@@ -26,9 +26,14 @@ func main() {
 
 	deps := initDependencies()
 	bootstrap := service.NewTenantBootstrapService(deps.storage)
-	if _, err := bootstrap.BootstrapAdminTenant(context.Background(), deps.cfg.AdminTenant.Domain); err != nil {
+	if _, err := bootstrap.BootstrapAdminTenant(context.Background(), deps.cfg.IdentityServer.AdminTenantDomain); err != nil {
 		log.Fatalf("Admin tenant bootstrap failed: %v", err)
 	}
+
+	// Start the background token pruning worker
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	startTokenPruningWorker(ctx, deps.storage, deps.cfg.IdentityServer.TokenPruningInterval)
 
 	signer := jwtcrypto.NewJWTSigner()
 	oauthService := service.NewOAuthService(deps.storage, signer, nil)
@@ -41,6 +46,27 @@ func main() {
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Token server terminated: %v", err)
 	}
+}
+
+func startTokenPruningWorker(ctx context.Context, storage *postgres.PostgresStorage, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	go func() {
+		log.Printf("Starting expired token pruning worker (interval: %v)...", interval)
+		for {
+			select {
+			case <-ticker.C:
+				if err := storage.PruneExpiredTokens(ctx); err != nil {
+					log.Printf("Error during background token pruning: %v", err)
+				} else {
+					log.Println("Successfully pruned expired revoked tokens from database.")
+				}
+			case <-ctx.Done():
+				ticker.Stop()
+				log.Println("Token pruning worker stopped.")
+				return
+			}
+		}
+	}()
 }
 
 func initDependencies() *dependencies {

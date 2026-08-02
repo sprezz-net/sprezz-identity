@@ -92,6 +92,11 @@ type Password struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
+type RevokedToken struct {
+	TokenID   string             `json:"token_id"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+}
+
 type Tenant struct {
 	ID         int32              `json:"id"`
 	TenantUuid pgtype.UUID        `json:"tenant_uuid"`

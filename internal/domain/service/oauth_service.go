@@ -11,6 +11,7 @@ import (
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -100,4 +101,31 @@ func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.
 
 func (s *OAuthService) ProcessLogout(ctx context.Context, tenantID uuid.UUID, subject string, clientID string, tokenJTI string) error {
 	return s.storage.RevokeSession(ctx, tenantID, subject, clientID)
+}
+
+func (s *OAuthService) RevokeToken(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) error {
+	parser := new(jwt.Parser)
+	token, _, err := parser.ParseUnverified(tokenStr, jwt.MapClaims{})
+	if err != nil {
+		return nil
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil
+	}
+
+	tokenID, _ := claims["jti"].(string)
+	if tokenID == "" {
+		return nil
+	}
+
+	var expiresAt time.Time
+	if expVal, ok := claims["exp"].(float64); ok {
+		expiresAt = time.Unix(int64(expVal), 0)
+	} else {
+		expiresAt = time.Now().Add(24 * time.Hour)
+	}
+
+	return s.storage.RevokeToken(ctx, tokenID, expiresAt)
 }

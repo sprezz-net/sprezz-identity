@@ -3,6 +3,7 @@ package port
 import (
 	"context"
 	"errors"
+	"time"
 
 	"sprezz-identity/internal/domain/model"
 
@@ -28,4 +29,6 @@ type Storage interface {
 	RevokeSession(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) error
 	SaveInteractionSession(ctx context.Context, session model.InteractionSession) error
 	GetAndConsumeInteractionSession(ctx context.Context, id uuid.UUID) (*model.InteractionSession, error)
+	RevokeToken(ctx context.Context, tokenID string, expiresAt time.Time) error
+	IsTokenRevoked(ctx context.Context, tokenID string) (bool, error)
 }

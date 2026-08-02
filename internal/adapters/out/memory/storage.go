@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -21,6 +22,7 @@ type Storage struct {
 	passwordCredentials map[string]*model.PasswordCredential
 	identities          map[string]*model.UserIdentity
 	interactionSessions map[uuid.UUID]model.InteractionSession
+	revokedTokens       map[string]time.Time
 }
 
 func NewStorage() *Storage {
@@ -33,6 +35,7 @@ func NewStorage() *Storage {
 		passwordCredentials: make(map[string]*model.PasswordCredential),
 		identities:          make(map[string]*model.UserIdentity),
 		interactionSessions: make(map[uuid.UUID]model.InteractionSession),
+		revokedTokens:       make(map[string]time.Time),
 	}
 }
 
@@ -231,4 +234,24 @@ func (s *Storage) GetAndConsumeInteractionSession(ctx context.Context, id uuid.U
 	}
 	delete(s.interactionSessions, id)
 	return &session, nil
+}
+
+func (s *Storage) RevokeToken(ctx context.Context, tokenID string, expiresAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.revokedTokens[tokenID] = expiresAt
+	return nil
+}
+
+func (s *Storage) IsTokenRevoked(ctx context.Context, tokenID string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	exp, ok := s.revokedTokens[tokenID]
+	if !ok {
+		return false, nil
+	}
+	if time.Now().After(exp) {
+		return false, nil
+	}
+	return true, nil
 }

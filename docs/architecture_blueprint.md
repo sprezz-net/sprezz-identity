@@ -8,24 +8,15 @@ The server implements **OAuth 2.0 with PKCE**, **OpenID Connect (OIDC)**, and **
 
 Sprezz Identity operates as a decentralized, zero-trust cryptographic boundary layer. It strictly decouples user identity and authentication domains from downstream resource business logic.
 
-```text
-[ Public Internet / Native Client Apps ]
-                 │
-                 │ (Resolves Tenant via Host Header, e.g., ://idp.com)
-                 ▼
-┌──────────────────┐          ┌──────────────────────────┐
-│ SPREZZ-ID ENGINE │          │ EXTERNAL RESOURCE SERVER │
-│   (Port 8100)    │          │   (e.g. Sprezz Server)   │
-└────────┬─────────┘          └────────────┬─────────────
-         │                                 │
-         │ (JWKS Public Key Fetch)         │
-         └────────────────────────────────►│ [In-Memory Token Verification]
-         │                                 │
-         ▼                                 ▼
-Database: `sprezz_identity`   Database: `sprezz_federation`
-  └──────────────┬─────────────────────────┘
-                 ▼
-[ SHARED POSTGRESQL ENGINE SERVER ]
+```mermaid
+graph TD
+    Client[Public Internet / Native Client Apps] -->|Resolves Tenant via Host Header, e.g., ://idp.com| Engine[SPREZZ-ID ENGINE Port 8100]
+    Engine -->|JWKS Public Key Fetch| Resource[EXTERNAL RESOURCE SERVER e.g. Sprezz Server]
+    Resource -->|In-Memory Token Verification| Verification[In-Memory Token Verification]
+    Engine --> DB1[(Database: sprezz_identity)]
+    Resource --> DB2[(Database: sprezz_federation)]
+    DB1 --> SharedDB[(SHARED POSTGRESQL ENGINE SERVER)]
+    DB2 --> SharedDB
 ```
 
 ## 2. Microservice Project Structure
@@ -96,32 +87,24 @@ Enables native apps (like mobile clients or single-page applications) to registe
 
 Protects public, native mobile clients from intercept attacks by forcing runtime cryptographic proofs.
 
-```text
-[ Mobile Client App ]               [ Browser Engine ]              [ Sprezz Identity Server ]
-          │                                 │                                      │
-          │ 1. Generate verifier & challenge│                                      │
-          │ 2. Direct user to browser ─────>│                                      │
-          │                                 │ 3. GET /oauth/authorize              │
-          │                                 │    ?response_type=code               │
-          │                                 │    &client_id=client_123             │
-          │                                 │    &code_challenge=XYZ...            │
-          │                                 │    &code_challenge_method=S256       │
-          │                                 ├─────────────────────────────────────>│
-          │                                 │                                      │ [Renders Login/Consent UI]
-          │                                 │ 4. Authenticates user & tenant credentials
-          │                                 │<─────────────────────────────────────┤
-          │                                 │ 5. Redirects with 302 Found          │
-          │                                 │    to client redirect_uri?code=abc...│
-          │ <───────────────────────────────┤                                      │
-          │ 6. Extracts code parameter      │                                      │
-          │                                 │                                      │
-          │ 7. POST /oauth/token ───────────┼─────────────────────────────────────>│
-          │    (Payload: code, client_id, code_verifier)                           │ [Core Service Engine Validation]
-          │                                 │                                      │ - Recomputes SHA256 of verifier
-          │                                 │                                      │ - Compares against challenge
-          │                                 │                                      │ - Mints Access, ID, & Refresh tokens
-          │ <───────────────────────────────┼──────────────────────────────────────┤
-          │ 8. Returns 200 OK (JSON Token Set containing access_token, id_token, refresh_token)
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User/Browser Engine
+    participant Client as Mobile Client App
+    participant Server as Sprezz Identity Server
+
+    Note over Client: Generate PKCE verifier & challenge
+    Client->>User: Direct user to browser
+    User->>Server: GET /oauth/authorize?response_type=code&client_id=client_123&code_challenge=XYZ...&code_challenge_method=S256
+    Note over Server: Renders Login/Consent UI
+    Server-->>User: Authenticates user & tenant credentials
+    Server->>User: Redirects with 302 Found to client redirect_uri?code=abc...
+    User->>Client: Redirect to client redirect_uri?code=abc...
+    Note over Client: Extracts code parameter
+    Client->>Server: POST /oauth/token (Payload: code, client_id, code_verifier)
+    Note over Server: Core Service Engine Validation:<br/>- Recomputes SHA256 of verifier<br/>- Compares against challenge<br/>- Mints Access, ID, & Refresh tokens
+    Server-->>Client: Returns 200 OK (JSON Token Set containing access_token, id_token, refresh_token)
 ```
 
 The mathematical evaluation inside the business layer service strictly asserts:
@@ -170,6 +153,7 @@ To maintain complete compatibility with off-the-shelf native app clients, the HT
 | `/oauth/register` | `POST` | RFC 7591 (DCR) | Executes dynamic onboard profiles for untrusted mobile native clients. |
 | `/oauth/authorize` | `GET`/`POST` | RFC 6749 / RFC 7636 | Orchestrates credentials authentication, tenant isolation, and consent UI. |
 | `/oauth/token` | `POST` | RFC 6749 / PKCE Swap | Validates verifiers, confirms code constraints, and issues the token payload. |
+| `/oauth/revoke` | `POST` | RFC 7009 | Revokes an active Access Token or Refresh Token (adds JTI to database-backed blacklist). |
 | `/oauth/userinfo` | `GET` | OIDC Core 1.0 | Authenticated user profile retrieval interface (`Authorization: Bearer`). |
 | **Dynamic Routing Middleware** | `Intercept` | HTTP Host Header Context | Resolves incoming raw server domains (`Host`) to a valid internal `tenant_id` state. |
 
@@ -209,3 +193,15 @@ To maintain architectural purity, separation of concerns, and clean views:
 The `"username-password"` provider stores credentials utilizing Argon2id in a standard PHC-formatted string:
 `$argon2id$v=19$m=65536,t=3,p=2$salt$hash`
 This format inherently prefixes the signature algorithm identifier, ensuring smooth algorithm migration support in the future.
+
+### 9.5 Token Revocation & Periodic Expired Blacklist Pruning (RFC 7009)
+
+Sprezz Identity implements RFC 7009 Token Revocation to invalidate stateless JWT access tokens prior to their physical cryptographic expiration.
+
+* **The Blacklist Mechanism**: Revoking a token parses its unique JWT ID (`jti` / `TokenID`) and commits the `token_id` alongside its absolute expiration timestamp (`expires_at`) into a PostgreSQL-backed `revoked_tokens` table.
+* **Introspection Verification**: Any cryptographic validation or introspection checks assert that the token's `jti` is not present within the active revoked blacklist database.
+* **Automated Periodic Pruning**: Because revoked tokens naturally become cryptographically invalid once the current time passes their `expires_at` timestamp, storing expired rows in the database is redundant. A background cleaning worker, configured with a custom defined ticker interval (`TokenPruningInterval`) in the `IdentityServerConfig`, periodically executes high-performance bulk-pruning queries to clean up the table:
+
+  ```sql
+  DELETE FROM revoked_tokens WHERE expires_at <= NOW();
+  ```

@@ -541,6 +541,40 @@ func (s *PostgresStorage) GetAndConsumeInteractionSession(ctx context.Context, i
 	}, nil
 }
 
+func (s *PostgresStorage) RevokeToken(ctx context.Context, tokenID string, expiresAt time.Time) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO revoked_tokens (token_id, expires_at)
+		VALUES ($1, $2::timestamptz)
+		ON CONFLICT (token_id) DO NOTHING
+	`, tokenID, toPGTimestamptz(expiresAt))
+	if err != nil {
+		return fmt.Errorf("revoke token: %w", err)
+	}
+	return nil
+}
+
+func (s *PostgresStorage) IsTokenRevoked(ctx context.Context, tokenID string) (bool, error) {
+	var exists bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM revoked_tokens
+			WHERE token_id = $1 AND expires_at > NOW()
+		)
+	`, tokenID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check token revocation: %w", err)
+	}
+	return exists, nil
+}
+
+func (s *PostgresStorage) PruneExpiredTokens(ctx context.Context) error {
+	_, err := s.pool.Exec(ctx, "DELETE FROM revoked_tokens WHERE expires_at <= NOW()")
+	if err != nil {
+		return fmt.Errorf("prune expired tokens: %w", err)
+	}
+	return nil
+}
+
 func toPGUUID(id uuid.UUID) pgtype.UUID {
 	return pgtype.UUID{Bytes: id, Valid: true}
 }

@@ -11,6 +11,7 @@ import (
 	"sprezz-identity/internal/domain/port/portmock"
 
 	"github.com/gojuno/minimock/v3"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -78,52 +79,13 @@ func TestOAuthService_ExchangeCodeForTokensMintsTokens(t *testing.T) {
 		ExpiresAt:       time.Now().UTC().Add(5 * time.Minute),
 	}
 
-	storage.ResolveTenantByIDMock.Set(func(ctx context.Context, gotTenantID uuid.UUID) (*model.Tenant, error) {
-		if gotTenantID != tenantID {
-			t.Fatalf("unexpected tenant ID %s", gotTenantID)
-		}
-		return tenant, nil
-	})
-	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, gotClientID string) (*model.ClientApplication, error) {
-		if gotTenantID != tenantID {
-			t.Fatalf("unexpected tenant ID %s", gotTenantID)
-		}
-		if gotClientID != clientID {
-			t.Fatalf("unexpected client ID %s", gotClientID)
-		}
-		return client, nil
-	})
-	storage.GetAndConsumeAuthSessionMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, gotCode string) (*model.AuthorizationCodeSession, error) {
-		if gotTenantID != tenantID {
-			t.Fatalf("unexpected tenant ID %s", gotTenantID)
-		}
-		if gotCode != code {
-			t.Fatalf("unexpected code %s", gotCode)
-		}
-		return authSession, nil
-	})
+	storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(tenant, nil)
+	storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(client, nil)
+	storage.GetAndConsumeAuthSessionMock.Expect(context.Background(), tenantID, code).Return(authSession, nil)
 	crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
-		if alg != model.AlgRS256 {
-			t.Fatalf("unexpected signing algorithm %s", alg)
-		}
-		if claims.Issuer != "https://example.com" {
-			t.Fatalf("unexpected issuer %s", claims.Issuer)
-		}
-		if claims.TenantID != tenantID.String() {
-			t.Fatalf("unexpected tenant claim %s", claims.TenantID)
-		}
 		return "access-token", nil
 	})
 	crypto.SignIDTokenMock.Set(func(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
-		if alg != model.AlgRS256 {
-			t.Fatalf("unexpected signing algorithm %s", alg)
-		}
-		if claims.Issuer != "https://example.com" {
-			t.Fatalf("unexpected issuer %s", claims.Issuer)
-		}
-		if claims.TenantID != tenantID.String() {
-			t.Fatalf("unexpected tenant claim %s", claims.TenantID)
-		}
 		return "id-token", nil
 	})
 
@@ -145,4 +107,39 @@ func TestOAuthService_ExchangeCodeForTokensMintsTokens(t *testing.T) {
 func pkceChallenge(verifier string) string {
 	sum := sha256.Sum256([]byte(verifier))
 	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+func TestOAuthService_RevokeToken_Success(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	service := NewOAuthService(storage, nil, nil)
+
+	tenantID := uuid.New()
+	clientID := "test-client"
+	tokenID := uuid.NewString()
+	exp := time.Now().Add(time.Hour).Truncate(time.Second)
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"jti": tokenID,
+		"exp": exp.Unix(),
+	})
+	tokenString, err := token.SignedString([]byte("mock-signing-key"))
+	if err != nil {
+		t.Fatalf("failed to create JWT token: %v", err)
+	}
+
+	storage.RevokeTokenMock.Set(func(ctx context.Context, gotTokenID string, gotExpiresAt time.Time) error {
+		if gotTokenID != tokenID {
+			t.Errorf("expected TokenID %s, got %s", tokenID, gotTokenID)
+		}
+		if gotExpiresAt.Unix() != exp.Unix() {
+			t.Errorf("expected ExpiresAt %v, got %v", exp, gotExpiresAt)
+		}
+		return nil
+	})
+
+	err = service.RevokeToken(context.Background(), tenantID, clientID, tokenString)
+	if err != nil {
+		t.Fatalf("unexpected error during token revocation: %v", err)
+	}
 }

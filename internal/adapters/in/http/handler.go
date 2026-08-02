@@ -27,6 +27,7 @@ const (
 	routeRegister     = "/oauth/register"
 	routeOpenIDConfig = "/.well-known/openid-configuration"
 	routeKeys         = "/.well-known/jwks.json"
+	routeRevoke       = "/oauth/revoke"
 	contentTypeHeader = "Content-Type"
 	contentTypeJSON   = "application/json"
 )
@@ -75,6 +76,7 @@ func (h *HttpAdapter) registerRoutes() {
 	h.router.Post(routeAuthorize, h.authorize)
 	h.router.Post(routeToken, h.token)
 	h.router.Get(routeUserInfo, h.userinfo)
+	h.router.Post(routeRevoke, h.revoke)
 }
 
 func (h *HttpAdapter) loginRoot(w http.ResponseWriter, r *http.Request) {
@@ -430,6 +432,45 @@ func (h *HttpAdapter) token(w http.ResponseWriter, r *http.Request) {
 	default:
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported grant_type"})
 	}
+}
+
+func (h *HttpAdapter) revoke(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "malformed revocation request"})
+		return
+	}
+
+	tenant, err := h.resolveTenant(r.Context(), r.Host)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	clientID := r.FormValue("client_id")
+	clientSecret := r.FormValue("client_secret")
+	if clientID == "" || clientSecret == "" {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "client_id and client_secret are required"})
+		return
+	}
+
+	client, err := h.storagePort.GetClient(r.Context(), tenant.ID, clientID)
+	if err != nil || client.ClientSecret == nil || *client.ClientSecret != clientSecret {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "client authentication failed"})
+		return
+	}
+
+	token := r.FormValue("token")
+	if token == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "token is required"})
+		return
+	}
+
+	if err := h.authPort.RevokeToken(r.Context(), tenant.ID, clientID, token); err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *HttpAdapter) userinfo(w http.ResponseWriter, r *http.Request) {

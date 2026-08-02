@@ -40,6 +40,13 @@ type AuthMock struct {
 	afterProcessLogoutCounter  uint64
 	beforeProcessLogoutCounter uint64
 	ProcessLogoutMock          mAuthMockProcessLogout
+
+	funcRevokeToken          func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (err error)
+	funcRevokeTokenOrigin    string
+	inspectFuncRevokeToken   func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string)
+	afterRevokeTokenCounter  uint64
+	beforeRevokeTokenCounter uint64
+	RevokeTokenMock          mAuthMockRevokeToken
 }
 
 // NewAuthMock returns a mock for mm_port.Auth
@@ -58,6 +65,9 @@ func NewAuthMock(t minimock.Tester) *AuthMock {
 
 	m.ProcessLogoutMock = mAuthMockProcessLogout{mock: m}
 	m.ProcessLogoutMock.callArgs = []*AuthMockProcessLogoutParams{}
+
+	m.RevokeTokenMock = mAuthMockRevokeToken{mock: m}
+	m.RevokeTokenMock.callArgs = []*AuthMockRevokeTokenParams{}
 
 	t.Cleanup(m.MinimockFinish)
 
@@ -1277,6 +1287,410 @@ func (m *AuthMock) MinimockProcessLogoutInspect() {
 	}
 }
 
+type mAuthMockRevokeToken struct {
+	optional           bool
+	mock               *AuthMock
+	defaultExpectation *AuthMockRevokeTokenExpectation
+	expectations       []*AuthMockRevokeTokenExpectation
+
+	callArgs []*AuthMockRevokeTokenParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AuthMockRevokeTokenExpectation specifies expectation struct of the Auth.RevokeToken
+type AuthMockRevokeTokenExpectation struct {
+	mock               *AuthMock
+	params             *AuthMockRevokeTokenParams
+	paramPtrs          *AuthMockRevokeTokenParamPtrs
+	expectationOrigins AuthMockRevokeTokenExpectationOrigins
+	results            *AuthMockRevokeTokenResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AuthMockRevokeTokenParams contains parameters of the Auth.RevokeToken
+type AuthMockRevokeTokenParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+	clientID string
+	tokenStr string
+}
+
+// AuthMockRevokeTokenParamPtrs contains pointers to parameters of the Auth.RevokeToken
+type AuthMockRevokeTokenParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+	clientID *string
+	tokenStr *string
+}
+
+// AuthMockRevokeTokenResults contains results of the Auth.RevokeToken
+type AuthMockRevokeTokenResults struct {
+	err error
+}
+
+// AuthMockRevokeTokenOrigins contains origins of expectations of the Auth.RevokeToken
+type AuthMockRevokeTokenExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+	originClientID string
+	originTokenStr string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmRevokeToken *mAuthMockRevokeToken) Optional() *mAuthMockRevokeToken {
+	mmRevokeToken.optional = true
+	return mmRevokeToken
+}
+
+// Expect sets up expected params for Auth.RevokeToken
+func (mmRevokeToken *mAuthMockRevokeToken) Expect(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) *mAuthMockRevokeToken {
+	if mmRevokeToken.mock.funcRevokeToken != nil {
+		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Set")
+	}
+
+	if mmRevokeToken.defaultExpectation == nil {
+		mmRevokeToken.defaultExpectation = &AuthMockRevokeTokenExpectation{}
+	}
+
+	if mmRevokeToken.defaultExpectation.paramPtrs != nil {
+		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by ExpectParams functions")
+	}
+
+	mmRevokeToken.defaultExpectation.params = &AuthMockRevokeTokenParams{ctx, tenantID, clientID, tokenStr}
+	mmRevokeToken.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmRevokeToken.expectations {
+		if minimock.Equal(e.params, mmRevokeToken.defaultExpectation.params) {
+			mmRevokeToken.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmRevokeToken.defaultExpectation.params)
+		}
+	}
+
+	return mmRevokeToken
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Auth.RevokeToken
+func (mmRevokeToken *mAuthMockRevokeToken) ExpectCtxParam1(ctx context.Context) *mAuthMockRevokeToken {
+	if mmRevokeToken.mock.funcRevokeToken != nil {
+		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Set")
+	}
+
+	if mmRevokeToken.defaultExpectation == nil {
+		mmRevokeToken.defaultExpectation = &AuthMockRevokeTokenExpectation{}
+	}
+
+	if mmRevokeToken.defaultExpectation.params != nil {
+		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Expect")
+	}
+
+	if mmRevokeToken.defaultExpectation.paramPtrs == nil {
+		mmRevokeToken.defaultExpectation.paramPtrs = &AuthMockRevokeTokenParamPtrs{}
+	}
+	mmRevokeToken.defaultExpectation.paramPtrs.ctx = &ctx
+	mmRevokeToken.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmRevokeToken
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Auth.RevokeToken
+func (mmRevokeToken *mAuthMockRevokeToken) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthMockRevokeToken {
+	if mmRevokeToken.mock.funcRevokeToken != nil {
+		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Set")
+	}
+
+	if mmRevokeToken.defaultExpectation == nil {
+		mmRevokeToken.defaultExpectation = &AuthMockRevokeTokenExpectation{}
+	}
+
+	if mmRevokeToken.defaultExpectation.params != nil {
+		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Expect")
+	}
+
+	if mmRevokeToken.defaultExpectation.paramPtrs == nil {
+		mmRevokeToken.defaultExpectation.paramPtrs = &AuthMockRevokeTokenParamPtrs{}
+	}
+	mmRevokeToken.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmRevokeToken.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmRevokeToken
+}
+
+// ExpectClientIDParam3 sets up expected param clientID for Auth.RevokeToken
+func (mmRevokeToken *mAuthMockRevokeToken) ExpectClientIDParam3(clientID string) *mAuthMockRevokeToken {
+	if mmRevokeToken.mock.funcRevokeToken != nil {
+		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Set")
+	}
+
+	if mmRevokeToken.defaultExpectation == nil {
+		mmRevokeToken.defaultExpectation = &AuthMockRevokeTokenExpectation{}
+	}
+
+	if mmRevokeToken.defaultExpectation.params != nil {
+		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Expect")
+	}
+
+	if mmRevokeToken.defaultExpectation.paramPtrs == nil {
+		mmRevokeToken.defaultExpectation.paramPtrs = &AuthMockRevokeTokenParamPtrs{}
+	}
+	mmRevokeToken.defaultExpectation.paramPtrs.clientID = &clientID
+	mmRevokeToken.defaultExpectation.expectationOrigins.originClientID = minimock.CallerInfo(1)
+
+	return mmRevokeToken
+}
+
+// ExpectTokenStrParam4 sets up expected param tokenStr for Auth.RevokeToken
+func (mmRevokeToken *mAuthMockRevokeToken) ExpectTokenStrParam4(tokenStr string) *mAuthMockRevokeToken {
+	if mmRevokeToken.mock.funcRevokeToken != nil {
+		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Set")
+	}
+
+	if mmRevokeToken.defaultExpectation == nil {
+		mmRevokeToken.defaultExpectation = &AuthMockRevokeTokenExpectation{}
+	}
+
+	if mmRevokeToken.defaultExpectation.params != nil {
+		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Expect")
+	}
+
+	if mmRevokeToken.defaultExpectation.paramPtrs == nil {
+		mmRevokeToken.defaultExpectation.paramPtrs = &AuthMockRevokeTokenParamPtrs{}
+	}
+	mmRevokeToken.defaultExpectation.paramPtrs.tokenStr = &tokenStr
+	mmRevokeToken.defaultExpectation.expectationOrigins.originTokenStr = minimock.CallerInfo(1)
+
+	return mmRevokeToken
+}
+
+// Inspect accepts an inspector function that has same arguments as the Auth.RevokeToken
+func (mmRevokeToken *mAuthMockRevokeToken) Inspect(f func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string)) *mAuthMockRevokeToken {
+	if mmRevokeToken.mock.inspectFuncRevokeToken != nil {
+		mmRevokeToken.mock.t.Fatalf("Inspect function is already set for AuthMock.RevokeToken")
+	}
+
+	mmRevokeToken.mock.inspectFuncRevokeToken = f
+
+	return mmRevokeToken
+}
+
+// Return sets up results that will be returned by Auth.RevokeToken
+func (mmRevokeToken *mAuthMockRevokeToken) Return(err error) *AuthMock {
+	if mmRevokeToken.mock.funcRevokeToken != nil {
+		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Set")
+	}
+
+	if mmRevokeToken.defaultExpectation == nil {
+		mmRevokeToken.defaultExpectation = &AuthMockRevokeTokenExpectation{mock: mmRevokeToken.mock}
+	}
+	mmRevokeToken.defaultExpectation.results = &AuthMockRevokeTokenResults{err}
+	mmRevokeToken.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmRevokeToken.mock
+}
+
+// Set uses given function f to mock the Auth.RevokeToken method
+func (mmRevokeToken *mAuthMockRevokeToken) Set(f func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (err error)) *AuthMock {
+	if mmRevokeToken.defaultExpectation != nil {
+		mmRevokeToken.mock.t.Fatalf("Default expectation is already set for the Auth.RevokeToken method")
+	}
+
+	if len(mmRevokeToken.expectations) > 0 {
+		mmRevokeToken.mock.t.Fatalf("Some expectations are already set for the Auth.RevokeToken method")
+	}
+
+	mmRevokeToken.mock.funcRevokeToken = f
+	mmRevokeToken.mock.funcRevokeTokenOrigin = minimock.CallerInfo(1)
+	return mmRevokeToken.mock
+}
+
+// When sets expectation for the Auth.RevokeToken which will trigger the result defined by the following
+// Then helper
+func (mmRevokeToken *mAuthMockRevokeToken) When(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) *AuthMockRevokeTokenExpectation {
+	if mmRevokeToken.mock.funcRevokeToken != nil {
+		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Set")
+	}
+
+	expectation := &AuthMockRevokeTokenExpectation{
+		mock:               mmRevokeToken.mock,
+		params:             &AuthMockRevokeTokenParams{ctx, tenantID, clientID, tokenStr},
+		expectationOrigins: AuthMockRevokeTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmRevokeToken.expectations = append(mmRevokeToken.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Auth.RevokeToken return parameters for the expectation previously defined by the When method
+func (e *AuthMockRevokeTokenExpectation) Then(err error) *AuthMock {
+	e.results = &AuthMockRevokeTokenResults{err}
+	return e.mock
+}
+
+// Times sets number of times Auth.RevokeToken should be invoked
+func (mmRevokeToken *mAuthMockRevokeToken) Times(n uint64) *mAuthMockRevokeToken {
+	if n == 0 {
+		mmRevokeToken.mock.t.Fatalf("Times of AuthMock.RevokeToken mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmRevokeToken.expectedInvocations, n)
+	mmRevokeToken.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmRevokeToken
+}
+
+func (mmRevokeToken *mAuthMockRevokeToken) invocationsDone() bool {
+	if len(mmRevokeToken.expectations) == 0 && mmRevokeToken.defaultExpectation == nil && mmRevokeToken.mock.funcRevokeToken == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmRevokeToken.mock.afterRevokeTokenCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmRevokeToken.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// RevokeToken implements mm_port.Auth
+func (mmRevokeToken *AuthMock) RevokeToken(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (err error) {
+	mm_atomic.AddUint64(&mmRevokeToken.beforeRevokeTokenCounter, 1)
+	defer mm_atomic.AddUint64(&mmRevokeToken.afterRevokeTokenCounter, 1)
+
+	mmRevokeToken.t.Helper()
+
+	if mmRevokeToken.inspectFuncRevokeToken != nil {
+		mmRevokeToken.inspectFuncRevokeToken(ctx, tenantID, clientID, tokenStr)
+	}
+
+	mm_params := AuthMockRevokeTokenParams{ctx, tenantID, clientID, tokenStr}
+
+	// Record call args
+	mmRevokeToken.RevokeTokenMock.mutex.Lock()
+	mmRevokeToken.RevokeTokenMock.callArgs = append(mmRevokeToken.RevokeTokenMock.callArgs, &mm_params)
+	mmRevokeToken.RevokeTokenMock.mutex.Unlock()
+
+	for _, e := range mmRevokeToken.RevokeTokenMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmRevokeToken.RevokeTokenMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmRevokeToken.RevokeTokenMock.defaultExpectation.Counter, 1)
+		mm_want := mmRevokeToken.RevokeTokenMock.defaultExpectation.params
+		mm_want_ptrs := mmRevokeToken.RevokeTokenMock.defaultExpectation.paramPtrs
+
+		mm_got := AuthMockRevokeTokenParams{ctx, tenantID, clientID, tokenStr}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmRevokeToken.t.Errorf("AuthMock.RevokeToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRevokeToken.RevokeTokenMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmRevokeToken.t.Errorf("AuthMock.RevokeToken got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRevokeToken.RevokeTokenMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.clientID != nil && !minimock.Equal(*mm_want_ptrs.clientID, mm_got.clientID) {
+				mmRevokeToken.t.Errorf("AuthMock.RevokeToken got unexpected parameter clientID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRevokeToken.RevokeTokenMock.defaultExpectation.expectationOrigins.originClientID, *mm_want_ptrs.clientID, mm_got.clientID, minimock.Diff(*mm_want_ptrs.clientID, mm_got.clientID))
+			}
+
+			if mm_want_ptrs.tokenStr != nil && !minimock.Equal(*mm_want_ptrs.tokenStr, mm_got.tokenStr) {
+				mmRevokeToken.t.Errorf("AuthMock.RevokeToken got unexpected parameter tokenStr, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRevokeToken.RevokeTokenMock.defaultExpectation.expectationOrigins.originTokenStr, *mm_want_ptrs.tokenStr, mm_got.tokenStr, minimock.Diff(*mm_want_ptrs.tokenStr, mm_got.tokenStr))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmRevokeToken.t.Errorf("AuthMock.RevokeToken got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRevokeToken.RevokeTokenMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmRevokeToken.RevokeTokenMock.defaultExpectation.results
+		if mm_results == nil {
+			mmRevokeToken.t.Fatal("No results are set for the AuthMock.RevokeToken")
+		}
+		return (*mm_results).err
+	}
+	if mmRevokeToken.funcRevokeToken != nil {
+		return mmRevokeToken.funcRevokeToken(ctx, tenantID, clientID, tokenStr)
+	}
+	mmRevokeToken.t.Fatalf("Unexpected call to AuthMock.RevokeToken. %v %v %v %v", ctx, tenantID, clientID, tokenStr)
+	return
+}
+
+// RevokeTokenAfterCounter returns a count of finished AuthMock.RevokeToken invocations
+func (mmRevokeToken *AuthMock) RevokeTokenAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRevokeToken.afterRevokeTokenCounter)
+}
+
+// RevokeTokenBeforeCounter returns a count of AuthMock.RevokeToken invocations
+func (mmRevokeToken *AuthMock) RevokeTokenBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRevokeToken.beforeRevokeTokenCounter)
+}
+
+// Calls returns a list of arguments used in each call to AuthMock.RevokeToken.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmRevokeToken *mAuthMockRevokeToken) Calls() []*AuthMockRevokeTokenParams {
+	mmRevokeToken.mutex.RLock()
+
+	argCopy := make([]*AuthMockRevokeTokenParams, len(mmRevokeToken.callArgs))
+	copy(argCopy, mmRevokeToken.callArgs)
+
+	mmRevokeToken.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockRevokeTokenDone returns true if the count of the RevokeToken invocations corresponds
+// the number of defined expectations
+func (m *AuthMock) MinimockRevokeTokenDone() bool {
+	if m.RevokeTokenMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.RevokeTokenMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.RevokeTokenMock.invocationsDone()
+}
+
+// MinimockRevokeTokenInspect logs each unmet expectation
+func (m *AuthMock) MinimockRevokeTokenInspect() {
+	for _, e := range m.RevokeTokenMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AuthMock.RevokeToken at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterRevokeTokenCounter := mm_atomic.LoadUint64(&m.afterRevokeTokenCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.RevokeTokenMock.defaultExpectation != nil && afterRevokeTokenCounter < 1 {
+		if m.RevokeTokenMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AuthMock.RevokeToken at\n%s", m.RevokeTokenMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AuthMock.RevokeToken at\n%s with params: %#v", m.RevokeTokenMock.defaultExpectation.expectationOrigins.origin, *m.RevokeTokenMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcRevokeToken != nil && afterRevokeTokenCounter < 1 {
+		m.t.Errorf("Expected call to AuthMock.RevokeToken at\n%s", m.funcRevokeTokenOrigin)
+	}
+
+	if !m.RevokeTokenMock.invocationsDone() && afterRevokeTokenCounter > 0 {
+		m.t.Errorf("Expected %d calls to AuthMock.RevokeToken at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.RevokeTokenMock.expectedInvocations), m.RevokeTokenMock.expectedInvocationsOrigin, afterRevokeTokenCounter)
+	}
+}
+
 // MinimockFinish checks that all mocked methods have been called the expected number of times
 func (m *AuthMock) MinimockFinish() {
 	m.finishOnce.Do(func() {
@@ -1286,6 +1700,8 @@ func (m *AuthMock) MinimockFinish() {
 			m.MinimockInitiateAuthorizeInspect()
 
 			m.MinimockProcessLogoutInspect()
+
+			m.MinimockRevokeTokenInspect()
 		}
 	})
 }
@@ -1311,5 +1727,6 @@ func (m *AuthMock) minimockDone() bool {
 	return done &&
 		m.MinimockExchangeCodeForTokensDone() &&
 		m.MinimockInitiateAuthorizeDone() &&
-		m.MinimockProcessLogoutDone()
+		m.MinimockProcessLogoutDone() &&
+		m.MinimockRevokeTokenDone()
 }

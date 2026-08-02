@@ -19,16 +19,17 @@ type DatabaseConfig struct {
 	StatementTimeout time.Duration `yaml:"statement_timeout" env:"POSTGRES_STATEMENT_TIMEOUT" env-default:"5s"`
 }
 
-type AdminTenantConfig struct {
-	Domain string `yaml:"domain" env:"ADMIN_TENANT_DOMAIN" env-default:"localhost:8100"`
+type IdentityServerConfig struct {
+	AdminTenantDomain    string        `yaml:"admin_tenant_domain" env:"ADMIN_TENANT_DOMAIN" env-default:"localhost:8100"`
+	TokenPruningInterval time.Duration `yaml:"token_pruning_interval" env:"TOKEN_PRUNING_INTERVAL" env-default:"1h"`
 }
 
 type Config struct {
-	AppEnv      string            `yaml:"app_env" env:"APP_ENV" env-default:"local"`
-	Port        string            `yaml:"port" env:"PORT" env-default:"8080"`
-	Database    DatabaseConfig    `yaml:"database"`
-	AdminTenant AdminTenantConfig `yaml:"admin_tenant"`
-	DatabaseURL string            `env:"DATABASE_URL"`
+	AppEnv         string               `yaml:"app_env" env:"APP_ENV" env-default:"local"`
+	Port           string               `yaml:"port" env:"PORT" env-default:"8080"`
+	Database       DatabaseConfig       `yaml:"database"`
+	IdentityServer IdentityServerConfig `yaml:"identity_server"`
+	DatabaseURL    string               `env:"DATABASE_URL"`
 }
 
 // GetDSN dynamically builds the connection string or prioritizes a raw DATABASE_URL override.

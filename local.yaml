@@ -10,5 +10,5 @@ database:
   sslmode: "disable"
   statement_timeout: "5s"
 
-admin_tenant:
-  domain: "localhost:8100"
+identity_server:
+  admin_tenant_domain: "localhost:8100"
