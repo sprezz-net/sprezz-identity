@@ -16,6 +16,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const httpsScheme = "https://"
+
 type JWTSigner struct {
 	mu       sync.RWMutex
 	keyrings map[string]*rsa.PrivateKey
@@ -36,10 +38,10 @@ func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.Signatur
 
 	issuer := claims.Issuer
 	if issuer == "" {
-		issuer = "https://" + strings.TrimPrefix(claims.TenantID, "https://")
+		issuer = httpsScheme + strings.TrimPrefix(claims.TenantID, httpsScheme)
 	}
 	issuer = strings.TrimSuffix(issuer, "/")
-	tenantKey := strings.TrimPrefix(issuer, "https://")
+	tenantKey := strings.TrimPrefix(issuer, httpsScheme)
 	kid := s.tenantKeyID(issuer)
 	privateKey, err := s.getOrCreateKeyPair(tenantKey, issuer, kid)
 	if err != nil {
@@ -71,10 +73,10 @@ func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.Signatur
 
 	issuer := claims.Issuer
 	if issuer == "" {
-		issuer = "https://" + strings.TrimPrefix(claims.TenantID, "https://")
+		issuer = httpsScheme + strings.TrimPrefix(claims.TenantID, httpsScheme)
 	}
 	issuer = strings.TrimSuffix(issuer, "/")
-	tenantKey := strings.TrimPrefix(issuer, "https://")
+	tenantKey := strings.TrimPrefix(issuer, httpsScheme)
 	kid := s.tenantKeyID(issuer)
 	privateKey, err := s.getOrCreateKeyPair(tenantKey, issuer, kid)
 	if err != nil {
@@ -134,7 +136,7 @@ func (s *JWTSigner) tenantIdentity(tenant string) (string, string) {
 	if tenant == "" {
 		tenant = "default"
 	}
-	issuer := strings.TrimSuffix("https://"+strings.TrimPrefix(tenant, "https://"), "/")
+	issuer := strings.TrimSuffix(httpsScheme+strings.TrimPrefix(tenant, httpsScheme), "/")
 	kid := s.tenantKeyID(issuer)
 	return issuer, kid
 }
@@ -143,7 +145,7 @@ func (s *JWTSigner) tenantKeyID(tenant string) string {
 	if tenant == "" {
 		tenant = "default"
 	}
-	kidHash := sha256.Sum256([]byte(strings.TrimPrefix(tenant, "https://")))
+	kidHash := sha256.Sum256([]byte(strings.TrimPrefix(tenant, httpsScheme)))
 	return fmt.Sprintf("kid-%x", kidHash)
 }
 
