@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"testing"
 	"time"
 
@@ -141,5 +142,172 @@ func TestOAuthService_RevokeToken_Success(t *testing.T) {
 	err = service.RevokeToken(context.Background(), tenantID, clientID, tokenString)
 	if err != nil {
 		t.Fatalf("unexpected error during token revocation: %v", err)
+	}
+}
+
+func TestOAuthService_InitiateAuthorize_ValidationErrors(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	service := NewOAuthService(storage, nil, nil)
+
+	// Empty Code
+	sessionEmptyCode := model.AuthorizationCodeSession{
+		RedirectURI: "https://example.com/callback",
+	}
+	if err := service.InitiateAuthorize(context.Background(), sessionEmptyCode); err == nil || err.Error() != "authorize code must not be empty" {
+		t.Errorf("expected empty code error, got %v", err)
+	}
+
+	// Empty RedirectURI
+	sessionEmptyRedirect := model.AuthorizationCodeSession{
+		Code: "code",
+	}
+	if err := service.InitiateAuthorize(context.Background(), sessionEmptyRedirect); err == nil || err.Error() != "redirect_uri must not be empty" {
+		t.Errorf("expected empty redirect_uri error, got %v", err)
+	}
+}
+
+func TestOAuthService_ExchangeCodeForTokens_Errors(t *testing.T) {
+	tenantID := uuid.New()
+	clientID := "client-id"
+	code := "some-code"
+
+	// 1. GetClient returns error
+	{
+		ctrl := minimock.NewController(t)
+		storage := portmock.NewStorageMock(ctrl)
+		service := NewOAuthService(storage, nil, nil)
+		storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(nil, errors.New("client lookup failed"))
+
+		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "verifier")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	}
+
+	// 2. ResolveTenantByID returns error
+	{
+		ctrl := minimock.NewController(t)
+		storage := portmock.NewStorageMock(ctrl)
+		service := NewOAuthService(storage, nil, nil)
+		storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(&model.ClientApplication{}, nil)
+		storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(nil, errors.New("tenant lookup failed"))
+
+		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "verifier")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	}
+
+	// 3. GetAndConsumeAuthSession returns error
+	{
+		ctrl := minimock.NewController(t)
+		storage := portmock.NewStorageMock(ctrl)
+		service := NewOAuthService(storage, nil, nil)
+		storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(&model.ClientApplication{}, nil)
+		storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(&model.Tenant{}, nil)
+		storage.GetAndConsumeAuthSessionMock.Expect(context.Background(), tenantID, code).Return(nil, errors.New("session not found"))
+
+		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "verifier")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	}
+
+	// 4. Invalid PKCE verifier
+	{
+		ctrl := minimock.NewController(t)
+		storage := portmock.NewStorageMock(ctrl)
+		service := NewOAuthService(storage, nil, nil)
+		storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(&model.ClientApplication{}, nil)
+		storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(&model.Tenant{Domain: "example.com"}, nil)
+		storage.GetAndConsumeAuthSessionMock.Expect(context.Background(), tenantID, code).Return(&model.AuthorizationCodeSession{
+			CodeChallenge: "expected-challenge",
+		}, nil)
+
+		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "invalid-verifier")
+		if err == nil || err.Error() != "invalid PKCE verifier" {
+			t.Errorf("expected PKCE validation error, got %v", err)
+		}
+	}
+
+	// 5. SignAccessToken error
+	{
+		ctrl := minimock.NewController(t)
+		storage := portmock.NewStorageMock(ctrl)
+		crypto := portmock.NewCryptoMock(ctrl)
+		service := NewOAuthService(storage, crypto, nil)
+
+		storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(&model.ClientApplication{Algorithm: model.AlgRS256}, nil)
+		storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(&model.Tenant{Domain: "example.com"}, nil)
+		storage.GetAndConsumeAuthSessionMock.Expect(context.Background(), tenantID, code).Return(&model.AuthorizationCodeSession{}, nil)
+		crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+			return "", errors.New("sign error")
+		})
+
+		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "verifier")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	}
+
+	// 6. SignIDToken error
+	{
+		ctrl := minimock.NewController(t)
+		storage := portmock.NewStorageMock(ctrl)
+		crypto := portmock.NewCryptoMock(ctrl)
+		service := NewOAuthService(storage, crypto, nil)
+
+		storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(&model.ClientApplication{Algorithm: model.AlgRS256}, nil)
+		storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(&model.Tenant{Domain: "example.com"}, nil)
+		storage.GetAndConsumeAuthSessionMock.Expect(context.Background(), tenantID, code).Return(&model.AuthorizationCodeSession{}, nil)
+		crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+			return "access-token", nil
+		})
+		crypto.SignIDTokenMock.Set(func(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
+			return "", errors.New("sign error")
+		})
+
+		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "verifier")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	}
+}
+
+func TestOAuthService_ProcessLogout(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	service := NewOAuthService(storage, nil, nil)
+
+	tenantID := uuid.New()
+	subject := "sub"
+	clientID := "client-id"
+
+	storage.RevokeSessionMock.Expect(context.Background(), tenantID, subject, clientID).Return(nil)
+
+	err := service.ProcessLogout(context.Background(), tenantID, subject, clientID, "jti")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestOAuthService_RevokeToken_NoJTIOrClaims(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	service := NewOAuthService(storage, nil, nil)
+
+	// Revoking completely invalid string should not return error (fails silently)
+	err := service.RevokeToken(context.Background(), uuid.New(), "client", "invalid-token")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Token with empty claims (or empty JTI) should also fail silently
+	tokenNoJTI := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{})
+	tokenString, _ := tokenNoJTI.SignedString([]byte("key"))
+	err = service.RevokeToken(context.Background(), uuid.New(), "client", tokenString)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -191,3 +191,151 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_IncrementLoginCoun
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestIdentityProviderService_AuthenticateUsernamePassword_GetEnabledProvidersError(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	service := NewIdentityProviderService(storage)
+
+	tenantID := uuid.New()
+	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return(nil, errors.New("database failure"))
+
+	_, err := service.AuthenticateUsernamePassword(context.Background(), tenantID, "john_doe", "pass")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestIdentityProviderService_AuthenticateUsernamePassword_NoProviders(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	service := NewIdentityProviderService(storage)
+
+	tenantID := uuid.New()
+	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{}, nil)
+
+	_, err := service.AuthenticateUsernamePassword(context.Background(), tenantID, "john_doe", "pass")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if err.Error() != "no identity providers configured for tenant" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestIdentityProviderService_AuthenticateUsernamePassword_NoUsernamePasswordIDP(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	service := NewIdentityProviderService(storage)
+
+	tenantID := uuid.New()
+	provider := model.IdentityProvider{
+		ID:       uuid.New(),
+		TenantID: tenantID,
+		IDPType:  "OIDC", // non-UsernamePasswordIDPType
+		Enabled:  true,
+	}
+
+	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{provider}, nil)
+
+	_, err := service.AuthenticateUsernamePassword(context.Background(), tenantID, "john_doe", "pass")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestIdentityProviderService_AuthenticateUsernamePassword_ProfileLookupError(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	service := NewIdentityProviderService(storage)
+
+	tenantID := uuid.New()
+	providerID := uuid.New()
+	provider := model.IdentityProvider{
+		ID:       providerID,
+		TenantID: tenantID,
+		IDPType:  model.UsernamePasswordIDPType,
+		Enabled:  true,
+	}
+
+	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{provider}, nil)
+	storage.GetUserProfileByIdentifierMock.Expect(context.Background(), tenantID, providerID, "john_doe").Return(nil, errors.New("user not found"))
+
+	_, err := service.AuthenticateUsernamePassword(context.Background(), tenantID, "john_doe", "pass")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestIdentityProviderService_AuthenticateUsernamePassword_CredentialLookupError(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	service := NewIdentityProviderService(storage)
+
+	tenantID := uuid.New()
+	providerID := uuid.New()
+	userProfileID := uuid.New()
+
+	provider := model.IdentityProvider{
+		ID:       providerID,
+		TenantID: tenantID,
+		IDPType:  model.UsernamePasswordIDPType,
+		Enabled:  true,
+	}
+
+	profile := &model.UserProfile{
+		ID: userProfileID,
+	}
+
+	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{provider}, nil)
+	storage.GetUserProfileByIdentifierMock.Expect(context.Background(), tenantID, providerID, "john_doe").Return(profile, nil)
+	storage.GetPasswordCredentialMock.Expect(context.Background(), userProfileID, providerID).Return(nil, errors.New("credential error"))
+
+	_, err := service.AuthenticateUsernamePassword(context.Background(), tenantID, "john_doe", "pass")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestIdentityProviderService_AuthenticateUsernamePassword_UpsertError(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	service := NewIdentityProviderService(storage)
+
+	tenantID := uuid.New()
+	providerID := uuid.New()
+	userProfileID := uuid.New()
+
+	password := "SecretPass123!"
+	hashedPassword, _ := argon2id.CreateHash(password, argon2id.DefaultParams)
+
+	provider := model.IdentityProvider{
+		ID:       providerID,
+		TenantID: tenantID,
+		IDPType:  model.UsernamePasswordIDPType,
+		Enabled:  true,
+	}
+
+	profile := &model.UserProfile{
+		ID: userProfileID,
+	}
+
+	cred := &model.PasswordCredential{
+		UserProfileID:      userProfileID,
+		IdentityProviderID: providerID,
+		Argon2Hash:         hashedPassword,
+	}
+
+	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{provider}, nil)
+	storage.GetUserProfileByIdentifierMock.Expect(context.Background(), tenantID, providerID, "john_doe").Return(profile, nil)
+	storage.GetPasswordCredentialMock.Expect(context.Background(), userProfileID, providerID).Return(cred, nil)
+	storage.GetIdentityByProfileAndProviderMock.Expect(context.Background(), userProfileID, providerID).Return(nil, errors.New("not found"))
+	storage.UpsertIdentityMock.Set(func(ctx context.Context, identity model.UserIdentity) error {
+		return errors.New("upsert failure")
+	})
+
+	_, err := service.AuthenticateUsernamePassword(context.Background(), tenantID, "john_doe", password)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
