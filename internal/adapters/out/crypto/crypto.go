@@ -83,7 +83,7 @@ func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.Signatur
 		return "", err
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+	mapClaims := jwt.MapClaims{
 		"iss":       issuer,
 		"sub":       claims.Subject,
 		"aud":       claims.Audience,
@@ -94,7 +94,11 @@ func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.Signatur
 		"iat":       claims.IssuedAt.Unix(),
 		"exp":       claims.ExpiresAt.Unix(),
 		"nbf":       claims.IssuedAt.Unix(),
-	})
+	}
+	if claims.SessionID != "" {
+		mapClaims["sid"] = claims.SessionID
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, mapClaims)
 	token.Header["kid"] = kid
 	token.Header["typ"] = "JWT"
 

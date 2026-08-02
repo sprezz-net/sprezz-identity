@@ -81,7 +81,7 @@ Ports define the rigid, un-compromised structural abstract contracts of the syst
 Enables native apps (like mobile clients or single-page applications) to register themselves dynamically over an unauthenticated boundary.
 
 * **Rule 1 (Public Client Stripping)**: If the registration payload specifies a native mobile or browser client application type, the engine **must not** generate or return a `client_secret`. The application profile is saved with a null secret and locked out of standard client-credential grant executions.
-* **Rule 2 (Scope Filtering)**: The registration engine matches requested scopes against the global tenant allowance rules before committing the application array.
+* **Rule 2 (Scope Filtering)**: The registration engine matches requested scopes against the tenant's predefined list of allowed scopes (`PredefinedScopes`) before committing the client application registration.
 
 ### B. Authorization Code Flow with PKCE (RFC 7636)
 
@@ -240,6 +240,7 @@ Sprezz Identity exposes standard RFC 7662 Token Introspection at the POST endpoi
 
 Sprezz Identity implements OIDC Front-Channel Logout 1.0 to clear browser cookie sessions across multiple logged-in client applications.
 
+* **The `"sid"` Session Claim**: Issued ID Tokens contain a unique, stable `"sid"` (Session ID) claim tied to the user's active login browser session. This identifier is passed to client applications during logout integration workflows.
 * **The Iframe Rendering Flow**: Upon receiving a valid GET request at `/oauth/logout`, the HttpAdapter clears the IDP session cookies and queries the usecase for front-channel logout URLs. If present, it serves `views.Logout`, rendering a hidden `<iframe>` targeting each client's registered `front_channel_logout_uri`.
 * **Robust Redirection Timout**: To guarantee browser navigation, the template implements a dual-timer scheme: an unconditional 2-second safety timeout coupled to a faster `window.onload` callback, ensuring a reliable user redirect to the validated `post_logout_redirect_uri` even if client endpoints are slow or offline.
 

@@ -23,6 +23,7 @@ type OIDCTokenClaims struct {
 	ExpiresAt time.Time
 	AuthTime  time.Time
 	Nonce     string
+	SessionID string
 }
 
 type TokenSetResponse struct {

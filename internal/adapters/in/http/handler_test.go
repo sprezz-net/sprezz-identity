@@ -64,6 +64,18 @@ func TestHttpAdapter_OpenIDConfiguration_Success(t *testing.T) {
 	if scopes[0] != "openid" || scopes[1] != "custom-scope" {
 		t.Fatalf("unexpected scopes in configuration: %v", scopes)
 	}
+
+	if resp["end_session_endpoint"] != "https://test.com/oauth/logout" {
+		t.Fatalf("expected end_session_endpoint https://test.com/oauth/logout, got %v", resp["end_session_endpoint"])
+	}
+
+	if resp["frontchannel_logout_supported"] != true {
+		t.Fatalf("expected frontchannel_logout_supported true, got %v", resp["frontchannel_logout_supported"])
+	}
+
+	if resp["frontchannel_logout_session_supported"] != true {
+		t.Fatalf("expected frontchannel_logout_session_supported true, got %v", resp["frontchannel_logout_session_supported"])
+	}
 }
 
 type registerTestCase struct {
