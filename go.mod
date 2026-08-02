@@ -3,6 +3,8 @@ module sprezz-identity
 go 1.26.5
 
 require (
+	github.com/a-h/templ v0.3.1020
+	github.com/alexedwards/argon2id v1.0.0
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/gojuno/minimock/v3 v3.4.7
 	github.com/golang-jwt/jwt/v5 v5.3.1
@@ -24,7 +26,9 @@ require (
 	github.com/rogpeppe/go-internal v1.15.0 // indirect
 	github.com/sethvargo/go-retry v0.4.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
+	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	olympos.io/encoding/edn v0.0.0-20201019073823-d3554ca0b0a3 // indirect

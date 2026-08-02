@@ -173,10 +173,39 @@ To maintain complete compatibility with off-the-shelf native app clients, the HT
 | `/oauth/userinfo` | `GET` | OIDC Core 1.0 | Authenticated user profile retrieval interface (`Authorization: Bearer`). |
 | **Dynamic Routing Middleware** | `Intercept` | HTTP Host Header Context | Resolves incoming raw server domains (`Host`) to a valid internal `tenant_id` state. |
 
-## 9. Identity Providers
+## 9. Multi-Tenant Identity Providers & Identity Coupling
 
-Each user has a profile is identified with a unique UUIDv4, has a display name and email address (with verification status). Each user profile is coupled to one or more identities from an identity provider. Each tenant has a list of available identity providers. At the moment the only identity provider implemented is the username-password identity provider. Whenever an identity provider does a succesful authentication, it will create an identity that is linked to the user profile. Identities can be decoupled. Each identity has a unique UUIDv4.
+Sprezz Identity natively supports multiple, decoupled identity providers per tenant. This model cleanly separates user authentication mechanisms from the core user identity boundary.
 
-### Username-Password
+### 9.1 Architectural Domain Model
 
-The password is stored as Argon2id Hash in the database.
+* **User Profile**: A singular representation of the human identity within a tenant, identified by a UUIDv4. It holds standard claim values (display name, email address, verification status).
+* **Identity Provider (IdP)**: A configured mechanism of authentication for a tenant (e.g., `"username-password"`, and future OIDC/SAML configurations).
+* **User Identity**: A verified coupling record mapping a User Profile to a specific Identity Provider. Successful authentication on an IdP couples that user profile to the identity. It tracks:
+  * `coupled_at` (First login/coupling time)
+  * `last_login_at` (Last login time)
+  * `login_count` (Logins tally)
+  * `external_identity_id` (Unique subject ID from the provider; for `"username-password"` it maps to the User Profile UUID; for future federated IdPs, it maps to their external `sub` claim).
+
+### 9.2 Client-Level IdP Access Controls
+
+To support granular security policies, Client Applications govern IdP execution:
+
+* **Allowed IdPs**: A client configuration option specifying which IdP aliases are permitted for authentication.
+* **Default IdP**: The default IdP alias utilized when no explicit choice is specified.
+* **IDP Hint (`idp_hint`)**: Client applications can bypass general selection by specifying an explicit IdP alias via the `idp_hint` authorize query parameter. The server strictly asserts that the hint exists within the client's allowed IdPs list.
+
+### 9.3 Secure Pre-Authentication Interaction Sessions
+
+To maintain architectural purity, separation of concerns, and clean views:
+
+1. When `/oauth/authorize` is accessed unauthenticated, the server instantiates a high-entropy, short-lived `interaction_sessions` record (referencing a native UUID primary key) to store the incoming OAuth context (`client_id`, `redirect_uri`, `code_challenge`, etc.).
+2. The server sets a secure, HTTP-only, short-lived session cookie containing ONLY the session UUID (`spz_auth_session_id`) and redirects to `/`.
+3. The login view template (`login.templ`) is completely decoupled and receives zero OIDC parameters.
+4. Upon successful credential validation, the server consumes (and deletes) the interaction session, clears the cookie, and seamlessly completes the authorization code grant code swap.
+
+### 9.4 Cryptographic Argon2id Storage
+
+The `"username-password"` provider stores credentials utilizing Argon2id in a standard PHC-formatted string:
+`$argon2id$v=19$m=65536,t=3,p=2$salt$hash`
+This format inherently prefixes the signature algorithm identifier, ensuring smooth algorithm migration support in the future.

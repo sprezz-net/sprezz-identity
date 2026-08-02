@@ -19,5 +19,13 @@ type Storage interface {
 	ResolveTenantByDomain(ctx context.Context, domain string) (*model.Tenant, error)
 	ResolveTenantByID(ctx context.Context, tenantID uuid.UUID) (*model.Tenant, error)
 	CreateTenant(ctx context.Context, tenant model.Tenant) error
+	CreateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) error
+	GetEnabledIdentityProviders(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProvider, error)
+	GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.UUID, providerID uuid.UUID, identifier string) (*model.UserProfile, error)
+	GetPasswordCredential(ctx context.Context, userProfileID uuid.UUID, providerID uuid.UUID) (*model.PasswordCredential, error)
+	GetIdentityByProfileAndProvider(ctx context.Context, userProfileID uuid.UUID, providerID uuid.UUID) (*model.UserIdentity, error)
+	UpsertIdentity(ctx context.Context, identity model.UserIdentity) error
 	RevokeSession(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) error
+	SaveInteractionSession(ctx context.Context, session model.InteractionSession) error
+	GetAndConsumeInteractionSession(ctx context.Context, id uuid.UUID) (*model.InteractionSession, error)
 }

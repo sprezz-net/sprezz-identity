@@ -30,7 +30,9 @@ SELECT
     a.refresh_token_lifetime,
     a.id_token_lifetime,
     a.allowed_scopes,
-    a.default_scopes
+    a.default_scopes,
+    a.allowed_idps,
+    a.default_idp
 FROM applications AS a
 JOIN tenants AS t ON t.id = a.tenant_id
 WHERE t.tenant_uuid = $1
@@ -64,6 +66,8 @@ func (q *Queries) GetClient(ctx context.Context, arg GetClientParams) (Applicati
 		&i.IDTokenLifetime,
 		&i.AllowedScopes,
 		&i.DefaultScopes,
+		&i.AllowedIdps,
+		&i.DefaultIdp,
 	)
 	return i, err
 }
@@ -105,7 +109,9 @@ INSERT INTO applications (
     refresh_token_lifetime,
     id_token_lifetime,
     allowed_scopes,
-    default_scopes
+    default_scopes,
+    allowed_idps,
+    default_idp
 )
 SELECT
     $2,
@@ -124,7 +130,9 @@ SELECT
     $14,
     $15,
     $16,
-    $17
+    $17,
+    $18,
+    $19
 FROM tenant
 ON CONFLICT (tenant_id, client_id)
 DO UPDATE SET
@@ -141,7 +149,9 @@ DO UPDATE SET
     refresh_token_lifetime = EXCLUDED.refresh_token_lifetime,
     id_token_lifetime = EXCLUDED.id_token_lifetime,
     allowed_scopes = EXCLUDED.allowed_scopes,
-    default_scopes = EXCLUDED.default_scopes
+    default_scopes = EXCLUDED.default_scopes,
+    allowed_idps = EXCLUDED.allowed_idps,
+    default_idp = EXCLUDED.default_idp
 `
 
 type SaveClientParams struct {
@@ -162,6 +172,8 @@ type SaveClientParams struct {
 	IDTokenLifetime        pgtype.Interval `json:"id_token_lifetime"`
 	AllowedScopes          []string        `json:"allowed_scopes"`
 	DefaultScopes          []string        `json:"default_scopes"`
+	AllowedIdps            []string        `json:"allowed_idps"`
+	DefaultIdp             *string         `json:"default_idp"`
 }
 
 func (q *Queries) SaveClient(ctx context.Context, arg SaveClientParams) (pgconn.CommandTag, error) {
@@ -183,5 +195,7 @@ func (q *Queries) SaveClient(ctx context.Context, arg SaveClientParams) (pgconn.
 		arg.IDTokenLifetime,
 		arg.AllowedScopes,
 		arg.DefaultScopes,
+		arg.AllowedIdps,
+		arg.DefaultIdp,
 	)
 }

@@ -26,6 +26,8 @@ type Application struct {
 	IDTokenLifetime        pgtype.Interval `json:"id_token_lifetime"`
 	AllowedScopes          []string        `json:"allowed_scopes"`
 	DefaultScopes          []string        `json:"default_scopes"`
+	AllowedIdps            []string        `json:"allowed_idps"`
+	DefaultIdp             *string         `json:"default_idp"`
 }
 
 type AuditEventLog struct {
@@ -50,6 +52,46 @@ type AuthSession struct {
 	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
 }
 
+type Identity struct {
+	ID                 pgtype.UUID        `json:"id"`
+	UserProfileID      pgtype.UUID        `json:"user_profile_id"`
+	IdentityProviderID pgtype.UUID        `json:"identity_provider_id"`
+	ExternalIdentityID string             `json:"external_identity_id"`
+	LoginCount         int32              `json:"login_count"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	LastLoginAttempt   pgtype.Timestamptz `json:"last_login_attempt"`
+	Blocked            bool               `json:"blocked"`
+	CoupledAt          pgtype.Timestamptz `json:"coupled_at"`
+}
+
+type IdentityProvider struct {
+	ID        pgtype.UUID        `json:"id"`
+	TenantID  int32              `json:"tenant_id"`
+	IdpType   string             `json:"idp_type"`
+	Enabled   bool               `json:"enabled"`
+	AliasName string             `json:"alias_name"`
+	Config    []byte             `json:"config"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type InteractionSession struct {
+	ID                  pgtype.UUID        `json:"id"`
+	TenantID            int32              `json:"tenant_id"`
+	ClientID            string             `json:"client_id"`
+	RedirectUri         string             `json:"redirect_uri"`
+	CodeChallenge       string             `json:"code_challenge"`
+	CodeChallengeMethod string             `json:"code_challenge_method"`
+	IdpHint             *string            `json:"idp_hint"`
+	ExpiresAt           pgtype.Timestamptz `json:"expires_at"`
+}
+
+type Password struct {
+	UserProfileID      pgtype.UUID        `json:"user_profile_id"`
+	IdentityProviderID pgtype.UUID        `json:"identity_provider_id"`
+	PasswordHash       string             `json:"password_hash"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+}
+
 type Tenant struct {
 	ID         int32              `json:"id"`
 	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
@@ -57,4 +99,14 @@ type Tenant struct {
 	DomainName string             `json:"domain_name"`
 	IsActive   bool               `json:"is_active"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+type UserProfile struct {
+	ID                pgtype.UUID        `json:"id"`
+	TenantID          int32              `json:"tenant_id"`
+	PreferredUsername string             `json:"preferred_username"`
+	Name              string             `json:"name"`
+	Email             string             `json:"email"`
+	EmailVerified     bool               `json:"email_verified"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 }

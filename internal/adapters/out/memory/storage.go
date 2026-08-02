@@ -12,17 +12,27 @@ import (
 )
 
 type Storage struct {
-	mu       sync.RWMutex
-	tenants  map[string]*model.Tenant
-	clients  map[string]map[string]model.ClientApplication
-	sessions map[string]model.AuthorizationCodeSession
+	mu                  sync.RWMutex
+	tenants             map[string]*model.Tenant
+	clients             map[string]map[string]model.ClientApplication
+	sessions            map[string]model.AuthorizationCodeSession
+	providers           map[string]map[uuid.UUID]model.IdentityProvider
+	profiles            map[string]*model.UserProfile
+	passwordCredentials map[string]*model.PasswordCredential
+	identities          map[string]*model.UserIdentity
+	interactionSessions map[uuid.UUID]model.InteractionSession
 }
 
 func NewStorage() *Storage {
 	return &Storage{
-		tenants:  make(map[string]*model.Tenant),
-		clients:  make(map[string]map[string]model.ClientApplication),
-		sessions: make(map[string]model.AuthorizationCodeSession),
+		tenants:             make(map[string]*model.Tenant),
+		clients:             make(map[string]map[string]model.ClientApplication),
+		sessions:            make(map[string]model.AuthorizationCodeSession),
+		providers:           make(map[string]map[uuid.UUID]model.IdentityProvider),
+		profiles:            make(map[string]*model.UserProfile),
+		passwordCredentials: make(map[string]*model.PasswordCredential),
+		identities:          make(map[string]*model.UserIdentity),
+		interactionSessions: make(map[uuid.UUID]model.InteractionSession),
 	}
 }
 
@@ -37,6 +47,100 @@ func (s *Storage) ResolveTenantByID(ctx context.Context, tenantID uuid.UUID) (*m
 		}
 	}
 	return nil, port.ErrTenantNotFound
+}
+
+func (s *Storage) CreateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.providers[tenantID.String()]; !ok {
+		s.providers[tenantID.String()] = make(map[uuid.UUID]model.IdentityProvider)
+	}
+	s.providers[tenantID.String()][provider.ID] = provider
+	return nil
+}
+
+func (s *Storage) GetEnabledIdentityProviders(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProvider, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	providers, ok := s.providers[tenantID.String()]
+	if !ok {
+		return nil, port.ErrTenantNotFound
+	}
+
+	result := make([]model.IdentityProvider, 0)
+	for _, provider := range providers {
+		if provider.Enabled {
+			clone := provider
+			result = append(result, clone)
+		}
+	}
+	return result, nil
+}
+
+func (s *Storage) SaveUserProfile(ctx context.Context, tenantID uuid.UUID, providerID uuid.UUID, identifier string, profile model.UserProfile) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := fmt.Sprintf("%s|%s|%s", tenantID.String(), providerID.String(), identifier)
+	s.profiles[key] = &profile
+	return nil
+}
+
+func (s *Storage) SavePasswordCredential(ctx context.Context, credential model.PasswordCredential) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := fmt.Sprintf("%s|%s", credential.UserProfileID.String(), credential.IdentityProviderID.String())
+	s.passwordCredentials[key] = &credential
+	return nil
+}
+
+func (s *Storage) GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.UUID, providerID uuid.UUID, identifier string) (*model.UserProfile, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	key := fmt.Sprintf("%s|%s|%s", tenantID.String(), providerID.String(), identifier)
+	profile, ok := s.profiles[key]
+	if !ok {
+		return nil, fmt.Errorf("identity %s for tenant %s: %w", identifier, tenantID, port.ErrTenantNotFound)
+	}
+	clone := *profile
+	return &clone, nil
+}
+
+func (s *Storage) GetPasswordCredential(ctx context.Context, userProfileID uuid.UUID, providerID uuid.UUID) (*model.PasswordCredential, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	key := fmt.Sprintf("%s|%s", userProfileID.String(), providerID.String())
+	credential, ok := s.passwordCredentials[key]
+	if !ok {
+		return nil, fmt.Errorf("password credential for user %s provider %s: %w", userProfileID, providerID, port.ErrTenantNotFound)
+	}
+	clone := *credential
+	return &clone, nil
+}
+
+func (s *Storage) GetIdentityByProfileAndProvider(ctx context.Context, userProfileID uuid.UUID, providerID uuid.UUID) (*model.UserIdentity, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	key := fmt.Sprintf("%s|%s", userProfileID.String(), providerID.String())
+	identity, ok := s.identities[key]
+	if !ok {
+		return nil, fmt.Errorf("identity for user %s provider %s: %w", userProfileID, providerID, port.ErrTenantNotFound)
+	}
+	clone := *identity
+	return &clone, nil
+}
+
+func (s *Storage) UpsertIdentity(ctx context.Context, identity model.UserIdentity) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := fmt.Sprintf("%s|%s", identity.UserProfileID.String(), identity.IdentityProviderID.String())
+	s.identities[key] = &identity
+	return nil
 }
 
 func (s *Storage) SaveClient(ctx context.Context, client model.ClientApplication) error {
@@ -109,4 +213,22 @@ func (s *Storage) CreateTenant(ctx context.Context, tenant model.Tenant) error {
 
 func (s *Storage) RevokeSession(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) error {
 	return nil
+}
+
+func (s *Storage) SaveInteractionSession(ctx context.Context, session model.InteractionSession) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.interactionSessions[session.ID] = session
+	return nil
+}
+
+func (s *Storage) GetAndConsumeInteractionSession(ctx context.Context, id uuid.UUID) (*model.InteractionSession, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.interactionSessions[id]
+	if !ok {
+		return nil, port.ErrTenantNotFound
+	}
+	delete(s.interactionSessions, id)
+	return &session, nil
 }

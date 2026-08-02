@@ -1,0 +1,33 @@
+package views
+
+templ Login(errorMessage string) {
+	<!doctype html>
+	<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Sprezz Identity Login</title>
+		<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+	</head>
+	<body style="font-family:sans-serif;max-width:480px;margin:4rem auto;">
+		<h1>Sign in</h1>
+		<div id="login-result">
+			if errorMessage != "" {
+				<div style="color:red;margin-bottom:1rem;">{ errorMessage }</div>
+			}
+		</div>
+		<form hx-post="/login" hx-target="#login-result" hx-swap="innerHTML" method="post">
+			<p>
+				<label>Username
+					<input type="text" name="username" autocomplete="username" required />
+				</label>
+			</p>
+			<p>
+				<label>Password
+					<input type="password" name="password" autocomplete="current-password" required />
+				</label>
+			</p>
+			<button type="submit">Sign in</button>
+		</form>
+	</body>
+	</html>
+}

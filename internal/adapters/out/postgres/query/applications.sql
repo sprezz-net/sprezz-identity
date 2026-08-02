@@ -27,7 +27,9 @@ INSERT INTO applications (
     refresh_token_lifetime,
     id_token_lifetime,
     allowed_scopes,
-    default_scopes
+    default_scopes,
+    allowed_idps,
+    default_idp
 )
 SELECT
     $2,
@@ -46,7 +48,9 @@ SELECT
     $14,
     $15,
     $16,
-    $17
+    $17,
+    $18,
+    $19
 FROM tenant
 ON CONFLICT (tenant_id, client_id)
 DO UPDATE SET
@@ -63,7 +67,9 @@ DO UPDATE SET
     refresh_token_lifetime = EXCLUDED.refresh_token_lifetime,
     id_token_lifetime = EXCLUDED.id_token_lifetime,
     allowed_scopes = EXCLUDED.allowed_scopes,
-    default_scopes = EXCLUDED.default_scopes;
+    default_scopes = EXCLUDED.default_scopes,
+    allowed_idps = EXCLUDED.allowed_idps,
+    default_idp = EXCLUDED.default_idp;
 
 -- name: GetClient :one
 SELECT
@@ -83,7 +89,9 @@ SELECT
     a.refresh_token_lifetime,
     a.id_token_lifetime,
     a.allowed_scopes,
-    a.default_scopes
+    a.default_scopes,
+    a.allowed_idps,
+    a.default_idp
 FROM applications AS a
 JOIN tenants AS t ON t.id = a.tenant_id
 WHERE t.tenant_uuid = $1

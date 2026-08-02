@@ -1,7 +1,9 @@
 package model
 
+import "github.com/google/uuid"
+
 type UserProfile struct {
-	Subject           string
+	ID                uuid.UUID
 	PreferredUsername string
 	Name              string
 	Email             string

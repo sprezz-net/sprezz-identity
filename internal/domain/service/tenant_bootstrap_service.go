@@ -24,6 +24,22 @@ func NewTenantBootstrapService(storage port.Storage) *TenantBootstrapService {
 func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domain string) (*model.Tenant, error) {
 	tenant, err := s.storage.ResolveTenantByDomain(ctx, domain)
 	if err == nil {
+		providers, providerErr := s.storage.GetEnabledIdentityProviders(ctx, tenant.ID)
+		if providerErr != nil || len(providers) == 0 {
+			defaultProvider := model.IdentityProvider{
+				ID:       uuid.New(),
+				TenantID: tenant.ID,
+				IDPType:  model.UsernamePasswordIDPType,
+				Enabled:  true,
+				Alias:    "username-password",
+				Config: model.IdentityProviderConfig{
+					UsernameField: "preferredUsername",
+				},
+			}
+			if err := s.storage.CreateIdentityProvider(ctx, tenant.ID, defaultProvider); err != nil {
+				return nil, err
+			}
+		}
 		return tenant, nil
 	}
 
@@ -40,6 +56,20 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 	}
 
 	if err := s.storage.CreateTenant(ctx, *newTenant); err != nil {
+		return nil, err
+	}
+
+	defaultProvider := model.IdentityProvider{
+		ID:       uuid.New(),
+		TenantID: newTenant.ID,
+		IDPType:  model.UsernamePasswordIDPType,
+		Enabled:  true,
+		Alias:    "username-password",
+		Config: model.IdentityProviderConfig{
+			UsernameField: "preferredUsername",
+		},
+	}
+	if err := s.storage.CreateIdentityProvider(ctx, newTenant.ID, defaultProvider); err != nil {
 		return nil, err
 	}
 

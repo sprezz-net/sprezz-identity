@@ -2,27 +2,40 @@ package http
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	jwtcrypto "sprezz-identity/internal/adapters/out/crypto"
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
+	"sprezz-identity/internal/domain/service"
+	"sprezz-identity/internal/views"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
+const (
+	routeAuthorize    = "/oauth/authorize"
+	routeToken        = "/oauth/token"
+	routeUserInfo     = "/oauth/userinfo"
+	routeRegister     = "/oauth/register"
+	routeOpenIDConfig = "/.well-known/openid-configuration"
+	routeKeys         = "/.well-known/jwks.json"
+	contentTypeHeader = "Content-Type"
+	contentTypeJSON   = "application/json"
+)
+
 type HttpAdapter struct {
 	authPort    port.Auth
 	storagePort port.Storage
 	cryptoPort  port.Crypto
+	idpService  *service.IdentityProviderService
 	router      chi.Router
 }
 
@@ -41,6 +54,7 @@ func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto) *HttpAdapter {
 		authPort:    a,
 		storagePort: s,
 		cryptoPort:  c,
+		idpService:  service.NewIdentityProviderService(s),
 		router:      chi.NewRouter(),
 	}
 	h.registerRoutes()
@@ -52,24 +66,109 @@ func (h *HttpAdapter) Router() http.Handler {
 }
 
 func (h *HttpAdapter) registerRoutes() {
-	h.router.Get("/.well-known/openid-configuration", h.openIDConfiguration)
-	h.router.Get("/.well-known/jwks.json", h.jwks)
-	h.router.Post("/oauth/register", h.register)
-	h.router.Get("/oauth/authorize", h.authorize)
-	h.router.Post("/oauth/authorize", h.authorize)
-	h.router.Post("/oauth/token", h.token)
-	h.router.Get("/oauth/userinfo", h.userinfo)
+	h.router.Get("/", h.loginRoot)
+	h.router.Post("/login", h.login)
+	h.router.Get(routeOpenIDConfig, h.openIDConfiguration)
+	h.router.Get(routeKeys, h.jwks)
+	h.router.Post(routeRegister, h.register)
+	h.router.Get(routeAuthorize, h.authorize)
+	h.router.Post(routeAuthorize, h.authorize)
+	h.router.Post(routeToken, h.token)
+	h.router.Get(routeUserInfo, h.userinfo)
+}
+
+func (h *HttpAdapter) loginRoot(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set(contentTypeHeader, "text/html; charset=utf-8")
+	component := views.Login("")
+	_ = component.Render(r.Context(), w)
+}
+
+func (h *HttpAdapter) processInteractionRedirect(w http.ResponseWriter, r *http.Request) bool {
+	sessionCookie, err := r.Cookie("spz_auth_session_id")
+	if err != nil || sessionCookie.Value == "" {
+		return false
+	}
+	sessionUUID, parseErr := uuid.Parse(sessionCookie.Value)
+	if parseErr != nil {
+		return false
+	}
+	session, loadErr := h.storagePort.GetAndConsumeInteractionSession(r.Context(), sessionUUID)
+	if loadErr != nil {
+		return false
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "spz_auth_session_id",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	redirectURL := routeAuthorize + "?client_id=" + url.QueryEscape(session.ClientID) + "&redirect_uri=" + url.QueryEscape(session.RedirectURI)
+	if session.CodeChallenge != "" {
+		redirectURL += "&code_challenge=" + url.QueryEscape(session.CodeChallenge)
+	}
+	if session.ChallengeMethod != "" {
+		redirectURL += "&code_challenge_method=" + url.QueryEscape(session.ChallengeMethod)
+	}
+	if session.IDPHint != "" {
+		redirectURL += "&idp_hint=" + url.QueryEscape(session.IDPHint)
+	}
+	w.Header().Set("HX-Redirect", redirectURL)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("Authenticated"))
+	return true
+}
+
+func (h *HttpAdapter) login(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("malformed login payload"))
+		return
+	}
+	tenant, err := h.resolveTenant(r.Context(), r.Host)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(err.Error()))
+		return
+	}
+	username := strings.TrimSpace(r.FormValue("username"))
+	password := strings.TrimSpace(r.FormValue("password"))
+	if username == "" || password == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("username and password are required"))
+		return
+	}
+
+	result, err := h.idpService.AuthenticateUsernamePassword(r.Context(), tenant.ID, username, password)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = fmt.Fprintf(w, `<div style="color:red;margin-bottom:1rem;">%s</div>`, err.Error())
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{Name: "spz_login_subject", Value: result.UserProfile.ID.String(), Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(w, &http.Cookie{Name: "spz_login_provider", Value: result.Identity.IdentityProviderID.String(), Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
+
+	if h.processInteractionRedirect(w, r) {
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("Authenticated"))
 }
 
 func (h *HttpAdapter) openIDConfiguration(w http.ResponseWriter, r *http.Request) {
 	issuer := "https://" + r.Host
 	respondJSON(w, http.StatusOK, map[string]any{
 		"issuer":                                issuer,
-		"jwks_uri":                              issuer + "/.well-known/jwks.json",
-		"authorization_endpoint":                issuer + "/oauth/authorize",
-		"token_endpoint":                        issuer + "/oauth/token",
-		"userinfo_endpoint":                     issuer + "/oauth/userinfo",
-		"registration_endpoint":                 issuer + "/oauth/register",
+		"jwks_uri":                              issuer + routeKeys,
+		"authorization_endpoint":                issuer + routeAuthorize,
+		"token_endpoint":                        issuer + routeToken,
+		"userinfo_endpoint":                     issuer + routeUserInfo,
+		"registration_endpoint":                 issuer + routeRegister,
 		"response_types_supported":              []string{"code", "token"},
 		"grant_types_supported":                 []string{"authorization_code", "client_credentials", "refresh_token"},
 		"scopes_supported":                      []string{"openid", "profile", "email", "offline_access"},
@@ -88,7 +187,7 @@ func (h *HttpAdapter) jwks(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(contentTypeHeader, contentTypeJSON)
 	_, _ = w.Write([]byte(body))
 }
 
@@ -155,6 +254,58 @@ func (h *HttpAdapter) register(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *HttpAdapter) handleUnauthenticatedAuthorize(w http.ResponseWriter, r *http.Request, session model.InteractionSession) {
+	if err := h.storagePort.SaveInteractionSession(r.Context(), session); err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{Name: "spz_auth_session_id", Value: session.ID.String(), Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+func (h *HttpAdapter) handleAuthenticatedAuthorize(w http.ResponseWriter, r *http.Request, client *model.ClientApplication, subject string) {
+	redirectURI := r.FormValue("redirect_uri")
+	codeChallenge := r.FormValue("code_challenge")
+	challengeMethod := r.FormValue("code_challenge_method")
+	if challengeMethod == "" {
+		challengeMethod = "S256"
+	}
+	idpHint := r.FormValue("idp_hint")
+
+	if idpHint != "" {
+		if len(client.AllowedIDPs) > 0 && !contains(client.AllowedIDPs, idpHint) {
+			respondJSON(w, http.StatusBadRequest, map[string]string{"error": "identity provider not allowed for client"})
+			return
+		}
+	}
+
+	code := uuid.NewString()
+	authSession := model.AuthorizationCodeSession{
+		Code:            code,
+		TenantID:        client.TenantID.String(),
+		ClientID:        client.ClientID,
+		Subject:         subject,
+		CodeChallenge:   codeChallenge,
+		ChallengeMethod: challengeMethod,
+		RedirectURI:     redirectURI,
+		Scopes:          client.DefaultScopes,
+		ExpiresAt:       time.Now().Add(10 * time.Minute),
+	}
+	if err := h.authPort.InitiateAuthorize(r.Context(), authSession); err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	redirectURL := redirectURI
+	if strings.Contains(redirectURL, "?") {
+		redirectURL += "&code=" + code
+	} else {
+		redirectURL += "?code=" + code
+	}
+	http.Redirect(w, r, redirectURL, http.StatusFound)
+}
+
 func (h *HttpAdapter) authorize(w http.ResponseWriter, r *http.Request) {
 	tenant, err := h.resolveTenant(r.Context(), r.Host)
 	if err != nil {
@@ -174,6 +325,7 @@ func (h *HttpAdapter) authorize(w http.ResponseWriter, r *http.Request) {
 	if challengeMethod == "" {
 		challengeMethod = "S256"
 	}
+	idpHint := r.FormValue("idp_hint")
 	if clientID == "" || redirectURI == "" {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "client_id and redirect_uri are required"})
 		return
@@ -189,30 +341,73 @@ func (h *HttpAdapter) authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code := uuid.NewString()
-	session := model.AuthorizationCodeSession{
-		Code:            code,
-		TenantID:        tenant.ID.String(),
-		ClientID:        clientID,
-		Subject:         "anon-subject",
-		CodeChallenge:   codeChallenge,
-		ChallengeMethod: challengeMethod,
-		RedirectURI:     redirectURI,
-		Scopes:          client.DefaultScopes,
-		ExpiresAt:       time.Now().Add(10 * time.Minute),
-	}
-	if err := h.authPort.InitiateAuthorize(r.Context(), session); err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	cookie, cookieErr := r.Cookie("spz_login_subject")
+	if cookieErr != nil || cookie.Value == "" {
+		session := model.InteractionSession{
+			ID:              uuid.New(),
+			TenantID:        tenant.ID,
+			ClientID:        clientID,
+			RedirectURI:     redirectURI,
+			CodeChallenge:   codeChallenge,
+			ChallengeMethod: challengeMethod,
+			IDPHint:         idpHint,
+			ExpiresAt:       time.Now().Add(10 * time.Minute),
+		}
+		h.handleUnauthenticatedAuthorize(w, r, session)
 		return
 	}
 
-	redirectURL := redirectURI
-	if strings.Contains(redirectURL, "?") {
-		redirectURL += "&code=" + code
-	} else {
-		redirectURL += "?code=" + code
+	h.handleAuthenticatedAuthorize(w, r, client, cookie.Value)
+}
+
+func (h *HttpAdapter) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Request, tenant *model.Tenant) {
+	clientID := r.FormValue("client_id")
+	code := r.FormValue("code")
+	codeVerifier := r.FormValue("code_verifier")
+	if clientID == "" || code == "" || codeVerifier == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "client_id, code and code_verifier are required"})
+		return
 	}
-	http.Redirect(w, r, redirectURL, http.StatusFound)
+	tokens, err := h.authPort.ExchangeCodeForTokens(r.Context(), tenant.ID, clientID, code, codeVerifier)
+	if err != nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
+		return
+	}
+	respondJSON(w, http.StatusOK, tokens)
+}
+
+func (h *HttpAdapter) handleClientCredentialsGrant(w http.ResponseWriter, r *http.Request, tenant *model.Tenant) {
+	clientID := r.FormValue("client_id")
+	clientSecret := r.FormValue("client_secret")
+	if clientID == "" || clientSecret == "" {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "client_id and client_secret are required"})
+		return
+	}
+	client, err := h.storagePort.GetClient(r.Context(), tenant.ID, clientID)
+	if err != nil || client.ClientSecret == nil || *client.ClientSecret != clientSecret {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "client authentication failed"})
+		return
+	}
+	issuedAt := time.Now().UTC()
+	accessToken, err := h.cryptoPort.SignAccessToken(model.TokenClaims{
+		TokenID:   uuid.NewString(),
+		Issuer:    "https://" + tenant.Domain,
+		TenantID:  tenant.ID.String(),
+		Subject:   clientID,
+		ClientID:  clientID,
+		Scopes:    client.DefaultScopes,
+		IssuedAt:  issuedAt,
+		ExpiresAt: issuedAt.Add(client.AccessTokenLifetime),
+	}, client.Algorithm)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	respondJSON(w, http.StatusOK, &model.TokenSetResponse{
+		AccessToken: accessToken,
+		TokenType:   "Bearer",
+		ExpiresIn:   int64(client.AccessTokenLifetime / time.Second),
+	})
 }
 
 func (h *HttpAdapter) token(w http.ResponseWriter, r *http.Request) {
@@ -229,51 +424,9 @@ func (h *HttpAdapter) token(w http.ResponseWriter, r *http.Request) {
 
 	switch grantType {
 	case "authorization_code":
-		clientID := r.FormValue("client_id")
-		code := r.FormValue("code")
-		codeVerifier := r.FormValue("code_verifier")
-		if clientID == "" || code == "" || codeVerifier == "" {
-			respondJSON(w, http.StatusBadRequest, map[string]string{"error": "client_id, code and code_verifier are required"})
-			return
-		}
-		tokens, err := h.authPort.ExchangeCodeForTokens(r.Context(), tenant.ID, clientID, code, codeVerifier)
-		if err != nil {
-			respondJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
-			return
-		}
-		respondJSON(w, http.StatusOK, tokens)
+		h.handleAuthorizationCodeGrant(w, r, tenant)
 	case "client_credentials":
-		clientID := r.FormValue("client_id")
-		clientSecret := r.FormValue("client_secret")
-		if clientID == "" || clientSecret == "" {
-			respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "client_id and client_secret are required"})
-			return
-		}
-		client, err := h.storagePort.GetClient(r.Context(), tenant.ID, clientID)
-		if err != nil || client.ClientSecret == nil || *client.ClientSecret != clientSecret {
-			respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "client authentication failed"})
-			return
-		}
-		issuedAt := time.Now().UTC()
-		accessToken, err := h.cryptoPort.SignAccessToken(model.TokenClaims{
-			TokenID:   uuid.NewString(),
-			Issuer:    "https://" + tenant.Domain,
-			TenantID:  tenant.ID.String(),
-			Subject:   clientID,
-			ClientID:  clientID,
-			Scopes:    client.DefaultScopes,
-			IssuedAt:  issuedAt,
-			ExpiresAt: issuedAt.Add(client.AccessTokenLifetime),
-		}, client.Algorithm)
-		if err != nil {
-			respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		respondJSON(w, http.StatusOK, &model.TokenSetResponse{
-			AccessToken: accessToken,
-			TokenType:   "Bearer",
-			ExpiresIn:   int64(client.AccessTokenLifetime / time.Second),
-		})
+		h.handleClientCredentialsGrant(w, r, tenant)
 	default:
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported grant_type"})
 	}
@@ -323,7 +476,7 @@ func (h *HttpAdapter) resolveTenant(ctx context.Context, host string) (*model.Te
 }
 
 func respondJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(contentTypeHeader, contentTypeJSON)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
 }
@@ -335,9 +488,4 @@ func contains(values []string, target string) bool {
 		}
 	}
 	return false
-}
-
-func pkceChallenge(verifier string) string {
-	sum := sha256.Sum256([]byte(verifier))
-	return base64.RawURLEncoding.EncodeToString(sum[:])
 }

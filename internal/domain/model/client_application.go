@@ -24,4 +24,6 @@ type ClientApplication struct {
 	IDTokenLifetime        time.Duration
 	AllowedScopes          []string
 	DefaultScopes          []string
+	AllowedIDPs            []string
+	DefaultIDP             string
 }
