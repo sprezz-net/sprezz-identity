@@ -1,0 +1,175 @@
+package crypto
+
+import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"sync"
+
+	"sprezz-identity/internal/domain/model"
+
+	"github.com/golang-jwt/jwt/v5"
+)
+
+type JWTSigner struct {
+	mu       sync.RWMutex
+	keyrings map[string]*rsa.PrivateKey
+	jwks     map[string][]map[string]any
+}
+
+func NewJWTSigner() *JWTSigner {
+	return &JWTSigner{
+		keyrings: make(map[string]*rsa.PrivateKey),
+		jwks:     make(map[string][]map[string]any),
+	}
+}
+
+func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+	if alg != model.AlgRS256 {
+		return "", fmt.Errorf("unsupported signing algorithm %s", alg)
+	}
+
+	issuer, kid := s.tenantIdentity(claims.TenantID)
+	privateKey, err := s.getOrCreateKeyPair(claims.TenantID, issuer, kid)
+	if err != nil {
+		return "", err
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"iss":       issuer,
+		"sub":       claims.Subject,
+		"aud":       claims.ClientID,
+		"jti":       claims.TokenID,
+		"tenant_id": claims.TenantID,
+		"client_id": claims.ClientID,
+		"scope":     strings.Join(claims.Scopes, " "),
+		"iat":       claims.IssuedAt.Unix(),
+		"exp":       claims.ExpiresAt.Unix(),
+		"nbf":       claims.IssuedAt.Unix(),
+	})
+	token.Header["kid"] = kid
+	token.Header["typ"] = "JWT"
+
+	return token.SignedString(privateKey)
+}
+
+func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
+	if alg != model.AlgRS256 {
+		return "", fmt.Errorf("unsupported signing algorithm %s", alg)
+	}
+
+	issuer, kid := s.tenantIdentity(claims.TenantID)
+	privateKey, err := s.getOrCreateKeyPair(claims.TenantID, issuer, kid)
+	if err != nil {
+		return "", err
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"iss":       claims.Issuer,
+		"sub":       claims.Subject,
+		"aud":       claims.Audience,
+		"jti":       claims.TokenID,
+		"tenant_id": claims.TenantID,
+		"auth_time": claims.AuthTime.Unix(),
+		"nonce":     claims.Nonce,
+		"iat":       claims.IssuedAt.Unix(),
+		"exp":       claims.ExpiresAt.Unix(),
+		"nbf":       claims.IssuedAt.Unix(),
+	})
+	token.Header["kid"] = kid
+	token.Header["typ"] = "JWT"
+
+	return token.SignedString(privateKey)
+}
+
+func (s *JWTSigner) JWKSForTenant(domain string) ([]map[string]any, error) {
+	s.mu.RLock()
+	jwkSet, ok := s.jwks[domain]
+	s.mu.RUnlock()
+	if ok {
+		return jwkSet, nil
+	}
+
+	issuer, kid := s.tenantIdentity(domain)
+	_, err := s.getOrCreateKeyPair(domain, issuer, kid)
+	if err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.jwks[domain], nil
+}
+
+func (s *JWTSigner) MarshalJWKSet(tenant string) (string, error) {
+	jwkSet, err := s.JWKSForTenant(tenant)
+	if err != nil {
+		return "", err
+	}
+	body, err := json.Marshal(map[string]any{"keys": jwkSet})
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+func (s *JWTSigner) tenantIdentity(tenant string) (string, string) {
+	if tenant == "" {
+		tenant = "default"
+	}
+	issuer := "https://" + strings.TrimPrefix(tenant, "https://")
+	kidHash := sha256.Sum256([]byte(tenant))
+	kid := fmt.Sprintf("kid-%x", kidHash)
+	return issuer, kid
+}
+
+func (s *JWTSigner) getOrCreateKeyPair(tenant string, issuer string, kid string) (*rsa.PrivateKey, error) {
+	s.mu.RLock()
+	privateKey, ok := s.keyrings[issuer]
+	s.mu.RUnlock()
+	if ok {
+		return privateKey, nil
+	}
+
+	generatedKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, fmt.Errorf("generate tenant signing key: %w", err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if existing, exists := s.keyrings[issuer]; exists {
+		return existing, nil
+	}
+
+	s.keyrings[issuer] = generatedKey
+	publicKeyBytes, err := x509.MarshalPKIXPublicKey(&generatedKey.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("marshal public key: %w", err)
+	}
+	publicKey, err := x509.ParsePKIXPublicKey(publicKeyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse public key: %w", err)
+	}
+	rsaPublic, ok := publicKey.(*rsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("unexpected public key type")
+	}
+	modulus := base64.RawURLEncoding.EncodeToString(rsaPublic.N.Bytes())
+	exponent := base64.RawURLEncoding.EncodeToString([]byte{1, 0, 1})
+	jwk := map[string]any{
+		"kty": "RSA",
+		"kid": kid,
+		"use": "sig",
+		"alg": "RS256",
+		"n":   modulus,
+		"e":   exponent,
+	}
+	s.jwks[tenant] = []map[string]any{jwk}
+	return generatedKey, nil
+}

@@ -1,0 +1,10 @@
+package port
+
+import (
+	"sprezz-identity/internal/domain/model"
+)
+
+type Crypto interface {
+	SignAccessToken(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error)
+	SignIDToken(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error)
+}

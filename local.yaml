@@ -1,0 +1,14 @@
+app_env: "local"
+port: "8100"
+
+database:
+  host: "localhost"
+  port: "5433"
+  user: "sprezz_user"
+  # password:
+  dbname: "sprezz_identity"
+  sslmode: "disable"
+  statement_timeout: "5s"
+
+admin_tenant:
+  domain: "localhost:8100"
