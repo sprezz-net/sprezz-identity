@@ -28,6 +28,7 @@ type Application struct {
 	DefaultScopes          []string        `json:"default_scopes"`
 	AllowedIdps            []string        `json:"allowed_idps"`
 	DefaultIdp             *string         `json:"default_idp"`
+	AllowedAudiences       []string        `json:"allowed_audiences"`
 }
 
 type AuditEventLog struct {
@@ -98,13 +99,14 @@ type RevokedToken struct {
 }
 
 type Tenant struct {
-	ID               int32              `json:"id"`
-	TenantUuid       pgtype.UUID        `json:"tenant_uuid"`
-	Name             string             `json:"name"`
-	DomainName       string             `json:"domain_name"`
-	IsActive         bool               `json:"is_active"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	PredefinedScopes []string           `json:"predefined_scopes"`
+	ID                  int32              `json:"id"`
+	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
+	Name                string             `json:"name"`
+	DomainName          string             `json:"domain_name"`
+	IsActive            bool               `json:"is_active"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	PredefinedScopes    []string           `json:"predefined_scopes"`
+	PredefinedAudiences []string           `json:"predefined_audiences"`
 }
 
 type UserProfile struct {

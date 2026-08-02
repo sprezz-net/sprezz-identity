@@ -48,10 +48,15 @@ func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.Signatur
 		return "", err
 	}
 
+	audClaim := any(claims.ClientID)
+	if len(claims.Audiences) > 0 {
+		audClaim = claims.Audiences
+	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 		"iss":       issuer,
 		"sub":       claims.Subject,
-		"aud":       claims.ClientID,
+		"aud":       audClaim,
 		"jti":       claims.TokenID,
 		"tid":       claims.TenantID,
 		"client_id": claims.ClientID,

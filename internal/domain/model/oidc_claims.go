@@ -11,6 +11,7 @@ type TokenClaims struct {
 	Scopes    []string
 	IssuedAt  time.Time
 	ExpiresAt time.Time
+	Audiences []string
 }
 
 type OIDCTokenClaims struct {

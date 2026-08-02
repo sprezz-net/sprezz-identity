@@ -79,12 +79,14 @@ func TestHttpAdapter_OpenIDConfiguration_Success(t *testing.T) {
 }
 
 type registerTestCase struct {
-	name               string
-	predefinedScopes   []string
-	allowedScopes      []string
-	defaultScopes      []string
-	expectedStatusCode int
-	expectedError      string
+	name                string
+	predefinedScopes    []string
+	allowedScopes       []string
+	defaultScopes       []string
+	predefinedAudiences []string
+	allowedAudiences    []string
+	expectedStatusCode  int
+	expectedError       string
 }
 
 func TestHttpAdapter_Register_Validation(t *testing.T) {
@@ -112,6 +114,19 @@ func TestHttpAdapter_Register_Validation(t *testing.T) {
 			expectedStatusCode: http.StatusBadRequest,
 			expectedError:      "requested default_scopes are not predefined/allowed by the tenant",
 		},
+		{
+			name:                "Valid allowed audience subset",
+			predefinedAudiences: []string{"https://api.one.com", "https://api.two.com"},
+			allowedAudiences:    []string{"https://api.one.com"},
+			expectedStatusCode:  http.StatusCreated,
+		},
+		{
+			name:                "Invalid allowed audience subset",
+			predefinedAudiences: []string{"https://api.one.com"},
+			allowedAudiences:    []string{"https://api.rogue.com"},
+			expectedStatusCode:  http.StatusBadRequest,
+			expectedError:       "requested allowed_audiences are not predefined/allowed by the tenant",
+		},
 	}
 
 	for _, tt := range tests {
@@ -130,11 +145,12 @@ func runRegisterTestCase(t *testing.T, tt registerTestCase) {
 
 	tenantID := uuid.New()
 	tenant := &model.Tenant{
-		ID:               tenantID,
-		Name:             "test-tenant",
-		Domain:           "test.com",
-		IsActive:         true,
-		PredefinedScopes: tt.predefinedScopes,
+		ID:                  tenantID,
+		Name:                "test-tenant",
+		Domain:              "test.com",
+		IsActive:            true,
+		PredefinedScopes:    tt.predefinedScopes,
+		PredefinedAudiences: tt.predefinedAudiences,
 	}
 
 	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
@@ -150,10 +166,11 @@ func runRegisterTestCase(t *testing.T, tt registerTestCase) {
 	adapter := NewHttpAdapter(auth, storage, crypto)
 
 	payload := registerRequest{
-		ClientName:    "test-app",
-		RedirectURIs:  []string{"https://test.com/callback"},
-		AllowedScopes: tt.allowedScopes,
-		DefaultScopes: tt.defaultScopes,
+		ClientName:       "test-app",
+		RedirectURIs:     []string{"https://test.com/callback"},
+		AllowedScopes:    tt.allowedScopes,
+		DefaultScopes:    tt.defaultScopes,
+		AllowedAudiences: tt.allowedAudiences,
 	}
 
 	body, _ := json.Marshal(payload)

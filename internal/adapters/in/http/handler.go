@@ -49,6 +49,7 @@ type registerRequest struct {
 	ResponseTypes       []string `json:"response_types"`
 	AllowedScopes       []string `json:"allowed_scopes"`
 	DefaultScopes       []string `json:"default_scopes"`
+	AllowedAudiences    []string `json:"allowed_audiences"`
 	TokenEndpointMethod string   `json:"token_endpoint_auth_method"`
 }
 
@@ -258,6 +259,13 @@ func (h *HttpAdapter) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(payload.AllowedAudiences) > 0 {
+		if !isSubset(payload.AllowedAudiences, tenant.PredefinedAudiences) {
+			respondJSON(w, http.StatusBadRequest, map[string]string{"error": "requested allowed_audiences are not predefined/allowed by the tenant"})
+			return
+		}
+	}
+
 	clientID := uuid.NewString()
 	clientSecret := uuid.NewString()
 	client := model.ClientApplication{
@@ -275,6 +283,7 @@ func (h *HttpAdapter) register(w http.ResponseWriter, r *http.Request) {
 		IDTokenLifetime:        10 * time.Minute,
 		AllowedScopes:          payload.AllowedScopes,
 		DefaultScopes:          payload.DefaultScopes,
+		AllowedAudiences:       payload.AllowedAudiences,
 		PostLogoutRedirectURIs: []string{},
 	}
 	if err := h.storagePort.SaveClient(r.Context(), client); err != nil {
@@ -443,6 +452,7 @@ func (h *HttpAdapter) handleClientCredentialsGrant(w http.ResponseWriter, r *htt
 		Scopes:    client.DefaultScopes,
 		IssuedAt:  issuedAt,
 		ExpiresAt: issuedAt.Add(client.AccessTokenLifetime),
+		Audiences: client.AllowedAudiences,
 	}, client.Algorithm)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})

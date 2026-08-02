@@ -67,6 +67,7 @@ func TestOAuthService_ExchangeCodeForTokensMintsTokens(t *testing.T) {
 		IDTokenLifetime:      time.Minute,
 		RefreshTokenLifetime: 24 * time.Hour,
 		DefaultScopes:        []string{"openid", "profile"},
+		AllowedAudiences:     []string{"https://api.example.com/resource"},
 	}
 	authSession := &model.AuthorizationCodeSession{
 		Code:            code,
@@ -84,6 +85,9 @@ func TestOAuthService_ExchangeCodeForTokensMintsTokens(t *testing.T) {
 	storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(client, nil)
 	storage.GetAndConsumeAuthSessionMock.Expect(context.Background(), tenantID, code).Return(authSession, nil)
 	crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+		if len(claims.Audiences) != 1 || claims.Audiences[0] != "https://api.example.com/resource" {
+			t.Errorf("expected audience [\"https://api.example.com/resource\"], got %v", claims.Audiences)
+		}
 		return "access-token", nil
 	})
 	crypto.SignIDTokenMock.Set(func(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {

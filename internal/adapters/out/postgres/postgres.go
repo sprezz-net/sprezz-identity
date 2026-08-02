@@ -55,6 +55,7 @@ func (s *PostgresStorage) SaveClient(ctx context.Context, client model.ClientApp
 		DefaultScopes:          client.DefaultScopes,
 		AllowedIdps:            client.AllowedIDPs,
 		DefaultIdp:             stringPtr(client.DefaultIDP),
+		AllowedAudiences:       client.AllowedAudiences,
 	})
 	if err != nil {
 		return fmt.Errorf("save client: %w", err)
@@ -114,6 +115,7 @@ func (s *PostgresStorage) GetClient(ctx context.Context, tenantID uuid.UUID, cli
 		DefaultScopes:          row.DefaultScopes,
 		AllowedIDPs:            row.AllowedIdps,
 		DefaultIDP:             valueOrEmpty(row.DefaultIdp),
+		AllowedAudiences:       row.AllowedAudiences,
 	}, nil
 }
 
@@ -137,7 +139,8 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 			a.allowed_scopes,
 			a.default_scopes,
 			a.allowed_idps,
-			a.default_idp
+			a.default_idp,
+			a.allowed_audiences
 		FROM applications AS a
 		JOIN tenants AS t ON t.id = a.tenant_id
 		WHERE t.tenant_uuid = $1::uuid
@@ -167,6 +170,7 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 		var defaultScopes []string
 		var allowedIdps []string
 		var defaultIdp *string
+		var allowedAudiences []string
 
 		err = rows.Scan(
 			&id,
@@ -187,6 +191,7 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 			&defaultScopes,
 			&allowedIdps,
 			&defaultIdp,
+			&allowedAudiences,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan client application: %w", err)
@@ -229,6 +234,7 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 			DefaultScopes:          defaultScopes,
 			AllowedIDPs:            allowedIdps,
 			DefaultIDP:             valueOrEmpty(defaultIdp),
+			AllowedAudiences:       allowedAudiences,
 		})
 	}
 
@@ -315,12 +321,13 @@ func (s *PostgresStorage) ResolveTenantByDomain(ctx context.Context, domain stri
 	}
 
 	return &model.Tenant{
-		ID:               tenantID,
-		Name:             row.Name,
-		Domain:           row.DomainName,
-		IsActive:         row.IsActive,
-		CreatedAt:        createdAt,
-		PredefinedScopes: row.PredefinedScopes,
+		ID:                  tenantID,
+		Name:                row.Name,
+		Domain:              row.DomainName,
+		IsActive:            row.IsActive,
+		CreatedAt:           createdAt,
+		PredefinedScopes:    row.PredefinedScopes,
+		PredefinedAudiences: row.PredefinedAudiences,
 	}, nil
 }
 
@@ -344,23 +351,25 @@ func (s *PostgresStorage) ResolveTenantByID(ctx context.Context, tenantID uuid.U
 	}
 
 	return &model.Tenant{
-		ID:               resolvedID,
-		Name:             row.Name,
-		Domain:           row.DomainName,
-		IsActive:         row.IsActive,
-		CreatedAt:        createdAt,
-		PredefinedScopes: row.PredefinedScopes,
+		ID:                  resolvedID,
+		Name:                row.Name,
+		Domain:              row.DomainName,
+		IsActive:            row.IsActive,
+		CreatedAt:           createdAt,
+		PredefinedScopes:    row.PredefinedScopes,
+		PredefinedAudiences: row.PredefinedAudiences,
 	}, nil
 }
 
 func (s *PostgresStorage) CreateTenant(ctx context.Context, tenant model.Tenant) error {
 	commandTag, err := s.queries.CreateTenant(ctx, sqlcdb.CreateTenantParams{
-		TenantUuid:       toPGUUID(tenant.ID),
-		Name:             tenant.Name,
-		DomainName:       tenant.Domain,
-		IsActive:         tenant.IsActive,
-		CreatedAt:        toPGTimestamptz(tenant.CreatedAt),
-		PredefinedScopes: tenant.PredefinedScopes,
+		TenantUuid:          toPGUUID(tenant.ID),
+		Name:                tenant.Name,
+		DomainName:          tenant.Domain,
+		IsActive:            tenant.IsActive,
+		CreatedAt:           toPGTimestamptz(tenant.CreatedAt),
+		PredefinedScopes:    tenant.PredefinedScopes,
+		PredefinedAudiences: tenant.PredefinedAudiences,
 	})
 	if err != nil {
 		return fmt.Errorf("create tenant: %w", err)

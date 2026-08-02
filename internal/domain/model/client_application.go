@@ -26,4 +26,5 @@ type ClientApplication struct {
 	DefaultScopes          []string
 	AllowedIDPs            []string
 	DefaultIDP             string
+	AllowedAudiences       []string
 }

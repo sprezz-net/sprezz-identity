@@ -251,3 +251,15 @@ Sprezz Identity implements OIDC Back-Channel Logout 1.0 to trigger secure, out-o
 * **Cryptographic Token Verification**: The server generates a unique, cryptographically signed `logout_token` (JWT) for each client. This token contains the standard claims (`iss`, `sub`, `aud`, `iat`, `jti`) and the mandatory `events` claim:
   `"events": { "http://schemas.openid.net/event/back-channel-logout": {} }`
 * **Non-Blocking Asynchronous Propagation**: To keep logout execution extremely fast for the browser, the usecase invokes our SSRF-protected `port.LogoutNotifier` adapter asynchronously inside separate background goroutines, shielding client-to-server HTTP request times from the user.
+
+## 10. Audience Governance and Token Minting
+
+Sprezz Identity implements Audience Governance to restrict the intended recipients (Resource Servers) of minted Access Tokens and ensure least privilege access.
+
+### 10.1 Tenant-Level Predefined Audiences
+
+To enforce centralized security policy, Tenants configure a master list of trusted resource audiences (`PredefinedAudiences []string`). This ensures that only authorized resource API identifiers can be introduced into the identity partition.
+
+### 10.2 Client-Level Allowed Audiences
+
+Client Applications govern access to these APIs using `AllowedAudiences []string`. The system enforces that a client's allowed audiences list must be a subset of the tenant's predefined audiences. When an access token is minted, the token's `"aud"` claim is populated using the configured allowed audiences, restricting the token's validity to only the authorized resource servers.

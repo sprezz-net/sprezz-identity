@@ -29,7 +29,8 @@ INSERT INTO applications (
     allowed_scopes,
     default_scopes,
     allowed_idps,
-    default_idp
+    default_idp,
+    allowed_audiences
 )
 SELECT
     $2,
@@ -50,7 +51,8 @@ SELECT
     $16,
     $17,
     $18,
-    $19
+    $19,
+    $20
 FROM tenant
 ON CONFLICT (tenant_id, client_id)
 DO UPDATE SET
@@ -69,7 +71,8 @@ DO UPDATE SET
     allowed_scopes = EXCLUDED.allowed_scopes,
     default_scopes = EXCLUDED.default_scopes,
     allowed_idps = EXCLUDED.allowed_idps,
-    default_idp = EXCLUDED.default_idp;
+    default_idp = EXCLUDED.default_idp,
+    allowed_audiences = EXCLUDED.allowed_audiences;
 
 -- name: GetClient :one
 SELECT
@@ -91,7 +94,8 @@ SELECT
     a.allowed_scopes,
     a.default_scopes,
     a.allowed_idps,
-    a.default_idp
+    a.default_idp,
+    a.allowed_audiences
 FROM applications AS a
 JOIN tenants AS t ON t.id = a.tenant_id
 WHERE t.tenant_uuid = $1

@@ -71,6 +71,7 @@ func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.
 		Scopes:    authSession.Scopes,
 		IssuedAt:  now,
 		ExpiresAt: now.Add(client.AccessTokenLifetime),
+		Audiences: client.AllowedAudiences,
 	}, client.Algorithm)
 	if err != nil {
 		return nil, fmt.Errorf("mint access token: %w", err)

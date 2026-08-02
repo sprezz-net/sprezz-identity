@@ -49,6 +49,9 @@ func (s *Storage) ResolveTenantByID(ctx context.Context, tenantID uuid.UUID) (*m
 			if clone.PredefinedScopes == nil {
 				clone.PredefinedScopes = []string{"openid", "profile", "email", "offline_access"}
 			}
+			if clone.PredefinedAudiences == nil {
+				clone.PredefinedAudiences = []string{}
+			}
 			return &clone, nil
 		}
 	}
@@ -225,6 +228,9 @@ func (s *Storage) ResolveTenantByDomain(ctx context.Context, domain string) (*mo
 	clone := *tenant
 	if clone.PredefinedScopes == nil {
 		clone.PredefinedScopes = []string{"openid", "profile", "email", "offline_access"}
+	}
+	if clone.PredefinedAudiences == nil {
+		clone.PredefinedAudiences = []string{}
 	}
 	return &clone, nil
 }

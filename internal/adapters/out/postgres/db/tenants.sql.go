@@ -13,17 +13,18 @@ import (
 )
 
 const createTenant = `-- name: CreateTenant :execresult
-INSERT INTO tenants (tenant_uuid, name, domain_name, is_active, created_at, predefined_scopes)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO tenants (tenant_uuid, name, domain_name, is_active, created_at, predefined_scopes, predefined_audiences)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateTenantParams struct {
-	TenantUuid       pgtype.UUID        `json:"tenant_uuid"`
-	Name             string             `json:"name"`
-	DomainName       string             `json:"domain_name"`
-	IsActive         bool               `json:"is_active"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	PredefinedScopes []string           `json:"predefined_scopes"`
+	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
+	Name                string             `json:"name"`
+	DomainName          string             `json:"domain_name"`
+	IsActive            bool               `json:"is_active"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	PredefinedScopes    []string           `json:"predefined_scopes"`
+	PredefinedAudiences []string           `json:"predefined_audiences"`
 }
 
 func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (pgconn.CommandTag, error) {
@@ -34,23 +35,25 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (pgc
 		arg.IsActive,
 		arg.CreatedAt,
 		arg.PredefinedScopes,
+		arg.PredefinedAudiences,
 	)
 }
 
 const resolveTenantByDomain = `-- name: ResolveTenantByDomain :one
-SELECT tenant_uuid, name, domain_name, is_active, created_at, predefined_scopes
+SELECT tenant_uuid, name, domain_name, is_active, created_at, predefined_scopes, predefined_audiences
 FROM tenants
 WHERE domain_name = $1
 LIMIT 1
 `
 
 type ResolveTenantByDomainRow struct {
-	TenantUuid       pgtype.UUID        `json:"tenant_uuid"`
-	Name             string             `json:"name"`
-	DomainName       string             `json:"domain_name"`
-	IsActive         bool               `json:"is_active"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	PredefinedScopes []string           `json:"predefined_scopes"`
+	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
+	Name                string             `json:"name"`
+	DomainName          string             `json:"domain_name"`
+	IsActive            bool               `json:"is_active"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	PredefinedScopes    []string           `json:"predefined_scopes"`
+	PredefinedAudiences []string           `json:"predefined_audiences"`
 }
 
 func (q *Queries) ResolveTenantByDomain(ctx context.Context, domainName string) (ResolveTenantByDomainRow, error) {
@@ -63,24 +66,26 @@ func (q *Queries) ResolveTenantByDomain(ctx context.Context, domainName string) 
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.PredefinedScopes,
+		&i.PredefinedAudiences,
 	)
 	return i, err
 }
 
 const resolveTenantByUUID = `-- name: ResolveTenantByUUID :one
-SELECT tenant_uuid, name, domain_name, is_active, created_at, predefined_scopes
+SELECT tenant_uuid, name, domain_name, is_active, created_at, predefined_scopes, predefined_audiences
 FROM tenants
 WHERE tenant_uuid = $1
 LIMIT 1
 `
 
 type ResolveTenantByUUIDRow struct {
-	TenantUuid       pgtype.UUID        `json:"tenant_uuid"`
-	Name             string             `json:"name"`
-	DomainName       string             `json:"domain_name"`
-	IsActive         bool               `json:"is_active"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	PredefinedScopes []string           `json:"predefined_scopes"`
+	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
+	Name                string             `json:"name"`
+	DomainName          string             `json:"domain_name"`
+	IsActive            bool               `json:"is_active"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	PredefinedScopes    []string           `json:"predefined_scopes"`
+	PredefinedAudiences []string           `json:"predefined_audiences"`
 }
 
 func (q *Queries) ResolveTenantByUUID(ctx context.Context, tenantUuid pgtype.UUID) (ResolveTenantByUUIDRow, error) {
@@ -93,6 +98,7 @@ func (q *Queries) ResolveTenantByUUID(ctx context.Context, tenantUuid pgtype.UUI
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.PredefinedScopes,
+		&i.PredefinedAudiences,
 	)
 	return i, err
 }
