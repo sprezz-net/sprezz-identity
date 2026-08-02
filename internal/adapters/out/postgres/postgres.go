@@ -315,11 +315,12 @@ func (s *PostgresStorage) ResolveTenantByDomain(ctx context.Context, domain stri
 	}
 
 	return &model.Tenant{
-		ID:        tenantID,
-		Name:      row.Name,
-		Domain:    row.DomainName,
-		IsActive:  row.IsActive,
-		CreatedAt: createdAt,
+		ID:               tenantID,
+		Name:             row.Name,
+		Domain:           row.DomainName,
+		IsActive:         row.IsActive,
+		CreatedAt:        createdAt,
+		PredefinedScopes: row.PredefinedScopes,
 	}, nil
 }
 
@@ -343,21 +344,23 @@ func (s *PostgresStorage) ResolveTenantByID(ctx context.Context, tenantID uuid.U
 	}
 
 	return &model.Tenant{
-		ID:        resolvedID,
-		Name:      row.Name,
-		Domain:    row.DomainName,
-		IsActive:  row.IsActive,
-		CreatedAt: createdAt,
+		ID:               resolvedID,
+		Name:             row.Name,
+		Domain:           row.DomainName,
+		IsActive:         row.IsActive,
+		CreatedAt:        createdAt,
+		PredefinedScopes: row.PredefinedScopes,
 	}, nil
 }
 
 func (s *PostgresStorage) CreateTenant(ctx context.Context, tenant model.Tenant) error {
 	commandTag, err := s.queries.CreateTenant(ctx, sqlcdb.CreateTenantParams{
-		TenantUuid: toPGUUID(tenant.ID),
-		Name:       tenant.Name,
-		DomainName: tenant.Domain,
-		IsActive:   tenant.IsActive,
-		CreatedAt:  toPGTimestamptz(tenant.CreatedAt),
+		TenantUuid:       toPGUUID(tenant.ID),
+		Name:             tenant.Name,
+		DomainName:       tenant.Domain,
+		IsActive:         tenant.IsActive,
+		CreatedAt:        toPGTimestamptz(tenant.CreatedAt),
+		PredefinedScopes: tenant.PredefinedScopes,
 	})
 	if err != nil {
 		return fmt.Errorf("create tenant: %w", err)

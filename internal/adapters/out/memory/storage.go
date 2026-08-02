@@ -46,6 +46,9 @@ func (s *Storage) ResolveTenantByID(ctx context.Context, tenantID uuid.UUID) (*m
 	for _, tenant := range s.tenants {
 		if tenant.ID == tenantID {
 			clone := *tenant
+			if clone.PredefinedScopes == nil {
+				clone.PredefinedScopes = []string{"openid", "profile", "email", "offline_access"}
+			}
 			return &clone, nil
 		}
 	}
@@ -220,6 +223,9 @@ func (s *Storage) ResolveTenantByDomain(ctx context.Context, domain string) (*mo
 		return nil, port.ErrTenantNotFound
 	}
 	clone := *tenant
+	if clone.PredefinedScopes == nil {
+		clone.PredefinedScopes = []string{"openid", "profile", "email", "offline_access"}
+	}
 	return &clone, nil
 }
 

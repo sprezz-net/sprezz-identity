@@ -98,12 +98,13 @@ type RevokedToken struct {
 }
 
 type Tenant struct {
-	ID         int32              `json:"id"`
-	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
-	Name       string             `json:"name"`
-	DomainName string             `json:"domain_name"`
-	IsActive   bool               `json:"is_active"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	ID               int32              `json:"id"`
+	TenantUuid       pgtype.UUID        `json:"tenant_uuid"`
+	Name             string             `json:"name"`
+	DomainName       string             `json:"domain_name"`
+	IsActive         bool               `json:"is_active"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	PredefinedScopes []string           `json:"predefined_scopes"`
 }
 
 type UserProfile struct {

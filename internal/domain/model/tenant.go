@@ -7,9 +7,10 @@ import (
 )
 
 type Tenant struct {
-	ID        uuid.UUID
-	Name      string
-	Domain    string
-	IsActive  bool
-	CreatedAt time.Time
+	ID               uuid.UUID
+	Name             string
+	Domain           string
+	IsActive         bool
+	CreatedAt        time.Time
+	PredefinedScopes []string
 }

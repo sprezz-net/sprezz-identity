@@ -1,15 +1,15 @@
 -- name: ResolveTenantByDomain :one
-SELECT tenant_uuid, name, domain_name, is_active, created_at
+SELECT tenant_uuid, name, domain_name, is_active, created_at, predefined_scopes
 FROM tenants
 WHERE domain_name = $1
 LIMIT 1;
 
 -- name: ResolveTenantByUUID :one
-SELECT tenant_uuid, name, domain_name, is_active, created_at
+SELECT tenant_uuid, name, domain_name, is_active, created_at, predefined_scopes
 FROM tenants
 WHERE tenant_uuid = $1
 LIMIT 1;
 
 -- name: CreateTenant :execresult
-INSERT INTO tenants (tenant_uuid, name, domain_name, is_active, created_at)
-VALUES ($1, $2, $3, $4, $5);
+INSERT INTO tenants (tenant_uuid, name, domain_name, is_active, created_at, predefined_scopes)
+VALUES ($1, $2, $3, $4, $5, $6);

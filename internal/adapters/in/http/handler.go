@@ -167,6 +167,17 @@ func (h *HttpAdapter) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HttpAdapter) openIDConfiguration(w http.ResponseWriter, r *http.Request) {
+	tenant, err := h.resolveTenant(r.Context(), r.Host)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	scopesSupported := tenant.PredefinedScopes
+	if len(scopesSupported) == 0 {
+		scopesSupported = []string{"openid", "profile", "email", "offline_access"}
+	}
+
 	issuer := "https://" + r.Host
 	respondJSON(w, http.StatusOK, map[string]any{
 		"issuer":                                issuer,
@@ -178,7 +189,7 @@ func (h *HttpAdapter) openIDConfiguration(w http.ResponseWriter, r *http.Request
 		"introspection_endpoint":                issuer + routeIntrospect,
 		"response_types_supported":              []string{"code", "token"},
 		"grant_types_supported":                 []string{"authorization_code", "client_credentials", "refresh_token"},
-		"scopes_supported":                      []string{"openid", "profile", "email", "offline_access"},
+		"scopes_supported":                      scopesSupported,
 		"token_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post", "none"},
 	})
 }
@@ -228,6 +239,20 @@ func (h *HttpAdapter) register(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(payload.DefaultScopes) == 0 {
 		payload.DefaultScopes = payload.AllowedScopes
+	}
+
+	predefined := tenant.PredefinedScopes
+	if len(predefined) == 0 {
+		predefined = []string{"openid", "profile", "email", "offline_access"}
+	}
+
+	if !isSubset(payload.AllowedScopes, predefined) {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "requested allowed_scopes are not predefined/allowed by the tenant"})
+		return
+	}
+	if !isSubset(payload.DefaultScopes, predefined) {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "requested default_scopes are not predefined/allowed by the tenant"})
+		return
 	}
 
 	clientID := uuid.NewString()
@@ -637,4 +662,17 @@ func contains(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func isSubset(subset, set []string) bool {
+	setMap := make(map[string]struct{}, len(set))
+	for _, item := range set {
+		setMap[item] = struct{}{}
+	}
+	for _, item := range subset {
+		if _, ok := setMap[item]; !ok {
+			return false
+		}
+	}
+	return true
 }
