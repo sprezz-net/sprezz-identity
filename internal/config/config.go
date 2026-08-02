@@ -24,11 +24,11 @@ type AdminTenantConfig struct {
 }
 
 type Config struct {
-	AppEnv           string                 `yaml:"app_env" env:"APP_ENV" env-default:"local"`
-	Port             string                 `yaml:"port" env:"PORT" env-default:"8080"`
-	Database         DatabaseConfig         `yaml:"database"`
-	AdminTenant      AdminTenantConfig      `yaml:"admin_tenant"`
-	DatabaseURL      string                 `env:"DATABASE_URL"`
+	AppEnv      string            `yaml:"app_env" env:"APP_ENV" env-default:"local"`
+	Port        string            `yaml:"port" env:"PORT" env-default:"8080"`
+	Database    DatabaseConfig    `yaml:"database"`
+	AdminTenant AdminTenantConfig `yaml:"admin_tenant"`
+	DatabaseURL string            `env:"DATABASE_URL"`
 }
 
 // GetDSN dynamically builds the connection string or prioritizes a raw DATABASE_URL override.

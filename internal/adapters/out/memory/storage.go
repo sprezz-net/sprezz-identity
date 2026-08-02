@@ -26,6 +26,19 @@ func NewStorage() *Storage {
 	}
 }
 
+func (s *Storage) ResolveTenantByID(ctx context.Context, tenantID uuid.UUID) (*model.Tenant, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, tenant := range s.tenants {
+		if tenant.ID == tenantID {
+			clone := *tenant
+			return &clone, nil
+		}
+	}
+	return nil, port.ErrTenantNotFound
+}
+
 func (s *Storage) SaveClient(ctx context.Context, client model.ClientApplication) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

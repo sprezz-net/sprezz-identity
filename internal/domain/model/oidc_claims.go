@@ -4,6 +4,7 @@ import "time"
 
 type TokenClaims struct {
 	TokenID   string
+	Issuer    string
 	TenantID  string
 	Subject   string
 	ClientID  string

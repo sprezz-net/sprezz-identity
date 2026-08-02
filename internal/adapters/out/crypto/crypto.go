@@ -34,8 +34,14 @@ func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.Signatur
 		return "", fmt.Errorf("unsupported signing algorithm %s", alg)
 	}
 
-	issuer, kid := s.tenantIdentity(claims.TenantID)
-	privateKey, err := s.getOrCreateKeyPair(claims.TenantID, issuer, kid)
+	issuer := claims.Issuer
+	if issuer == "" {
+		issuer = "https://" + strings.TrimPrefix(claims.TenantID, "https://")
+	}
+	issuer = strings.TrimSuffix(issuer, "/")
+	tenantKey := strings.TrimPrefix(issuer, "https://")
+	kid := s.tenantKeyID(issuer)
+	privateKey, err := s.getOrCreateKeyPair(tenantKey, issuer, kid)
 	if err != nil {
 		return "", err
 	}
@@ -63,14 +69,20 @@ func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.Signatur
 		return "", fmt.Errorf("unsupported signing algorithm %s", alg)
 	}
 
-	issuer, kid := s.tenantIdentity(claims.TenantID)
-	privateKey, err := s.getOrCreateKeyPair(claims.TenantID, issuer, kid)
+	issuer := claims.Issuer
+	if issuer == "" {
+		issuer = "https://" + strings.TrimPrefix(claims.TenantID, "https://")
+	}
+	issuer = strings.TrimSuffix(issuer, "/")
+	tenantKey := strings.TrimPrefix(issuer, "https://")
+	kid := s.tenantKeyID(issuer)
+	privateKey, err := s.getOrCreateKeyPair(tenantKey, issuer, kid)
 	if err != nil {
 		return "", err
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		"iss":       claims.Issuer,
+		"iss":       issuer,
 		"sub":       claims.Subject,
 		"aud":       claims.Audience,
 		"jti":       claims.TokenID,
@@ -122,10 +134,17 @@ func (s *JWTSigner) tenantIdentity(tenant string) (string, string) {
 	if tenant == "" {
 		tenant = "default"
 	}
-	issuer := "https://" + strings.TrimPrefix(tenant, "https://")
-	kidHash := sha256.Sum256([]byte(tenant))
-	kid := fmt.Sprintf("kid-%x", kidHash)
+	issuer := strings.TrimSuffix("https://"+strings.TrimPrefix(tenant, "https://"), "/")
+	kid := s.tenantKeyID(issuer)
 	return issuer, kid
+}
+
+func (s *JWTSigner) tenantKeyID(tenant string) string {
+	if tenant == "" {
+		tenant = "default"
+	}
+	kidHash := sha256.Sum256([]byte(strings.TrimPrefix(tenant, "https://")))
+	return fmt.Sprintf("kid-%x", kidHash)
 }
 
 func (s *JWTSigner) getOrCreateKeyPair(tenant string, issuer string, kid string) (*rsa.PrivateKey, error) {

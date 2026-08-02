@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"sprezz-identity/internal/domain/model"
-	"sprezz-identity/internal/domain/port"
+	"sprezz-identity/internal/domain/port/portmock"
 
 	"github.com/gojuno/minimock/v3"
 	"github.com/google/uuid"
@@ -16,8 +16,8 @@ import (
 
 func TestOAuthService_InitiateAuthorizePersistsSession(t *testing.T) {
 	ctrl := minimock.NewController(t)
-	storage := port.NewStorageMock(ctrl)
-	crypto := port.NewCryptoMock(ctrl)
+	storage := portmock.NewStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
 	service := NewOAuthService(storage, crypto, nil)
 
 	session := model.AuthorizationCodeSession{
@@ -41,11 +41,15 @@ func TestOAuthService_InitiateAuthorizePersistsSession(t *testing.T) {
 
 func TestOAuthService_ExchangeCodeForTokensMintsTokens(t *testing.T) {
 	ctrl := minimock.NewController(t)
-	storage := port.NewStorageMock(ctrl)
-	crypto := port.NewCryptoMock(ctrl)
+	storage := portmock.NewStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
 	service := NewOAuthService(storage, crypto, nil)
 
 	tenantID := uuid.New()
+	tenant := &model.Tenant{
+		ID:     tenantID,
+		Domain: "example.com",
+	}
 	clientID := "client-id"
 	code := uuid.NewString()
 	codeVerifier := "verifier-value"
@@ -74,6 +78,12 @@ func TestOAuthService_ExchangeCodeForTokensMintsTokens(t *testing.T) {
 		ExpiresAt:       time.Now().UTC().Add(5 * time.Minute),
 	}
 
+	storage.ResolveTenantByIDMock.Set(func(ctx context.Context, gotTenantID uuid.UUID) (*model.Tenant, error) {
+		if gotTenantID != tenantID {
+			t.Fatalf("unexpected tenant ID %s", gotTenantID)
+		}
+		return tenant, nil
+	})
 	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, gotClientID string) (*model.ClientApplication, error) {
 		if gotTenantID != tenantID {
 			t.Fatalf("unexpected tenant ID %s", gotTenantID)
@@ -96,11 +106,23 @@ func TestOAuthService_ExchangeCodeForTokensMintsTokens(t *testing.T) {
 		if alg != model.AlgRS256 {
 			t.Fatalf("unexpected signing algorithm %s", alg)
 		}
+		if claims.Issuer != "https://example.com" {
+			t.Fatalf("unexpected issuer %s", claims.Issuer)
+		}
+		if claims.TenantID != tenantID.String() {
+			t.Fatalf("unexpected tenant claim %s", claims.TenantID)
+		}
 		return "access-token", nil
 	})
 	crypto.SignIDTokenMock.Set(func(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
 		if alg != model.AlgRS256 {
 			t.Fatalf("unexpected signing algorithm %s", alg)
+		}
+		if claims.Issuer != "https://example.com" {
+			t.Fatalf("unexpected issuer %s", claims.Issuer)
+		}
+		if claims.TenantID != tenantID.String() {
+			t.Fatalf("unexpected tenant claim %s", claims.TenantID)
 		}
 		return "id-token", nil
 	})

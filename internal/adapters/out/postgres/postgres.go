@@ -196,6 +196,34 @@ func (s *PostgresStorage) ResolveTenantByDomain(ctx context.Context, domain stri
 	}, nil
 }
 
+func (s *PostgresStorage) ResolveTenantByID(ctx context.Context, tenantID uuid.UUID) (*model.Tenant, error) {
+	row, err := s.queries.ResolveTenantByUUID(ctx, toPGUUID(tenantID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, port.ErrTenantNotFound
+		}
+		return nil, fmt.Errorf("resolve tenant by ID: %w", err)
+	}
+
+	resolvedID, err := pgUUIDToUUID(row.TenantUuid)
+	if err != nil {
+		return nil, fmt.Errorf("resolve tenant by ID: %w", err)
+	}
+
+	createdAt, err := pgTimestamptzToTime(row.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("resolve tenant by ID: %w", err)
+	}
+
+	return &model.Tenant{
+		ID:        resolvedID,
+		Name:      row.Name,
+		Domain:    row.DomainName,
+		IsActive:  row.IsActive,
+		CreatedAt: createdAt,
+	}, nil
+}
+
 func (s *PostgresStorage) CreateTenant(ctx context.Context, tenant model.Tenant) error {
 	commandTag, err := s.queries.CreateTenant(ctx, sqlcdb.CreateTenantParams{
 		TenantUuid: toPGUUID(tenant.ID),

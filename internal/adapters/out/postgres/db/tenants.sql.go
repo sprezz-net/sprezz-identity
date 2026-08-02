@@ -62,3 +62,31 @@ func (q *Queries) ResolveTenantByDomain(ctx context.Context, domainName string) 
 	)
 	return i, err
 }
+
+const resolveTenantByUUID = `-- name: ResolveTenantByUUID :one
+SELECT tenant_uuid, name, domain_name, is_active, created_at
+FROM tenants
+WHERE tenant_uuid = $1
+LIMIT 1
+`
+
+type ResolveTenantByUUIDRow struct {
+	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
+	Name       string             `json:"name"`
+	DomainName string             `json:"domain_name"`
+	IsActive   bool               `json:"is_active"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ResolveTenantByUUID(ctx context.Context, tenantUuid pgtype.UUID) (ResolveTenantByUUIDRow, error) {
+	row := q.db.QueryRow(ctx, resolveTenantByUUID, tenantUuid)
+	var i ResolveTenantByUUIDRow
+	err := row.Scan(
+		&i.TenantUuid,
+		&i.Name,
+		&i.DomainName,
+		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
+}

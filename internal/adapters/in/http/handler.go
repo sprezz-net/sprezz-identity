@@ -257,6 +257,7 @@ func (h *HttpAdapter) token(w http.ResponseWriter, r *http.Request) {
 		issuedAt := time.Now().UTC()
 		accessToken, err := h.cryptoPort.SignAccessToken(model.TokenClaims{
 			TokenID:   uuid.NewString(),
+			Issuer:    "https://" + tenant.Domain,
 			TenantID:  tenant.ID.String(),
 			Subject:   clientID,
 			ClientID:  clientID,

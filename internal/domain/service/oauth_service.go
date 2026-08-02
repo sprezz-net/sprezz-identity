@@ -40,6 +40,11 @@ func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.
 		return nil, fmt.Errorf("get client for token exchange: %w", err)
 	}
 
+	tenant, err := s.storage.ResolveTenantByID(ctx, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("resolve tenant identity for token exchange: %w", err)
+	}
+
 	authSession, err := s.storage.GetAndConsumeAuthSession(ctx, tenantID, code)
 	if err != nil {
 		return nil, fmt.Errorf("consume authorization code: %w", err)
@@ -53,9 +58,11 @@ func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.
 		}
 	}
 
+	issuer := "https://" + tenant.Domain
 	now := time.Now().UTC()
 	accessToken, err := s.crypto.SignAccessToken(model.TokenClaims{
 		TokenID:   uuid.NewString(),
+		Issuer:    issuer,
 		TenantID:  tenantID.String(),
 		Subject:   authSession.Subject,
 		ClientID:  clientID,
@@ -69,7 +76,7 @@ func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.
 
 	idToken, err := s.crypto.SignIDToken(model.OIDCTokenClaims{
 		TokenID:   uuid.NewString(),
-		Issuer:    "https://" + tenantID.String(),
+		Issuer:    issuer,
 		Subject:   authSession.Subject,
 		Audience:  clientID,
 		TenantID:  tenantID.String(),
