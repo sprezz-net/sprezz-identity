@@ -101,6 +101,35 @@ func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.Signatur
 	return token.SignedString(privateKey)
 }
 
+func (s *JWTSigner) VerifyToken(tokenStr string) (map[string]any, error) {
+	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		kid, _ := t.Header["kid"].(string)
+		if kid == "" {
+			return nil, fmt.Errorf("missing kid in token header")
+		}
+
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		for _, key := range s.keyrings {
+			return &key.PublicKey, nil
+		}
+		return nil, fmt.Errorf("key not found for kid: %s", kid)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		return nil, fmt.Errorf("invalid token claims")
+	}
+
+	return claims, nil
+}
+
 func (s *JWTSigner) JWKSForTenant(domain string) ([]map[string]any, error) {
 	s.mu.RLock()
 	jwkSet, ok := s.jwks[domain]

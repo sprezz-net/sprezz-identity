@@ -28,6 +28,7 @@ const (
 	routeOpenIDConfig = "/.well-known/openid-configuration"
 	routeKeys         = "/.well-known/jwks.json"
 	routeRevoke       = "/oauth/revoke"
+	routeIntrospect   = "/oauth/introspect"
 	contentTypeHeader = "Content-Type"
 	contentTypeJSON   = "application/json"
 )
@@ -77,6 +78,7 @@ func (h *HttpAdapter) registerRoutes() {
 	h.router.Post(routeToken, h.token)
 	h.router.Get(routeUserInfo, h.userinfo)
 	h.router.Post(routeRevoke, h.revoke)
+	h.router.Post(routeIntrospect, h.introspect)
 }
 
 func (h *HttpAdapter) loginRoot(w http.ResponseWriter, r *http.Request) {
@@ -171,6 +173,7 @@ func (h *HttpAdapter) openIDConfiguration(w http.ResponseWriter, r *http.Request
 		"token_endpoint":                        issuer + routeToken,
 		"userinfo_endpoint":                     issuer + routeUserInfo,
 		"registration_endpoint":                 issuer + routeRegister,
+		"introspection_endpoint":                issuer + routeIntrospect,
 		"response_types_supported":              []string{"code", "token"},
 		"grant_types_supported":                 []string{"authorization_code", "client_credentials", "refresh_token"},
 		"scopes_supported":                      []string{"openid", "profile", "email", "offline_access"},
@@ -378,16 +381,26 @@ func (h *HttpAdapter) handleAuthorizationCodeGrant(w http.ResponseWriter, r *htt
 	respondJSON(w, http.StatusOK, tokens)
 }
 
-func (h *HttpAdapter) handleClientCredentialsGrant(w http.ResponseWriter, r *http.Request, tenant *model.Tenant) {
+func (h *HttpAdapter) authenticateClient(w http.ResponseWriter, r *http.Request, tenant *model.Tenant) (*model.ClientApplication, error) {
 	clientID := r.FormValue("client_id")
 	clientSecret := r.FormValue("client_secret")
 	if clientID == "" || clientSecret == "" {
 		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "client_id and client_secret are required"})
-		return
+		return nil, fmt.Errorf("client_id and client_secret are required")
 	}
+
 	client, err := h.storagePort.GetClient(r.Context(), tenant.ID, clientID)
 	if err != nil || client.ClientSecret == nil || *client.ClientSecret != clientSecret {
 		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "client authentication failed"})
+		return nil, fmt.Errorf("client authentication failed")
+	}
+
+	return client, nil
+}
+
+func (h *HttpAdapter) handleClientCredentialsGrant(w http.ResponseWriter, r *http.Request, tenant *model.Tenant) {
+	client, err := h.authenticateClient(w, r, tenant)
+	if err != nil {
 		return
 	}
 	issuedAt := time.Now().UTC()
@@ -395,8 +408,8 @@ func (h *HttpAdapter) handleClientCredentialsGrant(w http.ResponseWriter, r *htt
 		TokenID:   uuid.NewString(),
 		Issuer:    "https://" + tenant.Domain,
 		TenantID:  tenant.ID.String(),
-		Subject:   clientID,
-		ClientID:  clientID,
+		Subject:   client.ClientID,
+		ClientID:  client.ClientID,
 		Scopes:    client.DefaultScopes,
 		IssuedAt:  issuedAt,
 		ExpiresAt: issuedAt.Add(client.AccessTokenLifetime),
@@ -446,16 +459,8 @@ func (h *HttpAdapter) revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientID := r.FormValue("client_id")
-	clientSecret := r.FormValue("client_secret")
-	if clientID == "" || clientSecret == "" {
-		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "client_id and client_secret are required"})
-		return
-	}
-
-	client, err := h.storagePort.GetClient(r.Context(), tenant.ID, clientID)
-	if err != nil || client.ClientSecret == nil || *client.ClientSecret != clientSecret {
-		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "client authentication failed"})
+	client, err := h.authenticateClient(w, r, tenant)
+	if err != nil {
 		return
 	}
 
@@ -465,12 +470,44 @@ func (h *HttpAdapter) revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.authPort.RevokeToken(r.Context(), tenant.ID, clientID, token); err != nil {
+	if err := h.authPort.RevokeToken(r.Context(), tenant.ID, client.ClientID, token); err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *HttpAdapter) introspect(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "malformed introspection request"})
+		return
+	}
+
+	tenant, err := h.resolveTenant(r.Context(), r.Host)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	client, err := h.authenticateClient(w, r, tenant)
+	if err != nil {
+		return
+	}
+
+	token := r.FormValue("token")
+	if token == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "token is required"})
+		return
+	}
+
+	res, err := h.authPort.IntrospectToken(r.Context(), tenant.ID, client.ClientID, token)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, res)
 }
 
 func (h *HttpAdapter) userinfo(w http.ResponseWriter, r *http.Request) {

@@ -155,6 +155,7 @@ To maintain complete compatibility with off-the-shelf native app clients, the HT
 | `/oauth/authorize` | `GET`/`POST` | RFC 6749 / RFC 7636 | Orchestrates credentials authentication, tenant isolation, and consent UI. |
 | `/oauth/token` | `POST` | RFC 6749 / PKCE Swap | Validates verifiers, confirms code constraints, and issues the token payload. |
 | `/oauth/revoke` | `POST` | RFC 7009 | Revokes an active Access Token or Refresh Token (adds JTI to database-backed blacklist). |
+| `/oauth/introspect` | `POST` | RFC 7662 | Validates cryptographically and checks the status of an active Access Token (or Refresh Token). |
 | `/oauth/userinfo` | `GET` | OIDC Core 1.0 | Authenticated user profile retrieval interface (`Authorization: Bearer`). |
 | **Dynamic Routing Middleware** | `Intercept` | HTTP Host Header Context | Resolves incoming raw server domains (`Host`) to a valid internal `tenant_id` state. |
 
@@ -206,3 +207,30 @@ Sprezz Identity implements RFC 7009 Token Revocation to invalidate stateless JWT
   ```sql
   DELETE FROM revoked_tokens WHERE expires_at <= NOW();
   ```
+
+### 9.6 Token Introspection (RFC 7662)
+
+Sprezz Identity exposes standard RFC 7662 Token Introspection at the POST endpoint `/oauth/introspect`.
+
+* **Cryptographic Integrity**: The token server verifies the signature of the incoming token using the tenant's public key (retrieved by matching the token's header `kid`).
+* **Active Evaluation**: The server dynamically asserts that the token:
+  1. Has a valid signature.
+  2. Is not expired (`time.Now().Before(expires_at)`).
+  3. Is not blacklisted inside the database `revoked_tokens` table.
+* **Metadata Response**: For active tokens, the endpoint returns a JSON payload containing:
+
+  ```json
+  {
+    "active": true,
+    "scope": "openid profile email",
+    "client_id": "test-client",
+    "sub": "user-uuid",
+    "exp": 1740000000,
+    "iat": 1730000000,
+    "iss": "https://idp.com",
+    "token_type": "Bearer",
+    "tid": "tenant-uuid"
+  }
+  ```
+
+  For invalid, revoked, or expired tokens, the server simply returns `{"active": false}`.

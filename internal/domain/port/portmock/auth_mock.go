@@ -34,6 +34,13 @@ type AuthMock struct {
 	beforeInitiateAuthorizeCounter uint64
 	InitiateAuthorizeMock          mAuthMockInitiateAuthorize
 
+	funcIntrospectToken          func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (ip1 *model.IntrospectionResponse, err error)
+	funcIntrospectTokenOrigin    string
+	inspectFuncIntrospectToken   func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string)
+	afterIntrospectTokenCounter  uint64
+	beforeIntrospectTokenCounter uint64
+	IntrospectTokenMock          mAuthMockIntrospectToken
+
 	funcProcessLogout          func(ctx context.Context, tenantID uuid.UUID, subject string, clientID string, tokenJTI string) (err error)
 	funcProcessLogoutOrigin    string
 	inspectFuncProcessLogout   func(ctx context.Context, tenantID uuid.UUID, subject string, clientID string, tokenJTI string)
@@ -62,6 +69,9 @@ func NewAuthMock(t minimock.Tester) *AuthMock {
 
 	m.InitiateAuthorizeMock = mAuthMockInitiateAuthorize{mock: m}
 	m.InitiateAuthorizeMock.callArgs = []*AuthMockInitiateAuthorizeParams{}
+
+	m.IntrospectTokenMock = mAuthMockIntrospectToken{mock: m}
+	m.IntrospectTokenMock.callArgs = []*AuthMockIntrospectTokenParams{}
 
 	m.ProcessLogoutMock = mAuthMockProcessLogout{mock: m}
 	m.ProcessLogoutMock.callArgs = []*AuthMockProcessLogoutParams{}
@@ -849,6 +859,411 @@ func (m *AuthMock) MinimockInitiateAuthorizeInspect() {
 	if !m.InitiateAuthorizeMock.invocationsDone() && afterInitiateAuthorizeCounter > 0 {
 		m.t.Errorf("Expected %d calls to AuthMock.InitiateAuthorize at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.InitiateAuthorizeMock.expectedInvocations), m.InitiateAuthorizeMock.expectedInvocationsOrigin, afterInitiateAuthorizeCounter)
+	}
+}
+
+type mAuthMockIntrospectToken struct {
+	optional           bool
+	mock               *AuthMock
+	defaultExpectation *AuthMockIntrospectTokenExpectation
+	expectations       []*AuthMockIntrospectTokenExpectation
+
+	callArgs []*AuthMockIntrospectTokenParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AuthMockIntrospectTokenExpectation specifies expectation struct of the Auth.IntrospectToken
+type AuthMockIntrospectTokenExpectation struct {
+	mock               *AuthMock
+	params             *AuthMockIntrospectTokenParams
+	paramPtrs          *AuthMockIntrospectTokenParamPtrs
+	expectationOrigins AuthMockIntrospectTokenExpectationOrigins
+	results            *AuthMockIntrospectTokenResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AuthMockIntrospectTokenParams contains parameters of the Auth.IntrospectToken
+type AuthMockIntrospectTokenParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+	clientID string
+	tokenStr string
+}
+
+// AuthMockIntrospectTokenParamPtrs contains pointers to parameters of the Auth.IntrospectToken
+type AuthMockIntrospectTokenParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+	clientID *string
+	tokenStr *string
+}
+
+// AuthMockIntrospectTokenResults contains results of the Auth.IntrospectToken
+type AuthMockIntrospectTokenResults struct {
+	ip1 *model.IntrospectionResponse
+	err error
+}
+
+// AuthMockIntrospectTokenOrigins contains origins of expectations of the Auth.IntrospectToken
+type AuthMockIntrospectTokenExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+	originClientID string
+	originTokenStr string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmIntrospectToken *mAuthMockIntrospectToken) Optional() *mAuthMockIntrospectToken {
+	mmIntrospectToken.optional = true
+	return mmIntrospectToken
+}
+
+// Expect sets up expected params for Auth.IntrospectToken
+func (mmIntrospectToken *mAuthMockIntrospectToken) Expect(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) *mAuthMockIntrospectToken {
+	if mmIntrospectToken.mock.funcIntrospectToken != nil {
+		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Set")
+	}
+
+	if mmIntrospectToken.defaultExpectation == nil {
+		mmIntrospectToken.defaultExpectation = &AuthMockIntrospectTokenExpectation{}
+	}
+
+	if mmIntrospectToken.defaultExpectation.paramPtrs != nil {
+		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by ExpectParams functions")
+	}
+
+	mmIntrospectToken.defaultExpectation.params = &AuthMockIntrospectTokenParams{ctx, tenantID, clientID, tokenStr}
+	mmIntrospectToken.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmIntrospectToken.expectations {
+		if minimock.Equal(e.params, mmIntrospectToken.defaultExpectation.params) {
+			mmIntrospectToken.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmIntrospectToken.defaultExpectation.params)
+		}
+	}
+
+	return mmIntrospectToken
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Auth.IntrospectToken
+func (mmIntrospectToken *mAuthMockIntrospectToken) ExpectCtxParam1(ctx context.Context) *mAuthMockIntrospectToken {
+	if mmIntrospectToken.mock.funcIntrospectToken != nil {
+		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Set")
+	}
+
+	if mmIntrospectToken.defaultExpectation == nil {
+		mmIntrospectToken.defaultExpectation = &AuthMockIntrospectTokenExpectation{}
+	}
+
+	if mmIntrospectToken.defaultExpectation.params != nil {
+		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Expect")
+	}
+
+	if mmIntrospectToken.defaultExpectation.paramPtrs == nil {
+		mmIntrospectToken.defaultExpectation.paramPtrs = &AuthMockIntrospectTokenParamPtrs{}
+	}
+	mmIntrospectToken.defaultExpectation.paramPtrs.ctx = &ctx
+	mmIntrospectToken.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmIntrospectToken
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Auth.IntrospectToken
+func (mmIntrospectToken *mAuthMockIntrospectToken) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthMockIntrospectToken {
+	if mmIntrospectToken.mock.funcIntrospectToken != nil {
+		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Set")
+	}
+
+	if mmIntrospectToken.defaultExpectation == nil {
+		mmIntrospectToken.defaultExpectation = &AuthMockIntrospectTokenExpectation{}
+	}
+
+	if mmIntrospectToken.defaultExpectation.params != nil {
+		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Expect")
+	}
+
+	if mmIntrospectToken.defaultExpectation.paramPtrs == nil {
+		mmIntrospectToken.defaultExpectation.paramPtrs = &AuthMockIntrospectTokenParamPtrs{}
+	}
+	mmIntrospectToken.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmIntrospectToken.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmIntrospectToken
+}
+
+// ExpectClientIDParam3 sets up expected param clientID for Auth.IntrospectToken
+func (mmIntrospectToken *mAuthMockIntrospectToken) ExpectClientIDParam3(clientID string) *mAuthMockIntrospectToken {
+	if mmIntrospectToken.mock.funcIntrospectToken != nil {
+		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Set")
+	}
+
+	if mmIntrospectToken.defaultExpectation == nil {
+		mmIntrospectToken.defaultExpectation = &AuthMockIntrospectTokenExpectation{}
+	}
+
+	if mmIntrospectToken.defaultExpectation.params != nil {
+		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Expect")
+	}
+
+	if mmIntrospectToken.defaultExpectation.paramPtrs == nil {
+		mmIntrospectToken.defaultExpectation.paramPtrs = &AuthMockIntrospectTokenParamPtrs{}
+	}
+	mmIntrospectToken.defaultExpectation.paramPtrs.clientID = &clientID
+	mmIntrospectToken.defaultExpectation.expectationOrigins.originClientID = minimock.CallerInfo(1)
+
+	return mmIntrospectToken
+}
+
+// ExpectTokenStrParam4 sets up expected param tokenStr for Auth.IntrospectToken
+func (mmIntrospectToken *mAuthMockIntrospectToken) ExpectTokenStrParam4(tokenStr string) *mAuthMockIntrospectToken {
+	if mmIntrospectToken.mock.funcIntrospectToken != nil {
+		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Set")
+	}
+
+	if mmIntrospectToken.defaultExpectation == nil {
+		mmIntrospectToken.defaultExpectation = &AuthMockIntrospectTokenExpectation{}
+	}
+
+	if mmIntrospectToken.defaultExpectation.params != nil {
+		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Expect")
+	}
+
+	if mmIntrospectToken.defaultExpectation.paramPtrs == nil {
+		mmIntrospectToken.defaultExpectation.paramPtrs = &AuthMockIntrospectTokenParamPtrs{}
+	}
+	mmIntrospectToken.defaultExpectation.paramPtrs.tokenStr = &tokenStr
+	mmIntrospectToken.defaultExpectation.expectationOrigins.originTokenStr = minimock.CallerInfo(1)
+
+	return mmIntrospectToken
+}
+
+// Inspect accepts an inspector function that has same arguments as the Auth.IntrospectToken
+func (mmIntrospectToken *mAuthMockIntrospectToken) Inspect(f func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string)) *mAuthMockIntrospectToken {
+	if mmIntrospectToken.mock.inspectFuncIntrospectToken != nil {
+		mmIntrospectToken.mock.t.Fatalf("Inspect function is already set for AuthMock.IntrospectToken")
+	}
+
+	mmIntrospectToken.mock.inspectFuncIntrospectToken = f
+
+	return mmIntrospectToken
+}
+
+// Return sets up results that will be returned by Auth.IntrospectToken
+func (mmIntrospectToken *mAuthMockIntrospectToken) Return(ip1 *model.IntrospectionResponse, err error) *AuthMock {
+	if mmIntrospectToken.mock.funcIntrospectToken != nil {
+		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Set")
+	}
+
+	if mmIntrospectToken.defaultExpectation == nil {
+		mmIntrospectToken.defaultExpectation = &AuthMockIntrospectTokenExpectation{mock: mmIntrospectToken.mock}
+	}
+	mmIntrospectToken.defaultExpectation.results = &AuthMockIntrospectTokenResults{ip1, err}
+	mmIntrospectToken.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmIntrospectToken.mock
+}
+
+// Set uses given function f to mock the Auth.IntrospectToken method
+func (mmIntrospectToken *mAuthMockIntrospectToken) Set(f func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (ip1 *model.IntrospectionResponse, err error)) *AuthMock {
+	if mmIntrospectToken.defaultExpectation != nil {
+		mmIntrospectToken.mock.t.Fatalf("Default expectation is already set for the Auth.IntrospectToken method")
+	}
+
+	if len(mmIntrospectToken.expectations) > 0 {
+		mmIntrospectToken.mock.t.Fatalf("Some expectations are already set for the Auth.IntrospectToken method")
+	}
+
+	mmIntrospectToken.mock.funcIntrospectToken = f
+	mmIntrospectToken.mock.funcIntrospectTokenOrigin = minimock.CallerInfo(1)
+	return mmIntrospectToken.mock
+}
+
+// When sets expectation for the Auth.IntrospectToken which will trigger the result defined by the following
+// Then helper
+func (mmIntrospectToken *mAuthMockIntrospectToken) When(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) *AuthMockIntrospectTokenExpectation {
+	if mmIntrospectToken.mock.funcIntrospectToken != nil {
+		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Set")
+	}
+
+	expectation := &AuthMockIntrospectTokenExpectation{
+		mock:               mmIntrospectToken.mock,
+		params:             &AuthMockIntrospectTokenParams{ctx, tenantID, clientID, tokenStr},
+		expectationOrigins: AuthMockIntrospectTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmIntrospectToken.expectations = append(mmIntrospectToken.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Auth.IntrospectToken return parameters for the expectation previously defined by the When method
+func (e *AuthMockIntrospectTokenExpectation) Then(ip1 *model.IntrospectionResponse, err error) *AuthMock {
+	e.results = &AuthMockIntrospectTokenResults{ip1, err}
+	return e.mock
+}
+
+// Times sets number of times Auth.IntrospectToken should be invoked
+func (mmIntrospectToken *mAuthMockIntrospectToken) Times(n uint64) *mAuthMockIntrospectToken {
+	if n == 0 {
+		mmIntrospectToken.mock.t.Fatalf("Times of AuthMock.IntrospectToken mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmIntrospectToken.expectedInvocations, n)
+	mmIntrospectToken.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmIntrospectToken
+}
+
+func (mmIntrospectToken *mAuthMockIntrospectToken) invocationsDone() bool {
+	if len(mmIntrospectToken.expectations) == 0 && mmIntrospectToken.defaultExpectation == nil && mmIntrospectToken.mock.funcIntrospectToken == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmIntrospectToken.mock.afterIntrospectTokenCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmIntrospectToken.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// IntrospectToken implements mm_port.Auth
+func (mmIntrospectToken *AuthMock) IntrospectToken(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (ip1 *model.IntrospectionResponse, err error) {
+	mm_atomic.AddUint64(&mmIntrospectToken.beforeIntrospectTokenCounter, 1)
+	defer mm_atomic.AddUint64(&mmIntrospectToken.afterIntrospectTokenCounter, 1)
+
+	mmIntrospectToken.t.Helper()
+
+	if mmIntrospectToken.inspectFuncIntrospectToken != nil {
+		mmIntrospectToken.inspectFuncIntrospectToken(ctx, tenantID, clientID, tokenStr)
+	}
+
+	mm_params := AuthMockIntrospectTokenParams{ctx, tenantID, clientID, tokenStr}
+
+	// Record call args
+	mmIntrospectToken.IntrospectTokenMock.mutex.Lock()
+	mmIntrospectToken.IntrospectTokenMock.callArgs = append(mmIntrospectToken.IntrospectTokenMock.callArgs, &mm_params)
+	mmIntrospectToken.IntrospectTokenMock.mutex.Unlock()
+
+	for _, e := range mmIntrospectToken.IntrospectTokenMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.ip1, e.results.err
+		}
+	}
+
+	if mmIntrospectToken.IntrospectTokenMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmIntrospectToken.IntrospectTokenMock.defaultExpectation.Counter, 1)
+		mm_want := mmIntrospectToken.IntrospectTokenMock.defaultExpectation.params
+		mm_want_ptrs := mmIntrospectToken.IntrospectTokenMock.defaultExpectation.paramPtrs
+
+		mm_got := AuthMockIntrospectTokenParams{ctx, tenantID, clientID, tokenStr}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmIntrospectToken.t.Errorf("AuthMock.IntrospectToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmIntrospectToken.IntrospectTokenMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmIntrospectToken.t.Errorf("AuthMock.IntrospectToken got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmIntrospectToken.IntrospectTokenMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.clientID != nil && !minimock.Equal(*mm_want_ptrs.clientID, mm_got.clientID) {
+				mmIntrospectToken.t.Errorf("AuthMock.IntrospectToken got unexpected parameter clientID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmIntrospectToken.IntrospectTokenMock.defaultExpectation.expectationOrigins.originClientID, *mm_want_ptrs.clientID, mm_got.clientID, minimock.Diff(*mm_want_ptrs.clientID, mm_got.clientID))
+			}
+
+			if mm_want_ptrs.tokenStr != nil && !minimock.Equal(*mm_want_ptrs.tokenStr, mm_got.tokenStr) {
+				mmIntrospectToken.t.Errorf("AuthMock.IntrospectToken got unexpected parameter tokenStr, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmIntrospectToken.IntrospectTokenMock.defaultExpectation.expectationOrigins.originTokenStr, *mm_want_ptrs.tokenStr, mm_got.tokenStr, minimock.Diff(*mm_want_ptrs.tokenStr, mm_got.tokenStr))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmIntrospectToken.t.Errorf("AuthMock.IntrospectToken got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmIntrospectToken.IntrospectTokenMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmIntrospectToken.IntrospectTokenMock.defaultExpectation.results
+		if mm_results == nil {
+			mmIntrospectToken.t.Fatal("No results are set for the AuthMock.IntrospectToken")
+		}
+		return (*mm_results).ip1, (*mm_results).err
+	}
+	if mmIntrospectToken.funcIntrospectToken != nil {
+		return mmIntrospectToken.funcIntrospectToken(ctx, tenantID, clientID, tokenStr)
+	}
+	mmIntrospectToken.t.Fatalf("Unexpected call to AuthMock.IntrospectToken. %v %v %v %v", ctx, tenantID, clientID, tokenStr)
+	return
+}
+
+// IntrospectTokenAfterCounter returns a count of finished AuthMock.IntrospectToken invocations
+func (mmIntrospectToken *AuthMock) IntrospectTokenAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmIntrospectToken.afterIntrospectTokenCounter)
+}
+
+// IntrospectTokenBeforeCounter returns a count of AuthMock.IntrospectToken invocations
+func (mmIntrospectToken *AuthMock) IntrospectTokenBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmIntrospectToken.beforeIntrospectTokenCounter)
+}
+
+// Calls returns a list of arguments used in each call to AuthMock.IntrospectToken.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmIntrospectToken *mAuthMockIntrospectToken) Calls() []*AuthMockIntrospectTokenParams {
+	mmIntrospectToken.mutex.RLock()
+
+	argCopy := make([]*AuthMockIntrospectTokenParams, len(mmIntrospectToken.callArgs))
+	copy(argCopy, mmIntrospectToken.callArgs)
+
+	mmIntrospectToken.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockIntrospectTokenDone returns true if the count of the IntrospectToken invocations corresponds
+// the number of defined expectations
+func (m *AuthMock) MinimockIntrospectTokenDone() bool {
+	if m.IntrospectTokenMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.IntrospectTokenMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.IntrospectTokenMock.invocationsDone()
+}
+
+// MinimockIntrospectTokenInspect logs each unmet expectation
+func (m *AuthMock) MinimockIntrospectTokenInspect() {
+	for _, e := range m.IntrospectTokenMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AuthMock.IntrospectToken at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterIntrospectTokenCounter := mm_atomic.LoadUint64(&m.afterIntrospectTokenCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.IntrospectTokenMock.defaultExpectation != nil && afterIntrospectTokenCounter < 1 {
+		if m.IntrospectTokenMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AuthMock.IntrospectToken at\n%s", m.IntrospectTokenMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AuthMock.IntrospectToken at\n%s with params: %#v", m.IntrospectTokenMock.defaultExpectation.expectationOrigins.origin, *m.IntrospectTokenMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcIntrospectToken != nil && afterIntrospectTokenCounter < 1 {
+		m.t.Errorf("Expected call to AuthMock.IntrospectToken at\n%s", m.funcIntrospectTokenOrigin)
+	}
+
+	if !m.IntrospectTokenMock.invocationsDone() && afterIntrospectTokenCounter > 0 {
+		m.t.Errorf("Expected %d calls to AuthMock.IntrospectToken at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.IntrospectTokenMock.expectedInvocations), m.IntrospectTokenMock.expectedInvocationsOrigin, afterIntrospectTokenCounter)
 	}
 }
 
@@ -1699,6 +2114,8 @@ func (m *AuthMock) MinimockFinish() {
 
 			m.MinimockInitiateAuthorizeInspect()
 
+			m.MinimockIntrospectTokenInspect()
+
 			m.MinimockProcessLogoutInspect()
 
 			m.MinimockRevokeTokenInspect()
@@ -1727,6 +2144,7 @@ func (m *AuthMock) minimockDone() bool {
 	return done &&
 		m.MinimockExchangeCodeForTokensDone() &&
 		m.MinimockInitiateAuthorizeDone() &&
+		m.MinimockIntrospectTokenDone() &&
 		m.MinimockProcessLogoutDone() &&
 		m.MinimockRevokeTokenDone()
 }

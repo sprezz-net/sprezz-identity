@@ -31,6 +31,13 @@ type CryptoMock struct {
 	afterSignIDTokenCounter  uint64
 	beforeSignIDTokenCounter uint64
 	SignIDTokenMock          mCryptoMockSignIDToken
+
+	funcVerifyToken          func(tokenStr string) (m1 map[string]any, err error)
+	funcVerifyTokenOrigin    string
+	inspectFuncVerifyToken   func(tokenStr string)
+	afterVerifyTokenCounter  uint64
+	beforeVerifyTokenCounter uint64
+	VerifyTokenMock          mCryptoMockVerifyToken
 }
 
 // NewCryptoMock returns a mock for mm_port.Crypto
@@ -46,6 +53,9 @@ func NewCryptoMock(t minimock.Tester) *CryptoMock {
 
 	m.SignIDTokenMock = mCryptoMockSignIDToken{mock: m}
 	m.SignIDTokenMock.callArgs = []*CryptoMockSignIDTokenParams{}
+
+	m.VerifyTokenMock = mCryptoMockVerifyToken{mock: m}
+	m.VerifyTokenMock.callArgs = []*CryptoMockVerifyTokenParams{}
 
 	t.Cleanup(m.MinimockFinish)
 
@@ -738,6 +748,318 @@ func (m *CryptoMock) MinimockSignIDTokenInspect() {
 	}
 }
 
+type mCryptoMockVerifyToken struct {
+	optional           bool
+	mock               *CryptoMock
+	defaultExpectation *CryptoMockVerifyTokenExpectation
+	expectations       []*CryptoMockVerifyTokenExpectation
+
+	callArgs []*CryptoMockVerifyTokenParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// CryptoMockVerifyTokenExpectation specifies expectation struct of the Crypto.VerifyToken
+type CryptoMockVerifyTokenExpectation struct {
+	mock               *CryptoMock
+	params             *CryptoMockVerifyTokenParams
+	paramPtrs          *CryptoMockVerifyTokenParamPtrs
+	expectationOrigins CryptoMockVerifyTokenExpectationOrigins
+	results            *CryptoMockVerifyTokenResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// CryptoMockVerifyTokenParams contains parameters of the Crypto.VerifyToken
+type CryptoMockVerifyTokenParams struct {
+	tokenStr string
+}
+
+// CryptoMockVerifyTokenParamPtrs contains pointers to parameters of the Crypto.VerifyToken
+type CryptoMockVerifyTokenParamPtrs struct {
+	tokenStr *string
+}
+
+// CryptoMockVerifyTokenResults contains results of the Crypto.VerifyToken
+type CryptoMockVerifyTokenResults struct {
+	m1  map[string]any
+	err error
+}
+
+// CryptoMockVerifyTokenOrigins contains origins of expectations of the Crypto.VerifyToken
+type CryptoMockVerifyTokenExpectationOrigins struct {
+	origin         string
+	originTokenStr string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmVerifyToken *mCryptoMockVerifyToken) Optional() *mCryptoMockVerifyToken {
+	mmVerifyToken.optional = true
+	return mmVerifyToken
+}
+
+// Expect sets up expected params for Crypto.VerifyToken
+func (mmVerifyToken *mCryptoMockVerifyToken) Expect(tokenStr string) *mCryptoMockVerifyToken {
+	if mmVerifyToken.mock.funcVerifyToken != nil {
+		mmVerifyToken.mock.t.Fatalf("CryptoMock.VerifyToken mock is already set by Set")
+	}
+
+	if mmVerifyToken.defaultExpectation == nil {
+		mmVerifyToken.defaultExpectation = &CryptoMockVerifyTokenExpectation{}
+	}
+
+	if mmVerifyToken.defaultExpectation.paramPtrs != nil {
+		mmVerifyToken.mock.t.Fatalf("CryptoMock.VerifyToken mock is already set by ExpectParams functions")
+	}
+
+	mmVerifyToken.defaultExpectation.params = &CryptoMockVerifyTokenParams{tokenStr}
+	mmVerifyToken.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmVerifyToken.expectations {
+		if minimock.Equal(e.params, mmVerifyToken.defaultExpectation.params) {
+			mmVerifyToken.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmVerifyToken.defaultExpectation.params)
+		}
+	}
+
+	return mmVerifyToken
+}
+
+// ExpectTokenStrParam1 sets up expected param tokenStr for Crypto.VerifyToken
+func (mmVerifyToken *mCryptoMockVerifyToken) ExpectTokenStrParam1(tokenStr string) *mCryptoMockVerifyToken {
+	if mmVerifyToken.mock.funcVerifyToken != nil {
+		mmVerifyToken.mock.t.Fatalf("CryptoMock.VerifyToken mock is already set by Set")
+	}
+
+	if mmVerifyToken.defaultExpectation == nil {
+		mmVerifyToken.defaultExpectation = &CryptoMockVerifyTokenExpectation{}
+	}
+
+	if mmVerifyToken.defaultExpectation.params != nil {
+		mmVerifyToken.mock.t.Fatalf("CryptoMock.VerifyToken mock is already set by Expect")
+	}
+
+	if mmVerifyToken.defaultExpectation.paramPtrs == nil {
+		mmVerifyToken.defaultExpectation.paramPtrs = &CryptoMockVerifyTokenParamPtrs{}
+	}
+	mmVerifyToken.defaultExpectation.paramPtrs.tokenStr = &tokenStr
+	mmVerifyToken.defaultExpectation.expectationOrigins.originTokenStr = minimock.CallerInfo(1)
+
+	return mmVerifyToken
+}
+
+// Inspect accepts an inspector function that has same arguments as the Crypto.VerifyToken
+func (mmVerifyToken *mCryptoMockVerifyToken) Inspect(f func(tokenStr string)) *mCryptoMockVerifyToken {
+	if mmVerifyToken.mock.inspectFuncVerifyToken != nil {
+		mmVerifyToken.mock.t.Fatalf("Inspect function is already set for CryptoMock.VerifyToken")
+	}
+
+	mmVerifyToken.mock.inspectFuncVerifyToken = f
+
+	return mmVerifyToken
+}
+
+// Return sets up results that will be returned by Crypto.VerifyToken
+func (mmVerifyToken *mCryptoMockVerifyToken) Return(m1 map[string]any, err error) *CryptoMock {
+	if mmVerifyToken.mock.funcVerifyToken != nil {
+		mmVerifyToken.mock.t.Fatalf("CryptoMock.VerifyToken mock is already set by Set")
+	}
+
+	if mmVerifyToken.defaultExpectation == nil {
+		mmVerifyToken.defaultExpectation = &CryptoMockVerifyTokenExpectation{mock: mmVerifyToken.mock}
+	}
+	mmVerifyToken.defaultExpectation.results = &CryptoMockVerifyTokenResults{m1, err}
+	mmVerifyToken.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmVerifyToken.mock
+}
+
+// Set uses given function f to mock the Crypto.VerifyToken method
+func (mmVerifyToken *mCryptoMockVerifyToken) Set(f func(tokenStr string) (m1 map[string]any, err error)) *CryptoMock {
+	if mmVerifyToken.defaultExpectation != nil {
+		mmVerifyToken.mock.t.Fatalf("Default expectation is already set for the Crypto.VerifyToken method")
+	}
+
+	if len(mmVerifyToken.expectations) > 0 {
+		mmVerifyToken.mock.t.Fatalf("Some expectations are already set for the Crypto.VerifyToken method")
+	}
+
+	mmVerifyToken.mock.funcVerifyToken = f
+	mmVerifyToken.mock.funcVerifyTokenOrigin = minimock.CallerInfo(1)
+	return mmVerifyToken.mock
+}
+
+// When sets expectation for the Crypto.VerifyToken which will trigger the result defined by the following
+// Then helper
+func (mmVerifyToken *mCryptoMockVerifyToken) When(tokenStr string) *CryptoMockVerifyTokenExpectation {
+	if mmVerifyToken.mock.funcVerifyToken != nil {
+		mmVerifyToken.mock.t.Fatalf("CryptoMock.VerifyToken mock is already set by Set")
+	}
+
+	expectation := &CryptoMockVerifyTokenExpectation{
+		mock:               mmVerifyToken.mock,
+		params:             &CryptoMockVerifyTokenParams{tokenStr},
+		expectationOrigins: CryptoMockVerifyTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmVerifyToken.expectations = append(mmVerifyToken.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Crypto.VerifyToken return parameters for the expectation previously defined by the When method
+func (e *CryptoMockVerifyTokenExpectation) Then(m1 map[string]any, err error) *CryptoMock {
+	e.results = &CryptoMockVerifyTokenResults{m1, err}
+	return e.mock
+}
+
+// Times sets number of times Crypto.VerifyToken should be invoked
+func (mmVerifyToken *mCryptoMockVerifyToken) Times(n uint64) *mCryptoMockVerifyToken {
+	if n == 0 {
+		mmVerifyToken.mock.t.Fatalf("Times of CryptoMock.VerifyToken mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmVerifyToken.expectedInvocations, n)
+	mmVerifyToken.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmVerifyToken
+}
+
+func (mmVerifyToken *mCryptoMockVerifyToken) invocationsDone() bool {
+	if len(mmVerifyToken.expectations) == 0 && mmVerifyToken.defaultExpectation == nil && mmVerifyToken.mock.funcVerifyToken == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmVerifyToken.mock.afterVerifyTokenCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmVerifyToken.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// VerifyToken implements mm_port.Crypto
+func (mmVerifyToken *CryptoMock) VerifyToken(tokenStr string) (m1 map[string]any, err error) {
+	mm_atomic.AddUint64(&mmVerifyToken.beforeVerifyTokenCounter, 1)
+	defer mm_atomic.AddUint64(&mmVerifyToken.afterVerifyTokenCounter, 1)
+
+	mmVerifyToken.t.Helper()
+
+	if mmVerifyToken.inspectFuncVerifyToken != nil {
+		mmVerifyToken.inspectFuncVerifyToken(tokenStr)
+	}
+
+	mm_params := CryptoMockVerifyTokenParams{tokenStr}
+
+	// Record call args
+	mmVerifyToken.VerifyTokenMock.mutex.Lock()
+	mmVerifyToken.VerifyTokenMock.callArgs = append(mmVerifyToken.VerifyTokenMock.callArgs, &mm_params)
+	mmVerifyToken.VerifyTokenMock.mutex.Unlock()
+
+	for _, e := range mmVerifyToken.VerifyTokenMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.m1, e.results.err
+		}
+	}
+
+	if mmVerifyToken.VerifyTokenMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmVerifyToken.VerifyTokenMock.defaultExpectation.Counter, 1)
+		mm_want := mmVerifyToken.VerifyTokenMock.defaultExpectation.params
+		mm_want_ptrs := mmVerifyToken.VerifyTokenMock.defaultExpectation.paramPtrs
+
+		mm_got := CryptoMockVerifyTokenParams{tokenStr}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.tokenStr != nil && !minimock.Equal(*mm_want_ptrs.tokenStr, mm_got.tokenStr) {
+				mmVerifyToken.t.Errorf("CryptoMock.VerifyToken got unexpected parameter tokenStr, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmVerifyToken.VerifyTokenMock.defaultExpectation.expectationOrigins.originTokenStr, *mm_want_ptrs.tokenStr, mm_got.tokenStr, minimock.Diff(*mm_want_ptrs.tokenStr, mm_got.tokenStr))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmVerifyToken.t.Errorf("CryptoMock.VerifyToken got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmVerifyToken.VerifyTokenMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmVerifyToken.VerifyTokenMock.defaultExpectation.results
+		if mm_results == nil {
+			mmVerifyToken.t.Fatal("No results are set for the CryptoMock.VerifyToken")
+		}
+		return (*mm_results).m1, (*mm_results).err
+	}
+	if mmVerifyToken.funcVerifyToken != nil {
+		return mmVerifyToken.funcVerifyToken(tokenStr)
+	}
+	mmVerifyToken.t.Fatalf("Unexpected call to CryptoMock.VerifyToken. %v", tokenStr)
+	return
+}
+
+// VerifyTokenAfterCounter returns a count of finished CryptoMock.VerifyToken invocations
+func (mmVerifyToken *CryptoMock) VerifyTokenAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmVerifyToken.afterVerifyTokenCounter)
+}
+
+// VerifyTokenBeforeCounter returns a count of CryptoMock.VerifyToken invocations
+func (mmVerifyToken *CryptoMock) VerifyTokenBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmVerifyToken.beforeVerifyTokenCounter)
+}
+
+// Calls returns a list of arguments used in each call to CryptoMock.VerifyToken.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmVerifyToken *mCryptoMockVerifyToken) Calls() []*CryptoMockVerifyTokenParams {
+	mmVerifyToken.mutex.RLock()
+
+	argCopy := make([]*CryptoMockVerifyTokenParams, len(mmVerifyToken.callArgs))
+	copy(argCopy, mmVerifyToken.callArgs)
+
+	mmVerifyToken.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockVerifyTokenDone returns true if the count of the VerifyToken invocations corresponds
+// the number of defined expectations
+func (m *CryptoMock) MinimockVerifyTokenDone() bool {
+	if m.VerifyTokenMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.VerifyTokenMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.VerifyTokenMock.invocationsDone()
+}
+
+// MinimockVerifyTokenInspect logs each unmet expectation
+func (m *CryptoMock) MinimockVerifyTokenInspect() {
+	for _, e := range m.VerifyTokenMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to CryptoMock.VerifyToken at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterVerifyTokenCounter := mm_atomic.LoadUint64(&m.afterVerifyTokenCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.VerifyTokenMock.defaultExpectation != nil && afterVerifyTokenCounter < 1 {
+		if m.VerifyTokenMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to CryptoMock.VerifyToken at\n%s", m.VerifyTokenMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to CryptoMock.VerifyToken at\n%s with params: %#v", m.VerifyTokenMock.defaultExpectation.expectationOrigins.origin, *m.VerifyTokenMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcVerifyToken != nil && afterVerifyTokenCounter < 1 {
+		m.t.Errorf("Expected call to CryptoMock.VerifyToken at\n%s", m.funcVerifyTokenOrigin)
+	}
+
+	if !m.VerifyTokenMock.invocationsDone() && afterVerifyTokenCounter > 0 {
+		m.t.Errorf("Expected %d calls to CryptoMock.VerifyToken at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.VerifyTokenMock.expectedInvocations), m.VerifyTokenMock.expectedInvocationsOrigin, afterVerifyTokenCounter)
+	}
+}
+
 // MinimockFinish checks that all mocked methods have been called the expected number of times
 func (m *CryptoMock) MinimockFinish() {
 	m.finishOnce.Do(func() {
@@ -745,6 +1067,8 @@ func (m *CryptoMock) MinimockFinish() {
 			m.MinimockSignAccessTokenInspect()
 
 			m.MinimockSignIDTokenInspect()
+
+			m.MinimockVerifyTokenInspect()
 		}
 	})
 }
@@ -769,5 +1093,6 @@ func (m *CryptoMock) minimockDone() bool {
 	done := true
 	return done &&
 		m.MinimockSignAccessTokenDone() &&
-		m.MinimockSignIDTokenDone()
+		m.MinimockSignIDTokenDone() &&
+		m.MinimockVerifyTokenDone()
 }

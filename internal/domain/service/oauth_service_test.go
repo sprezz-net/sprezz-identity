@@ -145,6 +145,74 @@ func TestOAuthService_RevokeToken_Success(t *testing.T) {
 	}
 }
 
+func TestOAuthService_IntrospectToken_Success(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+	service := NewOAuthService(storage, crypto, nil)
+
+	tenantID := uuid.New()
+	clientID := "test-client"
+	tokenStr := "active-token"
+	tokenID := "jti-value"
+	exp := time.Now().Add(time.Hour)
+
+	claims := map[string]any{
+		"jti":       tokenID,
+		"exp":       float64(exp.Unix()),
+		"scope":     "openid profile",
+		"client_id": clientID,
+		"sub":       "user-123",
+		"iss":       "https://idp.com",
+		"tid":       tenantID.String(),
+		"iat":       float64(time.Now().Unix()),
+	}
+
+	crypto.VerifyTokenMock.Expect(tokenStr).Return(claims, nil)
+	storage.IsTokenRevokedMock.Expect(context.Background(), tokenID).Return(false, nil)
+
+	res, err := service.IntrospectToken(context.Background(), tenantID, clientID, tokenStr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !res.Active {
+		t.Error("expected token to be active")
+	}
+	if res.ClientID != clientID {
+		t.Errorf("expected client_id %s, got %s", clientID, res.ClientID)
+	}
+}
+
+func TestOAuthService_IntrospectToken_Revoked(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+	service := NewOAuthService(storage, crypto, nil)
+
+	tenantID := uuid.New()
+	clientID := "test-client"
+	tokenStr := "revoked-token"
+	tokenID := "jti-value"
+
+	claims := map[string]any{
+		"jti": tokenID,
+		"exp": float64(time.Now().Add(time.Hour).Unix()),
+	}
+
+	crypto.VerifyTokenMock.Expect(tokenStr).Return(claims, nil)
+	storage.IsTokenRevokedMock.Expect(context.Background(), tokenID).Return(true, nil)
+
+	res, err := service.IntrospectToken(context.Background(), tenantID, clientID, tokenStr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if res.Active {
+		t.Error("expected token to be inactive")
+	}
+}
+
 func TestOAuthService_InitiateAuthorize_ValidationErrors(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)

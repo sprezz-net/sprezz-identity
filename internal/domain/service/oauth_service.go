@@ -129,3 +129,43 @@ func (s *OAuthService) RevokeToken(ctx context.Context, tenantID uuid.UUID, clie
 
 	return s.storage.RevokeToken(ctx, tokenID, expiresAt)
 }
+
+func (s *OAuthService) IntrospectToken(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (*model.IntrospectionResponse, error) {
+	claims, err := s.crypto.VerifyToken(tokenStr)
+	if err != nil {
+		return &model.IntrospectionResponse{Active: false}, nil
+	}
+
+	tokenID, _ := claims["jti"].(string)
+	expVal, _ := claims["exp"].(float64)
+	if tokenID != "" {
+		revoked, err := s.storage.IsTokenRevoked(ctx, tokenID)
+		if err == nil && revoked {
+			return &model.IntrospectionResponse{Active: false}, nil
+		}
+	}
+
+	exp := time.Unix(int64(expVal), 0)
+	if time.Now().After(exp) {
+		return &model.IntrospectionResponse{Active: false}, nil
+	}
+
+	scope, _ := claims["scope"].(string)
+	tokenClientID, _ := claims["client_id"].(string)
+	sub, _ := claims["sub"].(string)
+	iss, _ := claims["iss"].(string)
+	tid, _ := claims["tid"].(string)
+	iatVal, _ := claims["iat"].(float64)
+
+	return &model.IntrospectionResponse{
+		Active:    true,
+		Scope:     scope,
+		ClientID:  tokenClientID,
+		Subject:   sub,
+		ExpiresAt: int64(expVal),
+		IssuedAt:  int64(iatVal),
+		Issuer:    iss,
+		TokenType: "Bearer",
+		TenantID:  tid,
+	}, nil
+}

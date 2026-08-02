@@ -14,4 +14,5 @@ type Auth interface {
 	ExchangeCodeForTokens(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string) (*model.TokenSetResponse, error)
 	ProcessLogout(ctx context.Context, tenantID uuid.UUID, subject string, clientID string, tokenJTI string) error
 	RevokeToken(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) error
+	IntrospectToken(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (*model.IntrospectionResponse, error)
 }
