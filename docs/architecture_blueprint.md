@@ -136,6 +136,7 @@ Sprezz Identity implements concurrent asymmetric dual-signing. It uses an intern
 * **Egress Token Evaluation**: When minting tokens, the service queries the application profile. If `idp_signing_algorithm` matches `EdDSA`, it utilizes the **Ed25519** signing key to yield sub-millisecond encryption footprints. If it matches `RS256`, it applies the **RSA-2048** key for backwards-compatibility.
 * **The Single-GET JWKS Route**: The infrastructure exposes `/.well-known/jwks.json`, grouping both signatures into an immutable pre-computed memory byte array.
 * **Dynamic OIDC Issuer Claim Matching**: When minting an identity payload certificate (the ID Token), the crypto engine no longer pushes a static server-wide root domain string. It reads the specific resolved tenant parameters to generate distinct, isolated identity issuers dynamically matching the client's origin (e.g., `"iss": "https://idp.com"`).
+* **The `"tid"` Tenant ID Claim**: Every minted Access Token and ID Token contains a **`"tid"` (Tenant ID) claim** populated with the string representation of the resolved Tenant UUIDv4, allowing downstream resource servers to perform stateless, multi-tenant boundary checks.
 
 ## 8. Protocol Compliance Interface Map
 
