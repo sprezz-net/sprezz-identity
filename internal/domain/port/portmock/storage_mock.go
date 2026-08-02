@@ -56,6 +56,13 @@ type StorageMock struct {
 	beforeGetClientCounter uint64
 	GetClientMock          mStorageMockGetClient
 
+	funcGetClientsByTenant          func(ctx context.Context, tenantID uuid.UUID) (ca1 []model.ClientApplication, err error)
+	funcGetClientsByTenantOrigin    string
+	inspectFuncGetClientsByTenant   func(ctx context.Context, tenantID uuid.UUID)
+	afterGetClientsByTenantCounter  uint64
+	beforeGetClientsByTenantCounter uint64
+	GetClientsByTenantMock          mStorageMockGetClientsByTenant
+
 	funcGetEnabledIdentityProviders          func(ctx context.Context, tenantID uuid.UUID) (ia1 []model.IdentityProvider, err error)
 	funcGetEnabledIdentityProvidersOrigin    string
 	inspectFuncGetEnabledIdentityProviders   func(ctx context.Context, tenantID uuid.UUID)
@@ -90,6 +97,13 @@ type StorageMock struct {
 	afterIsTokenRevokedCounter  uint64
 	beforeIsTokenRevokedCounter uint64
 	IsTokenRevokedMock          mStorageMockIsTokenRevoked
+
+	funcPruneExpiredTokens          func(ctx context.Context) (err error)
+	funcPruneExpiredTokensOrigin    string
+	inspectFuncPruneExpiredTokens   func(ctx context.Context)
+	afterPruneExpiredTokensCounter  uint64
+	beforePruneExpiredTokensCounter uint64
+	PruneExpiredTokensMock          mStorageMockPruneExpiredTokens
 
 	funcResolveTenantByDomain          func(ctx context.Context, domain string) (tp1 *model.Tenant, err error)
 	funcResolveTenantByDomainOrigin    string
@@ -171,6 +185,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 	m.GetClientMock = mStorageMockGetClient{mock: m}
 	m.GetClientMock.callArgs = []*StorageMockGetClientParams{}
 
+	m.GetClientsByTenantMock = mStorageMockGetClientsByTenant{mock: m}
+	m.GetClientsByTenantMock.callArgs = []*StorageMockGetClientsByTenantParams{}
+
 	m.GetEnabledIdentityProvidersMock = mStorageMockGetEnabledIdentityProviders{mock: m}
 	m.GetEnabledIdentityProvidersMock.callArgs = []*StorageMockGetEnabledIdentityProvidersParams{}
 
@@ -185,6 +202,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 
 	m.IsTokenRevokedMock = mStorageMockIsTokenRevoked{mock: m}
 	m.IsTokenRevokedMock.callArgs = []*StorageMockIsTokenRevokedParams{}
+
+	m.PruneExpiredTokensMock = mStorageMockPruneExpiredTokens{mock: m}
+	m.PruneExpiredTokensMock.callArgs = []*StorageMockPruneExpiredTokensParams{}
 
 	m.ResolveTenantByDomainMock = mStorageMockResolveTenantByDomain{mock: m}
 	m.ResolveTenantByDomainMock.callArgs = []*StorageMockResolveTenantByDomainParams{}
@@ -2018,6 +2038,349 @@ func (m *StorageMock) MinimockGetClientInspect() {
 	if !m.GetClientMock.invocationsDone() && afterGetClientCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageMock.GetClient at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.GetClientMock.expectedInvocations), m.GetClientMock.expectedInvocationsOrigin, afterGetClientCounter)
+	}
+}
+
+type mStorageMockGetClientsByTenant struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockGetClientsByTenantExpectation
+	expectations       []*StorageMockGetClientsByTenantExpectation
+
+	callArgs []*StorageMockGetClientsByTenantParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockGetClientsByTenantExpectation specifies expectation struct of the Storage.GetClientsByTenant
+type StorageMockGetClientsByTenantExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockGetClientsByTenantParams
+	paramPtrs          *StorageMockGetClientsByTenantParamPtrs
+	expectationOrigins StorageMockGetClientsByTenantExpectationOrigins
+	results            *StorageMockGetClientsByTenantResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockGetClientsByTenantParams contains parameters of the Storage.GetClientsByTenant
+type StorageMockGetClientsByTenantParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+}
+
+// StorageMockGetClientsByTenantParamPtrs contains pointers to parameters of the Storage.GetClientsByTenant
+type StorageMockGetClientsByTenantParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+}
+
+// StorageMockGetClientsByTenantResults contains results of the Storage.GetClientsByTenant
+type StorageMockGetClientsByTenantResults struct {
+	ca1 []model.ClientApplication
+	err error
+}
+
+// StorageMockGetClientsByTenantOrigins contains origins of expectations of the Storage.GetClientsByTenant
+type StorageMockGetClientsByTenantExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetClientsByTenant *mStorageMockGetClientsByTenant) Optional() *mStorageMockGetClientsByTenant {
+	mmGetClientsByTenant.optional = true
+	return mmGetClientsByTenant
+}
+
+// Expect sets up expected params for Storage.GetClientsByTenant
+func (mmGetClientsByTenant *mStorageMockGetClientsByTenant) Expect(ctx context.Context, tenantID uuid.UUID) *mStorageMockGetClientsByTenant {
+	if mmGetClientsByTenant.mock.funcGetClientsByTenant != nil {
+		mmGetClientsByTenant.mock.t.Fatalf("StorageMock.GetClientsByTenant mock is already set by Set")
+	}
+
+	if mmGetClientsByTenant.defaultExpectation == nil {
+		mmGetClientsByTenant.defaultExpectation = &StorageMockGetClientsByTenantExpectation{}
+	}
+
+	if mmGetClientsByTenant.defaultExpectation.paramPtrs != nil {
+		mmGetClientsByTenant.mock.t.Fatalf("StorageMock.GetClientsByTenant mock is already set by ExpectParams functions")
+	}
+
+	mmGetClientsByTenant.defaultExpectation.params = &StorageMockGetClientsByTenantParams{ctx, tenantID}
+	mmGetClientsByTenant.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetClientsByTenant.expectations {
+		if minimock.Equal(e.params, mmGetClientsByTenant.defaultExpectation.params) {
+			mmGetClientsByTenant.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetClientsByTenant.defaultExpectation.params)
+		}
+	}
+
+	return mmGetClientsByTenant
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.GetClientsByTenant
+func (mmGetClientsByTenant *mStorageMockGetClientsByTenant) ExpectCtxParam1(ctx context.Context) *mStorageMockGetClientsByTenant {
+	if mmGetClientsByTenant.mock.funcGetClientsByTenant != nil {
+		mmGetClientsByTenant.mock.t.Fatalf("StorageMock.GetClientsByTenant mock is already set by Set")
+	}
+
+	if mmGetClientsByTenant.defaultExpectation == nil {
+		mmGetClientsByTenant.defaultExpectation = &StorageMockGetClientsByTenantExpectation{}
+	}
+
+	if mmGetClientsByTenant.defaultExpectation.params != nil {
+		mmGetClientsByTenant.mock.t.Fatalf("StorageMock.GetClientsByTenant mock is already set by Expect")
+	}
+
+	if mmGetClientsByTenant.defaultExpectation.paramPtrs == nil {
+		mmGetClientsByTenant.defaultExpectation.paramPtrs = &StorageMockGetClientsByTenantParamPtrs{}
+	}
+	mmGetClientsByTenant.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetClientsByTenant.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetClientsByTenant
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.GetClientsByTenant
+func (mmGetClientsByTenant *mStorageMockGetClientsByTenant) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockGetClientsByTenant {
+	if mmGetClientsByTenant.mock.funcGetClientsByTenant != nil {
+		mmGetClientsByTenant.mock.t.Fatalf("StorageMock.GetClientsByTenant mock is already set by Set")
+	}
+
+	if mmGetClientsByTenant.defaultExpectation == nil {
+		mmGetClientsByTenant.defaultExpectation = &StorageMockGetClientsByTenantExpectation{}
+	}
+
+	if mmGetClientsByTenant.defaultExpectation.params != nil {
+		mmGetClientsByTenant.mock.t.Fatalf("StorageMock.GetClientsByTenant mock is already set by Expect")
+	}
+
+	if mmGetClientsByTenant.defaultExpectation.paramPtrs == nil {
+		mmGetClientsByTenant.defaultExpectation.paramPtrs = &StorageMockGetClientsByTenantParamPtrs{}
+	}
+	mmGetClientsByTenant.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetClientsByTenant.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetClientsByTenant
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.GetClientsByTenant
+func (mmGetClientsByTenant *mStorageMockGetClientsByTenant) Inspect(f func(ctx context.Context, tenantID uuid.UUID)) *mStorageMockGetClientsByTenant {
+	if mmGetClientsByTenant.mock.inspectFuncGetClientsByTenant != nil {
+		mmGetClientsByTenant.mock.t.Fatalf("Inspect function is already set for StorageMock.GetClientsByTenant")
+	}
+
+	mmGetClientsByTenant.mock.inspectFuncGetClientsByTenant = f
+
+	return mmGetClientsByTenant
+}
+
+// Return sets up results that will be returned by Storage.GetClientsByTenant
+func (mmGetClientsByTenant *mStorageMockGetClientsByTenant) Return(ca1 []model.ClientApplication, err error) *StorageMock {
+	if mmGetClientsByTenant.mock.funcGetClientsByTenant != nil {
+		mmGetClientsByTenant.mock.t.Fatalf("StorageMock.GetClientsByTenant mock is already set by Set")
+	}
+
+	if mmGetClientsByTenant.defaultExpectation == nil {
+		mmGetClientsByTenant.defaultExpectation = &StorageMockGetClientsByTenantExpectation{mock: mmGetClientsByTenant.mock}
+	}
+	mmGetClientsByTenant.defaultExpectation.results = &StorageMockGetClientsByTenantResults{ca1, err}
+	mmGetClientsByTenant.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetClientsByTenant.mock
+}
+
+// Set uses given function f to mock the Storage.GetClientsByTenant method
+func (mmGetClientsByTenant *mStorageMockGetClientsByTenant) Set(f func(ctx context.Context, tenantID uuid.UUID) (ca1 []model.ClientApplication, err error)) *StorageMock {
+	if mmGetClientsByTenant.defaultExpectation != nil {
+		mmGetClientsByTenant.mock.t.Fatalf("Default expectation is already set for the Storage.GetClientsByTenant method")
+	}
+
+	if len(mmGetClientsByTenant.expectations) > 0 {
+		mmGetClientsByTenant.mock.t.Fatalf("Some expectations are already set for the Storage.GetClientsByTenant method")
+	}
+
+	mmGetClientsByTenant.mock.funcGetClientsByTenant = f
+	mmGetClientsByTenant.mock.funcGetClientsByTenantOrigin = minimock.CallerInfo(1)
+	return mmGetClientsByTenant.mock
+}
+
+// When sets expectation for the Storage.GetClientsByTenant which will trigger the result defined by the following
+// Then helper
+func (mmGetClientsByTenant *mStorageMockGetClientsByTenant) When(ctx context.Context, tenantID uuid.UUID) *StorageMockGetClientsByTenantExpectation {
+	if mmGetClientsByTenant.mock.funcGetClientsByTenant != nil {
+		mmGetClientsByTenant.mock.t.Fatalf("StorageMock.GetClientsByTenant mock is already set by Set")
+	}
+
+	expectation := &StorageMockGetClientsByTenantExpectation{
+		mock:               mmGetClientsByTenant.mock,
+		params:             &StorageMockGetClientsByTenantParams{ctx, tenantID},
+		expectationOrigins: StorageMockGetClientsByTenantExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetClientsByTenant.expectations = append(mmGetClientsByTenant.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.GetClientsByTenant return parameters for the expectation previously defined by the When method
+func (e *StorageMockGetClientsByTenantExpectation) Then(ca1 []model.ClientApplication, err error) *StorageMock {
+	e.results = &StorageMockGetClientsByTenantResults{ca1, err}
+	return e.mock
+}
+
+// Times sets number of times Storage.GetClientsByTenant should be invoked
+func (mmGetClientsByTenant *mStorageMockGetClientsByTenant) Times(n uint64) *mStorageMockGetClientsByTenant {
+	if n == 0 {
+		mmGetClientsByTenant.mock.t.Fatalf("Times of StorageMock.GetClientsByTenant mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetClientsByTenant.expectedInvocations, n)
+	mmGetClientsByTenant.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetClientsByTenant
+}
+
+func (mmGetClientsByTenant *mStorageMockGetClientsByTenant) invocationsDone() bool {
+	if len(mmGetClientsByTenant.expectations) == 0 && mmGetClientsByTenant.defaultExpectation == nil && mmGetClientsByTenant.mock.funcGetClientsByTenant == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetClientsByTenant.mock.afterGetClientsByTenantCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetClientsByTenant.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetClientsByTenant implements mm_port.Storage
+func (mmGetClientsByTenant *StorageMock) GetClientsByTenant(ctx context.Context, tenantID uuid.UUID) (ca1 []model.ClientApplication, err error) {
+	mm_atomic.AddUint64(&mmGetClientsByTenant.beforeGetClientsByTenantCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetClientsByTenant.afterGetClientsByTenantCounter, 1)
+
+	mmGetClientsByTenant.t.Helper()
+
+	if mmGetClientsByTenant.inspectFuncGetClientsByTenant != nil {
+		mmGetClientsByTenant.inspectFuncGetClientsByTenant(ctx, tenantID)
+	}
+
+	mm_params := StorageMockGetClientsByTenantParams{ctx, tenantID}
+
+	// Record call args
+	mmGetClientsByTenant.GetClientsByTenantMock.mutex.Lock()
+	mmGetClientsByTenant.GetClientsByTenantMock.callArgs = append(mmGetClientsByTenant.GetClientsByTenantMock.callArgs, &mm_params)
+	mmGetClientsByTenant.GetClientsByTenantMock.mutex.Unlock()
+
+	for _, e := range mmGetClientsByTenant.GetClientsByTenantMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.ca1, e.results.err
+		}
+	}
+
+	if mmGetClientsByTenant.GetClientsByTenantMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetClientsByTenant.GetClientsByTenantMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetClientsByTenant.GetClientsByTenantMock.defaultExpectation.params
+		mm_want_ptrs := mmGetClientsByTenant.GetClientsByTenantMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockGetClientsByTenantParams{ctx, tenantID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetClientsByTenant.t.Errorf("StorageMock.GetClientsByTenant got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetClientsByTenant.GetClientsByTenantMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetClientsByTenant.t.Errorf("StorageMock.GetClientsByTenant got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetClientsByTenant.GetClientsByTenantMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetClientsByTenant.t.Errorf("StorageMock.GetClientsByTenant got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetClientsByTenant.GetClientsByTenantMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetClientsByTenant.GetClientsByTenantMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetClientsByTenant.t.Fatal("No results are set for the StorageMock.GetClientsByTenant")
+		}
+		return (*mm_results).ca1, (*mm_results).err
+	}
+	if mmGetClientsByTenant.funcGetClientsByTenant != nil {
+		return mmGetClientsByTenant.funcGetClientsByTenant(ctx, tenantID)
+	}
+	mmGetClientsByTenant.t.Fatalf("Unexpected call to StorageMock.GetClientsByTenant. %v %v", ctx, tenantID)
+	return
+}
+
+// GetClientsByTenantAfterCounter returns a count of finished StorageMock.GetClientsByTenant invocations
+func (mmGetClientsByTenant *StorageMock) GetClientsByTenantAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetClientsByTenant.afterGetClientsByTenantCounter)
+}
+
+// GetClientsByTenantBeforeCounter returns a count of StorageMock.GetClientsByTenant invocations
+func (mmGetClientsByTenant *StorageMock) GetClientsByTenantBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetClientsByTenant.beforeGetClientsByTenantCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.GetClientsByTenant.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetClientsByTenant *mStorageMockGetClientsByTenant) Calls() []*StorageMockGetClientsByTenantParams {
+	mmGetClientsByTenant.mutex.RLock()
+
+	argCopy := make([]*StorageMockGetClientsByTenantParams, len(mmGetClientsByTenant.callArgs))
+	copy(argCopy, mmGetClientsByTenant.callArgs)
+
+	mmGetClientsByTenant.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetClientsByTenantDone returns true if the count of the GetClientsByTenant invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockGetClientsByTenantDone() bool {
+	if m.GetClientsByTenantMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetClientsByTenantMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetClientsByTenantMock.invocationsDone()
+}
+
+// MinimockGetClientsByTenantInspect logs each unmet expectation
+func (m *StorageMock) MinimockGetClientsByTenantInspect() {
+	for _, e := range m.GetClientsByTenantMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.GetClientsByTenant at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetClientsByTenantCounter := mm_atomic.LoadUint64(&m.afterGetClientsByTenantCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetClientsByTenantMock.defaultExpectation != nil && afterGetClientsByTenantCounter < 1 {
+		if m.GetClientsByTenantMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.GetClientsByTenant at\n%s", m.GetClientsByTenantMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.GetClientsByTenant at\n%s with params: %#v", m.GetClientsByTenantMock.defaultExpectation.expectationOrigins.origin, *m.GetClientsByTenantMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetClientsByTenant != nil && afterGetClientsByTenantCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.GetClientsByTenant at\n%s", m.funcGetClientsByTenantOrigin)
+	}
+
+	if !m.GetClientsByTenantMock.invocationsDone() && afterGetClientsByTenantCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.GetClientsByTenant at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetClientsByTenantMock.expectedInvocations), m.GetClientsByTenantMock.expectedInvocationsOrigin, afterGetClientsByTenantCounter)
 	}
 }
 
@@ -3857,6 +4220,317 @@ func (m *StorageMock) MinimockIsTokenRevokedInspect() {
 	if !m.IsTokenRevokedMock.invocationsDone() && afterIsTokenRevokedCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageMock.IsTokenRevoked at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.IsTokenRevokedMock.expectedInvocations), m.IsTokenRevokedMock.expectedInvocationsOrigin, afterIsTokenRevokedCounter)
+	}
+}
+
+type mStorageMockPruneExpiredTokens struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockPruneExpiredTokensExpectation
+	expectations       []*StorageMockPruneExpiredTokensExpectation
+
+	callArgs []*StorageMockPruneExpiredTokensParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockPruneExpiredTokensExpectation specifies expectation struct of the Storage.PruneExpiredTokens
+type StorageMockPruneExpiredTokensExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockPruneExpiredTokensParams
+	paramPtrs          *StorageMockPruneExpiredTokensParamPtrs
+	expectationOrigins StorageMockPruneExpiredTokensExpectationOrigins
+	results            *StorageMockPruneExpiredTokensResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockPruneExpiredTokensParams contains parameters of the Storage.PruneExpiredTokens
+type StorageMockPruneExpiredTokensParams struct {
+	ctx context.Context
+}
+
+// StorageMockPruneExpiredTokensParamPtrs contains pointers to parameters of the Storage.PruneExpiredTokens
+type StorageMockPruneExpiredTokensParamPtrs struct {
+	ctx *context.Context
+}
+
+// StorageMockPruneExpiredTokensResults contains results of the Storage.PruneExpiredTokens
+type StorageMockPruneExpiredTokensResults struct {
+	err error
+}
+
+// StorageMockPruneExpiredTokensOrigins contains origins of expectations of the Storage.PruneExpiredTokens
+type StorageMockPruneExpiredTokensExpectationOrigins struct {
+	origin    string
+	originCtx string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmPruneExpiredTokens *mStorageMockPruneExpiredTokens) Optional() *mStorageMockPruneExpiredTokens {
+	mmPruneExpiredTokens.optional = true
+	return mmPruneExpiredTokens
+}
+
+// Expect sets up expected params for Storage.PruneExpiredTokens
+func (mmPruneExpiredTokens *mStorageMockPruneExpiredTokens) Expect(ctx context.Context) *mStorageMockPruneExpiredTokens {
+	if mmPruneExpiredTokens.mock.funcPruneExpiredTokens != nil {
+		mmPruneExpiredTokens.mock.t.Fatalf("StorageMock.PruneExpiredTokens mock is already set by Set")
+	}
+
+	if mmPruneExpiredTokens.defaultExpectation == nil {
+		mmPruneExpiredTokens.defaultExpectation = &StorageMockPruneExpiredTokensExpectation{}
+	}
+
+	if mmPruneExpiredTokens.defaultExpectation.paramPtrs != nil {
+		mmPruneExpiredTokens.mock.t.Fatalf("StorageMock.PruneExpiredTokens mock is already set by ExpectParams functions")
+	}
+
+	mmPruneExpiredTokens.defaultExpectation.params = &StorageMockPruneExpiredTokensParams{ctx}
+	mmPruneExpiredTokens.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmPruneExpiredTokens.expectations {
+		if minimock.Equal(e.params, mmPruneExpiredTokens.defaultExpectation.params) {
+			mmPruneExpiredTokens.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmPruneExpiredTokens.defaultExpectation.params)
+		}
+	}
+
+	return mmPruneExpiredTokens
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.PruneExpiredTokens
+func (mmPruneExpiredTokens *mStorageMockPruneExpiredTokens) ExpectCtxParam1(ctx context.Context) *mStorageMockPruneExpiredTokens {
+	if mmPruneExpiredTokens.mock.funcPruneExpiredTokens != nil {
+		mmPruneExpiredTokens.mock.t.Fatalf("StorageMock.PruneExpiredTokens mock is already set by Set")
+	}
+
+	if mmPruneExpiredTokens.defaultExpectation == nil {
+		mmPruneExpiredTokens.defaultExpectation = &StorageMockPruneExpiredTokensExpectation{}
+	}
+
+	if mmPruneExpiredTokens.defaultExpectation.params != nil {
+		mmPruneExpiredTokens.mock.t.Fatalf("StorageMock.PruneExpiredTokens mock is already set by Expect")
+	}
+
+	if mmPruneExpiredTokens.defaultExpectation.paramPtrs == nil {
+		mmPruneExpiredTokens.defaultExpectation.paramPtrs = &StorageMockPruneExpiredTokensParamPtrs{}
+	}
+	mmPruneExpiredTokens.defaultExpectation.paramPtrs.ctx = &ctx
+	mmPruneExpiredTokens.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmPruneExpiredTokens
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.PruneExpiredTokens
+func (mmPruneExpiredTokens *mStorageMockPruneExpiredTokens) Inspect(f func(ctx context.Context)) *mStorageMockPruneExpiredTokens {
+	if mmPruneExpiredTokens.mock.inspectFuncPruneExpiredTokens != nil {
+		mmPruneExpiredTokens.mock.t.Fatalf("Inspect function is already set for StorageMock.PruneExpiredTokens")
+	}
+
+	mmPruneExpiredTokens.mock.inspectFuncPruneExpiredTokens = f
+
+	return mmPruneExpiredTokens
+}
+
+// Return sets up results that will be returned by Storage.PruneExpiredTokens
+func (mmPruneExpiredTokens *mStorageMockPruneExpiredTokens) Return(err error) *StorageMock {
+	if mmPruneExpiredTokens.mock.funcPruneExpiredTokens != nil {
+		mmPruneExpiredTokens.mock.t.Fatalf("StorageMock.PruneExpiredTokens mock is already set by Set")
+	}
+
+	if mmPruneExpiredTokens.defaultExpectation == nil {
+		mmPruneExpiredTokens.defaultExpectation = &StorageMockPruneExpiredTokensExpectation{mock: mmPruneExpiredTokens.mock}
+	}
+	mmPruneExpiredTokens.defaultExpectation.results = &StorageMockPruneExpiredTokensResults{err}
+	mmPruneExpiredTokens.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmPruneExpiredTokens.mock
+}
+
+// Set uses given function f to mock the Storage.PruneExpiredTokens method
+func (mmPruneExpiredTokens *mStorageMockPruneExpiredTokens) Set(f func(ctx context.Context) (err error)) *StorageMock {
+	if mmPruneExpiredTokens.defaultExpectation != nil {
+		mmPruneExpiredTokens.mock.t.Fatalf("Default expectation is already set for the Storage.PruneExpiredTokens method")
+	}
+
+	if len(mmPruneExpiredTokens.expectations) > 0 {
+		mmPruneExpiredTokens.mock.t.Fatalf("Some expectations are already set for the Storage.PruneExpiredTokens method")
+	}
+
+	mmPruneExpiredTokens.mock.funcPruneExpiredTokens = f
+	mmPruneExpiredTokens.mock.funcPruneExpiredTokensOrigin = minimock.CallerInfo(1)
+	return mmPruneExpiredTokens.mock
+}
+
+// When sets expectation for the Storage.PruneExpiredTokens which will trigger the result defined by the following
+// Then helper
+func (mmPruneExpiredTokens *mStorageMockPruneExpiredTokens) When(ctx context.Context) *StorageMockPruneExpiredTokensExpectation {
+	if mmPruneExpiredTokens.mock.funcPruneExpiredTokens != nil {
+		mmPruneExpiredTokens.mock.t.Fatalf("StorageMock.PruneExpiredTokens mock is already set by Set")
+	}
+
+	expectation := &StorageMockPruneExpiredTokensExpectation{
+		mock:               mmPruneExpiredTokens.mock,
+		params:             &StorageMockPruneExpiredTokensParams{ctx},
+		expectationOrigins: StorageMockPruneExpiredTokensExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmPruneExpiredTokens.expectations = append(mmPruneExpiredTokens.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.PruneExpiredTokens return parameters for the expectation previously defined by the When method
+func (e *StorageMockPruneExpiredTokensExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockPruneExpiredTokensResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.PruneExpiredTokens should be invoked
+func (mmPruneExpiredTokens *mStorageMockPruneExpiredTokens) Times(n uint64) *mStorageMockPruneExpiredTokens {
+	if n == 0 {
+		mmPruneExpiredTokens.mock.t.Fatalf("Times of StorageMock.PruneExpiredTokens mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmPruneExpiredTokens.expectedInvocations, n)
+	mmPruneExpiredTokens.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmPruneExpiredTokens
+}
+
+func (mmPruneExpiredTokens *mStorageMockPruneExpiredTokens) invocationsDone() bool {
+	if len(mmPruneExpiredTokens.expectations) == 0 && mmPruneExpiredTokens.defaultExpectation == nil && mmPruneExpiredTokens.mock.funcPruneExpiredTokens == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmPruneExpiredTokens.mock.afterPruneExpiredTokensCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmPruneExpiredTokens.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// PruneExpiredTokens implements mm_port.Storage
+func (mmPruneExpiredTokens *StorageMock) PruneExpiredTokens(ctx context.Context) (err error) {
+	mm_atomic.AddUint64(&mmPruneExpiredTokens.beforePruneExpiredTokensCounter, 1)
+	defer mm_atomic.AddUint64(&mmPruneExpiredTokens.afterPruneExpiredTokensCounter, 1)
+
+	mmPruneExpiredTokens.t.Helper()
+
+	if mmPruneExpiredTokens.inspectFuncPruneExpiredTokens != nil {
+		mmPruneExpiredTokens.inspectFuncPruneExpiredTokens(ctx)
+	}
+
+	mm_params := StorageMockPruneExpiredTokensParams{ctx}
+
+	// Record call args
+	mmPruneExpiredTokens.PruneExpiredTokensMock.mutex.Lock()
+	mmPruneExpiredTokens.PruneExpiredTokensMock.callArgs = append(mmPruneExpiredTokens.PruneExpiredTokensMock.callArgs, &mm_params)
+	mmPruneExpiredTokens.PruneExpiredTokensMock.mutex.Unlock()
+
+	for _, e := range mmPruneExpiredTokens.PruneExpiredTokensMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmPruneExpiredTokens.PruneExpiredTokensMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmPruneExpiredTokens.PruneExpiredTokensMock.defaultExpectation.Counter, 1)
+		mm_want := mmPruneExpiredTokens.PruneExpiredTokensMock.defaultExpectation.params
+		mm_want_ptrs := mmPruneExpiredTokens.PruneExpiredTokensMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockPruneExpiredTokensParams{ctx}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmPruneExpiredTokens.t.Errorf("StorageMock.PruneExpiredTokens got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmPruneExpiredTokens.PruneExpiredTokensMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmPruneExpiredTokens.t.Errorf("StorageMock.PruneExpiredTokens got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmPruneExpiredTokens.PruneExpiredTokensMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmPruneExpiredTokens.PruneExpiredTokensMock.defaultExpectation.results
+		if mm_results == nil {
+			mmPruneExpiredTokens.t.Fatal("No results are set for the StorageMock.PruneExpiredTokens")
+		}
+		return (*mm_results).err
+	}
+	if mmPruneExpiredTokens.funcPruneExpiredTokens != nil {
+		return mmPruneExpiredTokens.funcPruneExpiredTokens(ctx)
+	}
+	mmPruneExpiredTokens.t.Fatalf("Unexpected call to StorageMock.PruneExpiredTokens. %v", ctx)
+	return
+}
+
+// PruneExpiredTokensAfterCounter returns a count of finished StorageMock.PruneExpiredTokens invocations
+func (mmPruneExpiredTokens *StorageMock) PruneExpiredTokensAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmPruneExpiredTokens.afterPruneExpiredTokensCounter)
+}
+
+// PruneExpiredTokensBeforeCounter returns a count of StorageMock.PruneExpiredTokens invocations
+func (mmPruneExpiredTokens *StorageMock) PruneExpiredTokensBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmPruneExpiredTokens.beforePruneExpiredTokensCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.PruneExpiredTokens.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmPruneExpiredTokens *mStorageMockPruneExpiredTokens) Calls() []*StorageMockPruneExpiredTokensParams {
+	mmPruneExpiredTokens.mutex.RLock()
+
+	argCopy := make([]*StorageMockPruneExpiredTokensParams, len(mmPruneExpiredTokens.callArgs))
+	copy(argCopy, mmPruneExpiredTokens.callArgs)
+
+	mmPruneExpiredTokens.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockPruneExpiredTokensDone returns true if the count of the PruneExpiredTokens invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockPruneExpiredTokensDone() bool {
+	if m.PruneExpiredTokensMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.PruneExpiredTokensMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.PruneExpiredTokensMock.invocationsDone()
+}
+
+// MinimockPruneExpiredTokensInspect logs each unmet expectation
+func (m *StorageMock) MinimockPruneExpiredTokensInspect() {
+	for _, e := range m.PruneExpiredTokensMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.PruneExpiredTokens at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterPruneExpiredTokensCounter := mm_atomic.LoadUint64(&m.afterPruneExpiredTokensCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.PruneExpiredTokensMock.defaultExpectation != nil && afterPruneExpiredTokensCounter < 1 {
+		if m.PruneExpiredTokensMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.PruneExpiredTokens at\n%s", m.PruneExpiredTokensMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.PruneExpiredTokens at\n%s with params: %#v", m.PruneExpiredTokensMock.defaultExpectation.expectationOrigins.origin, *m.PruneExpiredTokensMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcPruneExpiredTokens != nil && afterPruneExpiredTokensCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.PruneExpiredTokens at\n%s", m.funcPruneExpiredTokensOrigin)
+	}
+
+	if !m.PruneExpiredTokensMock.invocationsDone() && afterPruneExpiredTokensCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.PruneExpiredTokens at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.PruneExpiredTokensMock.expectedInvocations), m.PruneExpiredTokensMock.expectedInvocationsOrigin, afterPruneExpiredTokensCounter)
 	}
 }
 
@@ -6705,6 +7379,8 @@ func (m *StorageMock) MinimockFinish() {
 
 			m.MinimockGetClientInspect()
 
+			m.MinimockGetClientsByTenantInspect()
+
 			m.MinimockGetEnabledIdentityProvidersInspect()
 
 			m.MinimockGetIdentityByProfileAndProviderInspect()
@@ -6714,6 +7390,8 @@ func (m *StorageMock) MinimockFinish() {
 			m.MinimockGetUserProfileByIdentifierInspect()
 
 			m.MinimockIsTokenRevokedInspect()
+
+			m.MinimockPruneExpiredTokensInspect()
 
 			m.MinimockResolveTenantByDomainInspect()
 
@@ -6758,11 +7436,13 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockGetAndConsumeAuthSessionDone() &&
 		m.MinimockGetAndConsumeInteractionSessionDone() &&
 		m.MinimockGetClientDone() &&
+		m.MinimockGetClientsByTenantDone() &&
 		m.MinimockGetEnabledIdentityProvidersDone() &&
 		m.MinimockGetIdentityByProfileAndProviderDone() &&
 		m.MinimockGetPasswordCredentialDone() &&
 		m.MinimockGetUserProfileByIdentifierDone() &&
 		m.MinimockIsTokenRevokedDone() &&
+		m.MinimockPruneExpiredTokensDone() &&
 		m.MinimockResolveTenantByDomainDone() &&
 		m.MinimockResolveTenantByIDDone() &&
 		m.MinimockRevokeSessionDone() &&

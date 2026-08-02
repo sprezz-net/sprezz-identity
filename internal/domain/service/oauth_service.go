@@ -16,13 +16,14 @@ import (
 )
 
 type OAuthService struct {
-	storage port.Storage
-	crypto  port.Crypto
-	event   port.Event
+	storage  port.Storage
+	crypto   port.Crypto
+	event    port.Event
+	notifier port.LogoutNotifier
 }
 
-func NewOAuthService(s port.Storage, c port.Crypto, e port.Event) *OAuthService {
-	return &OAuthService{storage: s, crypto: c, event: e}
+func NewOAuthService(s port.Storage, c port.Crypto, e port.Event, n port.LogoutNotifier) *OAuthService {
+	return &OAuthService{storage: s, crypto: c, event: e, notifier: n}
 }
 
 func (s *OAuthService) InitiateAuthorize(ctx context.Context, session model.AuthorizationCodeSession) error {
@@ -99,8 +100,39 @@ func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.
 	}, nil
 }
 
-func (s *OAuthService) ProcessLogout(ctx context.Context, tenantID uuid.UUID, subject string, clientID string, tokenJTI string) error {
-	return s.storage.RevokeSession(ctx, tenantID, subject, clientID)
+func (s *OAuthService) ProcessLogout(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) ([]string, error) {
+	_ = s.storage.RevokeSession(ctx, tenantID, subject, clientID)
+
+	clients, err := s.storage.GetClientsByTenant(ctx, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("retrieve tenant clients for logout: %w", err)
+	}
+
+	var frontChannelURIs []string
+	now := time.Now().UTC()
+
+	for _, client := range clients {
+		if client.BackChannelLogoutURI != "" {
+			logoutToken, err := s.crypto.SignLogoutToken(model.LogoutTokenClaims{
+				TokenID:  uuid.NewString(),
+				Issuer:   "https://" + client.TenantID.String(),
+				Subject:  subject,
+				Audience: client.ClientID,
+				IssuedAt: now,
+			}, client.Algorithm)
+			if err == nil && s.notifier != nil {
+				go func(uri, token string) {
+					_ = s.notifier.SendBackChannelLogout(context.Background(), uri, token)
+				}(client.BackChannelLogoutURI, logoutToken)
+			}
+		}
+
+		if client.FrontChannelLogoutURI != "" {
+			frontChannelURIs = append(frontChannelURIs, client.FrontChannelLogoutURI)
+		}
+	}
+
+	return frontChannelURIs, nil
 }
 
 func (s *OAuthService) RevokeToken(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) error {

@@ -101,6 +101,39 @@ func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.Signatur
 	return token.SignedString(privateKey)
 }
 
+func (s *JWTSigner) SignLogoutToken(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (string, error) {
+	if alg != model.AlgRS256 {
+		return "", fmt.Errorf("unsupported signing algorithm %s", alg)
+	}
+
+	issuer := claims.Issuer
+	if issuer == "" {
+		issuer = httpsScheme + strings.TrimPrefix(claims.Subject, httpsScheme)
+	}
+	issuer = strings.TrimSuffix(issuer, "/")
+	tenantKey := strings.TrimPrefix(issuer, httpsScheme)
+	kid := s.tenantKeyID(issuer)
+	privateKey, err := s.getOrCreateKeyPair(tenantKey, issuer, kid)
+	if err != nil {
+		return "", err
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"iss": issuer,
+		"sub": claims.Subject,
+		"aud": claims.Audience,
+		"jti": claims.TokenID,
+		"iat": claims.IssuedAt.Unix(),
+		"events": map[string]any{
+			"http://schemas.openid.net/event/back-channel-logout": map[string]any{},
+		},
+	})
+	token.Header["kid"] = kid
+	token.Header["typ"] = "JWT"
+
+	return token.SignedString(privateKey)
+}
+
 func (s *JWTSigner) VerifyToken(tokenStr string) (map[string]any, error) {
 	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {

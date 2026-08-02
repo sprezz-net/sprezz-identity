@@ -117,6 +117,128 @@ func (s *PostgresStorage) GetClient(ctx context.Context, tenantID uuid.UUID, cli
 	}, nil
 }
 
+func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.UUID) ([]model.ClientApplication, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT
+			a.id,
+			a.client_id,
+			a.client_secret_hash,
+			a.client_name,
+			a.redirect_uris,
+			a.post_logout_redirect_uris,
+			a.front_channel_logout_uri,
+			a.back_channel_logout_uri,
+			a.grant_types,
+			a.response_types,
+			a.idp_signing_algorithm,
+			a.access_token_lifetime,
+			a.refresh_token_lifetime,
+			a.id_token_lifetime,
+			a.allowed_scopes,
+			a.default_scopes,
+			a.allowed_idps,
+			a.default_idp
+		FROM applications AS a
+		JOIN tenants AS t ON t.id = a.tenant_id
+		WHERE t.tenant_uuid = $1::uuid
+	`, toPGUUID(tenantID))
+	if err != nil {
+		return nil, fmt.Errorf("get clients by tenant: %w", err)
+	}
+	defer rows.Close()
+
+	var clients []model.ClientApplication
+	for rows.Next() {
+		var id pgtype.UUID
+		var clientID string
+		var clientSecret *string
+		var clientName string
+		var redirectURIs []string
+		var postLogoutRedirectURIs []string
+		var frontChannelLogoutURI *string
+		var backChannelLogoutURI *string
+		var grantTypes []string
+		var responseTypes []string
+		var algorithm string
+		var accessLifetime pgtype.Interval
+		var refreshLifetime pgtype.Interval
+		var idTokenLifetime pgtype.Interval
+		var allowedScopes []string
+		var defaultScopes []string
+		var allowedIdps []string
+		var defaultIdp *string
+
+		err = rows.Scan(
+			&id,
+			&clientID,
+			&clientSecret,
+			&clientName,
+			&redirectURIs,
+			&postLogoutRedirectURIs,
+			&frontChannelLogoutURI,
+			&backChannelLogoutURI,
+			&grantTypes,
+			&responseTypes,
+			&algorithm,
+			&accessLifetime,
+			&refreshLifetime,
+			&idTokenLifetime,
+			&allowedScopes,
+			&defaultScopes,
+			&allowedIdps,
+			&defaultIdp,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan client application: %w", err)
+		}
+
+		parsedID, err := pgUUIDToUUID(id)
+		if err != nil {
+			return nil, fmt.Errorf("parse client UUID: %w", err)
+		}
+		parsedAccess, err := pgIntervalToDuration(accessLifetime)
+		if err != nil {
+			return nil, fmt.Errorf("parse access lifetime: %w", err)
+		}
+		parsedRefresh, err := pgIntervalToDuration(refreshLifetime)
+		if err != nil {
+			return nil, fmt.Errorf("parse refresh lifetime: %w", err)
+		}
+		parsedIDToken, err := pgIntervalToDuration(idTokenLifetime)
+		if err != nil {
+			return nil, fmt.Errorf("parse id token lifetime: %w", err)
+		}
+
+		clients = append(clients, model.ClientApplication{
+			ID:                     parsedID.String(),
+			TenantID:               tenantID,
+			ClientID:               clientID,
+			ClientSecret:           clientSecret,
+			ClientName:             clientName,
+			RedirectURIs:           redirectURIs,
+			PostLogoutRedirectURIs: postLogoutRedirectURIs,
+			FrontChannelLogoutURI:  valueOrEmpty(frontChannelLogoutURI),
+			BackChannelLogoutURI:   valueOrEmpty(backChannelLogoutURI),
+			GrantTypes:             grantTypes,
+			ResponseTypes:          responseTypes,
+			Algorithm:              model.SignatureAlgorithm(algorithm),
+			AccessTokenLifetime:    parsedAccess,
+			RefreshTokenLifetime:   parsedRefresh,
+			IDTokenLifetime:        parsedIDToken,
+			AllowedScopes:          allowedScopes,
+			DefaultScopes:          defaultScopes,
+			AllowedIDPs:            allowedIdps,
+			DefaultIDP:             valueOrEmpty(defaultIdp),
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate client applications: %w", err)
+	}
+
+	return clients, nil
+}
+
 func (s *PostgresStorage) SaveAuthSession(ctx context.Context, session model.AuthorizationCodeSession) error {
 	tenantUUID, err := uuid.Parse(session.TenantID)
 	if err != nil {

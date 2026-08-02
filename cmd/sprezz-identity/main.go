@@ -9,6 +9,7 @@ import (
 
 	httpadapter "sprezz-identity/internal/adapters/in/http"
 	jwtcrypto "sprezz-identity/internal/adapters/out/crypto"
+	"sprezz-identity/internal/adapters/out/logout"
 	"sprezz-identity/internal/adapters/out/postgres"
 	"sprezz-identity/internal/config"
 	"sprezz-identity/internal/domain/service"
@@ -36,7 +37,8 @@ func main() {
 	startTokenPruningWorker(ctx, deps.storage, deps.cfg.IdentityServer.TokenPruningInterval)
 
 	signer := jwtcrypto.NewJWTSigner()
-	oauthService := service.NewOAuthService(deps.storage, signer, nil)
+	notifier := logout.NewLogoutHttpClient()
+	oauthService := service.NewOAuthService(deps.storage, signer, nil, notifier)
 	handler := httpadapter.NewHttpAdapter(oauthService, deps.storage, signer)
 	server := &http.Server{
 		Addr:    ":" + deps.cfg.Port,

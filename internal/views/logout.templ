@@ -1,0 +1,35 @@
+package views
+
+templ Logout(iframeURIs []string, redirectURI string) {
+	<!doctype html>
+	<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Logging out...</title>
+		<script>
+			// 1. Set an unconditional safety timeout of 2 seconds
+			// This guarantees the user is redirected even if some client iframes fail, block, or timeout
+			var redirectTimeout = setTimeout(function() {
+				window.location.href = "{ redirectURI }";
+			}, 2000);
+
+			// 2. If all iframes load successfully before the 2 seconds, redirect sooner
+			window.onload = function() {
+				clearTimeout(redirectTimeout); // Cancel the safety timeout
+				setTimeout(function() {
+					window.location.href = "{ redirectURI }";
+				}, 500); // Small 500ms visual grace period
+			};
+		</script>
+	</head>
+	<body style="font-family:sans-serif;text-align:center;margin-top:8rem;">
+		<h1>Signing out of your applications...</h1>
+		<p>Please wait while we securely end your sessions.</p>
+
+		<!-- Render hidden iframes for Front-Channel logout propagation -->
+		for _, uri := range iframeURIs {
+			<iframe src={ uri } style="display:none;width:0;height:0;border:0;"></iframe>
+		}
+	</body>
+	</html>
+}

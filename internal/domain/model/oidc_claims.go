@@ -44,3 +44,11 @@ type IntrospectionResponse struct {
 	TokenType string `json:"token_type,omitempty"`
 	TenantID  string `json:"tid,omitempty"`
 }
+
+type LogoutTokenClaims struct {
+	TokenID  string
+	Issuer   string
+	Subject  string
+	Audience string
+	IssuedAt time.Time
+}

@@ -156,6 +156,7 @@ To maintain complete compatibility with off-the-shelf native app clients, the HT
 | `/oauth/token` | `POST` | RFC 6749 / PKCE Swap | Validates verifiers, confirms code constraints, and issues the token payload. |
 | `/oauth/revoke` | `POST` | RFC 7009 | Revokes an active Access Token or Refresh Token (adds JTI to database-backed blacklist). |
 | `/oauth/introspect` | `POST` | RFC 7662 | Validates cryptographically and checks the status of an active Access Token (or Refresh Token). |
+| `/oauth/logout` | `GET` | OIDC Session 1.0 | Log out the user, clear IDP cookies, and propagate Single Logout to active clients. |
 | `/oauth/userinfo` | `GET` | OIDC Core 1.0 | Authenticated user profile retrieval interface (`Authorization: Bearer`). |
 | **Dynamic Routing Middleware** | `Intercept` | HTTP Host Header Context | Resolves incoming raw server domains (`Host`) to a valid internal `tenant_id` state. |
 
@@ -234,3 +235,18 @@ Sprezz Identity exposes standard RFC 7662 Token Introspection at the POST endpoi
   ```
 
   For invalid, revoked, or expired tokens, the server simply returns `{"active": false}`.
+
+### 9.7 OIDC Front-Channel Logout 1.0
+
+Sprezz Identity implements OIDC Front-Channel Logout 1.0 to clear browser cookie sessions across multiple logged-in client applications.
+
+* **The Iframe Rendering Flow**: Upon receiving a valid GET request at `/oauth/logout`, the HttpAdapter clears the IDP session cookies and queries the usecase for front-channel logout URLs. If present, it serves `views.Logout`, rendering a hidden `<iframe>` targeting each client's registered `front_channel_logout_uri`.
+* **Robust Redirection Timout**: To guarantee browser navigation, the template implements a dual-timer scheme: an unconditional 2-second safety timeout coupled to a faster `window.onload` callback, ensuring a reliable user redirect to the validated `post_logout_redirect_uri` even if client endpoints are slow or offline.
+
+### 9.8 OIDC Back-Channel Logout 1.0
+
+Sprezz Identity implements OIDC Back-Channel Logout 1.0 to trigger secure, out-of-band single logout actions directly at client endpoints.
+
+* **Cryptographic Token Verification**: The server generates a unique, cryptographically signed `logout_token` (JWT) for each client. This token contains the standard claims (`iss`, `sub`, `aud`, `iat`, `jti`) and the mandatory `events` claim:
+  `"events": { "http://schemas.openid.net/event/back-channel-logout": {} }`
+* **Non-Blocking Asynchronous Propagation**: To keep logout execution extremely fast for the browser, the usecase invokes our SSRF-protected `port.LogoutNotifier` adapter asynchronously inside separate background goroutines, shielding client-to-server HTTP request times from the user.

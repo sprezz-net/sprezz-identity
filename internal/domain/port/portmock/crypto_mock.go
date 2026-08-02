@@ -32,6 +32,13 @@ type CryptoMock struct {
 	beforeSignIDTokenCounter uint64
 	SignIDTokenMock          mCryptoMockSignIDToken
 
+	funcSignLogoutToken          func(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)
+	funcSignLogoutTokenOrigin    string
+	inspectFuncSignLogoutToken   func(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm)
+	afterSignLogoutTokenCounter  uint64
+	beforeSignLogoutTokenCounter uint64
+	SignLogoutTokenMock          mCryptoMockSignLogoutToken
+
 	funcVerifyToken          func(tokenStr string) (m1 map[string]any, err error)
 	funcVerifyTokenOrigin    string
 	inspectFuncVerifyToken   func(tokenStr string)
@@ -53,6 +60,9 @@ func NewCryptoMock(t minimock.Tester) *CryptoMock {
 
 	m.SignIDTokenMock = mCryptoMockSignIDToken{mock: m}
 	m.SignIDTokenMock.callArgs = []*CryptoMockSignIDTokenParams{}
+
+	m.SignLogoutTokenMock = mCryptoMockSignLogoutToken{mock: m}
+	m.SignLogoutTokenMock.callArgs = []*CryptoMockSignLogoutTokenParams{}
 
 	m.VerifyTokenMock = mCryptoMockVerifyToken{mock: m}
 	m.VerifyTokenMock.callArgs = []*CryptoMockVerifyTokenParams{}
@@ -748,6 +758,349 @@ func (m *CryptoMock) MinimockSignIDTokenInspect() {
 	}
 }
 
+type mCryptoMockSignLogoutToken struct {
+	optional           bool
+	mock               *CryptoMock
+	defaultExpectation *CryptoMockSignLogoutTokenExpectation
+	expectations       []*CryptoMockSignLogoutTokenExpectation
+
+	callArgs []*CryptoMockSignLogoutTokenParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// CryptoMockSignLogoutTokenExpectation specifies expectation struct of the Crypto.SignLogoutToken
+type CryptoMockSignLogoutTokenExpectation struct {
+	mock               *CryptoMock
+	params             *CryptoMockSignLogoutTokenParams
+	paramPtrs          *CryptoMockSignLogoutTokenParamPtrs
+	expectationOrigins CryptoMockSignLogoutTokenExpectationOrigins
+	results            *CryptoMockSignLogoutTokenResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// CryptoMockSignLogoutTokenParams contains parameters of the Crypto.SignLogoutToken
+type CryptoMockSignLogoutTokenParams struct {
+	claims model.LogoutTokenClaims
+	alg    model.SignatureAlgorithm
+}
+
+// CryptoMockSignLogoutTokenParamPtrs contains pointers to parameters of the Crypto.SignLogoutToken
+type CryptoMockSignLogoutTokenParamPtrs struct {
+	claims *model.LogoutTokenClaims
+	alg    *model.SignatureAlgorithm
+}
+
+// CryptoMockSignLogoutTokenResults contains results of the Crypto.SignLogoutToken
+type CryptoMockSignLogoutTokenResults struct {
+	s1  string
+	err error
+}
+
+// CryptoMockSignLogoutTokenOrigins contains origins of expectations of the Crypto.SignLogoutToken
+type CryptoMockSignLogoutTokenExpectationOrigins struct {
+	origin       string
+	originClaims string
+	originAlg    string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Optional() *mCryptoMockSignLogoutToken {
+	mmSignLogoutToken.optional = true
+	return mmSignLogoutToken
+}
+
+// Expect sets up expected params for Crypto.SignLogoutToken
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Expect(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) *mCryptoMockSignLogoutToken {
+	if mmSignLogoutToken.mock.funcSignLogoutToken != nil {
+		mmSignLogoutToken.mock.t.Fatalf("CryptoMock.SignLogoutToken mock is already set by Set")
+	}
+
+	if mmSignLogoutToken.defaultExpectation == nil {
+		mmSignLogoutToken.defaultExpectation = &CryptoMockSignLogoutTokenExpectation{}
+	}
+
+	if mmSignLogoutToken.defaultExpectation.paramPtrs != nil {
+		mmSignLogoutToken.mock.t.Fatalf("CryptoMock.SignLogoutToken mock is already set by ExpectParams functions")
+	}
+
+	mmSignLogoutToken.defaultExpectation.params = &CryptoMockSignLogoutTokenParams{claims, alg}
+	mmSignLogoutToken.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmSignLogoutToken.expectations {
+		if minimock.Equal(e.params, mmSignLogoutToken.defaultExpectation.params) {
+			mmSignLogoutToken.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmSignLogoutToken.defaultExpectation.params)
+		}
+	}
+
+	return mmSignLogoutToken
+}
+
+// ExpectClaimsParam1 sets up expected param claims for Crypto.SignLogoutToken
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) ExpectClaimsParam1(claims model.LogoutTokenClaims) *mCryptoMockSignLogoutToken {
+	if mmSignLogoutToken.mock.funcSignLogoutToken != nil {
+		mmSignLogoutToken.mock.t.Fatalf("CryptoMock.SignLogoutToken mock is already set by Set")
+	}
+
+	if mmSignLogoutToken.defaultExpectation == nil {
+		mmSignLogoutToken.defaultExpectation = &CryptoMockSignLogoutTokenExpectation{}
+	}
+
+	if mmSignLogoutToken.defaultExpectation.params != nil {
+		mmSignLogoutToken.mock.t.Fatalf("CryptoMock.SignLogoutToken mock is already set by Expect")
+	}
+
+	if mmSignLogoutToken.defaultExpectation.paramPtrs == nil {
+		mmSignLogoutToken.defaultExpectation.paramPtrs = &CryptoMockSignLogoutTokenParamPtrs{}
+	}
+	mmSignLogoutToken.defaultExpectation.paramPtrs.claims = &claims
+	mmSignLogoutToken.defaultExpectation.expectationOrigins.originClaims = minimock.CallerInfo(1)
+
+	return mmSignLogoutToken
+}
+
+// ExpectAlgParam2 sets up expected param alg for Crypto.SignLogoutToken
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) ExpectAlgParam2(alg model.SignatureAlgorithm) *mCryptoMockSignLogoutToken {
+	if mmSignLogoutToken.mock.funcSignLogoutToken != nil {
+		mmSignLogoutToken.mock.t.Fatalf("CryptoMock.SignLogoutToken mock is already set by Set")
+	}
+
+	if mmSignLogoutToken.defaultExpectation == nil {
+		mmSignLogoutToken.defaultExpectation = &CryptoMockSignLogoutTokenExpectation{}
+	}
+
+	if mmSignLogoutToken.defaultExpectation.params != nil {
+		mmSignLogoutToken.mock.t.Fatalf("CryptoMock.SignLogoutToken mock is already set by Expect")
+	}
+
+	if mmSignLogoutToken.defaultExpectation.paramPtrs == nil {
+		mmSignLogoutToken.defaultExpectation.paramPtrs = &CryptoMockSignLogoutTokenParamPtrs{}
+	}
+	mmSignLogoutToken.defaultExpectation.paramPtrs.alg = &alg
+	mmSignLogoutToken.defaultExpectation.expectationOrigins.originAlg = minimock.CallerInfo(1)
+
+	return mmSignLogoutToken
+}
+
+// Inspect accepts an inspector function that has same arguments as the Crypto.SignLogoutToken
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Inspect(f func(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm)) *mCryptoMockSignLogoutToken {
+	if mmSignLogoutToken.mock.inspectFuncSignLogoutToken != nil {
+		mmSignLogoutToken.mock.t.Fatalf("Inspect function is already set for CryptoMock.SignLogoutToken")
+	}
+
+	mmSignLogoutToken.mock.inspectFuncSignLogoutToken = f
+
+	return mmSignLogoutToken
+}
+
+// Return sets up results that will be returned by Crypto.SignLogoutToken
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Return(s1 string, err error) *CryptoMock {
+	if mmSignLogoutToken.mock.funcSignLogoutToken != nil {
+		mmSignLogoutToken.mock.t.Fatalf("CryptoMock.SignLogoutToken mock is already set by Set")
+	}
+
+	if mmSignLogoutToken.defaultExpectation == nil {
+		mmSignLogoutToken.defaultExpectation = &CryptoMockSignLogoutTokenExpectation{mock: mmSignLogoutToken.mock}
+	}
+	mmSignLogoutToken.defaultExpectation.results = &CryptoMockSignLogoutTokenResults{s1, err}
+	mmSignLogoutToken.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmSignLogoutToken.mock
+}
+
+// Set uses given function f to mock the Crypto.SignLogoutToken method
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Set(f func(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)) *CryptoMock {
+	if mmSignLogoutToken.defaultExpectation != nil {
+		mmSignLogoutToken.mock.t.Fatalf("Default expectation is already set for the Crypto.SignLogoutToken method")
+	}
+
+	if len(mmSignLogoutToken.expectations) > 0 {
+		mmSignLogoutToken.mock.t.Fatalf("Some expectations are already set for the Crypto.SignLogoutToken method")
+	}
+
+	mmSignLogoutToken.mock.funcSignLogoutToken = f
+	mmSignLogoutToken.mock.funcSignLogoutTokenOrigin = minimock.CallerInfo(1)
+	return mmSignLogoutToken.mock
+}
+
+// When sets expectation for the Crypto.SignLogoutToken which will trigger the result defined by the following
+// Then helper
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) When(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) *CryptoMockSignLogoutTokenExpectation {
+	if mmSignLogoutToken.mock.funcSignLogoutToken != nil {
+		mmSignLogoutToken.mock.t.Fatalf("CryptoMock.SignLogoutToken mock is already set by Set")
+	}
+
+	expectation := &CryptoMockSignLogoutTokenExpectation{
+		mock:               mmSignLogoutToken.mock,
+		params:             &CryptoMockSignLogoutTokenParams{claims, alg},
+		expectationOrigins: CryptoMockSignLogoutTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmSignLogoutToken.expectations = append(mmSignLogoutToken.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Crypto.SignLogoutToken return parameters for the expectation previously defined by the When method
+func (e *CryptoMockSignLogoutTokenExpectation) Then(s1 string, err error) *CryptoMock {
+	e.results = &CryptoMockSignLogoutTokenResults{s1, err}
+	return e.mock
+}
+
+// Times sets number of times Crypto.SignLogoutToken should be invoked
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Times(n uint64) *mCryptoMockSignLogoutToken {
+	if n == 0 {
+		mmSignLogoutToken.mock.t.Fatalf("Times of CryptoMock.SignLogoutToken mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmSignLogoutToken.expectedInvocations, n)
+	mmSignLogoutToken.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmSignLogoutToken
+}
+
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) invocationsDone() bool {
+	if len(mmSignLogoutToken.expectations) == 0 && mmSignLogoutToken.defaultExpectation == nil && mmSignLogoutToken.mock.funcSignLogoutToken == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmSignLogoutToken.mock.afterSignLogoutTokenCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmSignLogoutToken.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// SignLogoutToken implements mm_port.Crypto
+func (mmSignLogoutToken *CryptoMock) SignLogoutToken(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error) {
+	mm_atomic.AddUint64(&mmSignLogoutToken.beforeSignLogoutTokenCounter, 1)
+	defer mm_atomic.AddUint64(&mmSignLogoutToken.afterSignLogoutTokenCounter, 1)
+
+	mmSignLogoutToken.t.Helper()
+
+	if mmSignLogoutToken.inspectFuncSignLogoutToken != nil {
+		mmSignLogoutToken.inspectFuncSignLogoutToken(claims, alg)
+	}
+
+	mm_params := CryptoMockSignLogoutTokenParams{claims, alg}
+
+	// Record call args
+	mmSignLogoutToken.SignLogoutTokenMock.mutex.Lock()
+	mmSignLogoutToken.SignLogoutTokenMock.callArgs = append(mmSignLogoutToken.SignLogoutTokenMock.callArgs, &mm_params)
+	mmSignLogoutToken.SignLogoutTokenMock.mutex.Unlock()
+
+	for _, e := range mmSignLogoutToken.SignLogoutTokenMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.s1, e.results.err
+		}
+	}
+
+	if mmSignLogoutToken.SignLogoutTokenMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmSignLogoutToken.SignLogoutTokenMock.defaultExpectation.Counter, 1)
+		mm_want := mmSignLogoutToken.SignLogoutTokenMock.defaultExpectation.params
+		mm_want_ptrs := mmSignLogoutToken.SignLogoutTokenMock.defaultExpectation.paramPtrs
+
+		mm_got := CryptoMockSignLogoutTokenParams{claims, alg}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.claims != nil && !minimock.Equal(*mm_want_ptrs.claims, mm_got.claims) {
+				mmSignLogoutToken.t.Errorf("CryptoMock.SignLogoutToken got unexpected parameter claims, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSignLogoutToken.SignLogoutTokenMock.defaultExpectation.expectationOrigins.originClaims, *mm_want_ptrs.claims, mm_got.claims, minimock.Diff(*mm_want_ptrs.claims, mm_got.claims))
+			}
+
+			if mm_want_ptrs.alg != nil && !minimock.Equal(*mm_want_ptrs.alg, mm_got.alg) {
+				mmSignLogoutToken.t.Errorf("CryptoMock.SignLogoutToken got unexpected parameter alg, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSignLogoutToken.SignLogoutTokenMock.defaultExpectation.expectationOrigins.originAlg, *mm_want_ptrs.alg, mm_got.alg, minimock.Diff(*mm_want_ptrs.alg, mm_got.alg))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmSignLogoutToken.t.Errorf("CryptoMock.SignLogoutToken got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmSignLogoutToken.SignLogoutTokenMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmSignLogoutToken.SignLogoutTokenMock.defaultExpectation.results
+		if mm_results == nil {
+			mmSignLogoutToken.t.Fatal("No results are set for the CryptoMock.SignLogoutToken")
+		}
+		return (*mm_results).s1, (*mm_results).err
+	}
+	if mmSignLogoutToken.funcSignLogoutToken != nil {
+		return mmSignLogoutToken.funcSignLogoutToken(claims, alg)
+	}
+	mmSignLogoutToken.t.Fatalf("Unexpected call to CryptoMock.SignLogoutToken. %v %v", claims, alg)
+	return
+}
+
+// SignLogoutTokenAfterCounter returns a count of finished CryptoMock.SignLogoutToken invocations
+func (mmSignLogoutToken *CryptoMock) SignLogoutTokenAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSignLogoutToken.afterSignLogoutTokenCounter)
+}
+
+// SignLogoutTokenBeforeCounter returns a count of CryptoMock.SignLogoutToken invocations
+func (mmSignLogoutToken *CryptoMock) SignLogoutTokenBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSignLogoutToken.beforeSignLogoutTokenCounter)
+}
+
+// Calls returns a list of arguments used in each call to CryptoMock.SignLogoutToken.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Calls() []*CryptoMockSignLogoutTokenParams {
+	mmSignLogoutToken.mutex.RLock()
+
+	argCopy := make([]*CryptoMockSignLogoutTokenParams, len(mmSignLogoutToken.callArgs))
+	copy(argCopy, mmSignLogoutToken.callArgs)
+
+	mmSignLogoutToken.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockSignLogoutTokenDone returns true if the count of the SignLogoutToken invocations corresponds
+// the number of defined expectations
+func (m *CryptoMock) MinimockSignLogoutTokenDone() bool {
+	if m.SignLogoutTokenMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.SignLogoutTokenMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.SignLogoutTokenMock.invocationsDone()
+}
+
+// MinimockSignLogoutTokenInspect logs each unmet expectation
+func (m *CryptoMock) MinimockSignLogoutTokenInspect() {
+	for _, e := range m.SignLogoutTokenMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to CryptoMock.SignLogoutToken at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterSignLogoutTokenCounter := mm_atomic.LoadUint64(&m.afterSignLogoutTokenCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.SignLogoutTokenMock.defaultExpectation != nil && afterSignLogoutTokenCounter < 1 {
+		if m.SignLogoutTokenMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to CryptoMock.SignLogoutToken at\n%s", m.SignLogoutTokenMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to CryptoMock.SignLogoutToken at\n%s with params: %#v", m.SignLogoutTokenMock.defaultExpectation.expectationOrigins.origin, *m.SignLogoutTokenMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcSignLogoutToken != nil && afterSignLogoutTokenCounter < 1 {
+		m.t.Errorf("Expected call to CryptoMock.SignLogoutToken at\n%s", m.funcSignLogoutTokenOrigin)
+	}
+
+	if !m.SignLogoutTokenMock.invocationsDone() && afterSignLogoutTokenCounter > 0 {
+		m.t.Errorf("Expected %d calls to CryptoMock.SignLogoutToken at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.SignLogoutTokenMock.expectedInvocations), m.SignLogoutTokenMock.expectedInvocationsOrigin, afterSignLogoutTokenCounter)
+	}
+}
+
 type mCryptoMockVerifyToken struct {
 	optional           bool
 	mock               *CryptoMock
@@ -1068,6 +1421,8 @@ func (m *CryptoMock) MinimockFinish() {
 
 			m.MinimockSignIDTokenInspect()
 
+			m.MinimockSignLogoutTokenInspect()
+
 			m.MinimockVerifyTokenInspect()
 		}
 	})
@@ -1094,5 +1449,6 @@ func (m *CryptoMock) minimockDone() bool {
 	return done &&
 		m.MinimockSignAccessTokenDone() &&
 		m.MinimockSignIDTokenDone() &&
+		m.MinimockSignLogoutTokenDone() &&
 		m.MinimockVerifyTokenDone()
 }

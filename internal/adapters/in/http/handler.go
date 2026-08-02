@@ -29,6 +29,7 @@ const (
 	routeKeys         = "/.well-known/jwks.json"
 	routeRevoke       = "/oauth/revoke"
 	routeIntrospect   = "/oauth/introspect"
+	routeLogout       = "/oauth/logout"
 	contentTypeHeader = "Content-Type"
 	contentTypeJSON   = "application/json"
 )
@@ -79,6 +80,7 @@ func (h *HttpAdapter) registerRoutes() {
 	h.router.Get(routeUserInfo, h.userinfo)
 	h.router.Post(routeRevoke, h.revoke)
 	h.router.Post(routeIntrospect, h.introspect)
+	h.router.Get(routeLogout, h.logout)
 }
 
 func (h *HttpAdapter) loginRoot(w http.ResponseWriter, r *http.Request) {
@@ -508,6 +510,75 @@ func (h *HttpAdapter) introspect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, res)
+}
+
+func (h *HttpAdapter) parseIDTokenHint(idTokenHint string) (string, string) {
+	if idTokenHint == "" {
+		return "", ""
+	}
+	parser := new(jwt.Parser)
+	parsedToken, _, err := parser.ParseUnverified(idTokenHint, jwt.MapClaims{})
+	if err != nil {
+		return "", ""
+	}
+	claims, ok := parsedToken.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", ""
+	}
+	sub, _ := claims["sub"].(string)
+	aud, _ := claims["aud"].(string)
+	return sub, aud
+}
+
+func (h *HttpAdapter) determinePostLogoutRedirectURI(r *http.Request, tenant *model.Tenant, clientID, requestedURI string) string {
+	if requestedURI != "" && clientID != "" {
+		if client, err := h.storagePort.GetClient(r.Context(), tenant.ID, clientID); err == nil {
+			if contains(client.PostLogoutRedirectURIs, requestedURI) {
+				return requestedURI
+			}
+		}
+	}
+	return "/"
+}
+
+func (h *HttpAdapter) logout(w http.ResponseWriter, r *http.Request) {
+	tenant, err := h.resolveTenant(r.Context(), r.Host)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	idTokenHint := r.URL.Query().Get("id_token_hint")
+	postLogoutRedirectURI := r.URL.Query().Get("post_logout_redirect_uri")
+
+	subject, clientID := h.parseIDTokenHint(idTokenHint)
+
+	if subject == "" {
+		if cookie, err := r.Cookie("spz_login_subject"); err == nil {
+			subject = cookie.Value
+		}
+	}
+	if clientID == "" {
+		if cookie, err := r.Cookie("spz_login_provider"); err == nil {
+			clientID = cookie.Value
+		}
+	}
+
+	http.SetCookie(w, &http.Cookie{Name: "spz_login_subject", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(w, &http.Cookie{Name: "spz_login_provider", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+
+	frontChannelURIs, _ := h.authPort.ProcessLogout(r.Context(), tenant.ID, subject, clientID)
+
+	redirectURI := h.determinePostLogoutRedirectURI(r, tenant, clientID, postLogoutRedirectURI)
+
+	if len(frontChannelURIs) > 0 {
+		w.Header().Set(contentTypeHeader, "text/html; charset=utf-8")
+		component := views.Logout(frontChannelURIs, redirectURI)
+		_ = component.Render(r.Context(), w)
+		return
+	}
+
+	http.Redirect(w, r, redirectURI, http.StatusFound)
 }
 
 func (h *HttpAdapter) userinfo(w http.ResponseWriter, r *http.Request) {

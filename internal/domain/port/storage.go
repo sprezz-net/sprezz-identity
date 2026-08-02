@@ -31,4 +31,6 @@ type Storage interface {
 	GetAndConsumeInteractionSession(ctx context.Context, id uuid.UUID) (*model.InteractionSession, error)
 	RevokeToken(ctx context.Context, tokenID string, expiresAt time.Time) error
 	IsTokenRevoked(ctx context.Context, tokenID string) (bool, error)
+	PruneExpiredTokens(ctx context.Context) error
+	GetClientsByTenant(ctx context.Context, tenantID uuid.UUID) ([]model.ClientApplication, error)
 }

@@ -41,9 +41,9 @@ type AuthMock struct {
 	beforeIntrospectTokenCounter uint64
 	IntrospectTokenMock          mAuthMockIntrospectToken
 
-	funcProcessLogout          func(ctx context.Context, tenantID uuid.UUID, subject string, clientID string, tokenJTI string) (err error)
+	funcProcessLogout          func(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) (sa1 []string, err error)
 	funcProcessLogoutOrigin    string
-	inspectFuncProcessLogout   func(ctx context.Context, tenantID uuid.UUID, subject string, clientID string, tokenJTI string)
+	inspectFuncProcessLogout   func(ctx context.Context, tenantID uuid.UUID, subject string, clientID string)
 	afterProcessLogoutCounter  uint64
 	beforeProcessLogoutCounter uint64
 	ProcessLogoutMock          mAuthMockProcessLogout
@@ -1297,7 +1297,6 @@ type AuthMockProcessLogoutParams struct {
 	tenantID uuid.UUID
 	subject  string
 	clientID string
-	tokenJTI string
 }
 
 // AuthMockProcessLogoutParamPtrs contains pointers to parameters of the Auth.ProcessLogout
@@ -1306,11 +1305,11 @@ type AuthMockProcessLogoutParamPtrs struct {
 	tenantID *uuid.UUID
 	subject  *string
 	clientID *string
-	tokenJTI *string
 }
 
 // AuthMockProcessLogoutResults contains results of the Auth.ProcessLogout
 type AuthMockProcessLogoutResults struct {
+	sa1 []string
 	err error
 }
 
@@ -1321,7 +1320,6 @@ type AuthMockProcessLogoutExpectationOrigins struct {
 	originTenantID string
 	originSubject  string
 	originClientID string
-	originTokenJTI string
 }
 
 // Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
@@ -1335,7 +1333,7 @@ func (mmProcessLogout *mAuthMockProcessLogout) Optional() *mAuthMockProcessLogou
 }
 
 // Expect sets up expected params for Auth.ProcessLogout
-func (mmProcessLogout *mAuthMockProcessLogout) Expect(ctx context.Context, tenantID uuid.UUID, subject string, clientID string, tokenJTI string) *mAuthMockProcessLogout {
+func (mmProcessLogout *mAuthMockProcessLogout) Expect(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) *mAuthMockProcessLogout {
 	if mmProcessLogout.mock.funcProcessLogout != nil {
 		mmProcessLogout.mock.t.Fatalf("AuthMock.ProcessLogout mock is already set by Set")
 	}
@@ -1348,7 +1346,7 @@ func (mmProcessLogout *mAuthMockProcessLogout) Expect(ctx context.Context, tenan
 		mmProcessLogout.mock.t.Fatalf("AuthMock.ProcessLogout mock is already set by ExpectParams functions")
 	}
 
-	mmProcessLogout.defaultExpectation.params = &AuthMockProcessLogoutParams{ctx, tenantID, subject, clientID, tokenJTI}
+	mmProcessLogout.defaultExpectation.params = &AuthMockProcessLogoutParams{ctx, tenantID, subject, clientID}
 	mmProcessLogout.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmProcessLogout.expectations {
 		if minimock.Equal(e.params, mmProcessLogout.defaultExpectation.params) {
@@ -1451,31 +1449,8 @@ func (mmProcessLogout *mAuthMockProcessLogout) ExpectClientIDParam4(clientID str
 	return mmProcessLogout
 }
 
-// ExpectTokenJTIParam5 sets up expected param tokenJTI for Auth.ProcessLogout
-func (mmProcessLogout *mAuthMockProcessLogout) ExpectTokenJTIParam5(tokenJTI string) *mAuthMockProcessLogout {
-	if mmProcessLogout.mock.funcProcessLogout != nil {
-		mmProcessLogout.mock.t.Fatalf("AuthMock.ProcessLogout mock is already set by Set")
-	}
-
-	if mmProcessLogout.defaultExpectation == nil {
-		mmProcessLogout.defaultExpectation = &AuthMockProcessLogoutExpectation{}
-	}
-
-	if mmProcessLogout.defaultExpectation.params != nil {
-		mmProcessLogout.mock.t.Fatalf("AuthMock.ProcessLogout mock is already set by Expect")
-	}
-
-	if mmProcessLogout.defaultExpectation.paramPtrs == nil {
-		mmProcessLogout.defaultExpectation.paramPtrs = &AuthMockProcessLogoutParamPtrs{}
-	}
-	mmProcessLogout.defaultExpectation.paramPtrs.tokenJTI = &tokenJTI
-	mmProcessLogout.defaultExpectation.expectationOrigins.originTokenJTI = minimock.CallerInfo(1)
-
-	return mmProcessLogout
-}
-
 // Inspect accepts an inspector function that has same arguments as the Auth.ProcessLogout
-func (mmProcessLogout *mAuthMockProcessLogout) Inspect(f func(ctx context.Context, tenantID uuid.UUID, subject string, clientID string, tokenJTI string)) *mAuthMockProcessLogout {
+func (mmProcessLogout *mAuthMockProcessLogout) Inspect(f func(ctx context.Context, tenantID uuid.UUID, subject string, clientID string)) *mAuthMockProcessLogout {
 	if mmProcessLogout.mock.inspectFuncProcessLogout != nil {
 		mmProcessLogout.mock.t.Fatalf("Inspect function is already set for AuthMock.ProcessLogout")
 	}
@@ -1486,7 +1461,7 @@ func (mmProcessLogout *mAuthMockProcessLogout) Inspect(f func(ctx context.Contex
 }
 
 // Return sets up results that will be returned by Auth.ProcessLogout
-func (mmProcessLogout *mAuthMockProcessLogout) Return(err error) *AuthMock {
+func (mmProcessLogout *mAuthMockProcessLogout) Return(sa1 []string, err error) *AuthMock {
 	if mmProcessLogout.mock.funcProcessLogout != nil {
 		mmProcessLogout.mock.t.Fatalf("AuthMock.ProcessLogout mock is already set by Set")
 	}
@@ -1494,13 +1469,13 @@ func (mmProcessLogout *mAuthMockProcessLogout) Return(err error) *AuthMock {
 	if mmProcessLogout.defaultExpectation == nil {
 		mmProcessLogout.defaultExpectation = &AuthMockProcessLogoutExpectation{mock: mmProcessLogout.mock}
 	}
-	mmProcessLogout.defaultExpectation.results = &AuthMockProcessLogoutResults{err}
+	mmProcessLogout.defaultExpectation.results = &AuthMockProcessLogoutResults{sa1, err}
 	mmProcessLogout.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmProcessLogout.mock
 }
 
 // Set uses given function f to mock the Auth.ProcessLogout method
-func (mmProcessLogout *mAuthMockProcessLogout) Set(f func(ctx context.Context, tenantID uuid.UUID, subject string, clientID string, tokenJTI string) (err error)) *AuthMock {
+func (mmProcessLogout *mAuthMockProcessLogout) Set(f func(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) (sa1 []string, err error)) *AuthMock {
 	if mmProcessLogout.defaultExpectation != nil {
 		mmProcessLogout.mock.t.Fatalf("Default expectation is already set for the Auth.ProcessLogout method")
 	}
@@ -1516,14 +1491,14 @@ func (mmProcessLogout *mAuthMockProcessLogout) Set(f func(ctx context.Context, t
 
 // When sets expectation for the Auth.ProcessLogout which will trigger the result defined by the following
 // Then helper
-func (mmProcessLogout *mAuthMockProcessLogout) When(ctx context.Context, tenantID uuid.UUID, subject string, clientID string, tokenJTI string) *AuthMockProcessLogoutExpectation {
+func (mmProcessLogout *mAuthMockProcessLogout) When(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) *AuthMockProcessLogoutExpectation {
 	if mmProcessLogout.mock.funcProcessLogout != nil {
 		mmProcessLogout.mock.t.Fatalf("AuthMock.ProcessLogout mock is already set by Set")
 	}
 
 	expectation := &AuthMockProcessLogoutExpectation{
 		mock:               mmProcessLogout.mock,
-		params:             &AuthMockProcessLogoutParams{ctx, tenantID, subject, clientID, tokenJTI},
+		params:             &AuthMockProcessLogoutParams{ctx, tenantID, subject, clientID},
 		expectationOrigins: AuthMockProcessLogoutExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmProcessLogout.expectations = append(mmProcessLogout.expectations, expectation)
@@ -1531,8 +1506,8 @@ func (mmProcessLogout *mAuthMockProcessLogout) When(ctx context.Context, tenantI
 }
 
 // Then sets up Auth.ProcessLogout return parameters for the expectation previously defined by the When method
-func (e *AuthMockProcessLogoutExpectation) Then(err error) *AuthMock {
-	e.results = &AuthMockProcessLogoutResults{err}
+func (e *AuthMockProcessLogoutExpectation) Then(sa1 []string, err error) *AuthMock {
+	e.results = &AuthMockProcessLogoutResults{sa1, err}
 	return e.mock
 }
 
@@ -1558,17 +1533,17 @@ func (mmProcessLogout *mAuthMockProcessLogout) invocationsDone() bool {
 }
 
 // ProcessLogout implements mm_port.Auth
-func (mmProcessLogout *AuthMock) ProcessLogout(ctx context.Context, tenantID uuid.UUID, subject string, clientID string, tokenJTI string) (err error) {
+func (mmProcessLogout *AuthMock) ProcessLogout(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) (sa1 []string, err error) {
 	mm_atomic.AddUint64(&mmProcessLogout.beforeProcessLogoutCounter, 1)
 	defer mm_atomic.AddUint64(&mmProcessLogout.afterProcessLogoutCounter, 1)
 
 	mmProcessLogout.t.Helper()
 
 	if mmProcessLogout.inspectFuncProcessLogout != nil {
-		mmProcessLogout.inspectFuncProcessLogout(ctx, tenantID, subject, clientID, tokenJTI)
+		mmProcessLogout.inspectFuncProcessLogout(ctx, tenantID, subject, clientID)
 	}
 
-	mm_params := AuthMockProcessLogoutParams{ctx, tenantID, subject, clientID, tokenJTI}
+	mm_params := AuthMockProcessLogoutParams{ctx, tenantID, subject, clientID}
 
 	// Record call args
 	mmProcessLogout.ProcessLogoutMock.mutex.Lock()
@@ -1578,7 +1553,7 @@ func (mmProcessLogout *AuthMock) ProcessLogout(ctx context.Context, tenantID uui
 	for _, e := range mmProcessLogout.ProcessLogoutMock.expectations {
 		if minimock.Equal(*e.params, mm_params) {
 			mm_atomic.AddUint64(&e.Counter, 1)
-			return e.results.err
+			return e.results.sa1, e.results.err
 		}
 	}
 
@@ -1587,7 +1562,7 @@ func (mmProcessLogout *AuthMock) ProcessLogout(ctx context.Context, tenantID uui
 		mm_want := mmProcessLogout.ProcessLogoutMock.defaultExpectation.params
 		mm_want_ptrs := mmProcessLogout.ProcessLogoutMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockProcessLogoutParams{ctx, tenantID, subject, clientID, tokenJTI}
+		mm_got := AuthMockProcessLogoutParams{ctx, tenantID, subject, clientID}
 
 		if mm_want_ptrs != nil {
 
@@ -1611,11 +1586,6 @@ func (mmProcessLogout *AuthMock) ProcessLogout(ctx context.Context, tenantID uui
 					mmProcessLogout.ProcessLogoutMock.defaultExpectation.expectationOrigins.originClientID, *mm_want_ptrs.clientID, mm_got.clientID, minimock.Diff(*mm_want_ptrs.clientID, mm_got.clientID))
 			}
 
-			if mm_want_ptrs.tokenJTI != nil && !minimock.Equal(*mm_want_ptrs.tokenJTI, mm_got.tokenJTI) {
-				mmProcessLogout.t.Errorf("AuthMock.ProcessLogout got unexpected parameter tokenJTI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmProcessLogout.ProcessLogoutMock.defaultExpectation.expectationOrigins.originTokenJTI, *mm_want_ptrs.tokenJTI, mm_got.tokenJTI, minimock.Diff(*mm_want_ptrs.tokenJTI, mm_got.tokenJTI))
-			}
-
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
 			mmProcessLogout.t.Errorf("AuthMock.ProcessLogout got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmProcessLogout.ProcessLogoutMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
@@ -1625,12 +1595,12 @@ func (mmProcessLogout *AuthMock) ProcessLogout(ctx context.Context, tenantID uui
 		if mm_results == nil {
 			mmProcessLogout.t.Fatal("No results are set for the AuthMock.ProcessLogout")
 		}
-		return (*mm_results).err
+		return (*mm_results).sa1, (*mm_results).err
 	}
 	if mmProcessLogout.funcProcessLogout != nil {
-		return mmProcessLogout.funcProcessLogout(ctx, tenantID, subject, clientID, tokenJTI)
+		return mmProcessLogout.funcProcessLogout(ctx, tenantID, subject, clientID)
 	}
-	mmProcessLogout.t.Fatalf("Unexpected call to AuthMock.ProcessLogout. %v %v %v %v %v", ctx, tenantID, subject, clientID, tokenJTI)
+	mmProcessLogout.t.Fatalf("Unexpected call to AuthMock.ProcessLogout. %v %v %v %v", ctx, tenantID, subject, clientID)
 	return
 }
 

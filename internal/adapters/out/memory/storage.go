@@ -173,6 +173,22 @@ func (s *Storage) GetClient(ctx context.Context, tenantID uuid.UUID, clientID st
 	return &client, nil
 }
 
+func (s *Storage) GetClientsByTenant(ctx context.Context, tenantID uuid.UUID) ([]model.ClientApplication, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	tenantClients, ok := s.clients[tenantID.String()]
+	if !ok {
+		return []model.ClientApplication{}, nil
+	}
+
+	clients := make([]model.ClientApplication, 0, len(tenantClients))
+	for _, client := range tenantClients {
+		clients = append(clients, client)
+	}
+	return clients, nil
+}
+
 func (s *Storage) SaveAuthSession(ctx context.Context, session model.AuthorizationCodeSession) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
