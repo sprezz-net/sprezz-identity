@@ -130,6 +130,14 @@ The persistence architecture isolates records by forcing a primary composite mul
 
 Internally a tenant is represented by an integer, externally (inside tokens for example) by a UUIDv4.
 
+### 6.1 Accidental Cascade Delete Prevention (The Cascade Delete Trap)
+
+To safeguard critical security audit trails and history files against accidental tenant deletion, Sprezz Identity implements strict database-level referential integrity checks:
+
+* **Strict Constraint Enforcement**: The `audit_event_log` table references the `tenants` table with an `ON DELETE RESTRICT` constraint instead of `ON DELETE CASCADE`.
+* **Security & Auditing Protection**: Physical tenant hard-deletion is blocked by the engine if the tenant has associated audit log records, ensuring that historical security trails can never be deleted or purged as an unintended cascade side-effect.
+* **Soft-Deletions**: Rather than hard-deleting tenant schemas, deactivation is performed by setting the soft-delete marker `is_active = FALSE`. This preserves all underlying logs, client records, and blacklists.
+
 ## 7. Cryptographic Strategy & Universal JWKS Layout
 
 Sprezz Identity implements concurrent asymmetric dual-signing. It uses an internal Key Registry pattern mapping keys by Key ID (`kid`) and signature algorithm type (`alg`).
@@ -207,16 +215,18 @@ The `"username-password"` provider stores credentials utilizing Argon2id in a st
 `$argon2id$v=19$m=65536,t=3,p=2$salt$hash`
 This format inherently prefixes the signature algorithm identifier, ensuring smooth algorithm migration support in the future.
 
-### 9.5 Token Revocation & Periodic Expired Blacklist Pruning (RFC 7009)
+### 9.5 Token Revocation, Stale Session and Interaction Session Pruning (Redefined to 15-Minute Ticks)
 
-Sprezz Identity implements RFC 7009 Token Revocation to invalidate stateless JWT access tokens prior to their physical cryptographic expiration.
+Sprezz Identity implements RFC 7009 Token Revocation to invalidate stateless JWT access tokens prior to their physical cryptographic expiration. To maintain O(log N) indexing speeds and prevent Postgres index degradation, a background cleanup routine periodically prunes stale data.
 
 * **The Blacklist Mechanism**: Revoking a token parses its unique JWT ID (`jti` / `TokenID`) and commits the `token_id` alongside its absolute expiration timestamp (`expires_at`) into a PostgreSQL-backed `revoked_tokens` table.
 * **Introspection Verification**: Any cryptographic validation or introspection checks assert that the token's `jti` is not present within the active revoked blacklist database.
-* **Automated Periodic Pruning**: Because revoked tokens naturally become cryptographically invalid once the current time passes their `expires_at` timestamp, storing expired rows in the database is redundant. A background cleaning worker, configured with a custom defined ticker interval (`TokenPruningInterval`) in the `IdentityServerConfig`, periodically executes high-performance bulk-pruning queries to clean up the table:
+* **Automated Periodic Pruning (15-Minute Ticks)**: Because revoked tokens and session records naturally become invalid once they pass their `expires_at` timestamp, storing them is redundant and degrades index performance. A background pruning worker, running on 15-minute ticks (configured via `TokenPruningInterval` in `IdentityServerConfig`), executes bulk-pruning deletes to purge expired rows from `revoked_tokens`, `auth_sessions`, and `interaction_sessions`:
 
   ```sql
   DELETE FROM revoked_tokens WHERE expires_at <= NOW();
+  DELETE FROM auth_sessions WHERE expires_at <= NOW();
+  DELETE FROM interaction_sessions WHERE expires_at <= NOW();
   ```
 
 ### 9.6 Token Introspection (RFC 7662)

@@ -34,7 +34,7 @@ func main() {
 		log.Fatalf("Admin tenant bootstrap failed: %v", err)
 	}
 
-	// Start the background token pruning worker
+	// Start the background token and session pruning worker (15-Minute Ticks)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	startTokenPruningWorker(ctx, deps.storage, deps.cfg.IdentityServer.TokenPruningInterval)
@@ -56,18 +56,18 @@ func main() {
 func startTokenPruningWorker(ctx context.Context, storage *postgres.PostgresStorage, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	go func() {
-		log.Printf("Starting expired token pruning worker (interval: %v)...", interval)
+		log.Printf("Starting background pruning worker for expired tokens and stale sessions (interval: %v)...", interval)
 		for {
 			select {
 			case <-ticker.C:
 				if err := storage.PruneExpiredTokens(ctx); err != nil {
-					log.Printf("Error during background token pruning: %v", err)
+					log.Printf("Error during background token/session pruning: %v", err)
 				} else {
-					log.Println("Successfully pruned expired revoked tokens from database.")
+					log.Println("Successfully pruned expired revoked tokens and stale sessions from database.")
 				}
 			case <-ctx.Done():
 				ticker.Stop()
-				log.Println("Token pruning worker stopped.")
+				log.Println("Pruning worker stopped.")
 				return
 			}
 		}

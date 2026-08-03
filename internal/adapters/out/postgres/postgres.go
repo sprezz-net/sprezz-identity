@@ -704,10 +704,24 @@ func (s *PostgresStorage) IsTokenRevoked(ctx context.Context, tokenID string) (b
 }
 
 func (s *PostgresStorage) PruneExpiredTokens(ctx context.Context) error {
+	// 1. Prune expired revoked tokens
 	_, err := s.pool.Exec(ctx, "DELETE FROM revoked_tokens WHERE expires_at <= NOW()")
 	if err != nil {
 		return fmt.Errorf("prune expired tokens: %w", err)
 	}
+
+	// 2. Prune stale authorization sessions
+	_, err = s.pool.Exec(ctx, "DELETE FROM auth_sessions WHERE expires_at <= NOW()")
+	if err != nil {
+		return fmt.Errorf("prune stale auth sessions: %w", err)
+	}
+
+	// 3. Prune expired interaction sessions
+	_, err = s.pool.Exec(ctx, "DELETE FROM interaction_sessions WHERE expires_at <= NOW()")
+	if err != nil {
+		return fmt.Errorf("prune expired interaction sessions: %w", err)
+	}
+
 	return nil
 }
 
