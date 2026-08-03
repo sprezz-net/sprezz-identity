@@ -119,7 +119,7 @@ func TestHttpAdapter_SignUpSubmit_PasswordsMismatch(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "Passwords do not match") {
+	if !strings.Contains(rec.Body.String(), "passwords do not match") {
 		t.Fatalf("expected error message in output, got: %s", rec.Body.String())
 	}
 }
