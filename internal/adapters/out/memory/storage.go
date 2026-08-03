@@ -23,6 +23,8 @@ type Storage struct {
 	identities          map[string]*model.UserIdentity
 	interactionSessions map[uuid.UUID]model.InteractionSession
 	revokedTokens       map[string]time.Time
+	parSessions         map[string]model.PushedAuthorizationRequest
+	dpopProofs          map[string]time.Time
 }
 
 func NewStorage() *Storage {
@@ -36,6 +38,8 @@ func NewStorage() *Storage {
 		identities:          make(map[string]*model.UserIdentity),
 		interactionSessions: make(map[uuid.UUID]model.InteractionSession),
 		revokedTokens:       make(map[string]time.Time),
+		parSessions:         make(map[string]model.PushedAuthorizationRequest),
+		dpopProofs:          make(map[string]time.Time),
 	}
 }
 
@@ -290,4 +294,67 @@ func (s *Storage) IsTokenRevoked(ctx context.Context, tokenID string) (bool, err
 		return false, nil
 	}
 	return true, nil
+}
+
+func (s *Storage) PruneExpiredTokens(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	for k, exp := range s.revokedTokens {
+		if now.After(exp) {
+			delete(s.revokedTokens, k)
+		}
+	}
+	for k, p := range s.parSessions {
+		if now.After(p.ExpiresAt) {
+			delete(s.parSessions, k)
+		}
+	}
+	for k, exp := range s.dpopProofs {
+		if now.After(exp) {
+			delete(s.dpopProofs, k)
+		}
+	}
+	return nil
+}
+
+func (s *Storage) SavePAR(ctx context.Context, req model.PushedAuthorizationRequest) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.parSessions[req.RequestURI] = req
+	return nil
+}
+
+func (s *Storage) GetAndConsumePAR(ctx context.Context, tenantID uuid.UUID, requestURI string) (*model.PushedAuthorizationRequest, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	req, ok := s.parSessions[requestURI]
+	if !ok {
+		return nil, fmt.Errorf("pushed authorization request not found")
+	}
+	if req.TenantID != tenantID {
+		return nil, fmt.Errorf("pushed authorization request tenant mismatch")
+	}
+	delete(s.parSessions, requestURI)
+	return &req, nil
+}
+
+func (s *Storage) IsDPoPProofUsed(ctx context.Context, jti string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	exp, ok := s.dpopProofs[jti]
+	if !ok {
+		return false, nil
+	}
+	if time.Now().After(exp) {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (s *Storage) SaveDPoPProof(ctx context.Context, jti string, expiresAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.dpopProofs[jti] = expiresAt
+	return nil
 }

@@ -37,7 +37,15 @@ func (s *OAuthService) InitiateAuthorize(ctx context.Context, session model.Auth
 	return s.storage.SaveAuthSession(ctx, session)
 }
 
-func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string) (*model.TokenSetResponse, error) {
+func (s *OAuthService) SavePAR(ctx context.Context, req model.PushedAuthorizationRequest) error {
+	return s.storage.SavePAR(ctx, req)
+}
+
+func (s *OAuthService) GetAndConsumePAR(ctx context.Context, tenantID uuid.UUID, requestURI string) (*model.PushedAuthorizationRequest, error) {
+	return s.storage.GetAndConsumePAR(ctx, tenantID, requestURI)
+}
+
+func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string, dpopJKT string) (*model.TokenSetResponse, error) {
 	client, err := s.storage.GetClient(ctx, tenantID, clientID)
 	if err != nil {
 		return nil, fmt.Errorf("get client for token exchange: %w", err)
@@ -73,9 +81,17 @@ func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.
 		IssuedAt:  now,
 		ExpiresAt: now.Add(client.AccessTokenLifetime),
 		Audiences: client.AllowedAudiences,
+		DPoPHash:  dpopJKT,
 	}, client.Algorithm)
 	if err != nil {
 		return nil, fmt.Errorf("mint access token: %w", err)
+	}
+
+	var parsedNonce string
+	if authSession.Nonce != "" {
+		parsedNonce = authSession.Nonce
+	} else {
+		parsedNonce = uuid.NewString()
 	}
 
 	idToken, err := s.crypto.SignIDToken(model.OIDCTokenClaims{
@@ -87,18 +103,23 @@ func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.
 		IssuedAt:  now,
 		ExpiresAt: now.Add(client.IDTokenLifetime),
 		AuthTime:  now,
-		Nonce:     uuid.NewString(),
+		Nonce:     parsedNonce,
 		SessionID: authSession.SessionID,
 	}, client.Algorithm)
 	if err != nil {
 		return nil, fmt.Errorf("mint id token: %w", err)
 	}
 
+	tokenType := "Bearer"
+	if dpopJKT != "" {
+		tokenType = "DPoP"
+	}
+
 	return &model.TokenSetResponse{
 		AccessToken:  accessToken,
 		IDToken:      idToken,
 		RefreshToken: uuid.NewString(),
-		TokenType:    "Bearer",
+		TokenType:    tokenType,
 		ExpiresIn:    int64(client.AccessTokenLifetime / time.Second),
 	}, nil
 }
@@ -192,15 +213,25 @@ func (s *OAuthService) IntrospectToken(ctx context.Context, tenantID uuid.UUID, 
 	tid, _ := claims["tid"].(string)
 	iatVal, _ := claims["iat"].(float64)
 
+	var cnf *model.Confirmation
+	var tokenType = "Bearer"
+	if cnfVal, ok := claims["cnf"].(map[string]any); ok {
+		if jktVal, ok := cnfVal["jkt"].(string); ok {
+			cnf = &model.Confirmation{JKT: jktVal}
+			tokenType = "DPoP"
+		}
+	}
+
 	return &model.IntrospectionResponse{
-		Active:    true,
-		Scope:     scope,
-		ClientID:  tokenClientID,
-		Subject:   sub,
-		ExpiresAt: int64(expVal),
-		IssuedAt:  int64(iatVal),
-		Issuer:    iss,
-		TokenType: "Bearer",
-		TenantID:  tid,
+		Active:       true,
+		Scope:        scope,
+		ClientID:     tokenClientID,
+		Subject:      sub,
+		ExpiresAt:    int64(expVal),
+		IssuedAt:     int64(iatVal),
+		Issuer:       iss,
+		TokenType:    tokenType,
+		TenantID:     tid,
+		Confirmation: cnf,
 	}, nil
 }

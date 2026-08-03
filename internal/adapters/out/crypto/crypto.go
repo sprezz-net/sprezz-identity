@@ -53,7 +53,7 @@ func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.Signatur
 		audClaim = claims.Audiences
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+	mapClaims := jwt.MapClaims{
 		"iss":       issuer,
 		"sub":       claims.Subject,
 		"aud":       audClaim,
@@ -64,7 +64,13 @@ func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.Signatur
 		"iat":       int64(claims.IssuedAt.Unix()),
 		"exp":       int64(claims.ExpiresAt.Unix()),
 		"nbf":       int64(claims.IssuedAt.Unix()),
-	})
+	}
+	if claims.DPoPHash != "" {
+		mapClaims["cnf"] = map[string]any{
+			"jkt": claims.DPoPHash,
+		}
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, mapClaims)
 	token.Header["kid"] = kid
 	token.Header["typ"] = "JWT"
 

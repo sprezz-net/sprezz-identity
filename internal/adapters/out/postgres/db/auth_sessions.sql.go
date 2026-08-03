@@ -26,7 +26,10 @@ WITH deleted AS (
         redirect_uri,
         scopes,
         expires_at,
-        session_id
+        session_id,
+        state,
+        nonce,
+        acr_values
 )
 SELECT
     code,
@@ -37,7 +40,10 @@ SELECT
     redirect_uri,
     scopes,
     expires_at,
-    session_id
+    session_id,
+    state,
+    nonce,
+    acr_values
 FROM deleted
 LIMIT 1
 `
@@ -57,6 +63,9 @@ type ConsumeAuthSessionRow struct {
 	Scopes          []string           `json:"scopes"`
 	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
 	SessionID       string             `json:"session_id"`
+	State           string             `json:"state"`
+	Nonce           string             `json:"nonce"`
+	AcrValues       string             `json:"acr_values"`
 }
 
 func (q *Queries) ConsumeAuthSession(ctx context.Context, arg ConsumeAuthSessionParams) (ConsumeAuthSessionRow, error) {
@@ -72,6 +81,81 @@ func (q *Queries) ConsumeAuthSession(ctx context.Context, arg ConsumeAuthSession
 		&i.Scopes,
 		&i.ExpiresAt,
 		&i.SessionID,
+		&i.State,
+		&i.Nonce,
+		&i.AcrValues,
+	)
+	return i, err
+}
+
+const consumePAR = `-- name: ConsumePAR :one
+WITH deleted AS (
+    DELETE FROM pushed_authorization_requests
+    WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1)
+      AND request_uri = $2
+    RETURNING
+        request_uri,
+        client_id,
+        redirect_uri,
+        code_challenge,
+        code_challenge_method,
+        scopes,
+        state,
+        nonce,
+        idp_hint,
+        acr_values,
+        expires_at
+)
+SELECT
+    request_uri,
+    client_id,
+    redirect_uri,
+    code_challenge,
+    code_challenge_method,
+    scopes,
+    state,
+    nonce,
+    idp_hint,
+    acr_values,
+    expires_at
+FROM deleted
+LIMIT 1
+`
+
+type ConsumePARParams struct {
+	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+	RequestUri string      `json:"request_uri"`
+}
+
+type ConsumePARRow struct {
+	RequestUri          string             `json:"request_uri"`
+	ClientID            string             `json:"client_id"`
+	RedirectUri         string             `json:"redirect_uri"`
+	CodeChallenge       string             `json:"code_challenge"`
+	CodeChallengeMethod string             `json:"code_challenge_method"`
+	Scopes              []string           `json:"scopes"`
+	State               string             `json:"state"`
+	Nonce               string             `json:"nonce"`
+	IdpHint             string             `json:"idp_hint"`
+	AcrValues           string             `json:"acr_values"`
+	ExpiresAt           pgtype.Timestamptz `json:"expires_at"`
+}
+
+func (q *Queries) ConsumePAR(ctx context.Context, arg ConsumePARParams) (ConsumePARRow, error) {
+	row := q.db.QueryRow(ctx, consumePAR, arg.TenantUuid, arg.RequestUri)
+	var i ConsumePARRow
+	err := row.Scan(
+		&i.RequestUri,
+		&i.ClientID,
+		&i.RedirectUri,
+		&i.CodeChallenge,
+		&i.CodeChallengeMethod,
+		&i.Scopes,
+		&i.State,
+		&i.Nonce,
+		&i.IdpHint,
+		&i.AcrValues,
+		&i.ExpiresAt,
 	)
 	return i, err
 }
@@ -92,7 +176,10 @@ INSERT INTO auth_sessions (
     redirect_uri,
     scopes,
     expires_at,
-    session_id
+    session_id,
+    state,
+    nonce,
+    acr_values
 )
 SELECT
     $2,
@@ -104,7 +191,10 @@ SELECT
     $7,
     $8,
     $9,
-    $10
+    $10,
+    $11,
+    $12,
+    $13
 FROM tenant
 `
 
@@ -119,6 +209,9 @@ type SaveAuthSessionParams struct {
 	Scopes          []string           `json:"scopes"`
 	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
 	SessionID       string             `json:"session_id"`
+	State           string             `json:"state"`
+	Nonce           string             `json:"nonce"`
+	AcrValues       string             `json:"acr_values"`
 }
 
 func (q *Queries) SaveAuthSession(ctx context.Context, arg SaveAuthSessionParams) (pgconn.CommandTag, error) {
@@ -133,5 +226,76 @@ func (q *Queries) SaveAuthSession(ctx context.Context, arg SaveAuthSessionParams
 		arg.Scopes,
 		arg.ExpiresAt,
 		arg.SessionID,
+		arg.State,
+		arg.Nonce,
+		arg.AcrValues,
+	)
+}
+
+const savePAR = `-- name: SavePAR :execresult
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $1
+)
+INSERT INTO pushed_authorization_requests (
+    request_uri,
+    tenant_id,
+    client_id,
+    redirect_uri,
+    code_challenge,
+    code_challenge_method,
+    scopes,
+    state,
+    nonce,
+    idp_hint,
+    acr_values,
+    expires_at
+)
+SELECT
+    $2,
+    tenant.id,
+    $3,
+    $4,
+    $5,
+    $6,
+    $7,
+    $8,
+    $9,
+    $10,
+    $11,
+    $12
+FROM tenant
+`
+
+type SavePARParams struct {
+	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
+	RequestUri          string             `json:"request_uri"`
+	ClientID            string             `json:"client_id"`
+	RedirectUri         string             `json:"redirect_uri"`
+	CodeChallenge       string             `json:"code_challenge"`
+	CodeChallengeMethod string             `json:"code_challenge_method"`
+	Scopes              []string           `json:"scopes"`
+	State               string             `json:"state"`
+	Nonce               string             `json:"nonce"`
+	IdpHint             string             `json:"idp_hint"`
+	AcrValues           string             `json:"acr_values"`
+	ExpiresAt           pgtype.Timestamptz `json:"expires_at"`
+}
+
+func (q *Queries) SavePAR(ctx context.Context, arg SavePARParams) (pgconn.CommandTag, error) {
+	return q.db.Exec(ctx, savePAR,
+		arg.TenantUuid,
+		arg.RequestUri,
+		arg.ClientID,
+		arg.RedirectUri,
+		arg.CodeChallenge,
+		arg.CodeChallengeMethod,
+		arg.Scopes,
+		arg.State,
+		arg.Nonce,
+		arg.IdpHint,
+		arg.AcrValues,
+		arg.ExpiresAt,
 	)
 }

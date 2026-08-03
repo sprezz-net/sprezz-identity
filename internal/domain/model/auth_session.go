@@ -17,6 +17,9 @@ type AuthorizationCodeSession struct {
 	Scopes          []string
 	ExpiresAt       time.Time
 	SessionID       string
+	State           string
+	Nonce           string
+	ACRValues       string
 }
 
 type InteractionSession struct {
@@ -27,5 +30,23 @@ type InteractionSession struct {
 	CodeChallenge   string
 	ChallengeMethod string
 	IDPHint         string
+	ExpiresAt       time.Time
+	State           string
+	Nonce           string
+	ACRValues       string
+}
+
+type PushedAuthorizationRequest struct {
+	RequestURI      string
+	TenantID        uuid.UUID
+	ClientID        string
+	RedirectURI     string
+	CodeChallenge   string
+	ChallengeMethod string
+	Scopes          []string
+	State           string
+	Nonce           string
+	IDPHint         string
+	ACRValues       string
 	ExpiresAt       time.Time
 }

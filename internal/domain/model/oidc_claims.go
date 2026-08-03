@@ -12,6 +12,7 @@ type TokenClaims struct {
 	IssuedAt  time.Time
 	ExpiresAt time.Time
 	Audiences []string
+	DPoPHash  string
 }
 
 type OIDCTokenClaims struct {
@@ -35,16 +36,21 @@ type TokenSetResponse struct {
 	ExpiresIn    int64  `json:"expires_in"`
 }
 
+type Confirmation struct {
+	JKT string `json:"jkt,omitempty"`
+}
+
 type IntrospectionResponse struct {
-	Active    bool   `json:"active"`
-	Scope     string `json:"scope,omitempty"`
-	ClientID  string `json:"client_id,omitempty"`
-	Subject   string `json:"sub,omitempty"`
-	ExpiresAt int64  `json:"exp,omitempty"`
-	IssuedAt  int64  `json:"iat,omitempty"`
-	Issuer    string `json:"iss,omitempty"`
-	TokenType string `json:"token_type,omitempty"`
-	TenantID  string `json:"tid,omitempty"`
+	Active       bool          `json:"active"`
+	Scope        string        `json:"scope,omitempty"`
+	ClientID     string        `json:"client_id,omitempty"`
+	Subject      string        `json:"sub,omitempty"`
+	ExpiresAt    int64         `json:"exp,omitempty"`
+	IssuedAt     int64         `json:"iat,omitempty"`
+	Issuer       string        `json:"iss,omitempty"`
+	TokenType    string        `json:"token_type,omitempty"`
+	TenantID     string        `json:"tid,omitempty"`
+	Confirmation *Confirmation `json:"cnf,omitempty"`
 }
 
 type LogoutTokenClaims struct {

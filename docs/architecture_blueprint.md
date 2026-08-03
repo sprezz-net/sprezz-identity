@@ -284,3 +284,22 @@ To enforce centralized security policy, Tenants configure a master list of trust
 ### 10.2 Client-Level Allowed Audiences
 
 Client Applications govern access to these APIs using `AllowedAudiences []string`. The system enforces that a client's allowed audiences list must be a subset of the tenant's predefined audiences. When an access token is minted, the token's `"aud"` claim is populated using the configured allowed audiences, restricting the token's validity to only the authorized resource servers.
+
+## 11. Pushed Authorization Requests (PAR - RFC 9126)
+
+Sprezz Identity implements standard RFC 9126 Pushed Authorization Requests (PAR) at the POST endpoint `/oauth/par` to increase authorization security and compatibility with native application types.
+
+* **Secure Param Delegation**: Clients push all OIDC parameters (`client_id`, `redirect_uri`, `scope`, `state`, `nonce`, `idp_hint`, `acr_values`) via a secure, authenticated back-channel request to `/oauth/par`.
+* **Request URI Generation**: The PAR engine validates the redirect URI and scope subsets and, if correct, stores the authorization parameters in our transactional storage, generating a unique, short-lived `urn:ietf:params:oauth:request_uri:<uuid>`.
+* **Decoupled Browser Navigation**: The client redirects the user to `/oauth/authorize?request_uri=<request_uri>`. The HTTP adapter resolves the tenant, consumes (deletes) the request parameters from storage, and executes the user login/authentication interaction, fully shielding downstream OIDC parameters from network query string interception or user manipulation.
+
+## 12. Demonstrating Proof-of-Possession at the Application Layer (DPoP - RFC 9449)
+
+Sprezz Identity implements standard RFC 9449 DPoP to bind minted tokens to a client's specific public/private keypair, protecting against token theft and unauthorized sender usage.
+
+* **Cryptographic Key Binding**: Token endpoints `/oauth/token` (Authorization Code and Client Credentials grants) accept a signed `DPoP` header (DPoP Proof JWT) containing the client's public key (`jwk`). The server validates the proof's signature, matches its claims (`htm` and `htu` must target the current request method and URL, and `iat` must be within a +/- 2 minute window), and hashes the public key to compute the thumbprint (`jkt` via RFC 7638).
+* **The `"cnf"` (Confirmation) Claim**: If valid, the access token is minted with a `"cnf"` claim mapping the thumbprint:
+    `"cnf": { "jkt": "thumbprint" }`
+    The return `token_type` is dynamically changed from `"Bearer"` to `"DPoP"`.
+* **Replay Prevention**: To prevent DPoP JWT reuse, the proof's unique identifier (`jti`) is persisted inside our single-use `dpop_proofs` database-backed cache. Re-sending a DPoP proof with an already-consumed `jti` is immediately blocked.
+* **Resource and UserInfo Protection**: Downstream resource endpoints (e.g., `/oauth/userinfo`) require DPoP-bound tokens to be accessed with the `DPoP <token>` scheme. The HttpAdapter parses the token, extracts the `cnf.jkt` claim, validates the incoming `DPoP` header, and enforces that the proof's public key matches the token's embedded thumbprint, fully validating the sender's cryptographic proof-of-possession.

@@ -20,12 +20,19 @@ type AuthMock struct {
 	t          minimock.Tester
 	finishOnce sync.Once
 
-	funcExchangeCodeForTokens          func(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string) (tp1 *model.TokenSetResponse, err error)
+	funcExchangeCodeForTokens          func(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string, dpopJKT string) (tp1 *model.TokenSetResponse, err error)
 	funcExchangeCodeForTokensOrigin    string
-	inspectFuncExchangeCodeForTokens   func(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string)
+	inspectFuncExchangeCodeForTokens   func(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string, dpopJKT string)
 	afterExchangeCodeForTokensCounter  uint64
 	beforeExchangeCodeForTokensCounter uint64
 	ExchangeCodeForTokensMock          mAuthMockExchangeCodeForTokens
+
+	funcGetAndConsumePAR          func(ctx context.Context, tenantID uuid.UUID, requestURI string) (pp1 *model.PushedAuthorizationRequest, err error)
+	funcGetAndConsumePAROrigin    string
+	inspectFuncGetAndConsumePAR   func(ctx context.Context, tenantID uuid.UUID, requestURI string)
+	afterGetAndConsumePARCounter  uint64
+	beforeGetAndConsumePARCounter uint64
+	GetAndConsumePARMock          mAuthMockGetAndConsumePAR
 
 	funcInitiateAuthorize          func(ctx context.Context, session model.AuthorizationCodeSession) (err error)
 	funcInitiateAuthorizeOrigin    string
@@ -54,6 +61,13 @@ type AuthMock struct {
 	afterRevokeTokenCounter  uint64
 	beforeRevokeTokenCounter uint64
 	RevokeTokenMock          mAuthMockRevokeToken
+
+	funcSavePAR          func(ctx context.Context, req model.PushedAuthorizationRequest) (err error)
+	funcSavePAROrigin    string
+	inspectFuncSavePAR   func(ctx context.Context, req model.PushedAuthorizationRequest)
+	afterSavePARCounter  uint64
+	beforeSavePARCounter uint64
+	SavePARMock          mAuthMockSavePAR
 }
 
 // NewAuthMock returns a mock for mm_port.Auth
@@ -67,6 +81,9 @@ func NewAuthMock(t minimock.Tester) *AuthMock {
 	m.ExchangeCodeForTokensMock = mAuthMockExchangeCodeForTokens{mock: m}
 	m.ExchangeCodeForTokensMock.callArgs = []*AuthMockExchangeCodeForTokensParams{}
 
+	m.GetAndConsumePARMock = mAuthMockGetAndConsumePAR{mock: m}
+	m.GetAndConsumePARMock.callArgs = []*AuthMockGetAndConsumePARParams{}
+
 	m.InitiateAuthorizeMock = mAuthMockInitiateAuthorize{mock: m}
 	m.InitiateAuthorizeMock.callArgs = []*AuthMockInitiateAuthorizeParams{}
 
@@ -78,6 +95,9 @@ func NewAuthMock(t minimock.Tester) *AuthMock {
 
 	m.RevokeTokenMock = mAuthMockRevokeToken{mock: m}
 	m.RevokeTokenMock.callArgs = []*AuthMockRevokeTokenParams{}
+
+	m.SavePARMock = mAuthMockSavePAR{mock: m}
+	m.SavePARMock.callArgs = []*AuthMockSavePARParams{}
 
 	t.Cleanup(m.MinimockFinish)
 
@@ -115,6 +135,7 @@ type AuthMockExchangeCodeForTokensParams struct {
 	clientID     string
 	code         string
 	codeVerifier string
+	dpopJKT      string
 }
 
 // AuthMockExchangeCodeForTokensParamPtrs contains pointers to parameters of the Auth.ExchangeCodeForTokens
@@ -124,6 +145,7 @@ type AuthMockExchangeCodeForTokensParamPtrs struct {
 	clientID     *string
 	code         *string
 	codeVerifier *string
+	dpopJKT      *string
 }
 
 // AuthMockExchangeCodeForTokensResults contains results of the Auth.ExchangeCodeForTokens
@@ -140,6 +162,7 @@ type AuthMockExchangeCodeForTokensExpectationOrigins struct {
 	originClientID     string
 	originCode         string
 	originCodeVerifier string
+	originDpopJKT      string
 }
 
 // Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
@@ -153,7 +176,7 @@ func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Optional() *mAuth
 }
 
 // Expect sets up expected params for Auth.ExchangeCodeForTokens
-func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Expect(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string) *mAuthMockExchangeCodeForTokens {
+func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Expect(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string, dpopJKT string) *mAuthMockExchangeCodeForTokens {
 	if mmExchangeCodeForTokens.mock.funcExchangeCodeForTokens != nil {
 		mmExchangeCodeForTokens.mock.t.Fatalf("AuthMock.ExchangeCodeForTokens mock is already set by Set")
 	}
@@ -166,7 +189,7 @@ func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Expect(ctx contex
 		mmExchangeCodeForTokens.mock.t.Fatalf("AuthMock.ExchangeCodeForTokens mock is already set by ExpectParams functions")
 	}
 
-	mmExchangeCodeForTokens.defaultExpectation.params = &AuthMockExchangeCodeForTokensParams{ctx, tenantID, clientID, code, codeVerifier}
+	mmExchangeCodeForTokens.defaultExpectation.params = &AuthMockExchangeCodeForTokensParams{ctx, tenantID, clientID, code, codeVerifier, dpopJKT}
 	mmExchangeCodeForTokens.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmExchangeCodeForTokens.expectations {
 		if minimock.Equal(e.params, mmExchangeCodeForTokens.defaultExpectation.params) {
@@ -292,8 +315,31 @@ func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) ExpectCodeVerifie
 	return mmExchangeCodeForTokens
 }
 
+// ExpectDpopJKTParam6 sets up expected param dpopJKT for Auth.ExchangeCodeForTokens
+func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) ExpectDpopJKTParam6(dpopJKT string) *mAuthMockExchangeCodeForTokens {
+	if mmExchangeCodeForTokens.mock.funcExchangeCodeForTokens != nil {
+		mmExchangeCodeForTokens.mock.t.Fatalf("AuthMock.ExchangeCodeForTokens mock is already set by Set")
+	}
+
+	if mmExchangeCodeForTokens.defaultExpectation == nil {
+		mmExchangeCodeForTokens.defaultExpectation = &AuthMockExchangeCodeForTokensExpectation{}
+	}
+
+	if mmExchangeCodeForTokens.defaultExpectation.params != nil {
+		mmExchangeCodeForTokens.mock.t.Fatalf("AuthMock.ExchangeCodeForTokens mock is already set by Expect")
+	}
+
+	if mmExchangeCodeForTokens.defaultExpectation.paramPtrs == nil {
+		mmExchangeCodeForTokens.defaultExpectation.paramPtrs = &AuthMockExchangeCodeForTokensParamPtrs{}
+	}
+	mmExchangeCodeForTokens.defaultExpectation.paramPtrs.dpopJKT = &dpopJKT
+	mmExchangeCodeForTokens.defaultExpectation.expectationOrigins.originDpopJKT = minimock.CallerInfo(1)
+
+	return mmExchangeCodeForTokens
+}
+
 // Inspect accepts an inspector function that has same arguments as the Auth.ExchangeCodeForTokens
-func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Inspect(f func(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string)) *mAuthMockExchangeCodeForTokens {
+func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Inspect(f func(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string, dpopJKT string)) *mAuthMockExchangeCodeForTokens {
 	if mmExchangeCodeForTokens.mock.inspectFuncExchangeCodeForTokens != nil {
 		mmExchangeCodeForTokens.mock.t.Fatalf("Inspect function is already set for AuthMock.ExchangeCodeForTokens")
 	}
@@ -318,7 +364,7 @@ func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Return(tp1 *model
 }
 
 // Set uses given function f to mock the Auth.ExchangeCodeForTokens method
-func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Set(f func(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string) (tp1 *model.TokenSetResponse, err error)) *AuthMock {
+func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Set(f func(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string, dpopJKT string) (tp1 *model.TokenSetResponse, err error)) *AuthMock {
 	if mmExchangeCodeForTokens.defaultExpectation != nil {
 		mmExchangeCodeForTokens.mock.t.Fatalf("Default expectation is already set for the Auth.ExchangeCodeForTokens method")
 	}
@@ -334,14 +380,14 @@ func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Set(f func(ctx co
 
 // When sets expectation for the Auth.ExchangeCodeForTokens which will trigger the result defined by the following
 // Then helper
-func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) When(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string) *AuthMockExchangeCodeForTokensExpectation {
+func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) When(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string, dpopJKT string) *AuthMockExchangeCodeForTokensExpectation {
 	if mmExchangeCodeForTokens.mock.funcExchangeCodeForTokens != nil {
 		mmExchangeCodeForTokens.mock.t.Fatalf("AuthMock.ExchangeCodeForTokens mock is already set by Set")
 	}
 
 	expectation := &AuthMockExchangeCodeForTokensExpectation{
 		mock:               mmExchangeCodeForTokens.mock,
-		params:             &AuthMockExchangeCodeForTokensParams{ctx, tenantID, clientID, code, codeVerifier},
+		params:             &AuthMockExchangeCodeForTokensParams{ctx, tenantID, clientID, code, codeVerifier, dpopJKT},
 		expectationOrigins: AuthMockExchangeCodeForTokensExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmExchangeCodeForTokens.expectations = append(mmExchangeCodeForTokens.expectations, expectation)
@@ -376,17 +422,17 @@ func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) invocationsDone()
 }
 
 // ExchangeCodeForTokens implements mm_port.Auth
-func (mmExchangeCodeForTokens *AuthMock) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string) (tp1 *model.TokenSetResponse, err error) {
+func (mmExchangeCodeForTokens *AuthMock) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string, dpopJKT string) (tp1 *model.TokenSetResponse, err error) {
 	mm_atomic.AddUint64(&mmExchangeCodeForTokens.beforeExchangeCodeForTokensCounter, 1)
 	defer mm_atomic.AddUint64(&mmExchangeCodeForTokens.afterExchangeCodeForTokensCounter, 1)
 
 	mmExchangeCodeForTokens.t.Helper()
 
 	if mmExchangeCodeForTokens.inspectFuncExchangeCodeForTokens != nil {
-		mmExchangeCodeForTokens.inspectFuncExchangeCodeForTokens(ctx, tenantID, clientID, code, codeVerifier)
+		mmExchangeCodeForTokens.inspectFuncExchangeCodeForTokens(ctx, tenantID, clientID, code, codeVerifier, dpopJKT)
 	}
 
-	mm_params := AuthMockExchangeCodeForTokensParams{ctx, tenantID, clientID, code, codeVerifier}
+	mm_params := AuthMockExchangeCodeForTokensParams{ctx, tenantID, clientID, code, codeVerifier, dpopJKT}
 
 	// Record call args
 	mmExchangeCodeForTokens.ExchangeCodeForTokensMock.mutex.Lock()
@@ -405,7 +451,7 @@ func (mmExchangeCodeForTokens *AuthMock) ExchangeCodeForTokens(ctx context.Conte
 		mm_want := mmExchangeCodeForTokens.ExchangeCodeForTokensMock.defaultExpectation.params
 		mm_want_ptrs := mmExchangeCodeForTokens.ExchangeCodeForTokensMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockExchangeCodeForTokensParams{ctx, tenantID, clientID, code, codeVerifier}
+		mm_got := AuthMockExchangeCodeForTokensParams{ctx, tenantID, clientID, code, codeVerifier, dpopJKT}
 
 		if mm_want_ptrs != nil {
 
@@ -434,6 +480,11 @@ func (mmExchangeCodeForTokens *AuthMock) ExchangeCodeForTokens(ctx context.Conte
 					mmExchangeCodeForTokens.ExchangeCodeForTokensMock.defaultExpectation.expectationOrigins.originCodeVerifier, *mm_want_ptrs.codeVerifier, mm_got.codeVerifier, minimock.Diff(*mm_want_ptrs.codeVerifier, mm_got.codeVerifier))
 			}
 
+			if mm_want_ptrs.dpopJKT != nil && !minimock.Equal(*mm_want_ptrs.dpopJKT, mm_got.dpopJKT) {
+				mmExchangeCodeForTokens.t.Errorf("AuthMock.ExchangeCodeForTokens got unexpected parameter dpopJKT, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmExchangeCodeForTokens.ExchangeCodeForTokensMock.defaultExpectation.expectationOrigins.originDpopJKT, *mm_want_ptrs.dpopJKT, mm_got.dpopJKT, minimock.Diff(*mm_want_ptrs.dpopJKT, mm_got.dpopJKT))
+			}
+
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
 			mmExchangeCodeForTokens.t.Errorf("AuthMock.ExchangeCodeForTokens got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmExchangeCodeForTokens.ExchangeCodeForTokensMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
@@ -446,9 +497,9 @@ func (mmExchangeCodeForTokens *AuthMock) ExchangeCodeForTokens(ctx context.Conte
 		return (*mm_results).tp1, (*mm_results).err
 	}
 	if mmExchangeCodeForTokens.funcExchangeCodeForTokens != nil {
-		return mmExchangeCodeForTokens.funcExchangeCodeForTokens(ctx, tenantID, clientID, code, codeVerifier)
+		return mmExchangeCodeForTokens.funcExchangeCodeForTokens(ctx, tenantID, clientID, code, codeVerifier, dpopJKT)
 	}
-	mmExchangeCodeForTokens.t.Fatalf("Unexpected call to AuthMock.ExchangeCodeForTokens. %v %v %v %v %v", ctx, tenantID, clientID, code, codeVerifier)
+	mmExchangeCodeForTokens.t.Fatalf("Unexpected call to AuthMock.ExchangeCodeForTokens. %v %v %v %v %v %v", ctx, tenantID, clientID, code, codeVerifier, dpopJKT)
 	return
 }
 
@@ -517,6 +568,380 @@ func (m *AuthMock) MinimockExchangeCodeForTokensInspect() {
 	if !m.ExchangeCodeForTokensMock.invocationsDone() && afterExchangeCodeForTokensCounter > 0 {
 		m.t.Errorf("Expected %d calls to AuthMock.ExchangeCodeForTokens at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ExchangeCodeForTokensMock.expectedInvocations), m.ExchangeCodeForTokensMock.expectedInvocationsOrigin, afterExchangeCodeForTokensCounter)
+	}
+}
+
+type mAuthMockGetAndConsumePAR struct {
+	optional           bool
+	mock               *AuthMock
+	defaultExpectation *AuthMockGetAndConsumePARExpectation
+	expectations       []*AuthMockGetAndConsumePARExpectation
+
+	callArgs []*AuthMockGetAndConsumePARParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AuthMockGetAndConsumePARExpectation specifies expectation struct of the Auth.GetAndConsumePAR
+type AuthMockGetAndConsumePARExpectation struct {
+	mock               *AuthMock
+	params             *AuthMockGetAndConsumePARParams
+	paramPtrs          *AuthMockGetAndConsumePARParamPtrs
+	expectationOrigins AuthMockGetAndConsumePARExpectationOrigins
+	results            *AuthMockGetAndConsumePARResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AuthMockGetAndConsumePARParams contains parameters of the Auth.GetAndConsumePAR
+type AuthMockGetAndConsumePARParams struct {
+	ctx        context.Context
+	tenantID   uuid.UUID
+	requestURI string
+}
+
+// AuthMockGetAndConsumePARParamPtrs contains pointers to parameters of the Auth.GetAndConsumePAR
+type AuthMockGetAndConsumePARParamPtrs struct {
+	ctx        *context.Context
+	tenantID   *uuid.UUID
+	requestURI *string
+}
+
+// AuthMockGetAndConsumePARResults contains results of the Auth.GetAndConsumePAR
+type AuthMockGetAndConsumePARResults struct {
+	pp1 *model.PushedAuthorizationRequest
+	err error
+}
+
+// AuthMockGetAndConsumePAROrigins contains origins of expectations of the Auth.GetAndConsumePAR
+type AuthMockGetAndConsumePARExpectationOrigins struct {
+	origin           string
+	originCtx        string
+	originTenantID   string
+	originRequestURI string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetAndConsumePAR *mAuthMockGetAndConsumePAR) Optional() *mAuthMockGetAndConsumePAR {
+	mmGetAndConsumePAR.optional = true
+	return mmGetAndConsumePAR
+}
+
+// Expect sets up expected params for Auth.GetAndConsumePAR
+func (mmGetAndConsumePAR *mAuthMockGetAndConsumePAR) Expect(ctx context.Context, tenantID uuid.UUID, requestURI string) *mAuthMockGetAndConsumePAR {
+	if mmGetAndConsumePAR.mock.funcGetAndConsumePAR != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("AuthMock.GetAndConsumePAR mock is already set by Set")
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation == nil {
+		mmGetAndConsumePAR.defaultExpectation = &AuthMockGetAndConsumePARExpectation{}
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation.paramPtrs != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("AuthMock.GetAndConsumePAR mock is already set by ExpectParams functions")
+	}
+
+	mmGetAndConsumePAR.defaultExpectation.params = &AuthMockGetAndConsumePARParams{ctx, tenantID, requestURI}
+	mmGetAndConsumePAR.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetAndConsumePAR.expectations {
+		if minimock.Equal(e.params, mmGetAndConsumePAR.defaultExpectation.params) {
+			mmGetAndConsumePAR.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetAndConsumePAR.defaultExpectation.params)
+		}
+	}
+
+	return mmGetAndConsumePAR
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Auth.GetAndConsumePAR
+func (mmGetAndConsumePAR *mAuthMockGetAndConsumePAR) ExpectCtxParam1(ctx context.Context) *mAuthMockGetAndConsumePAR {
+	if mmGetAndConsumePAR.mock.funcGetAndConsumePAR != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("AuthMock.GetAndConsumePAR mock is already set by Set")
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation == nil {
+		mmGetAndConsumePAR.defaultExpectation = &AuthMockGetAndConsumePARExpectation{}
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation.params != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("AuthMock.GetAndConsumePAR mock is already set by Expect")
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation.paramPtrs == nil {
+		mmGetAndConsumePAR.defaultExpectation.paramPtrs = &AuthMockGetAndConsumePARParamPtrs{}
+	}
+	mmGetAndConsumePAR.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetAndConsumePAR.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetAndConsumePAR
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Auth.GetAndConsumePAR
+func (mmGetAndConsumePAR *mAuthMockGetAndConsumePAR) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthMockGetAndConsumePAR {
+	if mmGetAndConsumePAR.mock.funcGetAndConsumePAR != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("AuthMock.GetAndConsumePAR mock is already set by Set")
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation == nil {
+		mmGetAndConsumePAR.defaultExpectation = &AuthMockGetAndConsumePARExpectation{}
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation.params != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("AuthMock.GetAndConsumePAR mock is already set by Expect")
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation.paramPtrs == nil {
+		mmGetAndConsumePAR.defaultExpectation.paramPtrs = &AuthMockGetAndConsumePARParamPtrs{}
+	}
+	mmGetAndConsumePAR.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetAndConsumePAR.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetAndConsumePAR
+}
+
+// ExpectRequestURIParam3 sets up expected param requestURI for Auth.GetAndConsumePAR
+func (mmGetAndConsumePAR *mAuthMockGetAndConsumePAR) ExpectRequestURIParam3(requestURI string) *mAuthMockGetAndConsumePAR {
+	if mmGetAndConsumePAR.mock.funcGetAndConsumePAR != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("AuthMock.GetAndConsumePAR mock is already set by Set")
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation == nil {
+		mmGetAndConsumePAR.defaultExpectation = &AuthMockGetAndConsumePARExpectation{}
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation.params != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("AuthMock.GetAndConsumePAR mock is already set by Expect")
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation.paramPtrs == nil {
+		mmGetAndConsumePAR.defaultExpectation.paramPtrs = &AuthMockGetAndConsumePARParamPtrs{}
+	}
+	mmGetAndConsumePAR.defaultExpectation.paramPtrs.requestURI = &requestURI
+	mmGetAndConsumePAR.defaultExpectation.expectationOrigins.originRequestURI = minimock.CallerInfo(1)
+
+	return mmGetAndConsumePAR
+}
+
+// Inspect accepts an inspector function that has same arguments as the Auth.GetAndConsumePAR
+func (mmGetAndConsumePAR *mAuthMockGetAndConsumePAR) Inspect(f func(ctx context.Context, tenantID uuid.UUID, requestURI string)) *mAuthMockGetAndConsumePAR {
+	if mmGetAndConsumePAR.mock.inspectFuncGetAndConsumePAR != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("Inspect function is already set for AuthMock.GetAndConsumePAR")
+	}
+
+	mmGetAndConsumePAR.mock.inspectFuncGetAndConsumePAR = f
+
+	return mmGetAndConsumePAR
+}
+
+// Return sets up results that will be returned by Auth.GetAndConsumePAR
+func (mmGetAndConsumePAR *mAuthMockGetAndConsumePAR) Return(pp1 *model.PushedAuthorizationRequest, err error) *AuthMock {
+	if mmGetAndConsumePAR.mock.funcGetAndConsumePAR != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("AuthMock.GetAndConsumePAR mock is already set by Set")
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation == nil {
+		mmGetAndConsumePAR.defaultExpectation = &AuthMockGetAndConsumePARExpectation{mock: mmGetAndConsumePAR.mock}
+	}
+	mmGetAndConsumePAR.defaultExpectation.results = &AuthMockGetAndConsumePARResults{pp1, err}
+	mmGetAndConsumePAR.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetAndConsumePAR.mock
+}
+
+// Set uses given function f to mock the Auth.GetAndConsumePAR method
+func (mmGetAndConsumePAR *mAuthMockGetAndConsumePAR) Set(f func(ctx context.Context, tenantID uuid.UUID, requestURI string) (pp1 *model.PushedAuthorizationRequest, err error)) *AuthMock {
+	if mmGetAndConsumePAR.defaultExpectation != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("Default expectation is already set for the Auth.GetAndConsumePAR method")
+	}
+
+	if len(mmGetAndConsumePAR.expectations) > 0 {
+		mmGetAndConsumePAR.mock.t.Fatalf("Some expectations are already set for the Auth.GetAndConsumePAR method")
+	}
+
+	mmGetAndConsumePAR.mock.funcGetAndConsumePAR = f
+	mmGetAndConsumePAR.mock.funcGetAndConsumePAROrigin = minimock.CallerInfo(1)
+	return mmGetAndConsumePAR.mock
+}
+
+// When sets expectation for the Auth.GetAndConsumePAR which will trigger the result defined by the following
+// Then helper
+func (mmGetAndConsumePAR *mAuthMockGetAndConsumePAR) When(ctx context.Context, tenantID uuid.UUID, requestURI string) *AuthMockGetAndConsumePARExpectation {
+	if mmGetAndConsumePAR.mock.funcGetAndConsumePAR != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("AuthMock.GetAndConsumePAR mock is already set by Set")
+	}
+
+	expectation := &AuthMockGetAndConsumePARExpectation{
+		mock:               mmGetAndConsumePAR.mock,
+		params:             &AuthMockGetAndConsumePARParams{ctx, tenantID, requestURI},
+		expectationOrigins: AuthMockGetAndConsumePARExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetAndConsumePAR.expectations = append(mmGetAndConsumePAR.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Auth.GetAndConsumePAR return parameters for the expectation previously defined by the When method
+func (e *AuthMockGetAndConsumePARExpectation) Then(pp1 *model.PushedAuthorizationRequest, err error) *AuthMock {
+	e.results = &AuthMockGetAndConsumePARResults{pp1, err}
+	return e.mock
+}
+
+// Times sets number of times Auth.GetAndConsumePAR should be invoked
+func (mmGetAndConsumePAR *mAuthMockGetAndConsumePAR) Times(n uint64) *mAuthMockGetAndConsumePAR {
+	if n == 0 {
+		mmGetAndConsumePAR.mock.t.Fatalf("Times of AuthMock.GetAndConsumePAR mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetAndConsumePAR.expectedInvocations, n)
+	mmGetAndConsumePAR.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetAndConsumePAR
+}
+
+func (mmGetAndConsumePAR *mAuthMockGetAndConsumePAR) invocationsDone() bool {
+	if len(mmGetAndConsumePAR.expectations) == 0 && mmGetAndConsumePAR.defaultExpectation == nil && mmGetAndConsumePAR.mock.funcGetAndConsumePAR == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetAndConsumePAR.mock.afterGetAndConsumePARCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetAndConsumePAR.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetAndConsumePAR implements mm_port.Auth
+func (mmGetAndConsumePAR *AuthMock) GetAndConsumePAR(ctx context.Context, tenantID uuid.UUID, requestURI string) (pp1 *model.PushedAuthorizationRequest, err error) {
+	mm_atomic.AddUint64(&mmGetAndConsumePAR.beforeGetAndConsumePARCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetAndConsumePAR.afterGetAndConsumePARCounter, 1)
+
+	mmGetAndConsumePAR.t.Helper()
+
+	if mmGetAndConsumePAR.inspectFuncGetAndConsumePAR != nil {
+		mmGetAndConsumePAR.inspectFuncGetAndConsumePAR(ctx, tenantID, requestURI)
+	}
+
+	mm_params := AuthMockGetAndConsumePARParams{ctx, tenantID, requestURI}
+
+	// Record call args
+	mmGetAndConsumePAR.GetAndConsumePARMock.mutex.Lock()
+	mmGetAndConsumePAR.GetAndConsumePARMock.callArgs = append(mmGetAndConsumePAR.GetAndConsumePARMock.callArgs, &mm_params)
+	mmGetAndConsumePAR.GetAndConsumePARMock.mutex.Unlock()
+
+	for _, e := range mmGetAndConsumePAR.GetAndConsumePARMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.pp1, e.results.err
+		}
+	}
+
+	if mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation.params
+		mm_want_ptrs := mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation.paramPtrs
+
+		mm_got := AuthMockGetAndConsumePARParams{ctx, tenantID, requestURI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetAndConsumePAR.t.Errorf("AuthMock.GetAndConsumePAR got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetAndConsumePAR.t.Errorf("AuthMock.GetAndConsumePAR got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.requestURI != nil && !minimock.Equal(*mm_want_ptrs.requestURI, mm_got.requestURI) {
+				mmGetAndConsumePAR.t.Errorf("AuthMock.GetAndConsumePAR got unexpected parameter requestURI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation.expectationOrigins.originRequestURI, *mm_want_ptrs.requestURI, mm_got.requestURI, minimock.Diff(*mm_want_ptrs.requestURI, mm_got.requestURI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetAndConsumePAR.t.Errorf("AuthMock.GetAndConsumePAR got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetAndConsumePAR.t.Fatal("No results are set for the AuthMock.GetAndConsumePAR")
+		}
+		return (*mm_results).pp1, (*mm_results).err
+	}
+	if mmGetAndConsumePAR.funcGetAndConsumePAR != nil {
+		return mmGetAndConsumePAR.funcGetAndConsumePAR(ctx, tenantID, requestURI)
+	}
+	mmGetAndConsumePAR.t.Fatalf("Unexpected call to AuthMock.GetAndConsumePAR. %v %v %v", ctx, tenantID, requestURI)
+	return
+}
+
+// GetAndConsumePARAfterCounter returns a count of finished AuthMock.GetAndConsumePAR invocations
+func (mmGetAndConsumePAR *AuthMock) GetAndConsumePARAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetAndConsumePAR.afterGetAndConsumePARCounter)
+}
+
+// GetAndConsumePARBeforeCounter returns a count of AuthMock.GetAndConsumePAR invocations
+func (mmGetAndConsumePAR *AuthMock) GetAndConsumePARBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetAndConsumePAR.beforeGetAndConsumePARCounter)
+}
+
+// Calls returns a list of arguments used in each call to AuthMock.GetAndConsumePAR.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetAndConsumePAR *mAuthMockGetAndConsumePAR) Calls() []*AuthMockGetAndConsumePARParams {
+	mmGetAndConsumePAR.mutex.RLock()
+
+	argCopy := make([]*AuthMockGetAndConsumePARParams, len(mmGetAndConsumePAR.callArgs))
+	copy(argCopy, mmGetAndConsumePAR.callArgs)
+
+	mmGetAndConsumePAR.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetAndConsumePARDone returns true if the count of the GetAndConsumePAR invocations corresponds
+// the number of defined expectations
+func (m *AuthMock) MinimockGetAndConsumePARDone() bool {
+	if m.GetAndConsumePARMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetAndConsumePARMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetAndConsumePARMock.invocationsDone()
+}
+
+// MinimockGetAndConsumePARInspect logs each unmet expectation
+func (m *AuthMock) MinimockGetAndConsumePARInspect() {
+	for _, e := range m.GetAndConsumePARMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AuthMock.GetAndConsumePAR at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetAndConsumePARCounter := mm_atomic.LoadUint64(&m.afterGetAndConsumePARCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetAndConsumePARMock.defaultExpectation != nil && afterGetAndConsumePARCounter < 1 {
+		if m.GetAndConsumePARMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AuthMock.GetAndConsumePAR at\n%s", m.GetAndConsumePARMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AuthMock.GetAndConsumePAR at\n%s with params: %#v", m.GetAndConsumePARMock.defaultExpectation.expectationOrigins.origin, *m.GetAndConsumePARMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetAndConsumePAR != nil && afterGetAndConsumePARCounter < 1 {
+		m.t.Errorf("Expected call to AuthMock.GetAndConsumePAR at\n%s", m.funcGetAndConsumePAROrigin)
+	}
+
+	if !m.GetAndConsumePARMock.invocationsDone() && afterGetAndConsumePARCounter > 0 {
+		m.t.Errorf("Expected %d calls to AuthMock.GetAndConsumePAR at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetAndConsumePARMock.expectedInvocations), m.GetAndConsumePARMock.expectedInvocationsOrigin, afterGetAndConsumePARCounter)
 	}
 }
 
@@ -2076,11 +2501,355 @@ func (m *AuthMock) MinimockRevokeTokenInspect() {
 	}
 }
 
+type mAuthMockSavePAR struct {
+	optional           bool
+	mock               *AuthMock
+	defaultExpectation *AuthMockSavePARExpectation
+	expectations       []*AuthMockSavePARExpectation
+
+	callArgs []*AuthMockSavePARParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AuthMockSavePARExpectation specifies expectation struct of the Auth.SavePAR
+type AuthMockSavePARExpectation struct {
+	mock               *AuthMock
+	params             *AuthMockSavePARParams
+	paramPtrs          *AuthMockSavePARParamPtrs
+	expectationOrigins AuthMockSavePARExpectationOrigins
+	results            *AuthMockSavePARResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AuthMockSavePARParams contains parameters of the Auth.SavePAR
+type AuthMockSavePARParams struct {
+	ctx context.Context
+	req model.PushedAuthorizationRequest
+}
+
+// AuthMockSavePARParamPtrs contains pointers to parameters of the Auth.SavePAR
+type AuthMockSavePARParamPtrs struct {
+	ctx *context.Context
+	req *model.PushedAuthorizationRequest
+}
+
+// AuthMockSavePARResults contains results of the Auth.SavePAR
+type AuthMockSavePARResults struct {
+	err error
+}
+
+// AuthMockSavePAROrigins contains origins of expectations of the Auth.SavePAR
+type AuthMockSavePARExpectationOrigins struct {
+	origin    string
+	originCtx string
+	originReq string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmSavePAR *mAuthMockSavePAR) Optional() *mAuthMockSavePAR {
+	mmSavePAR.optional = true
+	return mmSavePAR
+}
+
+// Expect sets up expected params for Auth.SavePAR
+func (mmSavePAR *mAuthMockSavePAR) Expect(ctx context.Context, req model.PushedAuthorizationRequest) *mAuthMockSavePAR {
+	if mmSavePAR.mock.funcSavePAR != nil {
+		mmSavePAR.mock.t.Fatalf("AuthMock.SavePAR mock is already set by Set")
+	}
+
+	if mmSavePAR.defaultExpectation == nil {
+		mmSavePAR.defaultExpectation = &AuthMockSavePARExpectation{}
+	}
+
+	if mmSavePAR.defaultExpectation.paramPtrs != nil {
+		mmSavePAR.mock.t.Fatalf("AuthMock.SavePAR mock is already set by ExpectParams functions")
+	}
+
+	mmSavePAR.defaultExpectation.params = &AuthMockSavePARParams{ctx, req}
+	mmSavePAR.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmSavePAR.expectations {
+		if minimock.Equal(e.params, mmSavePAR.defaultExpectation.params) {
+			mmSavePAR.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmSavePAR.defaultExpectation.params)
+		}
+	}
+
+	return mmSavePAR
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Auth.SavePAR
+func (mmSavePAR *mAuthMockSavePAR) ExpectCtxParam1(ctx context.Context) *mAuthMockSavePAR {
+	if mmSavePAR.mock.funcSavePAR != nil {
+		mmSavePAR.mock.t.Fatalf("AuthMock.SavePAR mock is already set by Set")
+	}
+
+	if mmSavePAR.defaultExpectation == nil {
+		mmSavePAR.defaultExpectation = &AuthMockSavePARExpectation{}
+	}
+
+	if mmSavePAR.defaultExpectation.params != nil {
+		mmSavePAR.mock.t.Fatalf("AuthMock.SavePAR mock is already set by Expect")
+	}
+
+	if mmSavePAR.defaultExpectation.paramPtrs == nil {
+		mmSavePAR.defaultExpectation.paramPtrs = &AuthMockSavePARParamPtrs{}
+	}
+	mmSavePAR.defaultExpectation.paramPtrs.ctx = &ctx
+	mmSavePAR.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmSavePAR
+}
+
+// ExpectReqParam2 sets up expected param req for Auth.SavePAR
+func (mmSavePAR *mAuthMockSavePAR) ExpectReqParam2(req model.PushedAuthorizationRequest) *mAuthMockSavePAR {
+	if mmSavePAR.mock.funcSavePAR != nil {
+		mmSavePAR.mock.t.Fatalf("AuthMock.SavePAR mock is already set by Set")
+	}
+
+	if mmSavePAR.defaultExpectation == nil {
+		mmSavePAR.defaultExpectation = &AuthMockSavePARExpectation{}
+	}
+
+	if mmSavePAR.defaultExpectation.params != nil {
+		mmSavePAR.mock.t.Fatalf("AuthMock.SavePAR mock is already set by Expect")
+	}
+
+	if mmSavePAR.defaultExpectation.paramPtrs == nil {
+		mmSavePAR.defaultExpectation.paramPtrs = &AuthMockSavePARParamPtrs{}
+	}
+	mmSavePAR.defaultExpectation.paramPtrs.req = &req
+	mmSavePAR.defaultExpectation.expectationOrigins.originReq = minimock.CallerInfo(1)
+
+	return mmSavePAR
+}
+
+// Inspect accepts an inspector function that has same arguments as the Auth.SavePAR
+func (mmSavePAR *mAuthMockSavePAR) Inspect(f func(ctx context.Context, req model.PushedAuthorizationRequest)) *mAuthMockSavePAR {
+	if mmSavePAR.mock.inspectFuncSavePAR != nil {
+		mmSavePAR.mock.t.Fatalf("Inspect function is already set for AuthMock.SavePAR")
+	}
+
+	mmSavePAR.mock.inspectFuncSavePAR = f
+
+	return mmSavePAR
+}
+
+// Return sets up results that will be returned by Auth.SavePAR
+func (mmSavePAR *mAuthMockSavePAR) Return(err error) *AuthMock {
+	if mmSavePAR.mock.funcSavePAR != nil {
+		mmSavePAR.mock.t.Fatalf("AuthMock.SavePAR mock is already set by Set")
+	}
+
+	if mmSavePAR.defaultExpectation == nil {
+		mmSavePAR.defaultExpectation = &AuthMockSavePARExpectation{mock: mmSavePAR.mock}
+	}
+	mmSavePAR.defaultExpectation.results = &AuthMockSavePARResults{err}
+	mmSavePAR.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmSavePAR.mock
+}
+
+// Set uses given function f to mock the Auth.SavePAR method
+func (mmSavePAR *mAuthMockSavePAR) Set(f func(ctx context.Context, req model.PushedAuthorizationRequest) (err error)) *AuthMock {
+	if mmSavePAR.defaultExpectation != nil {
+		mmSavePAR.mock.t.Fatalf("Default expectation is already set for the Auth.SavePAR method")
+	}
+
+	if len(mmSavePAR.expectations) > 0 {
+		mmSavePAR.mock.t.Fatalf("Some expectations are already set for the Auth.SavePAR method")
+	}
+
+	mmSavePAR.mock.funcSavePAR = f
+	mmSavePAR.mock.funcSavePAROrigin = minimock.CallerInfo(1)
+	return mmSavePAR.mock
+}
+
+// When sets expectation for the Auth.SavePAR which will trigger the result defined by the following
+// Then helper
+func (mmSavePAR *mAuthMockSavePAR) When(ctx context.Context, req model.PushedAuthorizationRequest) *AuthMockSavePARExpectation {
+	if mmSavePAR.mock.funcSavePAR != nil {
+		mmSavePAR.mock.t.Fatalf("AuthMock.SavePAR mock is already set by Set")
+	}
+
+	expectation := &AuthMockSavePARExpectation{
+		mock:               mmSavePAR.mock,
+		params:             &AuthMockSavePARParams{ctx, req},
+		expectationOrigins: AuthMockSavePARExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmSavePAR.expectations = append(mmSavePAR.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Auth.SavePAR return parameters for the expectation previously defined by the When method
+func (e *AuthMockSavePARExpectation) Then(err error) *AuthMock {
+	e.results = &AuthMockSavePARResults{err}
+	return e.mock
+}
+
+// Times sets number of times Auth.SavePAR should be invoked
+func (mmSavePAR *mAuthMockSavePAR) Times(n uint64) *mAuthMockSavePAR {
+	if n == 0 {
+		mmSavePAR.mock.t.Fatalf("Times of AuthMock.SavePAR mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmSavePAR.expectedInvocations, n)
+	mmSavePAR.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmSavePAR
+}
+
+func (mmSavePAR *mAuthMockSavePAR) invocationsDone() bool {
+	if len(mmSavePAR.expectations) == 0 && mmSavePAR.defaultExpectation == nil && mmSavePAR.mock.funcSavePAR == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmSavePAR.mock.afterSavePARCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmSavePAR.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// SavePAR implements mm_port.Auth
+func (mmSavePAR *AuthMock) SavePAR(ctx context.Context, req model.PushedAuthorizationRequest) (err error) {
+	mm_atomic.AddUint64(&mmSavePAR.beforeSavePARCounter, 1)
+	defer mm_atomic.AddUint64(&mmSavePAR.afterSavePARCounter, 1)
+
+	mmSavePAR.t.Helper()
+
+	if mmSavePAR.inspectFuncSavePAR != nil {
+		mmSavePAR.inspectFuncSavePAR(ctx, req)
+	}
+
+	mm_params := AuthMockSavePARParams{ctx, req}
+
+	// Record call args
+	mmSavePAR.SavePARMock.mutex.Lock()
+	mmSavePAR.SavePARMock.callArgs = append(mmSavePAR.SavePARMock.callArgs, &mm_params)
+	mmSavePAR.SavePARMock.mutex.Unlock()
+
+	for _, e := range mmSavePAR.SavePARMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmSavePAR.SavePARMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmSavePAR.SavePARMock.defaultExpectation.Counter, 1)
+		mm_want := mmSavePAR.SavePARMock.defaultExpectation.params
+		mm_want_ptrs := mmSavePAR.SavePARMock.defaultExpectation.paramPtrs
+
+		mm_got := AuthMockSavePARParams{ctx, req}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmSavePAR.t.Errorf("AuthMock.SavePAR got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSavePAR.SavePARMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.req != nil && !minimock.Equal(*mm_want_ptrs.req, mm_got.req) {
+				mmSavePAR.t.Errorf("AuthMock.SavePAR got unexpected parameter req, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSavePAR.SavePARMock.defaultExpectation.expectationOrigins.originReq, *mm_want_ptrs.req, mm_got.req, minimock.Diff(*mm_want_ptrs.req, mm_got.req))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmSavePAR.t.Errorf("AuthMock.SavePAR got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmSavePAR.SavePARMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmSavePAR.SavePARMock.defaultExpectation.results
+		if mm_results == nil {
+			mmSavePAR.t.Fatal("No results are set for the AuthMock.SavePAR")
+		}
+		return (*mm_results).err
+	}
+	if mmSavePAR.funcSavePAR != nil {
+		return mmSavePAR.funcSavePAR(ctx, req)
+	}
+	mmSavePAR.t.Fatalf("Unexpected call to AuthMock.SavePAR. %v %v", ctx, req)
+	return
+}
+
+// SavePARAfterCounter returns a count of finished AuthMock.SavePAR invocations
+func (mmSavePAR *AuthMock) SavePARAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSavePAR.afterSavePARCounter)
+}
+
+// SavePARBeforeCounter returns a count of AuthMock.SavePAR invocations
+func (mmSavePAR *AuthMock) SavePARBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSavePAR.beforeSavePARCounter)
+}
+
+// Calls returns a list of arguments used in each call to AuthMock.SavePAR.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmSavePAR *mAuthMockSavePAR) Calls() []*AuthMockSavePARParams {
+	mmSavePAR.mutex.RLock()
+
+	argCopy := make([]*AuthMockSavePARParams, len(mmSavePAR.callArgs))
+	copy(argCopy, mmSavePAR.callArgs)
+
+	mmSavePAR.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockSavePARDone returns true if the count of the SavePAR invocations corresponds
+// the number of defined expectations
+func (m *AuthMock) MinimockSavePARDone() bool {
+	if m.SavePARMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.SavePARMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.SavePARMock.invocationsDone()
+}
+
+// MinimockSavePARInspect logs each unmet expectation
+func (m *AuthMock) MinimockSavePARInspect() {
+	for _, e := range m.SavePARMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AuthMock.SavePAR at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterSavePARCounter := mm_atomic.LoadUint64(&m.afterSavePARCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.SavePARMock.defaultExpectation != nil && afterSavePARCounter < 1 {
+		if m.SavePARMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AuthMock.SavePAR at\n%s", m.SavePARMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AuthMock.SavePAR at\n%s with params: %#v", m.SavePARMock.defaultExpectation.expectationOrigins.origin, *m.SavePARMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcSavePAR != nil && afterSavePARCounter < 1 {
+		m.t.Errorf("Expected call to AuthMock.SavePAR at\n%s", m.funcSavePAROrigin)
+	}
+
+	if !m.SavePARMock.invocationsDone() && afterSavePARCounter > 0 {
+		m.t.Errorf("Expected %d calls to AuthMock.SavePAR at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.SavePARMock.expectedInvocations), m.SavePARMock.expectedInvocationsOrigin, afterSavePARCounter)
+	}
+}
+
 // MinimockFinish checks that all mocked methods have been called the expected number of times
 func (m *AuthMock) MinimockFinish() {
 	m.finishOnce.Do(func() {
 		if !m.minimockDone() {
 			m.MinimockExchangeCodeForTokensInspect()
+
+			m.MinimockGetAndConsumePARInspect()
 
 			m.MinimockInitiateAuthorizeInspect()
 
@@ -2089,6 +2858,8 @@ func (m *AuthMock) MinimockFinish() {
 			m.MinimockProcessLogoutInspect()
 
 			m.MinimockRevokeTokenInspect()
+
+			m.MinimockSavePARInspect()
 		}
 	})
 }
@@ -2113,8 +2884,10 @@ func (m *AuthMock) minimockDone() bool {
 	done := true
 	return done &&
 		m.MinimockExchangeCodeForTokensDone() &&
+		m.MinimockGetAndConsumePARDone() &&
 		m.MinimockInitiateAuthorizeDone() &&
 		m.MinimockIntrospectTokenDone() &&
 		m.MinimockProcessLogoutDone() &&
-		m.MinimockRevokeTokenDone()
+		m.MinimockRevokeTokenDone() &&
+		m.MinimockSavePARDone()
 }

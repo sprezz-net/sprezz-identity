@@ -42,4 +42,9 @@ type Storage interface {
 	IsTokenRevoked(ctx context.Context, tokenID string) (bool, error)
 	PruneExpiredTokens(ctx context.Context) error
 	GetClientsByTenant(ctx context.Context, tenantID uuid.UUID) ([]model.ClientApplication, error)
+
+	SavePAR(ctx context.Context, req model.PushedAuthorizationRequest) error
+	GetAndConsumePAR(ctx context.Context, tenantID uuid.UUID, requestURI string) (*model.PushedAuthorizationRequest, error)
+	IsDPoPProofUsed(ctx context.Context, jti string) (bool, error)
+	SaveDPoPProof(ctx context.Context, jti string, expiresAt time.Time) error
 }

@@ -94,7 +94,7 @@ func TestOAuthService_ExchangeCodeForTokensMintsTokens(t *testing.T) {
 		return "id-token", nil
 	})
 
-	tokens, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, codeVerifier)
+	tokens, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, codeVerifier, "")
 	if err != nil {
 		t.Fatalf("ExchangeCodeForTokens returned error: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestOAuthService_ExchangeCodeForTokens_Errors(t *testing.T) {
 		service := NewOAuthService(storage, nil, nil, nil, portmock.NewMockClock(time.Now()))
 		storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(nil, errors.New("client lookup failed"))
 
-		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "verifier")
+		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "verifier", "")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -265,7 +265,7 @@ func TestOAuthService_ExchangeCodeForTokens_Errors(t *testing.T) {
 		storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(&model.ClientApplication{}, nil)
 		storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(nil, errors.New("tenant lookup failed"))
 
-		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "verifier")
+		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "verifier", "")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -280,7 +280,7 @@ func TestOAuthService_ExchangeCodeForTokens_Errors(t *testing.T) {
 		storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(&model.Tenant{}, nil)
 		storage.GetAndConsumeAuthSessionMock.Expect(context.Background(), tenantID, code).Return(nil, errors.New("session not found"))
 
-		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "verifier")
+		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "verifier", "")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -297,7 +297,7 @@ func TestOAuthService_ExchangeCodeForTokens_Errors(t *testing.T) {
 			CodeChallenge: "expected-challenge",
 		}, nil)
 
-		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "invalid-verifier")
+		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "invalid-verifier", "")
 		if err == nil || err.Error() != "invalid PKCE verifier" {
 			t.Errorf("expected PKCE validation error, got %v", err)
 		}
@@ -317,7 +317,7 @@ func TestOAuthService_ExchangeCodeForTokens_Errors(t *testing.T) {
 			return "", errors.New("sign error")
 		})
 
-		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "verifier")
+		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "verifier", "")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -340,7 +340,7 @@ func TestOAuthService_ExchangeCodeForTokens_Errors(t *testing.T) {
 			return "", errors.New("sign error")
 		})
 
-		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "verifier")
+		_, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "verifier", "")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -405,5 +405,88 @@ func TestOAuthService_RevokeToken_NoJTIOrClaims(t *testing.T) {
 	err = service.RevokeToken(context.Background(), uuid.New(), "client", tokenString)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestOAuthService_PAR(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	service := NewOAuthService(storage, nil, nil, nil, portmock.NewMockClock(time.Now()))
+
+	tenantID := uuid.New()
+	req := model.PushedAuthorizationRequest{
+		RequestURI: "urn:ietf:params:oauth:request_uri:123",
+		TenantID:   tenantID,
+		ClientID:   "client",
+	}
+
+	storage.SavePARMock.Expect(context.Background(), req).Return(nil)
+	if err := service.SavePAR(context.Background(), req); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	storage.GetAndConsumePARMock.Expect(context.Background(), tenantID, req.RequestURI).Return(&req, nil)
+	got, err := service.GetAndConsumePAR(context.Background(), tenantID, req.RequestURI)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.RequestURI != req.RequestURI {
+		t.Errorf("expected RequestURI %s, got %s", req.RequestURI, got.RequestURI)
+	}
+}
+
+func TestOAuthService_ExchangeCodeForTokens_DPoP(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+	service := NewOAuthService(storage, crypto, nil, nil, portmock.NewMockClock(time.Now()))
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "example.com"}
+	clientID := "client-id"
+	code := "some-code"
+	dpopJKT := "some-jkt-thumbprint"
+
+	client := &model.ClientApplication{
+		ID:                   uuid.NewString(),
+		TenantID:             tenantID,
+		ClientID:             clientID,
+		Algorithm:            model.AlgRS256,
+		AccessTokenLifetime:  time.Hour,
+		IDTokenLifetime:      time.Minute,
+		RefreshTokenLifetime: 24 * time.Hour,
+	}
+
+	authSession := &model.AuthorizationCodeSession{
+		Code:      code,
+		TenantID:  tenantID.String(),
+		ClientID:  clientID,
+		Subject:   "user-1",
+		ExpiresAt: time.Now().Add(time.Hour),
+	}
+
+	storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(tenant, nil)
+	storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(client, nil)
+	storage.GetAndConsumeAuthSessionMock.Expect(context.Background(), tenantID, code).Return(authSession, nil)
+
+	crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+		if claims.DPoPHash != dpopJKT {
+			t.Errorf("expected DPoPHash %s, got %s", dpopJKT, claims.DPoPHash)
+		}
+		return "dpop-access-token", nil
+	})
+	crypto.SignIDTokenMock.Set(func(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
+		return "id-token", nil
+	})
+
+	tokens, err := service.ExchangeCodeForTokens(context.Background(), tenantID, clientID, code, "verifier", dpopJKT)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tokens.TokenType != "DPoP" {
+		t.Errorf("expected TokenType 'DPoP', got %s", tokens.TokenType)
+	}
+	if tokens.AccessToken != "dpop-access-token" {
+		t.Errorf("expected AccessToken 'dpop-access-token', got %s", tokens.AccessToken)
 	}
 }

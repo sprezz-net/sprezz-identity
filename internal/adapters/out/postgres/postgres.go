@@ -262,6 +262,9 @@ func (s *PostgresStorage) SaveAuthSession(ctx context.Context, session model.Aut
 		Scopes:          session.Scopes,
 		ExpiresAt:       toPGTimestamptz(session.ExpiresAt),
 		SessionID:       session.SessionID,
+		State:           session.State,
+		Nonce:           session.Nonce,
+		AcrValues:       session.ACRValues,
 	})
 	if err != nil {
 		return fmt.Errorf("save auth session: %w", err)
@@ -300,6 +303,9 @@ func (s *PostgresStorage) GetAndConsumeAuthSession(ctx context.Context, tenantID
 		Scopes:          row.Scopes,
 		ExpiresAt:       expiresAt,
 		SessionID:       row.SessionID,
+		State:           row.State,
+		Nonce:           row.Nonce,
+		ACRValues:       row.AcrValues,
 	}, nil
 }
 
@@ -722,6 +728,98 @@ func (s *PostgresStorage) PruneExpiredTokens(ctx context.Context) error {
 		return fmt.Errorf("prune expired interaction sessions: %w", err)
 	}
 
+	// 4. Prune expired PAR sessions
+	_, err = s.pool.Exec(ctx, "DELETE FROM pushed_authorization_requests WHERE expires_at <= NOW()")
+	if err != nil {
+		return fmt.Errorf("prune expired pushed auth requests: %w", err)
+	}
+
+	// 5. Prune expired DPoP proofs
+	_, err = s.pool.Exec(ctx, "DELETE FROM dpop_proofs WHERE expires_at <= NOW()")
+	if err != nil {
+		return fmt.Errorf("prune expired dpop proofs: %w", err)
+	}
+
+	return nil
+}
+
+func (s *PostgresStorage) SavePAR(ctx context.Context, req model.PushedAuthorizationRequest) error {
+	_, err := s.queries.SavePAR(ctx, sqlcdb.SavePARParams{
+		TenantUuid:          toPGUUID(req.TenantID),
+		RequestUri:          req.RequestURI,
+		ClientID:            req.ClientID,
+		RedirectUri:         req.RedirectURI,
+		CodeChallenge:       req.CodeChallenge,
+		CodeChallengeMethod: req.ChallengeMethod,
+		Scopes:              req.Scopes,
+		State:               req.State,
+		Nonce:               req.Nonce,
+		IdpHint:             req.IDPHint,
+		AcrValues:           req.ACRValues,
+		ExpiresAt:           toPGTimestamptz(req.ExpiresAt),
+	})
+	if err != nil {
+		return fmt.Errorf("save pushed authorization request: %w", err)
+	}
+	return nil
+}
+
+func (s *PostgresStorage) GetAndConsumePAR(ctx context.Context, tenantID uuid.UUID, requestURI string) (*model.PushedAuthorizationRequest, error) {
+	row, err := s.queries.ConsumePAR(ctx, sqlcdb.ConsumePARParams{
+		TenantUuid: toPGUUID(tenantID),
+		RequestUri: requestURI,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("pushed authorization request %s not found: %w", requestURI, port.ErrSessionNotFound)
+		}
+		return nil, fmt.Errorf("get and consume pushed authorization request: %w", err)
+	}
+
+	expiresAt, err := pgTimestamptzToTime(row.ExpiresAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse PAR expires_at: %w", err)
+	}
+
+	return &model.PushedAuthorizationRequest{
+		RequestURI:      row.RequestUri,
+		TenantID:        tenantID,
+		ClientID:        row.ClientID,
+		RedirectURI:     row.RedirectUri,
+		CodeChallenge:   row.CodeChallenge,
+		ChallengeMethod: row.CodeChallengeMethod,
+		Scopes:          row.Scopes,
+		State:           row.State,
+		Nonce:           row.Nonce,
+		IDPHint:         row.IdpHint,
+		ACRValues:       row.AcrValues,
+		ExpiresAt:       expiresAt,
+	}, nil
+}
+
+func (s *PostgresStorage) IsDPoPProofUsed(ctx context.Context, jti string) (bool, error) {
+	var exists bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM dpop_proofs
+			WHERE jti = $1 AND expires_at > NOW()
+		)
+	`, jti).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check DPoP proof replay: %w", err)
+	}
+	return exists, nil
+}
+
+func (s *PostgresStorage) SaveDPoPProof(ctx context.Context, jti string, expiresAt time.Time) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO dpop_proofs (jti, expires_at)
+		VALUES ($1, $2::timestamptz)
+		ON CONFLICT (jti) DO NOTHING
+	`, jti, toPGTimestamptz(expiresAt))
+	if err != nil {
+		return fmt.Errorf("save DPoP proof: %w", err)
+	}
 	return nil
 }
 

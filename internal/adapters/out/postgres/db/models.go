@@ -52,6 +52,14 @@ type AuthSession struct {
 	Scopes          []string           `json:"scopes"`
 	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
 	SessionID       string             `json:"session_id"`
+	State           string             `json:"state"`
+	Nonce           string             `json:"nonce"`
+	AcrValues       string             `json:"acr_values"`
+}
+
+type DpopProof struct {
+	Jti       string             `json:"jti"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
 type Identity struct {
@@ -85,6 +93,9 @@ type InteractionSession struct {
 	CodeChallengeMethod string             `json:"code_challenge_method"`
 	IdpHint             *string            `json:"idp_hint"`
 	ExpiresAt           pgtype.Timestamptz `json:"expires_at"`
+	State               string             `json:"state"`
+	Nonce               string             `json:"nonce"`
+	AcrValues           string             `json:"acr_values"`
 }
 
 type Password struct {
@@ -92,6 +103,21 @@ type Password struct {
 	IdentityProviderID pgtype.UUID        `json:"identity_provider_id"`
 	PasswordHash       string             `json:"password_hash"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+}
+
+type PushedAuthorizationRequest struct {
+	RequestUri          string             `json:"request_uri"`
+	TenantID            int32              `json:"tenant_id"`
+	ClientID            string             `json:"client_id"`
+	RedirectUri         string             `json:"redirect_uri"`
+	CodeChallenge       string             `json:"code_challenge"`
+	CodeChallengeMethod string             `json:"code_challenge_method"`
+	Scopes              []string           `json:"scopes"`
+	State               string             `json:"state"`
+	Nonce               string             `json:"nonce"`
+	IdpHint             string             `json:"idp_hint"`
+	AcrValues           string             `json:"acr_values"`
+	ExpiresAt           pgtype.Timestamptz `json:"expires_at"`
 }
 
 type RevokedToken struct {

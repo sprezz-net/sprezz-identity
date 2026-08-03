@@ -49,6 +49,13 @@ type StorageMock struct {
 	beforeGetAndConsumeInteractionSessionCounter uint64
 	GetAndConsumeInteractionSessionMock          mStorageMockGetAndConsumeInteractionSession
 
+	funcGetAndConsumePAR          func(ctx context.Context, tenantID uuid.UUID, requestURI string) (pp1 *model.PushedAuthorizationRequest, err error)
+	funcGetAndConsumePAROrigin    string
+	inspectFuncGetAndConsumePAR   func(ctx context.Context, tenantID uuid.UUID, requestURI string)
+	afterGetAndConsumePARCounter  uint64
+	beforeGetAndConsumePARCounter uint64
+	GetAndConsumePARMock          mStorageMockGetAndConsumePAR
+
 	funcGetClient          func(ctx context.Context, tenantID uuid.UUID, clientID string) (cp1 *model.ClientApplication, err error)
 	funcGetClientOrigin    string
 	inspectFuncGetClient   func(ctx context.Context, tenantID uuid.UUID, clientID string)
@@ -90,6 +97,13 @@ type StorageMock struct {
 	afterGetUserProfileByIdentifierCounter  uint64
 	beforeGetUserProfileByIdentifierCounter uint64
 	GetUserProfileByIdentifierMock          mStorageMockGetUserProfileByIdentifier
+
+	funcIsDPoPProofUsed          func(ctx context.Context, jti string) (b1 bool, err error)
+	funcIsDPoPProofUsedOrigin    string
+	inspectFuncIsDPoPProofUsed   func(ctx context.Context, jti string)
+	afterIsDPoPProofUsedCounter  uint64
+	beforeIsDPoPProofUsedCounter uint64
+	IsDPoPProofUsedMock          mStorageMockIsDPoPProofUsed
 
 	funcIsTokenRevoked          func(ctx context.Context, tokenID string) (b1 bool, err error)
 	funcIsTokenRevokedOrigin    string
@@ -147,12 +161,26 @@ type StorageMock struct {
 	beforeSaveClientCounter uint64
 	SaveClientMock          mStorageMockSaveClient
 
+	funcSaveDPoPProof          func(ctx context.Context, jti string, expiresAt time.Time) (err error)
+	funcSaveDPoPProofOrigin    string
+	inspectFuncSaveDPoPProof   func(ctx context.Context, jti string, expiresAt time.Time)
+	afterSaveDPoPProofCounter  uint64
+	beforeSaveDPoPProofCounter uint64
+	SaveDPoPProofMock          mStorageMockSaveDPoPProof
+
 	funcSaveInteractionSession          func(ctx context.Context, session model.InteractionSession) (err error)
 	funcSaveInteractionSessionOrigin    string
 	inspectFuncSaveInteractionSession   func(ctx context.Context, session model.InteractionSession)
 	afterSaveInteractionSessionCounter  uint64
 	beforeSaveInteractionSessionCounter uint64
 	SaveInteractionSessionMock          mStorageMockSaveInteractionSession
+
+	funcSavePAR          func(ctx context.Context, req model.PushedAuthorizationRequest) (err error)
+	funcSavePAROrigin    string
+	inspectFuncSavePAR   func(ctx context.Context, req model.PushedAuthorizationRequest)
+	afterSavePARCounter  uint64
+	beforeSavePARCounter uint64
+	SavePARMock          mStorageMockSavePAR
 
 	funcUpsertIdentity          func(ctx context.Context, identity model.UserIdentity) (err error)
 	funcUpsertIdentityOrigin    string
@@ -182,6 +210,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 	m.GetAndConsumeInteractionSessionMock = mStorageMockGetAndConsumeInteractionSession{mock: m}
 	m.GetAndConsumeInteractionSessionMock.callArgs = []*StorageMockGetAndConsumeInteractionSessionParams{}
 
+	m.GetAndConsumePARMock = mStorageMockGetAndConsumePAR{mock: m}
+	m.GetAndConsumePARMock.callArgs = []*StorageMockGetAndConsumePARParams{}
+
 	m.GetClientMock = mStorageMockGetClient{mock: m}
 	m.GetClientMock.callArgs = []*StorageMockGetClientParams{}
 
@@ -199,6 +230,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 
 	m.GetUserProfileByIdentifierMock = mStorageMockGetUserProfileByIdentifier{mock: m}
 	m.GetUserProfileByIdentifierMock.callArgs = []*StorageMockGetUserProfileByIdentifierParams{}
+
+	m.IsDPoPProofUsedMock = mStorageMockIsDPoPProofUsed{mock: m}
+	m.IsDPoPProofUsedMock.callArgs = []*StorageMockIsDPoPProofUsedParams{}
 
 	m.IsTokenRevokedMock = mStorageMockIsTokenRevoked{mock: m}
 	m.IsTokenRevokedMock.callArgs = []*StorageMockIsTokenRevokedParams{}
@@ -224,8 +258,14 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 	m.SaveClientMock = mStorageMockSaveClient{mock: m}
 	m.SaveClientMock.callArgs = []*StorageMockSaveClientParams{}
 
+	m.SaveDPoPProofMock = mStorageMockSaveDPoPProof{mock: m}
+	m.SaveDPoPProofMock.callArgs = []*StorageMockSaveDPoPProofParams{}
+
 	m.SaveInteractionSessionMock = mStorageMockSaveInteractionSession{mock: m}
 	m.SaveInteractionSessionMock.callArgs = []*StorageMockSaveInteractionSessionParams{}
+
+	m.SavePARMock = mStorageMockSavePAR{mock: m}
+	m.SavePARMock.callArgs = []*StorageMockSavePARParams{}
 
 	m.UpsertIdentityMock = mStorageMockUpsertIdentity{mock: m}
 	m.UpsertIdentityMock.callArgs = []*StorageMockUpsertIdentityParams{}
@@ -1695,6 +1735,380 @@ func (m *StorageMock) MinimockGetAndConsumeInteractionSessionInspect() {
 	if !m.GetAndConsumeInteractionSessionMock.invocationsDone() && afterGetAndConsumeInteractionSessionCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageMock.GetAndConsumeInteractionSession at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.GetAndConsumeInteractionSessionMock.expectedInvocations), m.GetAndConsumeInteractionSessionMock.expectedInvocationsOrigin, afterGetAndConsumeInteractionSessionCounter)
+	}
+}
+
+type mStorageMockGetAndConsumePAR struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockGetAndConsumePARExpectation
+	expectations       []*StorageMockGetAndConsumePARExpectation
+
+	callArgs []*StorageMockGetAndConsumePARParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockGetAndConsumePARExpectation specifies expectation struct of the Storage.GetAndConsumePAR
+type StorageMockGetAndConsumePARExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockGetAndConsumePARParams
+	paramPtrs          *StorageMockGetAndConsumePARParamPtrs
+	expectationOrigins StorageMockGetAndConsumePARExpectationOrigins
+	results            *StorageMockGetAndConsumePARResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockGetAndConsumePARParams contains parameters of the Storage.GetAndConsumePAR
+type StorageMockGetAndConsumePARParams struct {
+	ctx        context.Context
+	tenantID   uuid.UUID
+	requestURI string
+}
+
+// StorageMockGetAndConsumePARParamPtrs contains pointers to parameters of the Storage.GetAndConsumePAR
+type StorageMockGetAndConsumePARParamPtrs struct {
+	ctx        *context.Context
+	tenantID   *uuid.UUID
+	requestURI *string
+}
+
+// StorageMockGetAndConsumePARResults contains results of the Storage.GetAndConsumePAR
+type StorageMockGetAndConsumePARResults struct {
+	pp1 *model.PushedAuthorizationRequest
+	err error
+}
+
+// StorageMockGetAndConsumePAROrigins contains origins of expectations of the Storage.GetAndConsumePAR
+type StorageMockGetAndConsumePARExpectationOrigins struct {
+	origin           string
+	originCtx        string
+	originTenantID   string
+	originRequestURI string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetAndConsumePAR *mStorageMockGetAndConsumePAR) Optional() *mStorageMockGetAndConsumePAR {
+	mmGetAndConsumePAR.optional = true
+	return mmGetAndConsumePAR
+}
+
+// Expect sets up expected params for Storage.GetAndConsumePAR
+func (mmGetAndConsumePAR *mStorageMockGetAndConsumePAR) Expect(ctx context.Context, tenantID uuid.UUID, requestURI string) *mStorageMockGetAndConsumePAR {
+	if mmGetAndConsumePAR.mock.funcGetAndConsumePAR != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("StorageMock.GetAndConsumePAR mock is already set by Set")
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation == nil {
+		mmGetAndConsumePAR.defaultExpectation = &StorageMockGetAndConsumePARExpectation{}
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation.paramPtrs != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("StorageMock.GetAndConsumePAR mock is already set by ExpectParams functions")
+	}
+
+	mmGetAndConsumePAR.defaultExpectation.params = &StorageMockGetAndConsumePARParams{ctx, tenantID, requestURI}
+	mmGetAndConsumePAR.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetAndConsumePAR.expectations {
+		if minimock.Equal(e.params, mmGetAndConsumePAR.defaultExpectation.params) {
+			mmGetAndConsumePAR.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetAndConsumePAR.defaultExpectation.params)
+		}
+	}
+
+	return mmGetAndConsumePAR
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.GetAndConsumePAR
+func (mmGetAndConsumePAR *mStorageMockGetAndConsumePAR) ExpectCtxParam1(ctx context.Context) *mStorageMockGetAndConsumePAR {
+	if mmGetAndConsumePAR.mock.funcGetAndConsumePAR != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("StorageMock.GetAndConsumePAR mock is already set by Set")
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation == nil {
+		mmGetAndConsumePAR.defaultExpectation = &StorageMockGetAndConsumePARExpectation{}
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation.params != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("StorageMock.GetAndConsumePAR mock is already set by Expect")
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation.paramPtrs == nil {
+		mmGetAndConsumePAR.defaultExpectation.paramPtrs = &StorageMockGetAndConsumePARParamPtrs{}
+	}
+	mmGetAndConsumePAR.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetAndConsumePAR.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetAndConsumePAR
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.GetAndConsumePAR
+func (mmGetAndConsumePAR *mStorageMockGetAndConsumePAR) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockGetAndConsumePAR {
+	if mmGetAndConsumePAR.mock.funcGetAndConsumePAR != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("StorageMock.GetAndConsumePAR mock is already set by Set")
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation == nil {
+		mmGetAndConsumePAR.defaultExpectation = &StorageMockGetAndConsumePARExpectation{}
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation.params != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("StorageMock.GetAndConsumePAR mock is already set by Expect")
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation.paramPtrs == nil {
+		mmGetAndConsumePAR.defaultExpectation.paramPtrs = &StorageMockGetAndConsumePARParamPtrs{}
+	}
+	mmGetAndConsumePAR.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetAndConsumePAR.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetAndConsumePAR
+}
+
+// ExpectRequestURIParam3 sets up expected param requestURI for Storage.GetAndConsumePAR
+func (mmGetAndConsumePAR *mStorageMockGetAndConsumePAR) ExpectRequestURIParam3(requestURI string) *mStorageMockGetAndConsumePAR {
+	if mmGetAndConsumePAR.mock.funcGetAndConsumePAR != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("StorageMock.GetAndConsumePAR mock is already set by Set")
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation == nil {
+		mmGetAndConsumePAR.defaultExpectation = &StorageMockGetAndConsumePARExpectation{}
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation.params != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("StorageMock.GetAndConsumePAR mock is already set by Expect")
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation.paramPtrs == nil {
+		mmGetAndConsumePAR.defaultExpectation.paramPtrs = &StorageMockGetAndConsumePARParamPtrs{}
+	}
+	mmGetAndConsumePAR.defaultExpectation.paramPtrs.requestURI = &requestURI
+	mmGetAndConsumePAR.defaultExpectation.expectationOrigins.originRequestURI = minimock.CallerInfo(1)
+
+	return mmGetAndConsumePAR
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.GetAndConsumePAR
+func (mmGetAndConsumePAR *mStorageMockGetAndConsumePAR) Inspect(f func(ctx context.Context, tenantID uuid.UUID, requestURI string)) *mStorageMockGetAndConsumePAR {
+	if mmGetAndConsumePAR.mock.inspectFuncGetAndConsumePAR != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("Inspect function is already set for StorageMock.GetAndConsumePAR")
+	}
+
+	mmGetAndConsumePAR.mock.inspectFuncGetAndConsumePAR = f
+
+	return mmGetAndConsumePAR
+}
+
+// Return sets up results that will be returned by Storage.GetAndConsumePAR
+func (mmGetAndConsumePAR *mStorageMockGetAndConsumePAR) Return(pp1 *model.PushedAuthorizationRequest, err error) *StorageMock {
+	if mmGetAndConsumePAR.mock.funcGetAndConsumePAR != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("StorageMock.GetAndConsumePAR mock is already set by Set")
+	}
+
+	if mmGetAndConsumePAR.defaultExpectation == nil {
+		mmGetAndConsumePAR.defaultExpectation = &StorageMockGetAndConsumePARExpectation{mock: mmGetAndConsumePAR.mock}
+	}
+	mmGetAndConsumePAR.defaultExpectation.results = &StorageMockGetAndConsumePARResults{pp1, err}
+	mmGetAndConsumePAR.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetAndConsumePAR.mock
+}
+
+// Set uses given function f to mock the Storage.GetAndConsumePAR method
+func (mmGetAndConsumePAR *mStorageMockGetAndConsumePAR) Set(f func(ctx context.Context, tenantID uuid.UUID, requestURI string) (pp1 *model.PushedAuthorizationRequest, err error)) *StorageMock {
+	if mmGetAndConsumePAR.defaultExpectation != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("Default expectation is already set for the Storage.GetAndConsumePAR method")
+	}
+
+	if len(mmGetAndConsumePAR.expectations) > 0 {
+		mmGetAndConsumePAR.mock.t.Fatalf("Some expectations are already set for the Storage.GetAndConsumePAR method")
+	}
+
+	mmGetAndConsumePAR.mock.funcGetAndConsumePAR = f
+	mmGetAndConsumePAR.mock.funcGetAndConsumePAROrigin = minimock.CallerInfo(1)
+	return mmGetAndConsumePAR.mock
+}
+
+// When sets expectation for the Storage.GetAndConsumePAR which will trigger the result defined by the following
+// Then helper
+func (mmGetAndConsumePAR *mStorageMockGetAndConsumePAR) When(ctx context.Context, tenantID uuid.UUID, requestURI string) *StorageMockGetAndConsumePARExpectation {
+	if mmGetAndConsumePAR.mock.funcGetAndConsumePAR != nil {
+		mmGetAndConsumePAR.mock.t.Fatalf("StorageMock.GetAndConsumePAR mock is already set by Set")
+	}
+
+	expectation := &StorageMockGetAndConsumePARExpectation{
+		mock:               mmGetAndConsumePAR.mock,
+		params:             &StorageMockGetAndConsumePARParams{ctx, tenantID, requestURI},
+		expectationOrigins: StorageMockGetAndConsumePARExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetAndConsumePAR.expectations = append(mmGetAndConsumePAR.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.GetAndConsumePAR return parameters for the expectation previously defined by the When method
+func (e *StorageMockGetAndConsumePARExpectation) Then(pp1 *model.PushedAuthorizationRequest, err error) *StorageMock {
+	e.results = &StorageMockGetAndConsumePARResults{pp1, err}
+	return e.mock
+}
+
+// Times sets number of times Storage.GetAndConsumePAR should be invoked
+func (mmGetAndConsumePAR *mStorageMockGetAndConsumePAR) Times(n uint64) *mStorageMockGetAndConsumePAR {
+	if n == 0 {
+		mmGetAndConsumePAR.mock.t.Fatalf("Times of StorageMock.GetAndConsumePAR mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetAndConsumePAR.expectedInvocations, n)
+	mmGetAndConsumePAR.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetAndConsumePAR
+}
+
+func (mmGetAndConsumePAR *mStorageMockGetAndConsumePAR) invocationsDone() bool {
+	if len(mmGetAndConsumePAR.expectations) == 0 && mmGetAndConsumePAR.defaultExpectation == nil && mmGetAndConsumePAR.mock.funcGetAndConsumePAR == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetAndConsumePAR.mock.afterGetAndConsumePARCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetAndConsumePAR.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetAndConsumePAR implements mm_port.Storage
+func (mmGetAndConsumePAR *StorageMock) GetAndConsumePAR(ctx context.Context, tenantID uuid.UUID, requestURI string) (pp1 *model.PushedAuthorizationRequest, err error) {
+	mm_atomic.AddUint64(&mmGetAndConsumePAR.beforeGetAndConsumePARCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetAndConsumePAR.afterGetAndConsumePARCounter, 1)
+
+	mmGetAndConsumePAR.t.Helper()
+
+	if mmGetAndConsumePAR.inspectFuncGetAndConsumePAR != nil {
+		mmGetAndConsumePAR.inspectFuncGetAndConsumePAR(ctx, tenantID, requestURI)
+	}
+
+	mm_params := StorageMockGetAndConsumePARParams{ctx, tenantID, requestURI}
+
+	// Record call args
+	mmGetAndConsumePAR.GetAndConsumePARMock.mutex.Lock()
+	mmGetAndConsumePAR.GetAndConsumePARMock.callArgs = append(mmGetAndConsumePAR.GetAndConsumePARMock.callArgs, &mm_params)
+	mmGetAndConsumePAR.GetAndConsumePARMock.mutex.Unlock()
+
+	for _, e := range mmGetAndConsumePAR.GetAndConsumePARMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.pp1, e.results.err
+		}
+	}
+
+	if mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation.params
+		mm_want_ptrs := mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockGetAndConsumePARParams{ctx, tenantID, requestURI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetAndConsumePAR.t.Errorf("StorageMock.GetAndConsumePAR got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetAndConsumePAR.t.Errorf("StorageMock.GetAndConsumePAR got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.requestURI != nil && !minimock.Equal(*mm_want_ptrs.requestURI, mm_got.requestURI) {
+				mmGetAndConsumePAR.t.Errorf("StorageMock.GetAndConsumePAR got unexpected parameter requestURI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation.expectationOrigins.originRequestURI, *mm_want_ptrs.requestURI, mm_got.requestURI, minimock.Diff(*mm_want_ptrs.requestURI, mm_got.requestURI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetAndConsumePAR.t.Errorf("StorageMock.GetAndConsumePAR got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetAndConsumePAR.GetAndConsumePARMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetAndConsumePAR.t.Fatal("No results are set for the StorageMock.GetAndConsumePAR")
+		}
+		return (*mm_results).pp1, (*mm_results).err
+	}
+	if mmGetAndConsumePAR.funcGetAndConsumePAR != nil {
+		return mmGetAndConsumePAR.funcGetAndConsumePAR(ctx, tenantID, requestURI)
+	}
+	mmGetAndConsumePAR.t.Fatalf("Unexpected call to StorageMock.GetAndConsumePAR. %v %v %v", ctx, tenantID, requestURI)
+	return
+}
+
+// GetAndConsumePARAfterCounter returns a count of finished StorageMock.GetAndConsumePAR invocations
+func (mmGetAndConsumePAR *StorageMock) GetAndConsumePARAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetAndConsumePAR.afterGetAndConsumePARCounter)
+}
+
+// GetAndConsumePARBeforeCounter returns a count of StorageMock.GetAndConsumePAR invocations
+func (mmGetAndConsumePAR *StorageMock) GetAndConsumePARBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetAndConsumePAR.beforeGetAndConsumePARCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.GetAndConsumePAR.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetAndConsumePAR *mStorageMockGetAndConsumePAR) Calls() []*StorageMockGetAndConsumePARParams {
+	mmGetAndConsumePAR.mutex.RLock()
+
+	argCopy := make([]*StorageMockGetAndConsumePARParams, len(mmGetAndConsumePAR.callArgs))
+	copy(argCopy, mmGetAndConsumePAR.callArgs)
+
+	mmGetAndConsumePAR.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetAndConsumePARDone returns true if the count of the GetAndConsumePAR invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockGetAndConsumePARDone() bool {
+	if m.GetAndConsumePARMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetAndConsumePARMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetAndConsumePARMock.invocationsDone()
+}
+
+// MinimockGetAndConsumePARInspect logs each unmet expectation
+func (m *StorageMock) MinimockGetAndConsumePARInspect() {
+	for _, e := range m.GetAndConsumePARMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.GetAndConsumePAR at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetAndConsumePARCounter := mm_atomic.LoadUint64(&m.afterGetAndConsumePARCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetAndConsumePARMock.defaultExpectation != nil && afterGetAndConsumePARCounter < 1 {
+		if m.GetAndConsumePARMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.GetAndConsumePAR at\n%s", m.GetAndConsumePARMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.GetAndConsumePAR at\n%s with params: %#v", m.GetAndConsumePARMock.defaultExpectation.expectationOrigins.origin, *m.GetAndConsumePARMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetAndConsumePAR != nil && afterGetAndConsumePARCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.GetAndConsumePAR at\n%s", m.funcGetAndConsumePAROrigin)
+	}
+
+	if !m.GetAndConsumePARMock.invocationsDone() && afterGetAndConsumePARCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.GetAndConsumePAR at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetAndConsumePARMock.expectedInvocations), m.GetAndConsumePARMock.expectedInvocationsOrigin, afterGetAndConsumePARCounter)
 	}
 }
 
@@ -3908,6 +4322,349 @@ func (m *StorageMock) MinimockGetUserProfileByIdentifierInspect() {
 	if !m.GetUserProfileByIdentifierMock.invocationsDone() && afterGetUserProfileByIdentifierCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageMock.GetUserProfileByIdentifier at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.GetUserProfileByIdentifierMock.expectedInvocations), m.GetUserProfileByIdentifierMock.expectedInvocationsOrigin, afterGetUserProfileByIdentifierCounter)
+	}
+}
+
+type mStorageMockIsDPoPProofUsed struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockIsDPoPProofUsedExpectation
+	expectations       []*StorageMockIsDPoPProofUsedExpectation
+
+	callArgs []*StorageMockIsDPoPProofUsedParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockIsDPoPProofUsedExpectation specifies expectation struct of the Storage.IsDPoPProofUsed
+type StorageMockIsDPoPProofUsedExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockIsDPoPProofUsedParams
+	paramPtrs          *StorageMockIsDPoPProofUsedParamPtrs
+	expectationOrigins StorageMockIsDPoPProofUsedExpectationOrigins
+	results            *StorageMockIsDPoPProofUsedResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockIsDPoPProofUsedParams contains parameters of the Storage.IsDPoPProofUsed
+type StorageMockIsDPoPProofUsedParams struct {
+	ctx context.Context
+	jti string
+}
+
+// StorageMockIsDPoPProofUsedParamPtrs contains pointers to parameters of the Storage.IsDPoPProofUsed
+type StorageMockIsDPoPProofUsedParamPtrs struct {
+	ctx *context.Context
+	jti *string
+}
+
+// StorageMockIsDPoPProofUsedResults contains results of the Storage.IsDPoPProofUsed
+type StorageMockIsDPoPProofUsedResults struct {
+	b1  bool
+	err error
+}
+
+// StorageMockIsDPoPProofUsedOrigins contains origins of expectations of the Storage.IsDPoPProofUsed
+type StorageMockIsDPoPProofUsedExpectationOrigins struct {
+	origin    string
+	originCtx string
+	originJti string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmIsDPoPProofUsed *mStorageMockIsDPoPProofUsed) Optional() *mStorageMockIsDPoPProofUsed {
+	mmIsDPoPProofUsed.optional = true
+	return mmIsDPoPProofUsed
+}
+
+// Expect sets up expected params for Storage.IsDPoPProofUsed
+func (mmIsDPoPProofUsed *mStorageMockIsDPoPProofUsed) Expect(ctx context.Context, jti string) *mStorageMockIsDPoPProofUsed {
+	if mmIsDPoPProofUsed.mock.funcIsDPoPProofUsed != nil {
+		mmIsDPoPProofUsed.mock.t.Fatalf("StorageMock.IsDPoPProofUsed mock is already set by Set")
+	}
+
+	if mmIsDPoPProofUsed.defaultExpectation == nil {
+		mmIsDPoPProofUsed.defaultExpectation = &StorageMockIsDPoPProofUsedExpectation{}
+	}
+
+	if mmIsDPoPProofUsed.defaultExpectation.paramPtrs != nil {
+		mmIsDPoPProofUsed.mock.t.Fatalf("StorageMock.IsDPoPProofUsed mock is already set by ExpectParams functions")
+	}
+
+	mmIsDPoPProofUsed.defaultExpectation.params = &StorageMockIsDPoPProofUsedParams{ctx, jti}
+	mmIsDPoPProofUsed.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmIsDPoPProofUsed.expectations {
+		if minimock.Equal(e.params, mmIsDPoPProofUsed.defaultExpectation.params) {
+			mmIsDPoPProofUsed.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmIsDPoPProofUsed.defaultExpectation.params)
+		}
+	}
+
+	return mmIsDPoPProofUsed
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.IsDPoPProofUsed
+func (mmIsDPoPProofUsed *mStorageMockIsDPoPProofUsed) ExpectCtxParam1(ctx context.Context) *mStorageMockIsDPoPProofUsed {
+	if mmIsDPoPProofUsed.mock.funcIsDPoPProofUsed != nil {
+		mmIsDPoPProofUsed.mock.t.Fatalf("StorageMock.IsDPoPProofUsed mock is already set by Set")
+	}
+
+	if mmIsDPoPProofUsed.defaultExpectation == nil {
+		mmIsDPoPProofUsed.defaultExpectation = &StorageMockIsDPoPProofUsedExpectation{}
+	}
+
+	if mmIsDPoPProofUsed.defaultExpectation.params != nil {
+		mmIsDPoPProofUsed.mock.t.Fatalf("StorageMock.IsDPoPProofUsed mock is already set by Expect")
+	}
+
+	if mmIsDPoPProofUsed.defaultExpectation.paramPtrs == nil {
+		mmIsDPoPProofUsed.defaultExpectation.paramPtrs = &StorageMockIsDPoPProofUsedParamPtrs{}
+	}
+	mmIsDPoPProofUsed.defaultExpectation.paramPtrs.ctx = &ctx
+	mmIsDPoPProofUsed.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmIsDPoPProofUsed
+}
+
+// ExpectJtiParam2 sets up expected param jti for Storage.IsDPoPProofUsed
+func (mmIsDPoPProofUsed *mStorageMockIsDPoPProofUsed) ExpectJtiParam2(jti string) *mStorageMockIsDPoPProofUsed {
+	if mmIsDPoPProofUsed.mock.funcIsDPoPProofUsed != nil {
+		mmIsDPoPProofUsed.mock.t.Fatalf("StorageMock.IsDPoPProofUsed mock is already set by Set")
+	}
+
+	if mmIsDPoPProofUsed.defaultExpectation == nil {
+		mmIsDPoPProofUsed.defaultExpectation = &StorageMockIsDPoPProofUsedExpectation{}
+	}
+
+	if mmIsDPoPProofUsed.defaultExpectation.params != nil {
+		mmIsDPoPProofUsed.mock.t.Fatalf("StorageMock.IsDPoPProofUsed mock is already set by Expect")
+	}
+
+	if mmIsDPoPProofUsed.defaultExpectation.paramPtrs == nil {
+		mmIsDPoPProofUsed.defaultExpectation.paramPtrs = &StorageMockIsDPoPProofUsedParamPtrs{}
+	}
+	mmIsDPoPProofUsed.defaultExpectation.paramPtrs.jti = &jti
+	mmIsDPoPProofUsed.defaultExpectation.expectationOrigins.originJti = minimock.CallerInfo(1)
+
+	return mmIsDPoPProofUsed
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.IsDPoPProofUsed
+func (mmIsDPoPProofUsed *mStorageMockIsDPoPProofUsed) Inspect(f func(ctx context.Context, jti string)) *mStorageMockIsDPoPProofUsed {
+	if mmIsDPoPProofUsed.mock.inspectFuncIsDPoPProofUsed != nil {
+		mmIsDPoPProofUsed.mock.t.Fatalf("Inspect function is already set for StorageMock.IsDPoPProofUsed")
+	}
+
+	mmIsDPoPProofUsed.mock.inspectFuncIsDPoPProofUsed = f
+
+	return mmIsDPoPProofUsed
+}
+
+// Return sets up results that will be returned by Storage.IsDPoPProofUsed
+func (mmIsDPoPProofUsed *mStorageMockIsDPoPProofUsed) Return(b1 bool, err error) *StorageMock {
+	if mmIsDPoPProofUsed.mock.funcIsDPoPProofUsed != nil {
+		mmIsDPoPProofUsed.mock.t.Fatalf("StorageMock.IsDPoPProofUsed mock is already set by Set")
+	}
+
+	if mmIsDPoPProofUsed.defaultExpectation == nil {
+		mmIsDPoPProofUsed.defaultExpectation = &StorageMockIsDPoPProofUsedExpectation{mock: mmIsDPoPProofUsed.mock}
+	}
+	mmIsDPoPProofUsed.defaultExpectation.results = &StorageMockIsDPoPProofUsedResults{b1, err}
+	mmIsDPoPProofUsed.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmIsDPoPProofUsed.mock
+}
+
+// Set uses given function f to mock the Storage.IsDPoPProofUsed method
+func (mmIsDPoPProofUsed *mStorageMockIsDPoPProofUsed) Set(f func(ctx context.Context, jti string) (b1 bool, err error)) *StorageMock {
+	if mmIsDPoPProofUsed.defaultExpectation != nil {
+		mmIsDPoPProofUsed.mock.t.Fatalf("Default expectation is already set for the Storage.IsDPoPProofUsed method")
+	}
+
+	if len(mmIsDPoPProofUsed.expectations) > 0 {
+		mmIsDPoPProofUsed.mock.t.Fatalf("Some expectations are already set for the Storage.IsDPoPProofUsed method")
+	}
+
+	mmIsDPoPProofUsed.mock.funcIsDPoPProofUsed = f
+	mmIsDPoPProofUsed.mock.funcIsDPoPProofUsedOrigin = minimock.CallerInfo(1)
+	return mmIsDPoPProofUsed.mock
+}
+
+// When sets expectation for the Storage.IsDPoPProofUsed which will trigger the result defined by the following
+// Then helper
+func (mmIsDPoPProofUsed *mStorageMockIsDPoPProofUsed) When(ctx context.Context, jti string) *StorageMockIsDPoPProofUsedExpectation {
+	if mmIsDPoPProofUsed.mock.funcIsDPoPProofUsed != nil {
+		mmIsDPoPProofUsed.mock.t.Fatalf("StorageMock.IsDPoPProofUsed mock is already set by Set")
+	}
+
+	expectation := &StorageMockIsDPoPProofUsedExpectation{
+		mock:               mmIsDPoPProofUsed.mock,
+		params:             &StorageMockIsDPoPProofUsedParams{ctx, jti},
+		expectationOrigins: StorageMockIsDPoPProofUsedExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmIsDPoPProofUsed.expectations = append(mmIsDPoPProofUsed.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.IsDPoPProofUsed return parameters for the expectation previously defined by the When method
+func (e *StorageMockIsDPoPProofUsedExpectation) Then(b1 bool, err error) *StorageMock {
+	e.results = &StorageMockIsDPoPProofUsedResults{b1, err}
+	return e.mock
+}
+
+// Times sets number of times Storage.IsDPoPProofUsed should be invoked
+func (mmIsDPoPProofUsed *mStorageMockIsDPoPProofUsed) Times(n uint64) *mStorageMockIsDPoPProofUsed {
+	if n == 0 {
+		mmIsDPoPProofUsed.mock.t.Fatalf("Times of StorageMock.IsDPoPProofUsed mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmIsDPoPProofUsed.expectedInvocations, n)
+	mmIsDPoPProofUsed.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmIsDPoPProofUsed
+}
+
+func (mmIsDPoPProofUsed *mStorageMockIsDPoPProofUsed) invocationsDone() bool {
+	if len(mmIsDPoPProofUsed.expectations) == 0 && mmIsDPoPProofUsed.defaultExpectation == nil && mmIsDPoPProofUsed.mock.funcIsDPoPProofUsed == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmIsDPoPProofUsed.mock.afterIsDPoPProofUsedCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmIsDPoPProofUsed.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// IsDPoPProofUsed implements mm_port.Storage
+func (mmIsDPoPProofUsed *StorageMock) IsDPoPProofUsed(ctx context.Context, jti string) (b1 bool, err error) {
+	mm_atomic.AddUint64(&mmIsDPoPProofUsed.beforeIsDPoPProofUsedCounter, 1)
+	defer mm_atomic.AddUint64(&mmIsDPoPProofUsed.afterIsDPoPProofUsedCounter, 1)
+
+	mmIsDPoPProofUsed.t.Helper()
+
+	if mmIsDPoPProofUsed.inspectFuncIsDPoPProofUsed != nil {
+		mmIsDPoPProofUsed.inspectFuncIsDPoPProofUsed(ctx, jti)
+	}
+
+	mm_params := StorageMockIsDPoPProofUsedParams{ctx, jti}
+
+	// Record call args
+	mmIsDPoPProofUsed.IsDPoPProofUsedMock.mutex.Lock()
+	mmIsDPoPProofUsed.IsDPoPProofUsedMock.callArgs = append(mmIsDPoPProofUsed.IsDPoPProofUsedMock.callArgs, &mm_params)
+	mmIsDPoPProofUsed.IsDPoPProofUsedMock.mutex.Unlock()
+
+	for _, e := range mmIsDPoPProofUsed.IsDPoPProofUsedMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.b1, e.results.err
+		}
+	}
+
+	if mmIsDPoPProofUsed.IsDPoPProofUsedMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmIsDPoPProofUsed.IsDPoPProofUsedMock.defaultExpectation.Counter, 1)
+		mm_want := mmIsDPoPProofUsed.IsDPoPProofUsedMock.defaultExpectation.params
+		mm_want_ptrs := mmIsDPoPProofUsed.IsDPoPProofUsedMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockIsDPoPProofUsedParams{ctx, jti}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmIsDPoPProofUsed.t.Errorf("StorageMock.IsDPoPProofUsed got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmIsDPoPProofUsed.IsDPoPProofUsedMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.jti != nil && !minimock.Equal(*mm_want_ptrs.jti, mm_got.jti) {
+				mmIsDPoPProofUsed.t.Errorf("StorageMock.IsDPoPProofUsed got unexpected parameter jti, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmIsDPoPProofUsed.IsDPoPProofUsedMock.defaultExpectation.expectationOrigins.originJti, *mm_want_ptrs.jti, mm_got.jti, minimock.Diff(*mm_want_ptrs.jti, mm_got.jti))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmIsDPoPProofUsed.t.Errorf("StorageMock.IsDPoPProofUsed got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmIsDPoPProofUsed.IsDPoPProofUsedMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmIsDPoPProofUsed.IsDPoPProofUsedMock.defaultExpectation.results
+		if mm_results == nil {
+			mmIsDPoPProofUsed.t.Fatal("No results are set for the StorageMock.IsDPoPProofUsed")
+		}
+		return (*mm_results).b1, (*mm_results).err
+	}
+	if mmIsDPoPProofUsed.funcIsDPoPProofUsed != nil {
+		return mmIsDPoPProofUsed.funcIsDPoPProofUsed(ctx, jti)
+	}
+	mmIsDPoPProofUsed.t.Fatalf("Unexpected call to StorageMock.IsDPoPProofUsed. %v %v", ctx, jti)
+	return
+}
+
+// IsDPoPProofUsedAfterCounter returns a count of finished StorageMock.IsDPoPProofUsed invocations
+func (mmIsDPoPProofUsed *StorageMock) IsDPoPProofUsedAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmIsDPoPProofUsed.afterIsDPoPProofUsedCounter)
+}
+
+// IsDPoPProofUsedBeforeCounter returns a count of StorageMock.IsDPoPProofUsed invocations
+func (mmIsDPoPProofUsed *StorageMock) IsDPoPProofUsedBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmIsDPoPProofUsed.beforeIsDPoPProofUsedCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.IsDPoPProofUsed.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmIsDPoPProofUsed *mStorageMockIsDPoPProofUsed) Calls() []*StorageMockIsDPoPProofUsedParams {
+	mmIsDPoPProofUsed.mutex.RLock()
+
+	argCopy := make([]*StorageMockIsDPoPProofUsedParams, len(mmIsDPoPProofUsed.callArgs))
+	copy(argCopy, mmIsDPoPProofUsed.callArgs)
+
+	mmIsDPoPProofUsed.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockIsDPoPProofUsedDone returns true if the count of the IsDPoPProofUsed invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockIsDPoPProofUsedDone() bool {
+	if m.IsDPoPProofUsedMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.IsDPoPProofUsedMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.IsDPoPProofUsedMock.invocationsDone()
+}
+
+// MinimockIsDPoPProofUsedInspect logs each unmet expectation
+func (m *StorageMock) MinimockIsDPoPProofUsedInspect() {
+	for _, e := range m.IsDPoPProofUsedMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.IsDPoPProofUsed at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterIsDPoPProofUsedCounter := mm_atomic.LoadUint64(&m.afterIsDPoPProofUsedCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.IsDPoPProofUsedMock.defaultExpectation != nil && afterIsDPoPProofUsedCounter < 1 {
+		if m.IsDPoPProofUsedMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.IsDPoPProofUsed at\n%s", m.IsDPoPProofUsedMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.IsDPoPProofUsed at\n%s with params: %#v", m.IsDPoPProofUsedMock.defaultExpectation.expectationOrigins.origin, *m.IsDPoPProofUsedMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcIsDPoPProofUsed != nil && afterIsDPoPProofUsedCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.IsDPoPProofUsed at\n%s", m.funcIsDPoPProofUsedOrigin)
+	}
+
+	if !m.IsDPoPProofUsedMock.invocationsDone() && afterIsDPoPProofUsedCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.IsDPoPProofUsed at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.IsDPoPProofUsedMock.expectedInvocations), m.IsDPoPProofUsedMock.expectedInvocationsOrigin, afterIsDPoPProofUsedCounter)
 	}
 }
 
@@ -6712,6 +7469,379 @@ func (m *StorageMock) MinimockSaveClientInspect() {
 	}
 }
 
+type mStorageMockSaveDPoPProof struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockSaveDPoPProofExpectation
+	expectations       []*StorageMockSaveDPoPProofExpectation
+
+	callArgs []*StorageMockSaveDPoPProofParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockSaveDPoPProofExpectation specifies expectation struct of the Storage.SaveDPoPProof
+type StorageMockSaveDPoPProofExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockSaveDPoPProofParams
+	paramPtrs          *StorageMockSaveDPoPProofParamPtrs
+	expectationOrigins StorageMockSaveDPoPProofExpectationOrigins
+	results            *StorageMockSaveDPoPProofResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockSaveDPoPProofParams contains parameters of the Storage.SaveDPoPProof
+type StorageMockSaveDPoPProofParams struct {
+	ctx       context.Context
+	jti       string
+	expiresAt time.Time
+}
+
+// StorageMockSaveDPoPProofParamPtrs contains pointers to parameters of the Storage.SaveDPoPProof
+type StorageMockSaveDPoPProofParamPtrs struct {
+	ctx       *context.Context
+	jti       *string
+	expiresAt *time.Time
+}
+
+// StorageMockSaveDPoPProofResults contains results of the Storage.SaveDPoPProof
+type StorageMockSaveDPoPProofResults struct {
+	err error
+}
+
+// StorageMockSaveDPoPProofOrigins contains origins of expectations of the Storage.SaveDPoPProof
+type StorageMockSaveDPoPProofExpectationOrigins struct {
+	origin          string
+	originCtx       string
+	originJti       string
+	originExpiresAt string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmSaveDPoPProof *mStorageMockSaveDPoPProof) Optional() *mStorageMockSaveDPoPProof {
+	mmSaveDPoPProof.optional = true
+	return mmSaveDPoPProof
+}
+
+// Expect sets up expected params for Storage.SaveDPoPProof
+func (mmSaveDPoPProof *mStorageMockSaveDPoPProof) Expect(ctx context.Context, jti string, expiresAt time.Time) *mStorageMockSaveDPoPProof {
+	if mmSaveDPoPProof.mock.funcSaveDPoPProof != nil {
+		mmSaveDPoPProof.mock.t.Fatalf("StorageMock.SaveDPoPProof mock is already set by Set")
+	}
+
+	if mmSaveDPoPProof.defaultExpectation == nil {
+		mmSaveDPoPProof.defaultExpectation = &StorageMockSaveDPoPProofExpectation{}
+	}
+
+	if mmSaveDPoPProof.defaultExpectation.paramPtrs != nil {
+		mmSaveDPoPProof.mock.t.Fatalf("StorageMock.SaveDPoPProof mock is already set by ExpectParams functions")
+	}
+
+	mmSaveDPoPProof.defaultExpectation.params = &StorageMockSaveDPoPProofParams{ctx, jti, expiresAt}
+	mmSaveDPoPProof.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmSaveDPoPProof.expectations {
+		if minimock.Equal(e.params, mmSaveDPoPProof.defaultExpectation.params) {
+			mmSaveDPoPProof.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmSaveDPoPProof.defaultExpectation.params)
+		}
+	}
+
+	return mmSaveDPoPProof
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.SaveDPoPProof
+func (mmSaveDPoPProof *mStorageMockSaveDPoPProof) ExpectCtxParam1(ctx context.Context) *mStorageMockSaveDPoPProof {
+	if mmSaveDPoPProof.mock.funcSaveDPoPProof != nil {
+		mmSaveDPoPProof.mock.t.Fatalf("StorageMock.SaveDPoPProof mock is already set by Set")
+	}
+
+	if mmSaveDPoPProof.defaultExpectation == nil {
+		mmSaveDPoPProof.defaultExpectation = &StorageMockSaveDPoPProofExpectation{}
+	}
+
+	if mmSaveDPoPProof.defaultExpectation.params != nil {
+		mmSaveDPoPProof.mock.t.Fatalf("StorageMock.SaveDPoPProof mock is already set by Expect")
+	}
+
+	if mmSaveDPoPProof.defaultExpectation.paramPtrs == nil {
+		mmSaveDPoPProof.defaultExpectation.paramPtrs = &StorageMockSaveDPoPProofParamPtrs{}
+	}
+	mmSaveDPoPProof.defaultExpectation.paramPtrs.ctx = &ctx
+	mmSaveDPoPProof.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmSaveDPoPProof
+}
+
+// ExpectJtiParam2 sets up expected param jti for Storage.SaveDPoPProof
+func (mmSaveDPoPProof *mStorageMockSaveDPoPProof) ExpectJtiParam2(jti string) *mStorageMockSaveDPoPProof {
+	if mmSaveDPoPProof.mock.funcSaveDPoPProof != nil {
+		mmSaveDPoPProof.mock.t.Fatalf("StorageMock.SaveDPoPProof mock is already set by Set")
+	}
+
+	if mmSaveDPoPProof.defaultExpectation == nil {
+		mmSaveDPoPProof.defaultExpectation = &StorageMockSaveDPoPProofExpectation{}
+	}
+
+	if mmSaveDPoPProof.defaultExpectation.params != nil {
+		mmSaveDPoPProof.mock.t.Fatalf("StorageMock.SaveDPoPProof mock is already set by Expect")
+	}
+
+	if mmSaveDPoPProof.defaultExpectation.paramPtrs == nil {
+		mmSaveDPoPProof.defaultExpectation.paramPtrs = &StorageMockSaveDPoPProofParamPtrs{}
+	}
+	mmSaveDPoPProof.defaultExpectation.paramPtrs.jti = &jti
+	mmSaveDPoPProof.defaultExpectation.expectationOrigins.originJti = minimock.CallerInfo(1)
+
+	return mmSaveDPoPProof
+}
+
+// ExpectExpiresAtParam3 sets up expected param expiresAt for Storage.SaveDPoPProof
+func (mmSaveDPoPProof *mStorageMockSaveDPoPProof) ExpectExpiresAtParam3(expiresAt time.Time) *mStorageMockSaveDPoPProof {
+	if mmSaveDPoPProof.mock.funcSaveDPoPProof != nil {
+		mmSaveDPoPProof.mock.t.Fatalf("StorageMock.SaveDPoPProof mock is already set by Set")
+	}
+
+	if mmSaveDPoPProof.defaultExpectation == nil {
+		mmSaveDPoPProof.defaultExpectation = &StorageMockSaveDPoPProofExpectation{}
+	}
+
+	if mmSaveDPoPProof.defaultExpectation.params != nil {
+		mmSaveDPoPProof.mock.t.Fatalf("StorageMock.SaveDPoPProof mock is already set by Expect")
+	}
+
+	if mmSaveDPoPProof.defaultExpectation.paramPtrs == nil {
+		mmSaveDPoPProof.defaultExpectation.paramPtrs = &StorageMockSaveDPoPProofParamPtrs{}
+	}
+	mmSaveDPoPProof.defaultExpectation.paramPtrs.expiresAt = &expiresAt
+	mmSaveDPoPProof.defaultExpectation.expectationOrigins.originExpiresAt = minimock.CallerInfo(1)
+
+	return mmSaveDPoPProof
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.SaveDPoPProof
+func (mmSaveDPoPProof *mStorageMockSaveDPoPProof) Inspect(f func(ctx context.Context, jti string, expiresAt time.Time)) *mStorageMockSaveDPoPProof {
+	if mmSaveDPoPProof.mock.inspectFuncSaveDPoPProof != nil {
+		mmSaveDPoPProof.mock.t.Fatalf("Inspect function is already set for StorageMock.SaveDPoPProof")
+	}
+
+	mmSaveDPoPProof.mock.inspectFuncSaveDPoPProof = f
+
+	return mmSaveDPoPProof
+}
+
+// Return sets up results that will be returned by Storage.SaveDPoPProof
+func (mmSaveDPoPProof *mStorageMockSaveDPoPProof) Return(err error) *StorageMock {
+	if mmSaveDPoPProof.mock.funcSaveDPoPProof != nil {
+		mmSaveDPoPProof.mock.t.Fatalf("StorageMock.SaveDPoPProof mock is already set by Set")
+	}
+
+	if mmSaveDPoPProof.defaultExpectation == nil {
+		mmSaveDPoPProof.defaultExpectation = &StorageMockSaveDPoPProofExpectation{mock: mmSaveDPoPProof.mock}
+	}
+	mmSaveDPoPProof.defaultExpectation.results = &StorageMockSaveDPoPProofResults{err}
+	mmSaveDPoPProof.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmSaveDPoPProof.mock
+}
+
+// Set uses given function f to mock the Storage.SaveDPoPProof method
+func (mmSaveDPoPProof *mStorageMockSaveDPoPProof) Set(f func(ctx context.Context, jti string, expiresAt time.Time) (err error)) *StorageMock {
+	if mmSaveDPoPProof.defaultExpectation != nil {
+		mmSaveDPoPProof.mock.t.Fatalf("Default expectation is already set for the Storage.SaveDPoPProof method")
+	}
+
+	if len(mmSaveDPoPProof.expectations) > 0 {
+		mmSaveDPoPProof.mock.t.Fatalf("Some expectations are already set for the Storage.SaveDPoPProof method")
+	}
+
+	mmSaveDPoPProof.mock.funcSaveDPoPProof = f
+	mmSaveDPoPProof.mock.funcSaveDPoPProofOrigin = minimock.CallerInfo(1)
+	return mmSaveDPoPProof.mock
+}
+
+// When sets expectation for the Storage.SaveDPoPProof which will trigger the result defined by the following
+// Then helper
+func (mmSaveDPoPProof *mStorageMockSaveDPoPProof) When(ctx context.Context, jti string, expiresAt time.Time) *StorageMockSaveDPoPProofExpectation {
+	if mmSaveDPoPProof.mock.funcSaveDPoPProof != nil {
+		mmSaveDPoPProof.mock.t.Fatalf("StorageMock.SaveDPoPProof mock is already set by Set")
+	}
+
+	expectation := &StorageMockSaveDPoPProofExpectation{
+		mock:               mmSaveDPoPProof.mock,
+		params:             &StorageMockSaveDPoPProofParams{ctx, jti, expiresAt},
+		expectationOrigins: StorageMockSaveDPoPProofExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmSaveDPoPProof.expectations = append(mmSaveDPoPProof.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.SaveDPoPProof return parameters for the expectation previously defined by the When method
+func (e *StorageMockSaveDPoPProofExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockSaveDPoPProofResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.SaveDPoPProof should be invoked
+func (mmSaveDPoPProof *mStorageMockSaveDPoPProof) Times(n uint64) *mStorageMockSaveDPoPProof {
+	if n == 0 {
+		mmSaveDPoPProof.mock.t.Fatalf("Times of StorageMock.SaveDPoPProof mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmSaveDPoPProof.expectedInvocations, n)
+	mmSaveDPoPProof.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmSaveDPoPProof
+}
+
+func (mmSaveDPoPProof *mStorageMockSaveDPoPProof) invocationsDone() bool {
+	if len(mmSaveDPoPProof.expectations) == 0 && mmSaveDPoPProof.defaultExpectation == nil && mmSaveDPoPProof.mock.funcSaveDPoPProof == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmSaveDPoPProof.mock.afterSaveDPoPProofCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmSaveDPoPProof.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// SaveDPoPProof implements mm_port.Storage
+func (mmSaveDPoPProof *StorageMock) SaveDPoPProof(ctx context.Context, jti string, expiresAt time.Time) (err error) {
+	mm_atomic.AddUint64(&mmSaveDPoPProof.beforeSaveDPoPProofCounter, 1)
+	defer mm_atomic.AddUint64(&mmSaveDPoPProof.afterSaveDPoPProofCounter, 1)
+
+	mmSaveDPoPProof.t.Helper()
+
+	if mmSaveDPoPProof.inspectFuncSaveDPoPProof != nil {
+		mmSaveDPoPProof.inspectFuncSaveDPoPProof(ctx, jti, expiresAt)
+	}
+
+	mm_params := StorageMockSaveDPoPProofParams{ctx, jti, expiresAt}
+
+	// Record call args
+	mmSaveDPoPProof.SaveDPoPProofMock.mutex.Lock()
+	mmSaveDPoPProof.SaveDPoPProofMock.callArgs = append(mmSaveDPoPProof.SaveDPoPProofMock.callArgs, &mm_params)
+	mmSaveDPoPProof.SaveDPoPProofMock.mutex.Unlock()
+
+	for _, e := range mmSaveDPoPProof.SaveDPoPProofMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmSaveDPoPProof.SaveDPoPProofMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmSaveDPoPProof.SaveDPoPProofMock.defaultExpectation.Counter, 1)
+		mm_want := mmSaveDPoPProof.SaveDPoPProofMock.defaultExpectation.params
+		mm_want_ptrs := mmSaveDPoPProof.SaveDPoPProofMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockSaveDPoPProofParams{ctx, jti, expiresAt}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmSaveDPoPProof.t.Errorf("StorageMock.SaveDPoPProof got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSaveDPoPProof.SaveDPoPProofMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.jti != nil && !minimock.Equal(*mm_want_ptrs.jti, mm_got.jti) {
+				mmSaveDPoPProof.t.Errorf("StorageMock.SaveDPoPProof got unexpected parameter jti, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSaveDPoPProof.SaveDPoPProofMock.defaultExpectation.expectationOrigins.originJti, *mm_want_ptrs.jti, mm_got.jti, minimock.Diff(*mm_want_ptrs.jti, mm_got.jti))
+			}
+
+			if mm_want_ptrs.expiresAt != nil && !minimock.Equal(*mm_want_ptrs.expiresAt, mm_got.expiresAt) {
+				mmSaveDPoPProof.t.Errorf("StorageMock.SaveDPoPProof got unexpected parameter expiresAt, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSaveDPoPProof.SaveDPoPProofMock.defaultExpectation.expectationOrigins.originExpiresAt, *mm_want_ptrs.expiresAt, mm_got.expiresAt, minimock.Diff(*mm_want_ptrs.expiresAt, mm_got.expiresAt))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmSaveDPoPProof.t.Errorf("StorageMock.SaveDPoPProof got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmSaveDPoPProof.SaveDPoPProofMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmSaveDPoPProof.SaveDPoPProofMock.defaultExpectation.results
+		if mm_results == nil {
+			mmSaveDPoPProof.t.Fatal("No results are set for the StorageMock.SaveDPoPProof")
+		}
+		return (*mm_results).err
+	}
+	if mmSaveDPoPProof.funcSaveDPoPProof != nil {
+		return mmSaveDPoPProof.funcSaveDPoPProof(ctx, jti, expiresAt)
+	}
+	mmSaveDPoPProof.t.Fatalf("Unexpected call to StorageMock.SaveDPoPProof. %v %v %v", ctx, jti, expiresAt)
+	return
+}
+
+// SaveDPoPProofAfterCounter returns a count of finished StorageMock.SaveDPoPProof invocations
+func (mmSaveDPoPProof *StorageMock) SaveDPoPProofAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSaveDPoPProof.afterSaveDPoPProofCounter)
+}
+
+// SaveDPoPProofBeforeCounter returns a count of StorageMock.SaveDPoPProof invocations
+func (mmSaveDPoPProof *StorageMock) SaveDPoPProofBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSaveDPoPProof.beforeSaveDPoPProofCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.SaveDPoPProof.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmSaveDPoPProof *mStorageMockSaveDPoPProof) Calls() []*StorageMockSaveDPoPProofParams {
+	mmSaveDPoPProof.mutex.RLock()
+
+	argCopy := make([]*StorageMockSaveDPoPProofParams, len(mmSaveDPoPProof.callArgs))
+	copy(argCopy, mmSaveDPoPProof.callArgs)
+
+	mmSaveDPoPProof.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockSaveDPoPProofDone returns true if the count of the SaveDPoPProof invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockSaveDPoPProofDone() bool {
+	if m.SaveDPoPProofMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.SaveDPoPProofMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.SaveDPoPProofMock.invocationsDone()
+}
+
+// MinimockSaveDPoPProofInspect logs each unmet expectation
+func (m *StorageMock) MinimockSaveDPoPProofInspect() {
+	for _, e := range m.SaveDPoPProofMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.SaveDPoPProof at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterSaveDPoPProofCounter := mm_atomic.LoadUint64(&m.afterSaveDPoPProofCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.SaveDPoPProofMock.defaultExpectation != nil && afterSaveDPoPProofCounter < 1 {
+		if m.SaveDPoPProofMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.SaveDPoPProof at\n%s", m.SaveDPoPProofMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.SaveDPoPProof at\n%s with params: %#v", m.SaveDPoPProofMock.defaultExpectation.expectationOrigins.origin, *m.SaveDPoPProofMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcSaveDPoPProof != nil && afterSaveDPoPProofCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.SaveDPoPProof at\n%s", m.funcSaveDPoPProofOrigin)
+	}
+
+	if !m.SaveDPoPProofMock.invocationsDone() && afterSaveDPoPProofCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.SaveDPoPProof at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.SaveDPoPProofMock.expectedInvocations), m.SaveDPoPProofMock.expectedInvocationsOrigin, afterSaveDPoPProofCounter)
+	}
+}
+
 type mStorageMockSaveInteractionSession struct {
 	optional           bool
 	mock               *StorageMock
@@ -7051,6 +8181,348 @@ func (m *StorageMock) MinimockSaveInteractionSessionInspect() {
 	if !m.SaveInteractionSessionMock.invocationsDone() && afterSaveInteractionSessionCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageMock.SaveInteractionSession at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.SaveInteractionSessionMock.expectedInvocations), m.SaveInteractionSessionMock.expectedInvocationsOrigin, afterSaveInteractionSessionCounter)
+	}
+}
+
+type mStorageMockSavePAR struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockSavePARExpectation
+	expectations       []*StorageMockSavePARExpectation
+
+	callArgs []*StorageMockSavePARParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockSavePARExpectation specifies expectation struct of the Storage.SavePAR
+type StorageMockSavePARExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockSavePARParams
+	paramPtrs          *StorageMockSavePARParamPtrs
+	expectationOrigins StorageMockSavePARExpectationOrigins
+	results            *StorageMockSavePARResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockSavePARParams contains parameters of the Storage.SavePAR
+type StorageMockSavePARParams struct {
+	ctx context.Context
+	req model.PushedAuthorizationRequest
+}
+
+// StorageMockSavePARParamPtrs contains pointers to parameters of the Storage.SavePAR
+type StorageMockSavePARParamPtrs struct {
+	ctx *context.Context
+	req *model.PushedAuthorizationRequest
+}
+
+// StorageMockSavePARResults contains results of the Storage.SavePAR
+type StorageMockSavePARResults struct {
+	err error
+}
+
+// StorageMockSavePAROrigins contains origins of expectations of the Storage.SavePAR
+type StorageMockSavePARExpectationOrigins struct {
+	origin    string
+	originCtx string
+	originReq string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmSavePAR *mStorageMockSavePAR) Optional() *mStorageMockSavePAR {
+	mmSavePAR.optional = true
+	return mmSavePAR
+}
+
+// Expect sets up expected params for Storage.SavePAR
+func (mmSavePAR *mStorageMockSavePAR) Expect(ctx context.Context, req model.PushedAuthorizationRequest) *mStorageMockSavePAR {
+	if mmSavePAR.mock.funcSavePAR != nil {
+		mmSavePAR.mock.t.Fatalf("StorageMock.SavePAR mock is already set by Set")
+	}
+
+	if mmSavePAR.defaultExpectation == nil {
+		mmSavePAR.defaultExpectation = &StorageMockSavePARExpectation{}
+	}
+
+	if mmSavePAR.defaultExpectation.paramPtrs != nil {
+		mmSavePAR.mock.t.Fatalf("StorageMock.SavePAR mock is already set by ExpectParams functions")
+	}
+
+	mmSavePAR.defaultExpectation.params = &StorageMockSavePARParams{ctx, req}
+	mmSavePAR.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmSavePAR.expectations {
+		if minimock.Equal(e.params, mmSavePAR.defaultExpectation.params) {
+			mmSavePAR.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmSavePAR.defaultExpectation.params)
+		}
+	}
+
+	return mmSavePAR
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.SavePAR
+func (mmSavePAR *mStorageMockSavePAR) ExpectCtxParam1(ctx context.Context) *mStorageMockSavePAR {
+	if mmSavePAR.mock.funcSavePAR != nil {
+		mmSavePAR.mock.t.Fatalf("StorageMock.SavePAR mock is already set by Set")
+	}
+
+	if mmSavePAR.defaultExpectation == nil {
+		mmSavePAR.defaultExpectation = &StorageMockSavePARExpectation{}
+	}
+
+	if mmSavePAR.defaultExpectation.params != nil {
+		mmSavePAR.mock.t.Fatalf("StorageMock.SavePAR mock is already set by Expect")
+	}
+
+	if mmSavePAR.defaultExpectation.paramPtrs == nil {
+		mmSavePAR.defaultExpectation.paramPtrs = &StorageMockSavePARParamPtrs{}
+	}
+	mmSavePAR.defaultExpectation.paramPtrs.ctx = &ctx
+	mmSavePAR.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmSavePAR
+}
+
+// ExpectReqParam2 sets up expected param req for Storage.SavePAR
+func (mmSavePAR *mStorageMockSavePAR) ExpectReqParam2(req model.PushedAuthorizationRequest) *mStorageMockSavePAR {
+	if mmSavePAR.mock.funcSavePAR != nil {
+		mmSavePAR.mock.t.Fatalf("StorageMock.SavePAR mock is already set by Set")
+	}
+
+	if mmSavePAR.defaultExpectation == nil {
+		mmSavePAR.defaultExpectation = &StorageMockSavePARExpectation{}
+	}
+
+	if mmSavePAR.defaultExpectation.params != nil {
+		mmSavePAR.mock.t.Fatalf("StorageMock.SavePAR mock is already set by Expect")
+	}
+
+	if mmSavePAR.defaultExpectation.paramPtrs == nil {
+		mmSavePAR.defaultExpectation.paramPtrs = &StorageMockSavePARParamPtrs{}
+	}
+	mmSavePAR.defaultExpectation.paramPtrs.req = &req
+	mmSavePAR.defaultExpectation.expectationOrigins.originReq = minimock.CallerInfo(1)
+
+	return mmSavePAR
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.SavePAR
+func (mmSavePAR *mStorageMockSavePAR) Inspect(f func(ctx context.Context, req model.PushedAuthorizationRequest)) *mStorageMockSavePAR {
+	if mmSavePAR.mock.inspectFuncSavePAR != nil {
+		mmSavePAR.mock.t.Fatalf("Inspect function is already set for StorageMock.SavePAR")
+	}
+
+	mmSavePAR.mock.inspectFuncSavePAR = f
+
+	return mmSavePAR
+}
+
+// Return sets up results that will be returned by Storage.SavePAR
+func (mmSavePAR *mStorageMockSavePAR) Return(err error) *StorageMock {
+	if mmSavePAR.mock.funcSavePAR != nil {
+		mmSavePAR.mock.t.Fatalf("StorageMock.SavePAR mock is already set by Set")
+	}
+
+	if mmSavePAR.defaultExpectation == nil {
+		mmSavePAR.defaultExpectation = &StorageMockSavePARExpectation{mock: mmSavePAR.mock}
+	}
+	mmSavePAR.defaultExpectation.results = &StorageMockSavePARResults{err}
+	mmSavePAR.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmSavePAR.mock
+}
+
+// Set uses given function f to mock the Storage.SavePAR method
+func (mmSavePAR *mStorageMockSavePAR) Set(f func(ctx context.Context, req model.PushedAuthorizationRequest) (err error)) *StorageMock {
+	if mmSavePAR.defaultExpectation != nil {
+		mmSavePAR.mock.t.Fatalf("Default expectation is already set for the Storage.SavePAR method")
+	}
+
+	if len(mmSavePAR.expectations) > 0 {
+		mmSavePAR.mock.t.Fatalf("Some expectations are already set for the Storage.SavePAR method")
+	}
+
+	mmSavePAR.mock.funcSavePAR = f
+	mmSavePAR.mock.funcSavePAROrigin = minimock.CallerInfo(1)
+	return mmSavePAR.mock
+}
+
+// When sets expectation for the Storage.SavePAR which will trigger the result defined by the following
+// Then helper
+func (mmSavePAR *mStorageMockSavePAR) When(ctx context.Context, req model.PushedAuthorizationRequest) *StorageMockSavePARExpectation {
+	if mmSavePAR.mock.funcSavePAR != nil {
+		mmSavePAR.mock.t.Fatalf("StorageMock.SavePAR mock is already set by Set")
+	}
+
+	expectation := &StorageMockSavePARExpectation{
+		mock:               mmSavePAR.mock,
+		params:             &StorageMockSavePARParams{ctx, req},
+		expectationOrigins: StorageMockSavePARExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmSavePAR.expectations = append(mmSavePAR.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.SavePAR return parameters for the expectation previously defined by the When method
+func (e *StorageMockSavePARExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockSavePARResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.SavePAR should be invoked
+func (mmSavePAR *mStorageMockSavePAR) Times(n uint64) *mStorageMockSavePAR {
+	if n == 0 {
+		mmSavePAR.mock.t.Fatalf("Times of StorageMock.SavePAR mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmSavePAR.expectedInvocations, n)
+	mmSavePAR.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmSavePAR
+}
+
+func (mmSavePAR *mStorageMockSavePAR) invocationsDone() bool {
+	if len(mmSavePAR.expectations) == 0 && mmSavePAR.defaultExpectation == nil && mmSavePAR.mock.funcSavePAR == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmSavePAR.mock.afterSavePARCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmSavePAR.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// SavePAR implements mm_port.Storage
+func (mmSavePAR *StorageMock) SavePAR(ctx context.Context, req model.PushedAuthorizationRequest) (err error) {
+	mm_atomic.AddUint64(&mmSavePAR.beforeSavePARCounter, 1)
+	defer mm_atomic.AddUint64(&mmSavePAR.afterSavePARCounter, 1)
+
+	mmSavePAR.t.Helper()
+
+	if mmSavePAR.inspectFuncSavePAR != nil {
+		mmSavePAR.inspectFuncSavePAR(ctx, req)
+	}
+
+	mm_params := StorageMockSavePARParams{ctx, req}
+
+	// Record call args
+	mmSavePAR.SavePARMock.mutex.Lock()
+	mmSavePAR.SavePARMock.callArgs = append(mmSavePAR.SavePARMock.callArgs, &mm_params)
+	mmSavePAR.SavePARMock.mutex.Unlock()
+
+	for _, e := range mmSavePAR.SavePARMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmSavePAR.SavePARMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmSavePAR.SavePARMock.defaultExpectation.Counter, 1)
+		mm_want := mmSavePAR.SavePARMock.defaultExpectation.params
+		mm_want_ptrs := mmSavePAR.SavePARMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockSavePARParams{ctx, req}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmSavePAR.t.Errorf("StorageMock.SavePAR got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSavePAR.SavePARMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.req != nil && !minimock.Equal(*mm_want_ptrs.req, mm_got.req) {
+				mmSavePAR.t.Errorf("StorageMock.SavePAR got unexpected parameter req, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSavePAR.SavePARMock.defaultExpectation.expectationOrigins.originReq, *mm_want_ptrs.req, mm_got.req, minimock.Diff(*mm_want_ptrs.req, mm_got.req))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmSavePAR.t.Errorf("StorageMock.SavePAR got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmSavePAR.SavePARMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmSavePAR.SavePARMock.defaultExpectation.results
+		if mm_results == nil {
+			mmSavePAR.t.Fatal("No results are set for the StorageMock.SavePAR")
+		}
+		return (*mm_results).err
+	}
+	if mmSavePAR.funcSavePAR != nil {
+		return mmSavePAR.funcSavePAR(ctx, req)
+	}
+	mmSavePAR.t.Fatalf("Unexpected call to StorageMock.SavePAR. %v %v", ctx, req)
+	return
+}
+
+// SavePARAfterCounter returns a count of finished StorageMock.SavePAR invocations
+func (mmSavePAR *StorageMock) SavePARAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSavePAR.afterSavePARCounter)
+}
+
+// SavePARBeforeCounter returns a count of StorageMock.SavePAR invocations
+func (mmSavePAR *StorageMock) SavePARBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSavePAR.beforeSavePARCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.SavePAR.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmSavePAR *mStorageMockSavePAR) Calls() []*StorageMockSavePARParams {
+	mmSavePAR.mutex.RLock()
+
+	argCopy := make([]*StorageMockSavePARParams, len(mmSavePAR.callArgs))
+	copy(argCopy, mmSavePAR.callArgs)
+
+	mmSavePAR.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockSavePARDone returns true if the count of the SavePAR invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockSavePARDone() bool {
+	if m.SavePARMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.SavePARMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.SavePARMock.invocationsDone()
+}
+
+// MinimockSavePARInspect logs each unmet expectation
+func (m *StorageMock) MinimockSavePARInspect() {
+	for _, e := range m.SavePARMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.SavePAR at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterSavePARCounter := mm_atomic.LoadUint64(&m.afterSavePARCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.SavePARMock.defaultExpectation != nil && afterSavePARCounter < 1 {
+		if m.SavePARMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.SavePAR at\n%s", m.SavePARMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.SavePAR at\n%s with params: %#v", m.SavePARMock.defaultExpectation.expectationOrigins.origin, *m.SavePARMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcSavePAR != nil && afterSavePARCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.SavePAR at\n%s", m.funcSavePAROrigin)
+	}
+
+	if !m.SavePARMock.invocationsDone() && afterSavePARCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.SavePAR at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.SavePARMock.expectedInvocations), m.SavePARMock.expectedInvocationsOrigin, afterSavePARCounter)
 	}
 }
 
@@ -7408,6 +8880,8 @@ func (m *StorageMock) MinimockFinish() {
 
 			m.MinimockGetAndConsumeInteractionSessionInspect()
 
+			m.MinimockGetAndConsumePARInspect()
+
 			m.MinimockGetClientInspect()
 
 			m.MinimockGetClientsByTenantInspect()
@@ -7419,6 +8893,8 @@ func (m *StorageMock) MinimockFinish() {
 			m.MinimockGetPasswordCredentialInspect()
 
 			m.MinimockGetUserProfileByIdentifierInspect()
+
+			m.MinimockIsDPoPProofUsedInspect()
 
 			m.MinimockIsTokenRevokedInspect()
 
@@ -7436,7 +8912,11 @@ func (m *StorageMock) MinimockFinish() {
 
 			m.MinimockSaveClientInspect()
 
+			m.MinimockSaveDPoPProofInspect()
+
 			m.MinimockSaveInteractionSessionInspect()
+
+			m.MinimockSavePARInspect()
 
 			m.MinimockUpsertIdentityInspect()
 		}
@@ -7466,12 +8946,14 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockCreateTenantDone() &&
 		m.MinimockGetAndConsumeAuthSessionDone() &&
 		m.MinimockGetAndConsumeInteractionSessionDone() &&
+		m.MinimockGetAndConsumePARDone() &&
 		m.MinimockGetClientDone() &&
 		m.MinimockGetClientsByTenantDone() &&
 		m.MinimockGetEnabledIdentityProvidersDone() &&
 		m.MinimockGetIdentityByProfileAndProviderDone() &&
 		m.MinimockGetPasswordCredentialDone() &&
 		m.MinimockGetUserProfileByIdentifierDone() &&
+		m.MinimockIsDPoPProofUsedDone() &&
 		m.MinimockIsTokenRevokedDone() &&
 		m.MinimockPruneExpiredTokensDone() &&
 		m.MinimockResolveTenantByDomainDone() &&
@@ -7480,6 +8962,8 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockRevokeTokenDone() &&
 		m.MinimockSaveAuthSessionDone() &&
 		m.MinimockSaveClientDone() &&
+		m.MinimockSaveDPoPProofDone() &&
 		m.MinimockSaveInteractionSessionDone() &&
+		m.MinimockSavePARDone() &&
 		m.MinimockUpsertIdentityDone()
 }
