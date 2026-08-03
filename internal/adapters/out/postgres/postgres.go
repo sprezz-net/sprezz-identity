@@ -412,6 +412,99 @@ func (s *PostgresStorage) CreateIdentityProvider(ctx context.Context, tenantID u
 	return nil
 }
 
+func (s *PostgresStorage) GetIdentityProviderByType(ctx context.Context, tenantID uuid.UUID, idpType string) (*model.IdentityProvider, error) {
+	var providerID pgtype.UUID
+	var enabled bool
+	var alias string
+	var configJSON []byte
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT ip.id, ip.enabled, ip.alias_name, ip.config
+		FROM identity_providers ip
+		JOIN tenants t ON t.id = ip.tenant_id
+		WHERE t.tenant_uuid = $1::uuid AND ip.idp_type = $2 AND ip.enabled = TRUE
+	`, toPGUUID(tenantID), idpType).Scan(&providerID, &enabled, &alias, &configJSON)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("identity provider not found: %w", port.ErrIdentityProviderNotFound)
+		}
+		return nil, fmt.Errorf("get identity provider by type: %w", err)
+	}
+
+	providerUUID, err := pgUUIDToUUID(providerID)
+	if err != nil {
+		return nil, fmt.Errorf("parse provider UUID: %w", err)
+	}
+
+	providerCfg := model.IdentityProviderConfig{}
+	if len(configJSON) > 0 {
+		if err := json.Unmarshal(configJSON, &providerCfg); err != nil {
+			return nil, fmt.Errorf("unmarshal provider config: %w", err)
+		}
+	}
+
+	return &model.IdentityProvider{
+		ID:       providerUUID,
+		TenantID: tenantID,
+		IDPType:  idpType,
+		Enabled:  enabled,
+		Alias:    alias,
+		Config:   providerCfg,
+	}, nil
+}
+
+func (s *PostgresStorage) SaveUserProfile(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) error {
+	// Check collision first
+	var exists bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM user_profiles
+			WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
+			  AND (preferred_username = $2 OR email = $3)
+		)
+	`, toPGUUID(tenantID), profile.PreferredUsername, profile.Email).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("collision check user profile: %w", err)
+	}
+	if exists {
+		// Specific error mapping can be refined inside transaction, but we check specifically:
+		var count int
+		_ = s.pool.QueryRow(ctx, `
+			SELECT COUNT(*) FROM user_profiles
+			WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
+			  AND preferred_username = $2
+		`, toPGUUID(tenantID), profile.PreferredUsername).Scan(&count)
+		if count > 0 {
+			return port.ErrUsernameAlreadyExists
+		}
+		return port.ErrEmailAlreadyExists
+	}
+
+	_, err = s.pool.Exec(ctx, `
+		INSERT INTO user_profiles (id, tenant_id, preferred_username, name, email, email_verified)
+		SELECT $1::uuid, t.id, $2, $3, $4, $5
+		FROM tenants t
+		WHERE t.tenant_uuid = $6::uuid
+	`, toPGUUID(profile.ID), profile.PreferredUsername, profile.Name, profile.Email, profile.EmailVerified, toPGUUID(tenantID))
+	if err != nil {
+		return fmt.Errorf("insert user profile: %w", err)
+	}
+	return nil
+}
+
+func (s *PostgresStorage) SavePasswordCredential(ctx context.Context, credential model.PasswordCredential) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO passwords (user_profile_id, identity_provider_id, password_hash)
+		VALUES ($1::uuid, $2::uuid, $3)
+		ON CONFLICT (user_profile_id, identity_provider_id) DO UPDATE SET
+			password_hash = EXCLUDED.password_hash
+	`, toPGUUID(credential.UserProfileID), toPGUUID(credential.IdentityProviderID), credential.Argon2Hash)
+	if err != nil {
+		return fmt.Errorf("insert/update password credential: %w", err)
+	}
+	return nil
+}
+
 func (s *PostgresStorage) GetEnabledIdentityProviders(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProvider, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT ip.id, ip.idp_type, ip.enabled, ip.alias_name, ip.config

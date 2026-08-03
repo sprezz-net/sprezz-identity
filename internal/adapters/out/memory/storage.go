@@ -73,6 +73,25 @@ func (s *Storage) CreateIdentityProvider(ctx context.Context, tenantID uuid.UUID
 	return nil
 }
 
+func (s *Storage) GetIdentityProviderByType(ctx context.Context, tenantID uuid.UUID, idpType string) (*model.IdentityProvider, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	providers, ok := s.providers[tenantID.String()]
+	if !ok {
+		return nil, port.ErrTenantNotFound
+	}
+
+	for _, provider := range providers {
+		if provider.IDPType == idpType && provider.Enabled {
+			clone := provider
+			return &clone, nil
+		}
+	}
+
+	return nil, port.ErrIdentityProviderNotFound
+}
+
 func (s *Storage) GetEnabledIdentityProviders(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProvider, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -92,11 +111,35 @@ func (s *Storage) GetEnabledIdentityProviders(ctx context.Context, tenantID uuid
 	return result, nil
 }
 
-func (s *Storage) SaveUserProfile(ctx context.Context, tenantID uuid.UUID, providerID uuid.UUID, identifier string, profile model.UserProfile) error {
+func (s *Storage) SaveUserProfile(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key := fmt.Sprintf("%s|%s|%s", tenantID.String(), providerID.String(), identifier)
-	s.profiles[key] = &profile
+
+	// Check for username collision
+	for _, p := range s.profiles {
+		if p.TenantID == tenantID && p.PreferredUsername == profile.PreferredUsername {
+			return port.ErrUsernameAlreadyExists
+		}
+	}
+
+	// Check for email collision if provided
+	if profile.Email != "" {
+		for _, p := range s.profiles {
+			if p.TenantID == tenantID && p.Email == profile.Email {
+				return port.ErrEmailAlreadyExists
+			}
+		}
+	}
+
+	profile.ID = uuid.New()
+	profile.TenantID = tenantID
+
+	// Keep the original string key for memory storage (the memory storage maps profiles by string key "%s|%s|%s")
+	// Let's actually look at the key format: fmt.Sprintf("%s|%s|%s", tenantID.String(), providerID.String(), identifier)
+	// Wait, our Storage struct profiles is map[string]*model.UserProfile. Let's see how it was defined in original file.
+	// Ah! Original was map[string]*model.UserProfile.
+	// When saving, we can just use a generic key or profile.ID.String() since s.profiles is map[string]*model.UserProfile!
+	s.profiles[profile.ID.String()] = &profile
 	return nil
 }
 
@@ -108,17 +151,18 @@ func (s *Storage) SavePasswordCredential(ctx context.Context, credential model.P
 	return nil
 }
 
-func (s *Storage) GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.UUID, providerID uuid.UUID, identifier string) (*model.UserProfile, error) {
+func (s *Storage) GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.UUID, identifier string) (*model.UserProfile, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	key := fmt.Sprintf("%s|%s|%s", tenantID.String(), providerID.String(), identifier)
-	profile, ok := s.profiles[key]
-	if !ok {
-		return nil, fmt.Errorf("identity %s for tenant %s: %w", identifier, tenantID, port.ErrUserProfileNotFound)
+	for _, profile := range s.profiles {
+		if profile.TenantID == tenantID && (profile.PreferredUsername == identifier || profile.Email == identifier) {
+			clone := *profile
+			return &clone, nil
+		}
 	}
-	clone := *profile
-	return &clone, nil
+
+	return nil, port.ErrUserProfileNotFound
 }
 
 func (s *Storage) GetPasswordCredential(ctx context.Context, userProfileID uuid.UUID, providerID uuid.UUID) (*model.PasswordCredential, error) {

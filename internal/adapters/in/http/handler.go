@@ -40,16 +40,18 @@ const (
 	routeRoot      = "/"
 	routeWebLogin  = "/login"
 	routeWebLogout = "/logout"
+	routeWebSignUp = "/sign-up"
 
 	errTenantNotResolved = "tenant not resolved"
 )
 
 type HttpAdapter struct {
-	authPort    port.Auth
-	storagePort port.Storage
-	cryptoPort  port.Crypto
-	idpService  *service.IdentityProviderService
-	router      chi.Router
+	authPort      port.Auth
+	storagePort   port.Storage
+	cryptoPort    port.Crypto
+	idpService    *service.IdentityProviderService
+	signupService *service.UserRegistrationService
+	router        chi.Router
 }
 
 type registerRequest struct {
@@ -82,11 +84,12 @@ func ClientFromContext(ctx context.Context) (*model.ClientApplication, bool) {
 
 func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock) *HttpAdapter {
 	h := &HttpAdapter{
-		authPort:    a,
-		storagePort: s,
-		cryptoPort:  c,
-		idpService:  service.NewIdentityProviderService(s, cl),
-		router:      chi.NewRouter(),
+		authPort:      a,
+		storagePort:   s,
+		cryptoPort:    c,
+		idpService:    service.NewIdentityProviderService(s, cl),
+		signupService: service.NewUserRegistrationService(s),
+		router:        chi.NewRouter(),
 	}
 	h.router.Use(h.cspMiddleware)
 	h.router.Use(h.tenantMiddleware)
@@ -134,6 +137,8 @@ func (h *HttpAdapter) Router() http.Handler {
 func (h *HttpAdapter) registerRoutes() {
 	h.router.Get(routeRoot, h.loginRoot)
 	h.router.Post(routeWebLogin, h.login)
+	h.router.Get(routeWebSignUp, h.signUpForm)
+	h.router.Post(routeWebSignUp, h.signUpSubmit)
 	h.router.Get(routeOpenIDConfig, h.openIDConfiguration)
 	h.router.Get(routeKeys, h.jwks)
 	h.router.Post(routeRegister, h.register)

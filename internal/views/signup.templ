@@ -1,0 +1,58 @@
+package views
+
+import "sprezz-identity/internal/domain/model"
+
+templ SignUp(errorMessage string, provider *model.IdentityProvider, email string, username string, name string) {
+	<!doctype html>
+	<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Sign Up</title>
+		<script src="https://unpkg.com/htmx.org@1.9.12" nonce={ templ.GetNonce(ctx) }></script>
+	</head>
+	<body style="font-family:sans-serif;max-width:480px;margin:4rem auto;">
+		<h1>Create Account</h1>
+		<div id="signup-result">
+			if errorMessage != "" {
+				<div style="color:red;margin-bottom:1rem;">{ errorMessage }</div>
+			}
+		</div>
+		<form hx-post="/sign-up" hx-target="#signup-result" hx-swap="none" method="post">
+			<p>
+				<label>Display Name
+					<input type="text" name="name" value={ name } required />
+				</label>
+			</p>
+			if provider.Config.UsernameField == "email" {
+				<p>
+					<label>Email Address
+						<input type="email" name="email" value={ email } required />
+					</label>
+				</p>
+			} else {
+				<p>
+					<label>Username
+						<input type="text" name="username" value={ username } required />
+					</label>
+				</p>
+				<p>
+					<label>Email Address
+						<input type="email" name="email" value={ email } required />
+					</label>
+				</p>
+			}
+			<p>
+				<label>Password
+					<input type="password" name="password" minlength="8" required />
+				</label>
+			</p>
+			<p>
+				<label>Confirm Password
+					<input type="password" name="confirm_password" minlength="8" required />
+				</label>
+			</p>
+			<button type="submit">Sign Up</button>
+		</form>
+	</body>
+	</html>
+}

@@ -14,7 +14,6 @@ var (
 	ErrTenantNotFound             = errors.New("tenant not found")
 	ErrClientNotFound             = errors.New("client not found")
 	ErrSessionNotFound            = errors.New("session not found")
-	ErrIdentityProviderNotFound   = errors.New("identity provider not found")
 	ErrUserProfileNotFound        = errors.New("user profile not found")
 	ErrPasswordCredentialNotFound = errors.New("password credential not found")
 	ErrIdentityNotFound           = errors.New("identity not found")
@@ -34,7 +33,10 @@ type Storage interface {
 	GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.UUID, providerID uuid.UUID, identifier string) (*model.UserProfile, error)
 	GetPasswordCredential(ctx context.Context, userProfileID uuid.UUID, providerID uuid.UUID) (*model.PasswordCredential, error)
 	GetIdentityByProfileAndProvider(ctx context.Context, userProfileID uuid.UUID, providerID uuid.UUID) (*model.UserIdentity, error)
+	SaveUserProfile(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) error
+	SavePasswordCredential(ctx context.Context, credential model.PasswordCredential) error
 	UpsertIdentity(ctx context.Context, identity model.UserIdentity) error
+	GetIdentityProviderByType(ctx context.Context, tenantID uuid.UUID, idpType string) (*model.IdentityProvider, error)
 	RevokeSession(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) error
 	SaveInteractionSession(ctx context.Context, session model.InteractionSession) error
 	GetAndConsumeInteractionSession(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.InteractionSession, error)
@@ -48,3 +50,11 @@ type Storage interface {
 	IsDPoPProofUsed(ctx context.Context, jti string) (bool, error)
 	SaveDPoPProof(ctx context.Context, jti string, expiresAt time.Time) error
 }
+
+// Errors returned by the StoragePort.
+var (
+	ErrIdentityProviderNotFound = errors.New("identity provider not found")
+	ErrUserProfileAlreadyExists = errors.New("user profile with this identifier already exists")
+	ErrEmailAlreadyExists       = errors.New("email address already in use")
+	ErrUsernameAlreadyExists    = errors.New("username already in use")
+)
