@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE tenants (
     id SERIAL PRIMARY KEY,
     tenant_uuid UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
@@ -58,3 +59,11 @@ CREATE TABLE audit_event_log (
 
 -- Highly optimized composite index for rapid multi-tenant security auditing pipelines
 CREATE INDEX idx_audit_event_stream ON audit_event_log(tenant_id, subject, event_type);
+
+-- +goose Down
+DROP INDEX IF EXISTS idx_audit_event_stream;
+DROP TABLE IF EXISTS audit_event_log CASCADE;
+DROP TABLE IF EXISTS auth_sessions CASCADE;
+DROP TABLE IF EXISTS applications CASCADE;
+DROP INDEX IF EXISTS idx_tenant_domain_resolution;
+DROP TABLE IF EXISTS tenants CASCADE;

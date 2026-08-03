@@ -73,7 +73,7 @@ cover:
 ## build: Compile the core program binary into a transport target
 build: tidy sqlc-gen
 	@echo "=> Building system production binary..."
-	go build -o $(BINARY_NAME) cmd/server/main.go
+	go build -o $(BINARY_NAME) cmd/sprezz-identity/main.go
 
 ## run: Build and launch the multi-tenant application container engine immediately
 run: build
