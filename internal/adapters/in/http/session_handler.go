@@ -24,8 +24,9 @@ func (h *HttpAdapter) revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := h.authenticateClient(w, r, tenant)
-	if err != nil {
+	client, ok := ClientFromContext(r.Context())
+	if !ok {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 
@@ -55,8 +56,9 @@ func (h *HttpAdapter) introspect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := h.authenticateClient(w, r, tenant)
-	if err != nil {
+	client, ok := ClientFromContext(r.Context())
+	if !ok {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 
@@ -185,8 +187,9 @@ func (h *HttpAdapter) par(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := h.authenticateClient(w, r, tenant)
-	if err != nil {
+	client, ok := ClientFromContext(r.Context())
+	if !ok {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 

@@ -63,11 +63,17 @@ type contextKey string
 
 const (
 	tenantCtxKey contextKey = "tenant"
+	clientCtxKey contextKey = "client"
 )
 
 func TenantFromContext(ctx context.Context) (*model.Tenant, bool) {
 	tenant, ok := ctx.Value(tenantCtxKey).(*model.Tenant)
 	return tenant, ok
+}
+
+func ClientFromContext(ctx context.Context) (*model.ClientApplication, bool) {
+	client, ok := ctx.Value(clientCtxKey).(*model.ClientApplication)
+	return client, ok
 }
 
 func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock) *HttpAdapter {
@@ -101,6 +107,22 @@ func (h *HttpAdapter) tenantMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func (h *HttpAdapter) clientAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tenant, ok := TenantFromContext(r.Context())
+		if !ok {
+			respondJSON(w, http.StatusBadRequest, map[string]string{"error": errTenantNotResolved})
+			return
+		}
+		client, err := h.authenticateClient(w, r, tenant)
+		if err != nil {
+			return
+		}
+		ctx := context.WithValue(r.Context(), clientCtxKey, client)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 func (h *HttpAdapter) Router() http.Handler {
 	return h.router
 }
@@ -115,10 +137,15 @@ func (h *HttpAdapter) registerRoutes() {
 	h.router.Post(routeAuthorize, h.authorize)
 	h.router.Post(routeToken, h.token)
 	h.router.Get(routeUserInfo, h.userinfo)
-	h.router.Post(routeRevoke, h.revoke)
-	h.router.Post(routeIntrospect, h.introspect)
 	h.router.Get(routeLogout, h.logout)
-	h.router.Post(routePAR, h.par)
+
+	// Routes requiring mandatory client authentication
+	h.router.Group(func(r chi.Router) {
+		r.Use(h.clientAuthMiddleware)
+		r.Post(routeRevoke, h.revoke)
+		r.Post(routeIntrospect, h.introspect)
+		r.Post(routePAR, h.par)
+	})
 }
 
 func (h *HttpAdapter) openIDConfiguration(w http.ResponseWriter, r *http.Request) {

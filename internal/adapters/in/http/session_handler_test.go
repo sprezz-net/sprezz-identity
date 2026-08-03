@@ -413,3 +413,69 @@ func TestHttpAdapter_PAR_MissingRedirectURI(t *testing.T) {
 		t.Fatalf("expected status 400, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestHttpAdapter_ClientAuthMiddleware_Failure_InvalidSecret(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	auth := portmock.NewAuthMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	secret := "clientsecret"
+	client := &model.ClientApplication{
+		ID:           uuid.NewString(),
+		TenantID:     tenantID,
+		ClientID:     "test-client",
+		ClientSecret: &secret,
+	}
+
+	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
+		return tenant, nil
+	})
+	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
+		return client, nil
+	})
+
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+
+	// Call introspect with wrong secret
+	req := httptest.NewRequest(http.MethodPost, "/oauth/introspect", bytes.NewBufferString("client_id=test-client&client_secret=wrongsecret&token=dummy"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Host = "test.com"
+	rec := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401 Unauthorized, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHttpAdapter_ClientAuthMiddleware_Failure_MissingCredentials(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	auth := portmock.NewAuthMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+
+	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
+		return tenant, nil
+	})
+
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+
+	// Call revoke with no client_id / secret
+	req := httptest.NewRequest(http.MethodPost, "/oauth/revoke", bytes.NewBufferString("token=dummy"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Host = "test.com"
+	rec := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401 Unauthorized, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}

@@ -145,11 +145,11 @@ func TestJWTSigner_SignLogoutToken_Success(t *testing.T) {
 	signer := NewJWTSigner()
 
 	claims := model.LogoutTokenClaims{
-		TokenID:   "logout-token-123",
-		Issuer:    "https://auth.example.com",
-		Subject:   "user-sub",
-		Audience:  "client-id",
-		IssuedAt:  time.Now().UTC(),
+		TokenID:  "logout-token-123",
+		Issuer:   "https://auth.example.com",
+		Subject:  "user-sub",
+		Audience: "client-id",
+		IssuedAt: time.Now().UTC(),
 	}
 
 	tokenStr, err := signer.SignLogoutToken(claims, model.AlgRS256)
@@ -303,10 +303,10 @@ func TestJWTSigner_IssuerFallbackAndEmpty(t *testing.T) {
 
 	// 3. SignLogoutToken with empty Issuer and empty Subject fallback
 	claimsLogout := model.LogoutTokenClaims{
-		TokenID:   "logout-fallback",
-		Subject:   "https://auth.example.com",
-		Audience:  "client-id",
-		IssuedAt:  time.Now().UTC(),
+		TokenID:  "logout-fallback",
+		Subject:  "https://auth.example.com",
+		Audience: "client-id",
+		IssuedAt: time.Now().UTC(),
 	}
 	tokenStrLogout, err := signer.SignLogoutToken(claimsLogout, model.AlgRS256)
 	if err != nil {
