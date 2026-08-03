@@ -168,6 +168,18 @@ func (s *Storage) GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.
 	return nil, port.ErrUserProfileNotFound
 }
 
+func (s *Storage) GetUserProfileByID(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.UserProfile, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	profile, ok := s.profiles[id.String()]
+	if !ok || profile.TenantID != tenantID {
+		return nil, port.ErrUserProfileNotFound
+	}
+	clone := *profile
+	return &clone, nil
+}
+
 func (s *Storage) GetPasswordCredential(ctx context.Context, userProfileID uuid.UUID, providerID uuid.UUID) (*model.PasswordCredential, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

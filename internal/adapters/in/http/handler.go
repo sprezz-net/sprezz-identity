@@ -159,6 +159,7 @@ func (h *HttpAdapter) registerRoutes() {
 	h.router.Post(routeAuthorize, h.authorize)
 	h.router.Post(routeToken, h.token)
 	h.router.Get(routeUserInfo, h.userinfo)
+	h.router.Post(routeUserInfo, h.userinfo)
 	h.router.Get(routeLogout, h.logout)
 	h.router.Get(routeWebLogout, h.webLogout)
 

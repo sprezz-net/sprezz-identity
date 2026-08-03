@@ -315,3 +315,6 @@ Sprezz Identity implements standard RFC 9449 DPoP to bind minted tokens to a cli
     The return `token_type` is dynamically changed from `"Bearer"` to `"DPoP"`.
 * **Replay Prevention**: To prevent DPoP JWT reuse, the proof's unique identifier (`jti`) is persisted inside our single-use `dpop_proofs` database-backed cache. Re-sending a DPoP proof with an already-consumed `jti` is immediately blocked.
 * **Resource and UserInfo Protection**: Downstream resource endpoints (e.g., `/oauth/userinfo`) require DPoP-bound tokens to be accessed with the `DPoP <token>` scheme. The HttpAdapter parses the token, extracts the `cnf.jkt` claim, validates the incoming `DPoP` header, and enforces that the proof's public key matches the token's embedded thumbprint, fully validating the sender's cryptographic proof-of-possession.
+* **Spec-Compliant UserInfo Claims Resolution**: The `/oauth/userinfo` endpoint resolves the human identity directly by retrieving the user profile from storage using the `sub` claim. It dynamically structures and filters returned claims based on authorized OIDC scope claims present in the token:
+  * If `"profile"` scope is present: Returns `"name"` and `"preferred_username"`.
+  * If `"email"` scope is present: Returns `"email"` and `"email_verified"`.

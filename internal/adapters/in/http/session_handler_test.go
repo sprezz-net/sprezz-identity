@@ -25,15 +25,27 @@ func TestHttpAdapter_UserInfo_Success(t *testing.T) {
 	auth := portmock.NewAuthMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 
+	tenantID := uuid.New()
+	userUUID := uuid.New()
+
 	crypto.VerifyTokenMock.Set(func(token string) (map[string]any, error) {
 		if token != "token123" {
 			t.Errorf("expected token 'token123', got %s", token)
 		}
 		return map[string]any{
-			"sub":   "user-1",
-			"scope": "openid email",
+			"sub":   userUUID.String(),
+			"tid":   tenantID.String(),
+			"scope": "openid email profile",
 		}, nil
 	})
+
+	storage.GetUserProfileByIDMock.Expect(minimock.AnyContext, tenantID, userUUID).Return(&model.UserProfile{
+		ID:                userUUID,
+		PreferredUsername: "testuser",
+		Name:              "Test User",
+		Email:             "test@example.com",
+		EmailVerified:     true,
+	}, nil)
 
 	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
 
@@ -49,7 +61,55 @@ func TestHttpAdapter_UserInfo_Success(t *testing.T) {
 
 	var resp map[string]any
 	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
-	if resp["sub"] != "user-1" || resp["scope"] != "openid email" {
+	if resp["sub"] != userUUID.String() || resp["email"] != "test@example.com" || resp["name"] != "Test User" || resp["preferred_username"] != "testuser" {
+		t.Fatalf("unexpected userinfo response: %v", resp)
+	}
+}
+
+func TestHttpAdapter_UserInfo_POST_Success(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	auth := portmock.NewAuthMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+
+	tenantID := uuid.New()
+	userUUID := uuid.New()
+
+	crypto.VerifyTokenMock.Set(func(token string) (map[string]any, error) {
+		if token != "token123" {
+			t.Errorf("expected token 'token123', got %s", token)
+		}
+		return map[string]any{
+			"sub":   userUUID.String(),
+			"tid":   tenantID.String(),
+			"scope": "openid email profile",
+		}, nil
+	})
+
+	storage.GetUserProfileByIDMock.Expect(minimock.AnyContext, tenantID, userUUID).Return(&model.UserProfile{
+		ID:                userUUID,
+		PreferredUsername: "testuser",
+		Name:              "Test User",
+		Email:             "test@example.com",
+		EmailVerified:     true,
+	}, nil)
+
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+
+	// Verifies that OIDC-compliant POST method for UserInfo behaves identically to GET
+	req := httptest.NewRequest(http.MethodPost, "/oauth/userinfo", nil)
+	req.Header.Set("Authorization", "Bearer token123")
+	rec := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp["sub"] != userUUID.String() || resp["email"] != "test@example.com" || resp["name"] != "Test User" || resp["preferred_username"] != "testuser" {
 		t.Fatalf("unexpected userinfo response: %v", resp)
 	}
 }

@@ -186,10 +186,38 @@ func (h *HttpAdapter) userinfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	subject, _ := claims["sub"].(string)
-	response := map[string]any{"sub": subject}
-	if scopeValue, ok := claims["scope"].(string); ok {
-		response["scope"] = scopeValue
+	userUUID, err := uuid.Parse(subject)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid user sub format"})
+		return
 	}
+
+	tenantIDStr, _ := claims["tid"].(string)
+	tenantUUID, err := uuid.Parse(tenantIDStr)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid tenant tid format"})
+		return
+	}
+
+	profile, err := h.storagePort.GetUserProfileByID(r.Context(), tenantUUID, userUUID)
+	if err != nil {
+		respondJSON(w, http.StatusNotFound, map[string]string{"error": "user profile not found"})
+		return
+	}
+
+	response := map[string]any{"sub": subject}
+	scopeValue, _ := claims["scope"].(string)
+	scopes := strings.Split(scopeValue, " ")
+
+	if contains(scopes, "profile") {
+		response["name"] = profile.Name
+		response["preferred_username"] = profile.PreferredUsername
+	}
+	if contains(scopes, "email") {
+		response["email"] = profile.Email
+		response["email_verified"] = profile.EmailVerified
+	}
+
 	respondJSON(w, http.StatusOK, response)
 }
 

@@ -638,6 +638,34 @@ func (s *PostgresStorage) GetUserProfileByIdentifier(ctx context.Context, tenant
 	}, nil
 }
 
+func (s *PostgresStorage) GetUserProfileByID(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.UserProfile, error) {
+	var preferredUsername string
+	var name string
+	var email string
+	var emailVerified bool
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT preferred_username, name, email, email_verified
+		FROM user_profiles
+		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
+		  AND id = $2::uuid
+	`, toPGUUID(tenantID), toPGUUID(id)).Scan(&preferredUsername, &name, &email, &emailVerified)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, port.ErrUserProfileNotFound
+		}
+		return nil, fmt.Errorf("get user profile by ID: %w", err)
+	}
+
+	return &model.UserProfile{
+		ID:                id,
+		PreferredUsername: preferredUsername,
+		Name:              name,
+		Email:             email,
+		EmailVerified:     emailVerified,
+	}, nil
+}
+
 func (s *PostgresStorage) GetPasswordCredential(ctx context.Context, userProfileID uuid.UUID, providerID uuid.UUID) (*model.PasswordCredential, error) {
 	var hash string
 	err := s.pool.QueryRow(ctx, `
