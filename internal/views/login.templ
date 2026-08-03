@@ -6,7 +6,7 @@ templ Login(errorMessage string) {
 	<head>
 		<meta charset="utf-8" />
 		<title>Sprezz Identity Login</title>
-		<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+		<script src="https://unpkg.com/htmx.org@1.9.12" nonce={ templ.GetNonce(ctx) }></script>
 	</head>
 	<body style="font-family:sans-serif;max-width:480px;margin:4rem auto;">
 		<h1>Sign in</h1>

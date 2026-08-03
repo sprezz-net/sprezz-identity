@@ -2,6 +2,8 @@ package http
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,6 +17,7 @@ import (
 	"sprezz-identity/internal/domain/service"
 	"sprezz-identity/internal/views"
 
+	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -61,6 +64,7 @@ func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock) *
 		idpService:  service.NewIdentityProviderService(s, cl),
 		router:      chi.NewRouter(),
 	}
+	h.router.Use(h.cspMiddleware)
 	h.registerRoutes()
 	return h
 }
@@ -692,4 +696,24 @@ func isSubset(subset, set []string) bool {
 		}
 	}
 	return true
+}
+
+func (h *HttpAdapter) cspMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nonceBytes := make([]byte, 16)
+		if _, err := rand.Read(nonceBytes); err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		nonce := base64.StdEncoding.EncodeToString(nonceBytes)
+
+		// Set Content-Security-Policy header
+		// Script sources permit 'self', the secure per-request nonce, and https://unpkg.com (for htmx)
+		csp := fmt.Sprintf("default-src 'self'; script-src 'self' 'nonce-%s' https://unpkg.com; style-src 'self' 'unsafe-inline'; frame-src 'self' *", nonce)
+		w.Header().Set("Content-Security-Policy", csp)
+
+		// Pass the nonce down to our a-h/templ templates
+		ctx := templ.WithNonce(r.Context(), nonce)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }

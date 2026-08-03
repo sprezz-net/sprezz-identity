@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
+	"strings"
 	"testing"
 
 	"sprezz-identity/internal/adapters/out/clock"
@@ -197,5 +199,59 @@ func verifyRegisterErrorResponse(t *testing.T, bodyBytes []byte, expectedError s
 	}
 	if resp["error"] != expectedError {
 		t.Fatalf("expected error %q, got %q", expectedError, resp["error"])
+	}
+}
+
+func TestHttpAdapter_CSPNonce(t *testing.T) {
+	ctrl := minimock.NewController(t)
+
+	storage := portmock.NewStorageMock(ctrl)
+	auth := portmock.NewAuthMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+
+	// Request 1
+	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec1 := httptest.NewRecorder()
+	adapter.Router().ServeHTTP(rec1, req1)
+
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec1.Code)
+	}
+
+	csp1 := rec1.Header().Get("Content-Security-Policy")
+	if csp1 == "" {
+		t.Fatal("expected Content-Security-Policy header, got empty")
+	}
+
+	// Extract nonce from CSP: script-src 'self' 'nonce-[nonce]' ...
+	re := regexp.MustCompile(`'nonce-([^']+)'`)
+	match1 := re.FindStringSubmatch(csp1)
+	if len(match1) < 2 {
+		t.Fatalf("could not find nonce in CSP header: %s", csp1)
+	}
+	nonce1 := match1[1]
+
+	body1 := rec1.Body.String()
+	expectedScriptTag1 := `nonce="` + nonce1 + `"`
+	if !strings.Contains(body1, expectedScriptTag1) {
+		t.Fatalf("expected body to contain %q, but got:\n%s", expectedScriptTag1, body1)
+	}
+
+	// Request 2 (to verify randomization/per-request change)
+	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec2 := httptest.NewRecorder()
+	adapter.Router().ServeHTTP(rec2, req2)
+
+	csp2 := rec2.Header().Get("Content-Security-Policy")
+	match2 := re.FindStringSubmatch(csp2)
+	if len(match2) < 2 {
+		t.Fatalf("could not find nonce in CSP header 2: %s", csp2)
+	}
+	nonce2 := match2[1]
+
+	if nonce1 == nonce2 {
+		t.Fatalf("expected nonces to be different per request, but both were: %s", nonce1)
 	}
 }

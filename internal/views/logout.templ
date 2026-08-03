@@ -6,7 +6,7 @@ templ Logout(iframeURIs []string, redirectURI string) {
 	<head>
 		<meta charset="utf-8" />
 		<title>Logging out...</title>
-		<script>
+		<script nonce={ templ.GetNonce(ctx) }>
 			// 1. Set an unconditional safety timeout of 2 seconds
 			// This guarantees the user is redirected even if some client iframes fail, block, or timeout
 			var redirectTimeout = setTimeout(function() {

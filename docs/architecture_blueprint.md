@@ -192,6 +192,15 @@ To maintain architectural purity, separation of concerns, and clean views:
 3. The login view template (`login.templ`) is completely decoupled and receives zero OIDC parameters.
 4. Upon successful credential validation, the server consumes (and deletes) the interaction session, clears the cookie, and seamlessly completes the authorization code grant code swap.
 
+### 9.3.1 Content Security Policy & Cryptographic Nonce Propagation
+
+To mitigate Cross-Site Scripting (XSS) and injection vectors on server-rendered pages (e.g., login and logout forms):
+
+* **Strict CSP Header**: Every user-facing UI route serves a strict `Content-Security-Policy` header:
+  `default-src 'self'; script-src 'self' 'nonce-[nonce]' https://unpkg.com; style-src 'self' 'unsafe-inline'; frame-src 'self' *`
+* **Secure Per-Request Nonce Generation**: A dedicated HTTP middleware generates a secure, high-entropy 16-byte cryptographically random value (using `crypto/rand` and base64-encoded) for every request.
+* **Contextual Nonce Injection**: The middleware injects this unique nonce into the request context via `templ.WithNonce(ctx, nonce)`. The `a-h/templ` rendering system automatically extracts this nonce and applies the `nonce="..."` attribute to all `<script>` blocks (such as those in `login.templ` and `logout.templ`), satisfying the browser's strict script execution safety checks.
+
 ### 9.4 Cryptographic Argon2id Storage
 
 The `"username-password"` provider stores credentials utilizing Argon2id in a standard PHC-formatted string:
