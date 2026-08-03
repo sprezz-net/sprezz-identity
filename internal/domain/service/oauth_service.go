@@ -82,6 +82,7 @@ func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.
 		ExpiresAt: now.Add(client.AccessTokenLifetime),
 		Audiences: client.AllowedAudiences,
 		DPoPHash:  dpopJKT,
+		ACR:       authSession.ACRValues,
 	}, client.Algorithm)
 	if err != nil {
 		return nil, fmt.Errorf("mint access token: %w", err)
@@ -105,6 +106,7 @@ func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.
 		AuthTime:  now,
 		Nonce:     parsedNonce,
 		SessionID: authSession.SessionID,
+		ACR:       authSession.ACRValues,
 	}, client.Algorithm)
 	if err != nil {
 		return nil, fmt.Errorf("mint id token: %w", err)

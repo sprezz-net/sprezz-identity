@@ -15,9 +15,16 @@ type Tenant struct {
 	Config    TenantConfig
 }
 
+type Levels struct {
+	IAL int `json:"ial,omitempty"`
+	AAL int `json:"aal,omitempty"`
+}
+
 type TenantConfig struct {
-	PredefinedScopes    []string `json:"predefined_scopes"`
-	PredefinedAudiences []string `json:"predefined_audiences"`
-	DefaultRedirectURI  string   `json:"default_redirect_uri"`
-	RedirectWhitelist   []string `json:"redirect_whitelist"`
+	PredefinedScopes    []string          `json:"predefined_scopes"`
+	PredefinedAudiences []string          `json:"predefined_audiences"`
+	DefaultRedirectURI  string            `json:"default_redirect_uri"`
+	RedirectWhitelist   []string          `json:"redirect_whitelist"`
+	ACRToLevels         map[string]Levels `json:"acr_to_levels"`
+	ACREssential        bool              `json:"acr_essential"`
 }

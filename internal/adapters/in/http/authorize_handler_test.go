@@ -168,6 +168,7 @@ func TestHttpAdapter_Authorize_AuthenticatedSSO(t *testing.T) {
 	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
 		return client, nil
 	})
+	storage.GetEnabledIdentityProvidersMock.Return([]model.IdentityProvider{}, nil)
 	auth.InitiateAuthorizeMock.Set(func(ctx context.Context, session model.AuthorizationCodeSession) error {
 		if session.ClientID != "test-client" {
 			t.Errorf("expected client_id 'test-client', got %s", session.ClientID)

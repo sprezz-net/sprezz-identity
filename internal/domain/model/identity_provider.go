@@ -23,6 +23,8 @@ type IdentityProvider struct {
 
 type IdentityProviderConfig struct {
 	UsernameField string `json:"username_field"`
+	IAL           int    `json:"ial"`
+	AAL           int    `json:"aal"`
 }
 
 type UserIdentity struct {
@@ -49,17 +51,24 @@ type LoginResult struct {
 }
 
 func (c IdentityProviderConfig) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]string{
-		"username_field": c.UsernameField,
+	type Alias IdentityProviderConfig
+	return json.Marshal(&struct {
+		Alias
+	}{
+		Alias: Alias(c),
 	})
 }
 
 func (c *IdentityProviderConfig) UnmarshalJSON(data []byte) error {
-	var payload map[string]string
-	if err := json.Unmarshal(data, &payload); err != nil {
+	type Alias IdentityProviderConfig
+	aux := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(c),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
-	c.UsernameField = payload["username_field"]
 	if c.UsernameField == "" {
 		c.UsernameField = "preferredUsername"
 	}

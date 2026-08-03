@@ -65,7 +65,7 @@ func (h *HttpAdapter) loginRoot(w http.ResponseWriter, r *http.Request) {
 	_ = component.Render(r.Context(), w)
 }
 
-func (h *HttpAdapter) processInteractionRedirect(w http.ResponseWriter, r *http.Request) bool {
+func (h *HttpAdapter) processInteractionRedirect(w http.ResponseWriter, r *http.Request, provider *model.IdentityProvider) bool {
 	sessionCookie, err := r.Cookie("spz_auth_session_id")
 	if err != nil || sessionCookie.Value == "" {
 		return false
@@ -91,6 +91,19 @@ func (h *HttpAdapter) processInteractionRedirect(w http.ResponseWriter, r *http.
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
+
+	var acrValues, claimsJSON string
+	if strings.HasPrefix(session.ACRValues, "{") {
+		claimsJSON = session.ACRValues
+	} else {
+		acrValues = session.ACRValues
+	}
+
+	if _, err := h.oauthValidator.ValidateACR(r.Context(), tenant, provider, acrValues, claimsJSON); err != nil {
+		h.clearSSOSessionCookie(w)
+		h.renderError(w, r, http.StatusForbidden, err.Error())
+		return true
+	}
 
 	redirectURL := routeAuthorize + "?client_id=" + url.QueryEscape(session.ClientID) + "&redirect_uri=" + url.QueryEscape(session.RedirectURI)
 	if session.CodeChallenge != "" {
@@ -135,13 +148,20 @@ func (h *HttpAdapter) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	provider, err := h.storagePort.GetIdentityProviderByType(r.Context(), tenant.ID, model.UsernamePasswordIDPType)
+	if err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte("Self-service login is not configured/enabled for this tenant"))
+		return
+	}
+
 	h.setSSOSessionCookie(w, ssoSession{
 		SubjectID:  result.UserProfile.ID.String(),
-		ProviderID: result.Identity.IdentityProviderID.String(),
+		ProviderID: provider.ID.String(),
 		SessionID:  uuid.NewString(),
 	})
 
-	if h.processInteractionRedirect(w, r) {
+	if h.processInteractionRedirect(w, r, provider) {
 		return
 	}
 
@@ -181,13 +201,27 @@ func (h *HttpAdapter) handleAuthenticatedAuthorize(w http.ResponseWriter, r *htt
 	idpHint := r.FormValue("idp_hint")
 	state := r.FormValue("state")
 	nonce := r.FormValue("nonce")
-	acrValues := r.FormValue("acr_values")
 
 	if idpHint != "" {
 		if len(client.AllowedIDPs) > 0 && !contains(client.AllowedIDPs, idpHint) {
 			respondJSON(w, http.StatusBadRequest, map[string]string{"error": "identity provider not allowed for client"})
 			return
 		}
+	}
+
+	tenant, _ := TenantFromContext(r.Context())
+	providers, _ := h.storagePort.GetEnabledIdentityProviders(r.Context(), tenant.ID)
+	var provider *model.IdentityProvider
+	for _, p := range providers {
+		if p.ID.String() == sso.ProviderID {
+			provider = &p
+			break
+		}
+	}
+
+	reachedACR := ""
+	if provider != nil {
+		reachedACR = h.oauthValidator.EvaluateReachedACR(tenant, provider)
 	}
 
 	code := uuid.NewString()
@@ -204,7 +238,7 @@ func (h *HttpAdapter) handleAuthenticatedAuthorize(w http.ResponseWriter, r *htt
 		SessionID:       sso.SessionID,
 		State:           state,
 		Nonce:           nonce,
-		ACRValues:       acrValues,
+		ACRValues:       reachedACR,
 	}
 	if err := h.authPort.InitiateAuthorize(r.Context(), authSession); err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -223,6 +257,19 @@ func (h *HttpAdapter) handleAuthenticatedAuthorize(w http.ResponseWriter, r *htt
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
+func (h *HttpAdapter) extractAuthorizeParams(r *http.Request, tenant *model.Tenant) (clientID, redirectURI, codeChallenge, challengeMethod, idpHint, state, nonce, acrValues string, scopes []string, err error) {
+	requestURI := r.FormValue("request_uri")
+	if requestURI != "" {
+		parReq, loadErr := h.authPort.GetAndConsumePAR(r.Context(), tenant.ID, requestURI)
+		if loadErr != nil {
+			return "", "", "", "", "", "", "", "", nil, errors.New("invalid or expired request_uri")
+		}
+		return parReq.ClientID, parReq.RedirectURI, parReq.CodeChallenge, parReq.ChallengeMethod, parReq.IDPHint, parReq.State, parReq.Nonce, parReq.ACRValues, parReq.Scopes, nil
+	}
+
+	return r.FormValue("client_id"), r.FormValue("redirect_uri"), r.FormValue("code_challenge"), r.FormValue("code_challenge_method"), r.FormValue("idp_hint"), r.FormValue("state"), r.FormValue("nonce"), r.FormValue("acr_values"), nil, nil
+}
+
 func (h *HttpAdapter) authorize(w http.ResponseWriter, r *http.Request) {
 	tenant, ok := TenantFromContext(r.Context())
 	if !ok {
@@ -235,34 +282,10 @@ func (h *HttpAdapter) authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requestURI := r.FormValue("request_uri")
-	var clientID, redirectURI, codeChallenge, challengeMethod, idpHint, state, nonce, acrValues string
-	var scopes []string
-
-	if requestURI != "" {
-		parReq, err := h.authPort.GetAndConsumePAR(r.Context(), tenant.ID, requestURI)
-		if err != nil {
-			respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid or expired request_uri"})
-			return
-		}
-		clientID = parReq.ClientID
-		redirectURI = parReq.RedirectURI
-		codeChallenge = parReq.CodeChallenge
-		challengeMethod = parReq.ChallengeMethod
-		idpHint = parReq.IDPHint
-		state = parReq.State
-		nonce = parReq.Nonce
-		scopes = parReq.Scopes
-		acrValues = parReq.ACRValues
-	} else {
-		clientID = r.FormValue("client_id")
-		redirectURI = r.FormValue("redirect_uri")
-		codeChallenge = r.FormValue("code_challenge")
-		challengeMethod = r.FormValue("code_challenge_method")
-		idpHint = r.FormValue("idp_hint")
-		state = r.FormValue("state")
-		nonce = r.FormValue("nonce")
-		acrValues = r.FormValue("acr_values")
+	clientID, redirectURI, codeChallenge, challengeMethod, idpHint, state, nonce, acrValues, scopes, err := h.extractAuthorizeParams(r, tenant)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
 	}
 
 	if challengeMethod == "" {
@@ -300,6 +323,11 @@ func (h *HttpAdapter) authorize(w http.ResponseWriter, r *http.Request) {
 
 	sso := h.getSSOSessionCookie(r)
 	if sso == nil {
+		claimsJSON := r.FormValue("claims")
+		sessionACR := acrValues
+		if claimsJSON != "" {
+			sessionACR = claimsJSON
+		}
 		session := model.InteractionSession{
 			ID:              uuid.New(),
 			TenantID:        tenant.ID,
@@ -311,7 +339,7 @@ func (h *HttpAdapter) authorize(w http.ResponseWriter, r *http.Request) {
 			ExpiresAt:       time.Now().Add(10 * time.Minute),
 			State:           state,
 			Nonce:           nonce,
-			ACRValues:       acrValues,
+			ACRValues:       sessionACR,
 		}
 		h.handleUnauthenticatedAuthorize(w, r, session)
 		return

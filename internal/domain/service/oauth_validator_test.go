@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"sprezz-identity/internal/domain/model"
@@ -229,5 +230,164 @@ func TestOAuthValidatorService_ValidateAudiences(t *testing.T) {
 				t.Fatalf("expected error %v, got %v", tt.wantErr, err)
 			}
 		})
+	}
+}
+
+func TestOAuthValidatorService_ValidateACR_Default(t *testing.T) {
+	v := NewOAuthValidatorService()
+	ctx := context.Background()
+
+	tenant := &model.Tenant{
+		Config: model.TenantConfig{
+			ACREssential: false,
+			ACRToLevels: map[string]model.Levels{
+				"aal2": {AAL: 2},
+				"aal3": {AAL: 3},
+				"ial3": {IAL: 3},
+			},
+		},
+	}
+
+	provider := &model.IdentityProvider{
+		Config: model.IdentityProviderConfig{
+			IAL: 1,
+			AAL: 2,
+		},
+	}
+
+	reached, err := v.ValidateACR(ctx, tenant, provider, "aal3", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(reached, "aal2") {
+		t.Fatalf("expected reached acr to contain aal2, got %q", reached)
+	}
+}
+
+func TestOAuthValidatorService_ValidateACR_Essential_OR(t *testing.T) {
+	v := NewOAuthValidatorService()
+	ctx := context.Background()
+
+	tenant := &model.Tenant{
+		Config: model.TenantConfig{
+			ACREssential: true,
+			ACRToLevels: map[string]model.Levels{
+				"aal2": {AAL: 2},
+				"aal3": {AAL: 3},
+				"ial3": {IAL: 3},
+			},
+		},
+	}
+
+	providerMet := &model.IdentityProvider{
+		Config: model.IdentityProviderConfig{
+			IAL: 1,
+			AAL: 2,
+		},
+	}
+	providerUnmet := &model.IdentityProvider{
+		Config: model.IdentityProviderConfig{
+			IAL: 1,
+			AAL: 1,
+		},
+	}
+
+	reached, err := v.ValidateACR(ctx, tenant, providerMet, "aal3 aal2", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(reached, "aal2") {
+		t.Fatalf("expected reached acr to contain aal2, got %q", reached)
+	}
+
+	_, err = v.ValidateACR(ctx, tenant, providerUnmet, "aal3 aal2", "")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestOAuthValidatorService_ValidateACR_Essential_AND(t *testing.T) {
+	v := NewOAuthValidatorService()
+	ctx := context.Background()
+
+	tenant := &model.Tenant{
+		Config: model.TenantConfig{
+			ACREssential: true,
+			ACRToLevels: map[string]model.Levels{
+				"aal2": {AAL: 2},
+				"aal3": {AAL: 3},
+				"ial3": {IAL: 3},
+			},
+		},
+	}
+
+	providerMet := &model.IdentityProvider{
+		Config: model.IdentityProviderConfig{
+			IAL: 3,
+			AAL: 2,
+		},
+	}
+	providerUnmet := &model.IdentityProvider{
+		Config: model.IdentityProviderConfig{
+			IAL: 1,
+			AAL: 2,
+		},
+	}
+
+	reached, err := v.ValidateACR(ctx, tenant, providerMet, "ial3-aal2", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(reached, "aal2") || !strings.Contains(reached, "ial3") {
+		t.Fatalf("expected reached acr to contain aal2 and ial3, got %q", reached)
+	}
+
+	_, err = v.ValidateACR(ctx, tenant, providerUnmet, "ial3-aal2", "")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestOAuthValidatorService_ValidateACR_ClaimsJSON(t *testing.T) {
+	v := NewOAuthValidatorService()
+	ctx := context.Background()
+
+	tenant := &model.Tenant{
+		Config: model.TenantConfig{
+			ACREssential: false,
+			ACRToLevels: map[string]model.Levels{
+				"aal2": {AAL: 2},
+				"aal3": {AAL: 3},
+				"ial3": {IAL: 3},
+			},
+		},
+	}
+
+	providerMet := &model.IdentityProvider{
+		Config: model.IdentityProviderConfig{
+			IAL: 1,
+			AAL: 3,
+		},
+	}
+	providerUnmet := &model.IdentityProvider{
+		Config: model.IdentityProviderConfig{
+			IAL: 1,
+			AAL: 1,
+		},
+	}
+
+	claims := `{"id_token":{"acr":{"essential":true,"values":["aal3","aal2"]}}}`
+
+	reached, err := v.ValidateACR(ctx, tenant, providerMet, "", claims)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(reached, "aal2") || !strings.Contains(reached, "aal3") {
+		t.Fatalf("expected reached acr to contain aal2 and aal3, got %q", reached)
+	}
+
+	_, err = v.ValidateACR(ctx, tenant, providerUnmet, "", claims)
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }

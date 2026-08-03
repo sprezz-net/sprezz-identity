@@ -13,6 +13,7 @@ type TokenClaims struct {
 	ExpiresAt time.Time
 	Audiences []string
 	DPoPHash  string
+	ACR       string
 }
 
 type OIDCTokenClaims struct {
@@ -26,6 +27,7 @@ type OIDCTokenClaims struct {
 	AuthTime  time.Time
 	Nonce     string
 	SessionID string
+	ACR       string
 }
 
 type TokenSetResponse struct {

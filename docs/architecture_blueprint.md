@@ -285,6 +285,18 @@ Sprezz Identity supports a direct, non-federated session termination route `/log
 * **Cookie Expiration**: The adapter forcefully expires and clears the browser's `spz_session` first-party cookie by returning a standard `Set-Cookie` header with a negative `Max-Age` attribute.
 * **Out-of-Band Single Logout Propagations**: To guarantee secure state cleanup across the workspace, the usecase automatically triggers all asynchronous backchannel logout requests to currently coupled third-party clients, ensuring zero orphan sessions remain active after the user leaves the direct web interface.
 
+### 9.10 Trust Tiering: IAL, AAL, and ACR Mapping
+
+Sprezz Identity implements OIDC-compliant trust tiering by introducing the concepts of **Identity Assurance Level (IAL)** and **Authenticator Assurance Level (AAL)**.
+
+* **Assurance Assignments**: Every `IdentityProvider` configured under a tenant has assigned `IAL` and `AAL` levels (ranging from 1 - lowest, to 4 - highest) indicating the degree of confidence in authentication. By default, standard username-password logins carry an assurance level of `1`.
+* **ACR Mapping Engine**: Tenant administrators configure a master lookup dictionary (`ACRToLevels`) mapping standard primitive string keys (e.g. `"aal2"` mapping to `{AAL: 2}`, `"ial3"` mapping to `{IAL: 3}`) to specific required IAL and AAL levels.
+* **Complex Constraints Verification**: Requested OIDC Authentication Context Class References (ACR) passed via the `acr_values` query parameter (space-separated OR options, dash-separated AND options) or parsed securely from the OIDC JSON `claims` parameters are verified at runtime:
+  * **Dynamic Decomposition of AND conditions**: Compound requested values joined by dashes (`"ial3-aal2"`) are parsed and decomposed dynamically into their primitive parts (`"ial3"` and `"aal2"`). Both constituent parts are evaluated together against the Identity Provider's levels. This means composite keys do not need to be configured inside the tenant's `ACRToLevels` map.
+  * **Essential Constraint (Default Fallback)**: If `essential` is `true` (or defaults to the tenant-configured `ACREssential` default), the IdP must satisfy the minimum required IAL/AAL, otherwise the authentication is forcefully rejected (returning 403 Forbidden).
+  * **Non-Essential/Reached Claims**: If `essential` is `false`, authentication succeeds, and the server dynamically calculates all tenant-mapped ACR keys satisfied by the login.
+* **Dynamic ACR Minting**: Reached ACR claims are dynamically embedded inside minted Access Tokens, ID Tokens, and UserInfo responses under the standard `"acr"` claim.
+
 ## 10. Audience Governance and Token Minting
 
 Sprezz Identity implements Audience Governance to restrict the intended recipients (Resource Servers) of minted Access Tokens and ensure least privilege access.

@@ -76,6 +76,9 @@ func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.Signatur
 			"jkt": claims.DPoPHash,
 		}
 	}
+	if claims.ACR != "" {
+		mapClaims["acr"] = claims.ACR
+	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, mapClaims)
 	token.Header["kid"] = keyring.ActiveKid
@@ -116,6 +119,9 @@ func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.Signatur
 	}
 	if claims.SessionID != "" {
 		mapClaims["sid"] = claims.SessionID
+	}
+	if claims.ACR != "" {
+		mapClaims["acr"] = claims.ACR
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, mapClaims)

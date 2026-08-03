@@ -267,6 +267,12 @@ func (h *HttpAdapter) par(w http.ResponseWriter, r *http.Request) {
 	requestURI := "urn:ietf:params:oauth:request_uri:" + uuid.NewString()
 	expiresIn := 600
 
+	claimsJSON := r.FormValue("claims")
+	sessionACR := r.FormValue("acr_values")
+	if claimsJSON != "" {
+		sessionACR = claimsJSON
+	}
+
 	parReq := model.PushedAuthorizationRequest{
 		RequestURI:      requestURI,
 		TenantID:        tenant.ID,
@@ -278,7 +284,7 @@ func (h *HttpAdapter) par(w http.ResponseWriter, r *http.Request) {
 		State:           r.FormValue("state"),
 		Nonce:           r.FormValue("nonce"),
 		IDPHint:         r.FormValue("idp_hint"),
-		ACRValues:       r.FormValue("acr_values"),
+		ACRValues:       sessionACR,
 		ExpiresAt:       time.Now().Add(10 * time.Minute),
 	}
 
