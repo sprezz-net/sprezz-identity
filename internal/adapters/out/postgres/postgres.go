@@ -73,7 +73,7 @@ func (s *PostgresStorage) GetClient(ctx context.Context, tenantID uuid.UUID, cli
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("client %s for tenant %s: %w", clientID, tenantID, port.ErrTenantNotFound)
+			return nil, fmt.Errorf("client %s for tenant %s: %w", clientID, tenantID, port.ErrClientNotFound)
 		}
 		return nil, fmt.Errorf("get client: %w", err)
 	}
@@ -278,7 +278,7 @@ func (s *PostgresStorage) GetAndConsumeAuthSession(ctx context.Context, tenantID
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("session %s for tenant %s: %w", code, tenantID, port.ErrTenantNotFound)
+			return nil, fmt.Errorf("session %s for tenant %s: %w", code, tenantID, port.ErrSessionNotFound)
 		}
 		return nil, fmt.Errorf("consume auth session: %w", err)
 	}
@@ -462,7 +462,7 @@ func (s *PostgresStorage) GetUserProfileByIdentifier(ctx context.Context, tenant
 	`, toPGUUID(tenantID), toPGUUID(providerID)).Scan(&configJSON)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("identity provider not found: %w", port.ErrTenantNotFound)
+			return nil, fmt.Errorf("identity provider not found: %w", port.ErrIdentityProviderNotFound)
 		}
 		return nil, fmt.Errorf("get identity provider config: %w", err)
 	}
@@ -502,7 +502,7 @@ func (s *PostgresStorage) GetUserProfileByIdentifier(ctx context.Context, tenant
 	err = s.pool.QueryRow(ctx, query, toPGUUID(tenantID), identifier).Scan(&id, &preferredUsername, &name, &email, &emailVerified)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("user profile not found for identifier %s: %w", identifier, port.ErrTenantNotFound)
+			return nil, fmt.Errorf("user profile not found for identifier %s: %w", identifier, port.ErrUserProfileNotFound)
 		}
 		return nil, fmt.Errorf("lookup user profile: %w", err)
 	}
@@ -530,7 +530,7 @@ func (s *PostgresStorage) GetPasswordCredential(ctx context.Context, userProfile
 	`, toPGUUID(userProfileID), toPGUUID(providerID)).Scan(&hash)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("password credential not found: %w", port.ErrTenantNotFound)
+			return nil, fmt.Errorf("password credential not found: %w", port.ErrPasswordCredentialNotFound)
 		}
 		return nil, fmt.Errorf("get password credential: %w", err)
 	}
@@ -557,7 +557,7 @@ func (s *PostgresStorage) GetIdentityByProfileAndProvider(ctx context.Context, u
 	`, toPGUUID(userProfileID), toPGUUID(providerID)).Scan(&id, &externalIdentityID, &loginCount, &lastLoginAt, &lastLoginAttempt, &blocked, &coupledAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("identity not found: %w", port.ErrTenantNotFound)
+			return nil, fmt.Errorf("identity not found: %w", port.ErrIdentityNotFound)
 		}
 		return nil, fmt.Errorf("get identity by profile and provider: %w", err)
 	}
@@ -649,7 +649,7 @@ func (s *PostgresStorage) GetAndConsumeInteractionSession(ctx context.Context, i
 	`, toPGUUID(id)).Scan(&clientID, &redirectURI, &codeChallenge, &codeChallengeMethod, &idpHint, &expiresAt, &tenantUUID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("interaction session %s not found: %w", id, port.ErrTenantNotFound)
+			return nil, fmt.Errorf("interaction session %s not found: %w", id, port.ErrInteractionSessionNotFound)
 		}
 		return nil, fmt.Errorf("get and consume interaction session: %w", err)
 	}

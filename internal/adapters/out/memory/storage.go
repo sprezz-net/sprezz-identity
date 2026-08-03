@@ -111,7 +111,7 @@ func (s *Storage) GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.
 	key := fmt.Sprintf("%s|%s|%s", tenantID.String(), providerID.String(), identifier)
 	profile, ok := s.profiles[key]
 	if !ok {
-		return nil, fmt.Errorf("identity %s for tenant %s: %w", identifier, tenantID, port.ErrTenantNotFound)
+		return nil, fmt.Errorf("identity %s for tenant %s: %w", identifier, tenantID, port.ErrUserProfileNotFound)
 	}
 	clone := *profile
 	return &clone, nil
@@ -124,7 +124,7 @@ func (s *Storage) GetPasswordCredential(ctx context.Context, userProfileID uuid.
 	key := fmt.Sprintf("%s|%s", userProfileID.String(), providerID.String())
 	credential, ok := s.passwordCredentials[key]
 	if !ok {
-		return nil, fmt.Errorf("password credential for user %s provider %s: %w", userProfileID, providerID, port.ErrTenantNotFound)
+		return nil, fmt.Errorf("password credential for user %s provider %s: %w", userProfileID, providerID, port.ErrPasswordCredentialNotFound)
 	}
 	clone := *credential
 	return &clone, nil
@@ -137,7 +137,7 @@ func (s *Storage) GetIdentityByProfileAndProvider(ctx context.Context, userProfi
 	key := fmt.Sprintf("%s|%s", userProfileID.String(), providerID.String())
 	identity, ok := s.identities[key]
 	if !ok {
-		return nil, fmt.Errorf("identity for user %s provider %s: %w", userProfileID, providerID, port.ErrTenantNotFound)
+		return nil, fmt.Errorf("identity for user %s provider %s: %w", userProfileID, providerID, port.ErrIdentityNotFound)
 	}
 	clone := *identity
 	return &clone, nil
@@ -169,12 +169,12 @@ func (s *Storage) GetClient(ctx context.Context, tenantID uuid.UUID, clientID st
 
 	tenantClients, ok := s.clients[tenantID.String()]
 	if !ok {
-		return nil, fmt.Errorf("client %s for tenant %s: %w", clientID, tenantID, port.ErrTenantNotFound)
+		return nil, fmt.Errorf("client %s for tenant %s: %w", clientID, tenantID, port.ErrClientNotFound)
 	}
 
 	client, ok := tenantClients[clientID]
 	if !ok {
-		return nil, fmt.Errorf("client %s for tenant %s: %w", clientID, tenantID, port.ErrTenantNotFound)
+		return nil, fmt.Errorf("client %s for tenant %s: %w", clientID, tenantID, port.ErrClientNotFound)
 	}
 	return &client, nil
 }
@@ -208,10 +208,10 @@ func (s *Storage) GetAndConsumeAuthSession(ctx context.Context, tenantID uuid.UU
 
 	session, ok := s.sessions[code]
 	if !ok {
-		return nil, fmt.Errorf("session %s: %w", code, port.ErrTenantNotFound)
+		return nil, fmt.Errorf("session %s: %w", code, port.ErrSessionNotFound)
 	}
 	if session.TenantID != tenantID.String() {
-		return nil, fmt.Errorf("session tenant mismatch: %w", port.ErrTenantNotFound)
+		return nil, fmt.Errorf("session tenant mismatch: %w", port.ErrSessionNotFound)
 	}
 	delete(s.sessions, code)
 	return &session, nil
@@ -258,7 +258,7 @@ func (s *Storage) GetAndConsumeInteractionSession(ctx context.Context, id uuid.U
 	defer s.mu.Unlock()
 	session, ok := s.interactionSessions[id]
 	if !ok {
-		return nil, port.ErrTenantNotFound
+		return nil, port.ErrInteractionSessionNotFound
 	}
 	delete(s.interactionSessions, id)
 	return &session, nil

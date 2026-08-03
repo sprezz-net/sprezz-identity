@@ -10,7 +10,16 @@ import (
 	"github.com/google/uuid"
 )
 
-var ErrTenantNotFound = errors.New("tenant not found")
+var (
+	ErrTenantNotFound              = errors.New("tenant not found")
+	ErrClientNotFound              = errors.New("client not found")
+	ErrSessionNotFound             = errors.New("session not found")
+	ErrIdentityProviderNotFound    = errors.New("identity provider not found")
+	ErrUserProfileNotFound         = errors.New("user profile not found")
+	ErrPasswordCredentialNotFound  = errors.New("password credential not found")
+	ErrIdentityNotFound            = errors.New("identity not found")
+	ErrInteractionSessionNotFound  = errors.New("interaction session not found")
+)
 
 type Storage interface {
 	SaveClient(ctx context.Context, client model.ClientApplication) error
