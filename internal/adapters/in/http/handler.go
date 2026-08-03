@@ -47,13 +47,13 @@ const (
 )
 
 type HttpAdapter struct {
-	authPort          port.Auth
-	storagePort       port.Storage
-	cryptoPort        port.Crypto
-	idpService        *service.IdentityProviderService
-	signupService     *service.UserRegistrationService
-	oauthValidator    *service.OAuthValidatorService
-	router            chi.Router
+	authPort       port.Auth
+	storagePort    port.Storage
+	cryptoPort     port.Crypto
+	idpService     *service.IdentityProviderService
+	signupService  *service.UserRegistrationService
+	oauthValidator *service.OAuthValidatorService
+	router         chi.Router
 }
 
 type registerRequest struct {
@@ -89,13 +89,13 @@ func ClientFromContext(ctx context.Context) (*model.ClientApplication, bool) {
 
 func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock) *HttpAdapter {
 	h := &HttpAdapter{
-		authPort:          a,
-		storagePort:       s,
-		cryptoPort:        c,
-		idpService:        service.NewIdentityProviderService(s, cl),
-		signupService:     service.NewUserRegistrationService(s),
-		oauthValidator:    service.NewOAuthValidatorService(),
-		router:            chi.NewRouter(),
+		authPort:       a,
+		storagePort:    s,
+		cryptoPort:     c,
+		idpService:     service.NewIdentityProviderService(s, cl),
+		signupService:  service.NewUserRegistrationService(s),
+		oauthValidator: service.NewOAuthValidatorService(),
+		router:         chi.NewRouter(),
 	}
 	h.router.Use(h.cspMiddleware)
 	h.router.Use(h.tenantMiddleware)

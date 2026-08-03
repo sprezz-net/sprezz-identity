@@ -12,11 +12,11 @@ import (
 )
 
 var (
-	ErrRedirectNotAllowed       = errors.New("redirect URI is not allowed")
-	ErrClientRedirectNotAllowed = errors.New("redirect_uri not allowed")
-	ErrInvalidRedirectURI       = errors.New("invalid redirect URI format")
-	ErrScopesNotAllowed         = errors.New("requested scopes are not predefined/allowed by the tenant")
-	ErrClientScopesNotAllowed   = errors.New("requested scopes are not allowed for this client")
+	ErrRedirectNotAllowed        = errors.New("redirect URI is not allowed")
+	ErrClientRedirectNotAllowed  = errors.New("redirect_uri not allowed")
+	ErrInvalidRedirectURI        = errors.New("invalid redirect URI format")
+	ErrScopesNotAllowed          = errors.New("requested scopes are not predefined/allowed by the tenant")
+	ErrClientScopesNotAllowed    = errors.New("requested scopes are not allowed for this client")
 	ErrAudiencesNotAllowed       = errors.New("requested allowed_audiences are not predefined/allowed by the tenant")
 	ErrClientAudiencesNotAllowed = errors.New("requested audiences are not allowed for this client")
 )

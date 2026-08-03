@@ -41,7 +41,7 @@ func (h *HttpAdapter) processSignUpRegistration(r *http.Request, tenant *model.T
 	confirmPassword := r.FormValue("confirm_password")
 
 	if password != confirmPassword {
-		return errors.New("Passwords do not match")
+		return errors.New("passwords do not match")
 	}
 
 	// In email-as-username mode, copy email to username
