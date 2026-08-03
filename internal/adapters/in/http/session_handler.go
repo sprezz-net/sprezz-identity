@@ -223,7 +223,7 @@ func (h *HttpAdapter) par(w http.ResponseWriter, r *http.Request) {
 		scopes = client.DefaultScopes
 	}
 
-	if err := h.validateAuthorizeParams(client, tenant, redirectURI, scopes); err != nil {
+	if err := h.validateAuthorizeParams(r.Context(), client, tenant, redirectURI, scopes); err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}

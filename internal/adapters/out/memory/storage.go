@@ -50,11 +50,14 @@ func (s *Storage) ResolveTenantByID(ctx context.Context, tenantID uuid.UUID) (*m
 	for _, tenant := range s.tenants {
 		if tenant.ID == tenantID {
 			clone := *tenant
-			if clone.PredefinedScopes == nil {
-				clone.PredefinedScopes = []string{"openid", "profile", "email", "offline_access"}
+			if clone.Config.PredefinedScopes == nil {
+				clone.Config.PredefinedScopes = []string{"openid", "profile", "email", "offline_access"}
 			}
-			if clone.PredefinedAudiences == nil {
-				clone.PredefinedAudiences = []string{}
+			if clone.Config.PredefinedAudiences == nil {
+				clone.Config.PredefinedAudiences = []string{}
+			}
+			if clone.Config.RedirectWhitelist == nil {
+				clone.Config.RedirectWhitelist = []string{}
 			}
 			return &clone, nil
 		}
@@ -274,11 +277,14 @@ func (s *Storage) ResolveTenantByDomain(ctx context.Context, domain string) (*mo
 		return nil, port.ErrTenantNotFound
 	}
 	clone := *tenant
-	if clone.PredefinedScopes == nil {
-		clone.PredefinedScopes = []string{"openid", "profile", "email", "offline_access"}
+	if clone.Config.PredefinedScopes == nil {
+		clone.Config.PredefinedScopes = []string{"openid", "profile", "email", "offline_access"}
 	}
-	if clone.PredefinedAudiences == nil {
-		clone.PredefinedAudiences = []string{}
+	if clone.Config.PredefinedAudiences == nil {
+		clone.Config.PredefinedAudiences = []string{}
+	}
+	if clone.Config.RedirectWhitelist == nil {
+		clone.Config.RedirectWhitelist = []string{}
 	}
 	return &clone, nil
 }

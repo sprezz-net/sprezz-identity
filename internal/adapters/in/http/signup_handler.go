@@ -5,6 +5,8 @@ import (
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/views"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -81,9 +83,22 @@ func (h *HttpAdapter) signUpSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if we have an original authorization context redirect
-	redirectURL := "/login?registered=true"
-	w.Header().Set("HX-Redirect", redirectURL)
-	w.WriteHeader(http.StatusSeeOther)
-	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+	// Resolve targetURL
+	targetURL := r.FormValue("redirect_uri")
+	if targetURL == "" {
+		if cookie, err := r.Cookie("spz_auth_session_id"); err == nil && cookie.Value != "" {
+			if sessionUUID, parseErr := uuid.Parse(cookie.Value); parseErr == nil {
+				if session, loadErr := h.storagePort.GetAndConsumeInteractionSession(r.Context(), tenant.ID, sessionUUID); loadErr == nil {
+					targetURL = session.RedirectURI
+				}
+			}
+		}
+	}
+
+	if targetURL == "" {
+		targetURL = tenant.Config.DefaultRedirectURI
+	}
+
+	w.Header().Set("HX-Redirect", targetURL)
+	http.Redirect(w, r, targetURL, http.StatusSeeOther)
 }

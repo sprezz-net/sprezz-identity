@@ -328,14 +328,20 @@ func (s *PostgresStorage) ResolveTenantByDomain(ctx context.Context, domain stri
 		return nil, fmt.Errorf("resolve tenant by domain: %w", err)
 	}
 
+	var cfg model.TenantConfig
+	if len(row.Config) > 0 {
+		if err := json.Unmarshal(row.Config, &cfg); err != nil {
+			return nil, fmt.Errorf("resolve tenant by domain: unmarshal config: %w", err)
+		}
+	}
+
 	return &model.Tenant{
-		ID:                  tenantID,
-		Name:                row.Name,
-		Domain:              row.DomainName,
-		IsActive:            row.IsActive,
-		CreatedAt:           createdAt,
-		PredefinedScopes:    row.PredefinedScopes,
-		PredefinedAudiences: row.PredefinedAudiences,
+		ID:        tenantID,
+		Name:      row.Name,
+		Domain:    row.DomainName,
+		IsActive:  row.IsActive,
+		CreatedAt: createdAt,
+		Config:    cfg,
 	}, nil
 }
 
@@ -358,26 +364,36 @@ func (s *PostgresStorage) ResolveTenantByID(ctx context.Context, tenantID uuid.U
 		return nil, fmt.Errorf("resolve tenant by ID: %w", err)
 	}
 
+	var cfg model.TenantConfig
+	if len(row.Config) > 0 {
+		if err := json.Unmarshal(row.Config, &cfg); err != nil {
+			return nil, fmt.Errorf("resolve tenant by ID: unmarshal config: %w", err)
+		}
+	}
+
 	return &model.Tenant{
-		ID:                  resolvedID,
-		Name:                row.Name,
-		Domain:              row.DomainName,
-		IsActive:            row.IsActive,
-		CreatedAt:           createdAt,
-		PredefinedScopes:    row.PredefinedScopes,
-		PredefinedAudiences: row.PredefinedAudiences,
+		ID:        resolvedID,
+		Name:      row.Name,
+		Domain:    row.DomainName,
+		IsActive:  row.IsActive,
+		CreatedAt: createdAt,
+		Config:    cfg,
 	}, nil
 }
 
 func (s *PostgresStorage) CreateTenant(ctx context.Context, tenant model.Tenant) error {
+	configJSON, err := json.Marshal(tenant.Config)
+	if err != nil {
+		return fmt.Errorf("create tenant: marshal config: %w", err)
+	}
+
 	commandTag, err := s.queries.CreateTenant(ctx, sqlcdb.CreateTenantParams{
-		TenantUuid:          toPGUUID(tenant.ID),
-		Name:                tenant.Name,
-		DomainName:          tenant.Domain,
-		IsActive:            tenant.IsActive,
-		CreatedAt:           toPGTimestamptz(tenant.CreatedAt),
-		PredefinedScopes:    tenant.PredefinedScopes,
-		PredefinedAudiences: tenant.PredefinedAudiences,
+		TenantUuid: toPGUUID(tenant.ID),
+		Name:       tenant.Name,
+		DomainName: tenant.Domain,
+		IsActive:   tenant.IsActive,
+		CreatedAt:  toPGTimestamptz(tenant.CreatedAt),
+		Config:     configJSON,
 	})
 	if err != nil {
 		return fmt.Errorf("create tenant: %w", err)

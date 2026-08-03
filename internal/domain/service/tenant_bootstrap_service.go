@@ -48,13 +48,17 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 	}
 
 	newTenant := &model.Tenant{
-		ID:                  uuid.New(),
-		Name:                domain,
-		Domain:              domain,
-		IsActive:            true,
-		CreatedAt:           s.clock.Now(),
-		PredefinedScopes:    []string{"openid", "profile", "email", "offline_access"},
-		PredefinedAudiences: []string{},
+		ID:        uuid.New(),
+		Name:      domain,
+		Domain:    domain,
+		IsActive:  true,
+		CreatedAt: s.clock.Now(),
+		Config: model.TenantConfig{
+			PredefinedScopes:    []string{"openid", "profile", "email", "offline_access"},
+			PredefinedAudiences: []string{},
+			DefaultRedirectURI:  "https://" + domain + "/admin",
+			RedirectWhitelist:   []string{"https://" + domain + "/admin"},
+		},
 	}
 
 	if err := s.storage.CreateTenant(ctx, *newTenant); err != nil {

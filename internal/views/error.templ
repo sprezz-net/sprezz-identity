@@ -1,0 +1,20 @@
+package views
+
+templ Error(errorMessage string) {
+	<!doctype html>
+	<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Error - Sprezz Identity</title>
+		<script src="https://unpkg.com/htmx.org@1.9.12" nonce={ templ.GetNonce(ctx) }></script>
+	</head>
+	<body style="font-family:sans-serif;max-width:480px;margin:4rem auto;text-align:center;">
+		<h1 style="color:#e53e3e;">Security Alert</h1>
+		<div style="background-color:#fff5f5;border:1px solid #fed7d7;color:#c53030;padding:1.5rem;border-radius:0.375rem;margin-top:2rem;">
+			<p style="font-weight:bold;font-size:1.125rem;margin-top:0;">Request Blocked</p>
+			<p>{ errorMessage }</p>
+		</div>
+		<p style="margin-top:2rem;color:#718096;font-size:0.875rem;">Please contact your administrator if you believe this is an error.</p>
+	</body>
+	</html>
+}

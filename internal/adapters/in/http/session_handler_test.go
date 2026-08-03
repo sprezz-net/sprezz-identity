@@ -84,7 +84,13 @@ func TestHttpAdapter_Revoke_Success(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{
+		ID:     tenantID,
+		Domain: "test.com",
+		Config: model.TenantConfig{
+			RedirectWhitelist: []string{"https://test.com/callback"},
+		},
+	}
 	secret := "clientsecret"
 	client := &model.ClientApplication{
 		ID:           uuid.NewString(),
@@ -179,13 +185,20 @@ func TestHttpAdapter_PAR_Success(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{
+		ID:     tenantID,
+		Domain: "test.com",
+		Config: model.TenantConfig{
+			RedirectWhitelist: []string{"https://test.com/callback"},
+		},
+	}
 	secret := "clientsecret"
 	client := &model.ClientApplication{
 		ID:            uuid.NewString(),
 		TenantID:      tenantID,
 		ClientID:      "test-client",
 		ClientSecret:  &secret,
+		AllowedScopes: []string{"openid"},
 		DefaultScopes: []string{"openid"},
 		RedirectURIs:  []string{"https://test.com/callback"},
 	}

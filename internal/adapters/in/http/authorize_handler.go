@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"sprezz-identity/internal/domain/model"
+	"sprezz-identity/internal/domain/service"
 	"sprezz-identity/internal/views"
 
 	"github.com/google/uuid"
@@ -143,6 +145,18 @@ func (h *HttpAdapter) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	defaultRedirect := tenant.Config.DefaultRedirectURI
+	if defaultRedirect == "" {
+		defaultRedirect = "/"
+	}
+
+	if err := h.oauthValidator.ValidateRedirect(r.Context(), tenant, nil, defaultRedirect); err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(err.Error()))
+		return
+	}
+
+	w.Header().Set("HX-Redirect", defaultRedirect)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("Authenticated"))
 }
@@ -264,8 +278,12 @@ func (h *HttpAdapter) authorize(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid client"})
 		return
 	}
-	if !contains(client.RedirectURIs, redirectURI) {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "redirect_uri not allowed"})
+	if err := h.oauthValidator.ValidateRedirect(r.Context(), tenant, client, redirectURI); err != nil {
+		if errors.Is(err, service.ErrClientRedirectNotAllowed) {
+			respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		h.renderError(w, r, http.StatusForbidden, err.Error())
 		return
 	}
 

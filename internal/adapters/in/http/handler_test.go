@@ -28,11 +28,13 @@ func TestHttpAdapter_OpenIDConfiguration_Success(t *testing.T) {
 
 	tenantID := uuid.New()
 	tenant := &model.Tenant{
-		ID:               tenantID,
-		Name:             "test-tenant",
-		Domain:           "test.com",
-		IsActive:         true,
-		PredefinedScopes: []string{"openid", "custom-scope"},
+		ID:       tenantID,
+		Name:     "test-tenant",
+		Domain:   "test.com",
+		IsActive: true,
+		Config: model.TenantConfig{
+			PredefinedScopes: []string{"openid", "custom-scope"},
+		},
 	}
 
 	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
@@ -149,12 +151,14 @@ func runRegisterTestCase(t *testing.T, tt registerTestCase) {
 
 	tenantID := uuid.New()
 	tenant := &model.Tenant{
-		ID:                  tenantID,
-		Name:                "test-tenant",
-		Domain:              "test.com",
-		IsActive:            true,
-		PredefinedScopes:    tt.predefinedScopes,
-		PredefinedAudiences: tt.predefinedAudiences,
+		ID:       tenantID,
+		Name:     "test-tenant",
+		Domain:   "test.com",
+		IsActive: true,
+		Config: model.TenantConfig{
+			PredefinedScopes:    tt.predefinedScopes,
+			PredefinedAudiences: tt.predefinedAudiences,
+		},
 	}
 
 	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {

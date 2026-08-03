@@ -49,6 +49,7 @@ func (s *UserRegistrationService) RegisterUser(ctx context.Context, tenantID uui
 	}
 
 	profile := model.UserProfile{
+		ID:                uuid.New(),
 		PreferredUsername: username,
 		Name:              name,
 		Email:             email,

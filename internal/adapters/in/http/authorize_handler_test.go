@@ -26,6 +26,9 @@ func TestHttpAdapter_Authorize_PreservesParams(t *testing.T) {
 	tenant := &model.Tenant{
 		ID:     tenantID,
 		Domain: "test.com",
+		Config: model.TenantConfig{
+			RedirectWhitelist: []string{"https://test.com/callback"},
+		},
 	}
 	client := &model.ClientApplication{
 		ID:           uuid.NewString(),
@@ -103,7 +106,13 @@ func TestHttpAdapter_Authorize_DisallowedRedirectURI(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{
+		ID:     tenantID,
+		Domain: "test.com",
+		Config: model.TenantConfig{
+			RedirectWhitelist: []string{"https://test.com/callback"},
+		},
+	}
 	client := &model.ClientApplication{
 		ID:           uuid.NewString(),
 		TenantID:     tenantID,
@@ -138,7 +147,13 @@ func TestHttpAdapter_Authorize_AuthenticatedSSO(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{
+		ID:     tenantID,
+		Domain: "test.com",
+		Config: model.TenantConfig{
+			RedirectWhitelist: []string{"https://test.com/callback"},
+		},
+	}
 	client := &model.ClientApplication{
 		ID:            uuid.NewString(),
 		TenantID:      tenantID,

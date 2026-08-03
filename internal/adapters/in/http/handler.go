@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
 	"sprezz-identity/internal/domain/service"
+	"sprezz-identity/internal/views"
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
@@ -46,12 +46,13 @@ const (
 )
 
 type HttpAdapter struct {
-	authPort      port.Auth
-	storagePort   port.Storage
-	cryptoPort    port.Crypto
-	idpService    *service.IdentityProviderService
-	signupService *service.UserRegistrationService
-	router        chi.Router
+	authPort          port.Auth
+	storagePort       port.Storage
+	cryptoPort        port.Crypto
+	idpService        *service.IdentityProviderService
+	signupService     *service.UserRegistrationService
+	oauthValidator    *service.OAuthValidatorService
+	router            chi.Router
 }
 
 type registerRequest struct {
@@ -84,17 +85,25 @@ func ClientFromContext(ctx context.Context) (*model.ClientApplication, bool) {
 
 func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock) *HttpAdapter {
 	h := &HttpAdapter{
-		authPort:      a,
-		storagePort:   s,
-		cryptoPort:    c,
-		idpService:    service.NewIdentityProviderService(s, cl),
-		signupService: service.NewUserRegistrationService(s),
-		router:        chi.NewRouter(),
+		authPort:          a,
+		storagePort:       s,
+		cryptoPort:        c,
+		idpService:        service.NewIdentityProviderService(s, cl),
+		signupService:     service.NewUserRegistrationService(s),
+		oauthValidator:    service.NewOAuthValidatorService(),
+		router:            chi.NewRouter(),
 	}
 	h.router.Use(h.cspMiddleware)
 	h.router.Use(h.tenantMiddleware)
 	h.registerRoutes()
 	return h
+}
+
+func (h *HttpAdapter) renderError(w http.ResponseWriter, r *http.Request, status int, errorMessage string) {
+	w.Header().Set(contentTypeHeader, "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	component := views.Error(errorMessage)
+	_ = component.Render(r.Context(), w)
 }
 
 func (h *HttpAdapter) tenantMiddleware(next http.Handler) http.Handler {
@@ -165,7 +174,7 @@ func (h *HttpAdapter) openIDConfiguration(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	scopesSupported := tenant.PredefinedScopes
+	scopesSupported := tenant.Config.PredefinedScopes
 	if len(scopesSupported) == 0 {
 		scopesSupported = []string{"openid", "profile", "email", "offline_access"}
 	}
@@ -238,23 +247,18 @@ func (h *HttpAdapter) register(w http.ResponseWriter, r *http.Request) {
 		payload.DefaultScopes = payload.AllowedScopes
 	}
 
-	predefined := tenant.PredefinedScopes
-	if len(predefined) == 0 {
-		predefined = []string{"openid", "profile", "email", "offline_access"}
-	}
-
-	if !isSubset(payload.AllowedScopes, predefined) {
+	if err := h.oauthValidator.ValidateScopes(r.Context(), tenant, nil, payload.AllowedScopes); err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "requested allowed_scopes are not predefined/allowed by the tenant"})
 		return
 	}
-	if !isSubset(payload.DefaultScopes, predefined) {
+	if err := h.oauthValidator.ValidateScopes(r.Context(), tenant, nil, payload.DefaultScopes); err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "requested default_scopes are not predefined/allowed by the tenant"})
 		return
 	}
 
 	if len(payload.AllowedAudiences) > 0 {
-		if !isSubset(payload.AllowedAudiences, tenant.PredefinedAudiences) {
-			respondJSON(w, http.StatusBadRequest, map[string]string{"error": "requested allowed_audiences are not predefined/allowed by the tenant"})
+		if err := h.oauthValidator.ValidateAudiences(r.Context(), tenant, nil, payload.AllowedAudiences); err != nil {
+			respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
 	}
@@ -334,19 +338,11 @@ func isSubset(subset, set []string) bool {
 	return true
 }
 
-func (h *HttpAdapter) validateAuthorizeParams(client *model.ClientApplication, tenant *model.Tenant, redirectURI string, scopes []string) error {
-	if !contains(client.RedirectURIs, redirectURI) {
-		return errors.New("redirect_uri not allowed")
+func (h *HttpAdapter) validateAuthorizeParams(ctx context.Context, client *model.ClientApplication, tenant *model.Tenant, redirectURI string, scopes []string) error {
+	if err := h.oauthValidator.ValidateRedirect(ctx, tenant, client, redirectURI); err != nil {
+		return err
 	}
-
-	predefined := tenant.PredefinedScopes
-	if len(predefined) == 0 {
-		predefined = []string{"openid", "profile", "email", "offline_access"}
-	}
-	if !isSubset(scopes, predefined) {
-		return errors.New("requested scopes are not predefined/allowed by the tenant")
-	}
-	return nil
+	return h.oauthValidator.ValidateScopes(ctx, tenant, client, scopes)
 }
 
 func (h *HttpAdapter) cspMiddleware(next http.Handler) http.Handler {
