@@ -42,9 +42,9 @@ type StorageMock struct {
 	beforeGetAndConsumeAuthSessionCounter uint64
 	GetAndConsumeAuthSessionMock          mStorageMockGetAndConsumeAuthSession
 
-	funcGetAndConsumeInteractionSession          func(ctx context.Context, id uuid.UUID) (ip1 *model.InteractionSession, err error)
+	funcGetAndConsumeInteractionSession          func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (ip1 *model.InteractionSession, err error)
 	funcGetAndConsumeInteractionSessionOrigin    string
-	inspectFuncGetAndConsumeInteractionSession   func(ctx context.Context, id uuid.UUID)
+	inspectFuncGetAndConsumeInteractionSession   func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID)
 	afterGetAndConsumeInteractionSessionCounter  uint64
 	beforeGetAndConsumeInteractionSessionCounter uint64
 	GetAndConsumeInteractionSessionMock          mStorageMockGetAndConsumeInteractionSession
@@ -1350,14 +1350,16 @@ type StorageMockGetAndConsumeInteractionSessionExpectation struct {
 
 // StorageMockGetAndConsumeInteractionSessionParams contains parameters of the Storage.GetAndConsumeInteractionSession
 type StorageMockGetAndConsumeInteractionSessionParams struct {
-	ctx context.Context
-	id  uuid.UUID
+	ctx      context.Context
+	tenantID uuid.UUID
+	id       uuid.UUID
 }
 
 // StorageMockGetAndConsumeInteractionSessionParamPtrs contains pointers to parameters of the Storage.GetAndConsumeInteractionSession
 type StorageMockGetAndConsumeInteractionSessionParamPtrs struct {
-	ctx *context.Context
-	id  *uuid.UUID
+	ctx      *context.Context
+	tenantID *uuid.UUID
+	id       *uuid.UUID
 }
 
 // StorageMockGetAndConsumeInteractionSessionResults contains results of the Storage.GetAndConsumeInteractionSession
@@ -1368,9 +1370,10 @@ type StorageMockGetAndConsumeInteractionSessionResults struct {
 
 // StorageMockGetAndConsumeInteractionSessionOrigins contains origins of expectations of the Storage.GetAndConsumeInteractionSession
 type StorageMockGetAndConsumeInteractionSessionExpectationOrigins struct {
-	origin    string
-	originCtx string
-	originId  string
+	origin         string
+	originCtx      string
+	originTenantID string
+	originId       string
 }
 
 // Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
@@ -1384,7 +1387,7 @@ func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSes
 }
 
 // Expect sets up expected params for Storage.GetAndConsumeInteractionSession
-func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSession) Expect(ctx context.Context, id uuid.UUID) *mStorageMockGetAndConsumeInteractionSession {
+func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSession) Expect(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) *mStorageMockGetAndConsumeInteractionSession {
 	if mmGetAndConsumeInteractionSession.mock.funcGetAndConsumeInteractionSession != nil {
 		mmGetAndConsumeInteractionSession.mock.t.Fatalf("StorageMock.GetAndConsumeInteractionSession mock is already set by Set")
 	}
@@ -1397,7 +1400,7 @@ func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSes
 		mmGetAndConsumeInteractionSession.mock.t.Fatalf("StorageMock.GetAndConsumeInteractionSession mock is already set by ExpectParams functions")
 	}
 
-	mmGetAndConsumeInteractionSession.defaultExpectation.params = &StorageMockGetAndConsumeInteractionSessionParams{ctx, id}
+	mmGetAndConsumeInteractionSession.defaultExpectation.params = &StorageMockGetAndConsumeInteractionSessionParams{ctx, tenantID, id}
 	mmGetAndConsumeInteractionSession.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmGetAndConsumeInteractionSession.expectations {
 		if minimock.Equal(e.params, mmGetAndConsumeInteractionSession.defaultExpectation.params) {
@@ -1431,8 +1434,31 @@ func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSes
 	return mmGetAndConsumeInteractionSession
 }
 
-// ExpectIdParam2 sets up expected param id for Storage.GetAndConsumeInteractionSession
-func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSession) ExpectIdParam2(id uuid.UUID) *mStorageMockGetAndConsumeInteractionSession {
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.GetAndConsumeInteractionSession
+func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSession) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockGetAndConsumeInteractionSession {
+	if mmGetAndConsumeInteractionSession.mock.funcGetAndConsumeInteractionSession != nil {
+		mmGetAndConsumeInteractionSession.mock.t.Fatalf("StorageMock.GetAndConsumeInteractionSession mock is already set by Set")
+	}
+
+	if mmGetAndConsumeInteractionSession.defaultExpectation == nil {
+		mmGetAndConsumeInteractionSession.defaultExpectation = &StorageMockGetAndConsumeInteractionSessionExpectation{}
+	}
+
+	if mmGetAndConsumeInteractionSession.defaultExpectation.params != nil {
+		mmGetAndConsumeInteractionSession.mock.t.Fatalf("StorageMock.GetAndConsumeInteractionSession mock is already set by Expect")
+	}
+
+	if mmGetAndConsumeInteractionSession.defaultExpectation.paramPtrs == nil {
+		mmGetAndConsumeInteractionSession.defaultExpectation.paramPtrs = &StorageMockGetAndConsumeInteractionSessionParamPtrs{}
+	}
+	mmGetAndConsumeInteractionSession.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetAndConsumeInteractionSession.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetAndConsumeInteractionSession
+}
+
+// ExpectIdParam3 sets up expected param id for Storage.GetAndConsumeInteractionSession
+func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSession) ExpectIdParam3(id uuid.UUID) *mStorageMockGetAndConsumeInteractionSession {
 	if mmGetAndConsumeInteractionSession.mock.funcGetAndConsumeInteractionSession != nil {
 		mmGetAndConsumeInteractionSession.mock.t.Fatalf("StorageMock.GetAndConsumeInteractionSession mock is already set by Set")
 	}
@@ -1455,7 +1481,7 @@ func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSes
 }
 
 // Inspect accepts an inspector function that has same arguments as the Storage.GetAndConsumeInteractionSession
-func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSession) Inspect(f func(ctx context.Context, id uuid.UUID)) *mStorageMockGetAndConsumeInteractionSession {
+func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSession) Inspect(f func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID)) *mStorageMockGetAndConsumeInteractionSession {
 	if mmGetAndConsumeInteractionSession.mock.inspectFuncGetAndConsumeInteractionSession != nil {
 		mmGetAndConsumeInteractionSession.mock.t.Fatalf("Inspect function is already set for StorageMock.GetAndConsumeInteractionSession")
 	}
@@ -1480,7 +1506,7 @@ func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSes
 }
 
 // Set uses given function f to mock the Storage.GetAndConsumeInteractionSession method
-func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSession) Set(f func(ctx context.Context, id uuid.UUID) (ip1 *model.InteractionSession, err error)) *StorageMock {
+func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSession) Set(f func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (ip1 *model.InteractionSession, err error)) *StorageMock {
 	if mmGetAndConsumeInteractionSession.defaultExpectation != nil {
 		mmGetAndConsumeInteractionSession.mock.t.Fatalf("Default expectation is already set for the Storage.GetAndConsumeInteractionSession method")
 	}
@@ -1496,14 +1522,14 @@ func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSes
 
 // When sets expectation for the Storage.GetAndConsumeInteractionSession which will trigger the result defined by the following
 // Then helper
-func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSession) When(ctx context.Context, id uuid.UUID) *StorageMockGetAndConsumeInteractionSessionExpectation {
+func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSession) When(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) *StorageMockGetAndConsumeInteractionSessionExpectation {
 	if mmGetAndConsumeInteractionSession.mock.funcGetAndConsumeInteractionSession != nil {
 		mmGetAndConsumeInteractionSession.mock.t.Fatalf("StorageMock.GetAndConsumeInteractionSession mock is already set by Set")
 	}
 
 	expectation := &StorageMockGetAndConsumeInteractionSessionExpectation{
 		mock:               mmGetAndConsumeInteractionSession.mock,
-		params:             &StorageMockGetAndConsumeInteractionSessionParams{ctx, id},
+		params:             &StorageMockGetAndConsumeInteractionSessionParams{ctx, tenantID, id},
 		expectationOrigins: StorageMockGetAndConsumeInteractionSessionExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmGetAndConsumeInteractionSession.expectations = append(mmGetAndConsumeInteractionSession.expectations, expectation)
@@ -1538,17 +1564,17 @@ func (mmGetAndConsumeInteractionSession *mStorageMockGetAndConsumeInteractionSes
 }
 
 // GetAndConsumeInteractionSession implements mm_port.Storage
-func (mmGetAndConsumeInteractionSession *StorageMock) GetAndConsumeInteractionSession(ctx context.Context, id uuid.UUID) (ip1 *model.InteractionSession, err error) {
+func (mmGetAndConsumeInteractionSession *StorageMock) GetAndConsumeInteractionSession(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (ip1 *model.InteractionSession, err error) {
 	mm_atomic.AddUint64(&mmGetAndConsumeInteractionSession.beforeGetAndConsumeInteractionSessionCounter, 1)
 	defer mm_atomic.AddUint64(&mmGetAndConsumeInteractionSession.afterGetAndConsumeInteractionSessionCounter, 1)
 
 	mmGetAndConsumeInteractionSession.t.Helper()
 
 	if mmGetAndConsumeInteractionSession.inspectFuncGetAndConsumeInteractionSession != nil {
-		mmGetAndConsumeInteractionSession.inspectFuncGetAndConsumeInteractionSession(ctx, id)
+		mmGetAndConsumeInteractionSession.inspectFuncGetAndConsumeInteractionSession(ctx, tenantID, id)
 	}
 
-	mm_params := StorageMockGetAndConsumeInteractionSessionParams{ctx, id}
+	mm_params := StorageMockGetAndConsumeInteractionSessionParams{ctx, tenantID, id}
 
 	// Record call args
 	mmGetAndConsumeInteractionSession.GetAndConsumeInteractionSessionMock.mutex.Lock()
@@ -1567,13 +1593,18 @@ func (mmGetAndConsumeInteractionSession *StorageMock) GetAndConsumeInteractionSe
 		mm_want := mmGetAndConsumeInteractionSession.GetAndConsumeInteractionSessionMock.defaultExpectation.params
 		mm_want_ptrs := mmGetAndConsumeInteractionSession.GetAndConsumeInteractionSessionMock.defaultExpectation.paramPtrs
 
-		mm_got := StorageMockGetAndConsumeInteractionSessionParams{ctx, id}
+		mm_got := StorageMockGetAndConsumeInteractionSessionParams{ctx, tenantID, id}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
 				mmGetAndConsumeInteractionSession.t.Errorf("StorageMock.GetAndConsumeInteractionSession got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmGetAndConsumeInteractionSession.GetAndConsumeInteractionSessionMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetAndConsumeInteractionSession.t.Errorf("StorageMock.GetAndConsumeInteractionSession got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetAndConsumeInteractionSession.GetAndConsumeInteractionSessionMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
 			}
 
 			if mm_want_ptrs.id != nil && !minimock.Equal(*mm_want_ptrs.id, mm_got.id) {
@@ -1593,9 +1624,9 @@ func (mmGetAndConsumeInteractionSession *StorageMock) GetAndConsumeInteractionSe
 		return (*mm_results).ip1, (*mm_results).err
 	}
 	if mmGetAndConsumeInteractionSession.funcGetAndConsumeInteractionSession != nil {
-		return mmGetAndConsumeInteractionSession.funcGetAndConsumeInteractionSession(ctx, id)
+		return mmGetAndConsumeInteractionSession.funcGetAndConsumeInteractionSession(ctx, tenantID, id)
 	}
-	mmGetAndConsumeInteractionSession.t.Fatalf("Unexpected call to StorageMock.GetAndConsumeInteractionSession. %v %v", ctx, id)
+	mmGetAndConsumeInteractionSession.t.Fatalf("Unexpected call to StorageMock.GetAndConsumeInteractionSession. %v %v %v", ctx, tenantID, id)
 	return
 }
 

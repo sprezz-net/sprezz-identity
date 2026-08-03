@@ -37,7 +37,7 @@ type Storage interface {
 	UpsertIdentity(ctx context.Context, identity model.UserIdentity) error
 	RevokeSession(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) error
 	SaveInteractionSession(ctx context.Context, session model.InteractionSession) error
-	GetAndConsumeInteractionSession(ctx context.Context, id uuid.UUID) (*model.InteractionSession, error)
+	GetAndConsumeInteractionSession(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.InteractionSession, error)
 	RevokeToken(ctx context.Context, tokenID string, expiresAt time.Time) error
 	IsTokenRevoked(ctx context.Context, tokenID string) (bool, error)
 	PruneExpiredTokens(ctx context.Context) error

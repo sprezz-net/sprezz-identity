@@ -632,7 +632,7 @@ func (s *PostgresStorage) SaveInteractionSession(ctx context.Context, session mo
 	return nil
 }
 
-func (s *PostgresStorage) GetAndConsumeInteractionSession(ctx context.Context, id uuid.UUID) (*model.InteractionSession, error) {
+func (s *PostgresStorage) GetAndConsumeInteractionSession(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.InteractionSession, error) {
 	var clientID string
 	var redirectURI string
 	var codeChallenge string
@@ -643,10 +643,10 @@ func (s *PostgresStorage) GetAndConsumeInteractionSession(ctx context.Context, i
 
 	err := s.pool.QueryRow(ctx, `
 		DELETE FROM interaction_sessions
-		WHERE id = $1::uuid
+		WHERE id = $1::uuid AND tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $2::uuid)
 		RETURNING client_id, redirect_uri, code_challenge, code_challenge_method, idp_hint, expires_at,
 		          (SELECT tenant_uuid FROM tenants WHERE id = tenant_id)
-	`, toPGUUID(id)).Scan(&clientID, &redirectURI, &codeChallenge, &codeChallengeMethod, &idpHint, &expiresAt, &tenantUUID)
+	`, toPGUUID(id), toPGUUID(tenantID)).Scan(&clientID, &redirectURI, &codeChallenge, &codeChallengeMethod, &idpHint, &expiresAt, &tenantUUID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("interaction session %s not found: %w", id, port.ErrInteractionSessionNotFound)

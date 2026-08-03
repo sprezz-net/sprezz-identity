@@ -238,6 +238,11 @@ func (s *Storage) ResolveTenantByDomain(ctx context.Context, domain string) (*mo
 func (s *Storage) CreateTenant(ctx context.Context, tenant model.Tenant) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	for _, existing := range s.tenants {
+		if existing.ID == tenant.ID {
+			return fmt.Errorf("tenant with UUID %s already exists", tenant.ID)
+		}
+	}
 	s.tenants[tenant.Domain] = &tenant
 	return nil
 }
@@ -253,11 +258,14 @@ func (s *Storage) SaveInteractionSession(ctx context.Context, session model.Inte
 	return nil
 }
 
-func (s *Storage) GetAndConsumeInteractionSession(ctx context.Context, id uuid.UUID) (*model.InteractionSession, error) {
+func (s *Storage) GetAndConsumeInteractionSession(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.InteractionSession, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	session, ok := s.interactionSessions[id]
 	if !ok {
+		return nil, port.ErrInteractionSessionNotFound
+	}
+	if session.TenantID != tenantID {
 		return nil, port.ErrInteractionSessionNotFound
 	}
 	delete(s.interactionSessions, id)

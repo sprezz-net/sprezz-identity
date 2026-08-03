@@ -99,7 +99,11 @@ func (h *HttpAdapter) processInteractionRedirect(w http.ResponseWriter, r *http.
 	if parseErr != nil {
 		return false
 	}
-	session, loadErr := h.storagePort.GetAndConsumeInteractionSession(r.Context(), sessionUUID)
+	tenant, err := h.resolveTenant(r.Context(), r.Host)
+	if err != nil {
+		return false
+	}
+	session, loadErr := h.storagePort.GetAndConsumeInteractionSession(r.Context(), tenant.ID, sessionUUID)
 	if loadErr != nil {
 		return false
 	}
