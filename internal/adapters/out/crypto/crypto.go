@@ -61,9 +61,9 @@ func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.Signatur
 		"tid":       claims.TenantID,
 		"client_id": claims.ClientID,
 		"scope":     strings.Join(claims.Scopes, " "),
-		"iat":       claims.IssuedAt.Unix(),
-		"exp":       claims.ExpiresAt.Unix(),
-		"nbf":       claims.IssuedAt.Unix(),
+		"iat":       int64(claims.IssuedAt.Unix()),
+		"exp":       int64(claims.ExpiresAt.Unix()),
+		"nbf":       int64(claims.IssuedAt.Unix()),
 	})
 	token.Header["kid"] = kid
 	token.Header["typ"] = "JWT"
@@ -94,11 +94,11 @@ func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.Signatur
 		"aud":       claims.Audience,
 		"jti":       claims.TokenID,
 		"tid":       claims.TenantID,
-		"auth_time": claims.AuthTime.Unix(),
+		"auth_time": int64(claims.AuthTime.Unix()),
 		"nonce":     claims.Nonce,
-		"iat":       claims.IssuedAt.Unix(),
-		"exp":       claims.ExpiresAt.Unix(),
-		"nbf":       claims.IssuedAt.Unix(),
+		"iat":       int64(claims.IssuedAt.Unix()),
+		"exp":       int64(claims.ExpiresAt.Unix()),
+		"nbf":       int64(claims.IssuedAt.Unix()),
 	}
 	if claims.SessionID != "" {
 		mapClaims["sid"] = claims.SessionID
@@ -132,7 +132,7 @@ func (s *JWTSigner) SignLogoutToken(claims model.LogoutTokenClaims, alg model.Si
 		"sub": claims.Subject,
 		"aud": claims.Audience,
 		"jti": claims.TokenID,
-		"iat": claims.IssuedAt.Unix(),
+		"iat": int64(claims.IssuedAt.Unix()),
 		"events": map[string]any{
 			"http://schemas.openid.net/event/back-channel-logout": map[string]any{},
 		},
