@@ -276,7 +276,13 @@ func TestHttpAdapter_Logout_ValidPostLogoutRedirectURI(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{
+		ID:     tenantID,
+		Domain: "test.com",
+		Config: model.TenantConfig{
+			RedirectWhitelist: []string{"https://test.com/logged-out"},
+		},
+	}
 	client := &model.ClientApplication{
 		ID:                     uuid.NewString(),
 		TenantID:               tenantID,

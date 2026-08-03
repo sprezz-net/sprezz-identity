@@ -99,7 +99,9 @@ func (h *HttpAdapter) determinePostLogoutRedirectURI(r *http.Request, tenant *mo
 	if []string{requestedURI}[0] != "" && clientID != "" {
 		if client, err := h.storagePort.GetClient(r.Context(), tenant.ID, clientID); err == nil {
 			if contains(client.PostLogoutRedirectURIs, requestedURI) {
-				return requestedURI
+				if err := h.oauthValidator.ValidateRedirect(r.Context(), tenant, nil, requestedURI); err == nil {
+					return requestedURI
+				}
 			}
 		}
 	}

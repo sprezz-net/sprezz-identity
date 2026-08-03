@@ -158,6 +158,7 @@ func runRegisterTestCase(t *testing.T, tt registerTestCase) {
 		Config: model.TenantConfig{
 			PredefinedScopes:    tt.predefinedScopes,
 			PredefinedAudiences: tt.predefinedAudiences,
+			RedirectWhitelist:   []string{"https://test.com/callback"},
 		},
 	}
 

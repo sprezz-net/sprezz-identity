@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"net/http"
 
 	"sprezz-identity/internal/domain/model"
@@ -32,6 +33,45 @@ func (h *HttpAdapter) signUpForm(w http.ResponseWriter, r *http.Request) {
 	_ = component.Render(r.Context(), w)
 }
 
+func (h *HttpAdapter) processSignUpRegistration(r *http.Request, tenant *model.Tenant, provider *model.IdentityProvider) error {
+	name := r.FormValue("name")
+	username := r.FormValue("username")
+	email := r.FormValue("email")
+	password := r.FormValue("password")
+	confirmPassword := r.FormValue("confirm_password")
+
+	if password != confirmPassword {
+		return errors.New("Passwords do not match")
+	}
+
+	// In email-as-username mode, copy email to username
+	if provider.Config.UsernameField == "email" {
+		username = email
+	}
+
+	// Trigger domain registration service logic
+	_, err := h.signupService.RegisterUser(r.Context(), tenant.ID, name, username, email, password)
+	return err
+}
+
+func (h *HttpAdapter) resolveSignUpRedirectURL(r *http.Request, tenant *model.Tenant) string {
+	targetURL := r.FormValue("redirect_uri")
+	if targetURL == "" {
+		if cookie, err := r.Cookie("spz_auth_session_id"); err == nil && cookie.Value != "" {
+			if sessionUUID, parseErr := uuid.Parse(cookie.Value); parseErr == nil {
+				if session, loadErr := h.storagePort.GetAndConsumeInteractionSession(r.Context(), tenant.ID, sessionUUID); loadErr == nil {
+					targetURL = session.RedirectURI
+				}
+			}
+		}
+	}
+
+	if targetURL == "" {
+		targetURL = tenant.Config.DefaultRedirectURI
+	}
+	return targetURL
+}
+
 func (h *HttpAdapter) signUpSubmit(w http.ResponseWriter, r *http.Request) {
 	tenant, ok := TenantFromContext(r.Context())
 	if !ok {
@@ -53,52 +93,15 @@ func (h *HttpAdapter) signUpSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := r.FormValue("name")
-	username := r.FormValue("username")
-	email := r.FormValue("email")
-	password := r.FormValue("password")
-	confirmPassword := r.FormValue("confirm_password")
-
-	renderErr := func(msg string) {
+	if err := h.processSignUpRegistration(r, tenant, provider); err != nil {
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
 		w.WriteHeader(http.StatusOK) // Return HTML back to HTMX or browser with the error message rendered
-		component := views.SignUp(msg, provider, email, username, name)
+		component := views.SignUp(err.Error(), provider, r.FormValue("email"), r.FormValue("username"), r.FormValue("name"))
 		_ = component.Render(r.Context(), w)
-	}
-
-	if password != confirmPassword {
-		renderErr("Passwords do not match")
 		return
 	}
 
-	// In email-as-username mode, copy email to username
-	if provider.Config.UsernameField == "email" {
-		username = email
-	}
-
-	// Trigger domain registration service logic
-	_, err = h.signupService.RegisterUser(r.Context(), tenant.ID, name, username, email, password)
-	if err != nil {
-		renderErr(err.Error())
-		return
-	}
-
-	// Resolve targetURL
-	targetURL := r.FormValue("redirect_uri")
-	if targetURL == "" {
-		if cookie, err := r.Cookie("spz_auth_session_id"); err == nil && cookie.Value != "" {
-			if sessionUUID, parseErr := uuid.Parse(cookie.Value); parseErr == nil {
-				if session, loadErr := h.storagePort.GetAndConsumeInteractionSession(r.Context(), tenant.ID, sessionUUID); loadErr == nil {
-					targetURL = session.RedirectURI
-				}
-			}
-		}
-	}
-
-	if targetURL == "" {
-		targetURL = tenant.Config.DefaultRedirectURI
-	}
-
+	targetURL := h.resolveSignUpRedirectURL(r, tenant)
 	w.Header().Set("HX-Redirect", targetURL)
 	http.Redirect(w, r, targetURL, http.StatusSeeOther)
 }

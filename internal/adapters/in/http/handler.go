@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -56,14 +57,17 @@ type HttpAdapter struct {
 }
 
 type registerRequest struct {
-	ClientName          string   `json:"client_name"`
-	RedirectURIs        []string `json:"redirect_uris"`
-	GrantTypes          []string `json:"grant_types"`
-	ResponseTypes       []string `json:"response_types"`
-	AllowedScopes       []string `json:"allowed_scopes"`
-	DefaultScopes       []string `json:"default_scopes"`
-	AllowedAudiences    []string `json:"allowed_audiences"`
-	TokenEndpointMethod string   `json:"token_endpoint_auth_method"`
+	ClientName             string   `json:"client_name"`
+	RedirectURIs           []string `json:"redirect_uris"`
+	PostLogoutRedirectURIs []string `json:"post_logout_redirect_uris"`
+	FrontChannelLogoutURI  string   `json:"frontchannel_logout_uri"`
+	BackChannelLogoutURI   string   `json:"backchannel_logout_uri"`
+	GrantTypes             []string `json:"grant_types"`
+	ResponseTypes          []string `json:"response_types"`
+	AllowedScopes          []string `json:"allowed_scopes"`
+	DefaultScopes          []string `json:"default_scopes"`
+	AllowedAudiences       []string `json:"allowed_audiences"`
+	TokenEndpointMethod    string   `json:"token_endpoint_auth_method"`
 }
 
 type contextKey string
@@ -215,6 +219,78 @@ func (h *HttpAdapter) jwks(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(body))
 }
 
+func (h *HttpAdapter) populateRegisterDefaults(payload *registerRequest) {
+	if len(payload.RedirectURIs) == 0 {
+		payload.RedirectURIs = []string{"https://example.com/callback"}
+	}
+	if len(payload.GrantTypes) == 0 {
+		payload.GrantTypes = []string{"authorization_code", "refresh_token"}
+	}
+	if len(payload.ResponseTypes) == 0 {
+		payload.ResponseTypes = []string{"code"}
+	}
+	if len(payload.AllowedScopes) == 0 {
+		payload.AllowedScopes = []string{"openid", "profile", "email"}
+	}
+	if len(payload.DefaultScopes) == 0 {
+		payload.DefaultScopes = payload.AllowedScopes
+	}
+}
+
+func (h *HttpAdapter) validateRegisterURLs(ctx context.Context, tenant *model.Tenant, payload *registerRequest) error {
+	// Validate RedirectURIs
+	for _, u := range payload.RedirectURIs {
+		if err := h.oauthValidator.ValidateRedirect(ctx, tenant, nil, u); err != nil {
+			return fmt.Errorf("redirect_uri not whitelisted: %w", err)
+		}
+	}
+
+	// Validate PostLogoutRedirectURIs
+	for _, u := range payload.PostLogoutRedirectURIs {
+		if err := h.oauthValidator.ValidateRedirect(ctx, tenant, nil, u); err != nil {
+			return fmt.Errorf("post_logout_redirect_uri not whitelisted: %w", err)
+		}
+	}
+
+	// Validate FrontChannelLogoutURI
+	if payload.FrontChannelLogoutURI != "" {
+		if err := h.oauthValidator.ValidateRedirect(ctx, tenant, nil, payload.FrontChannelLogoutURI); err != nil {
+			return fmt.Errorf("frontchannel_logout_uri not whitelisted: %w", err)
+		}
+	}
+
+	// Validate BackChannelLogoutURI
+	if payload.BackChannelLogoutURI != "" {
+		if err := h.oauthValidator.ValidateRedirect(ctx, tenant, nil, payload.BackChannelLogoutURI); err != nil {
+			return fmt.Errorf("backchannel_logout_uri not whitelisted: %w", err)
+		}
+	}
+	return nil
+}
+
+func (h *HttpAdapter) validateRegisterScopesAndAudiences(ctx context.Context, tenant *model.Tenant, payload *registerRequest) error {
+	if err := h.oauthValidator.ValidateScopes(ctx, tenant, nil, payload.AllowedScopes); err != nil {
+		return errors.New("requested allowed_scopes are not predefined/allowed by the tenant")
+	}
+	if err := h.oauthValidator.ValidateScopes(ctx, tenant, nil, payload.DefaultScopes); err != nil {
+		return errors.New("requested default_scopes are not predefined/allowed by the tenant")
+	}
+
+	if len(payload.AllowedAudiences) > 0 {
+		if err := h.oauthValidator.ValidateAudiences(ctx, tenant, nil, payload.AllowedAudiences); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *HttpAdapter) validateRegisterPayload(ctx context.Context, tenant *model.Tenant, payload *registerRequest) error {
+	if err := h.validateRegisterURLs(ctx, tenant, payload); err != nil {
+		return err
+	}
+	return h.validateRegisterScopesAndAudiences(ctx, tenant, payload)
+}
+
 func (h *HttpAdapter) register(w http.ResponseWriter, r *http.Request) {
 	tenant, ok := TenantFromContext(r.Context())
 	if !ok {
@@ -231,36 +307,11 @@ func (h *HttpAdapter) register(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "client_name is required"})
 		return
 	}
-	if len(payload.RedirectURIs) == 0 {
-		payload.RedirectURIs = []string{"https://example.com/callback"}
-	}
-	if len(payload.GrantTypes) == 0 {
-		payload.GrantTypes = []string{"authorization_code", "refresh_token"}
-	}
-	if len(payload.ResponseTypes) == 0 {
-		payload.ResponseTypes = []string{"code"}
-	}
-	if len(payload.AllowedScopes) == 0 {
-		payload.AllowedScopes = []string{"openid", "profile", "email"}
-	}
-	if len(payload.DefaultScopes) == 0 {
-		payload.DefaultScopes = payload.AllowedScopes
-	}
+	h.populateRegisterDefaults(&payload)
 
-	if err := h.oauthValidator.ValidateScopes(r.Context(), tenant, nil, payload.AllowedScopes); err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "requested allowed_scopes are not predefined/allowed by the tenant"})
+	if err := h.validateRegisterPayload(r.Context(), tenant, &payload); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
-	}
-	if err := h.oauthValidator.ValidateScopes(r.Context(), tenant, nil, payload.DefaultScopes); err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "requested default_scopes are not predefined/allowed by the tenant"})
-		return
-	}
-
-	if len(payload.AllowedAudiences) > 0 {
-		if err := h.oauthValidator.ValidateAudiences(r.Context(), tenant, nil, payload.AllowedAudiences); err != nil {
-			respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
 	}
 
 	clientID := uuid.NewString()
@@ -272,6 +323,9 @@ func (h *HttpAdapter) register(w http.ResponseWriter, r *http.Request) {
 		ClientSecret:           &clientSecret,
 		ClientName:             payload.ClientName,
 		RedirectURIs:           payload.RedirectURIs,
+		PostLogoutRedirectURIs: payload.PostLogoutRedirectURIs,
+		FrontChannelLogoutURI:  payload.FrontChannelLogoutURI,
+		BackChannelLogoutURI:   payload.BackChannelLogoutURI,
 		GrantTypes:             payload.GrantTypes,
 		ResponseTypes:          payload.ResponseTypes,
 		Algorithm:              model.AlgRS256,
@@ -281,7 +335,6 @@ func (h *HttpAdapter) register(w http.ResponseWriter, r *http.Request) {
 		AllowedScopes:          payload.AllowedScopes,
 		DefaultScopes:          payload.DefaultScopes,
 		AllowedAudiences:       payload.AllowedAudiences,
-		PostLogoutRedirectURIs: []string{},
 	}
 	if err := h.storagePort.SaveClient(r.Context(), client); err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -323,19 +376,6 @@ func contains(values []string, target string) bool {
 		}
 	}
 	return false
-}
-
-func isSubset(subset, set []string) bool {
-	setMap := make(map[string]struct{}, len(set))
-	for _, item := range set {
-		setMap[item] = struct{}{}
-	}
-	for _, item := range subset {
-		if _, ok := setMap[item]; !ok {
-			return false
-		}
-	}
-	return true
 }
 
 func (h *HttpAdapter) validateAuthorizeParams(ctx context.Context, client *model.ClientApplication, tenant *model.Tenant, redirectURI string, scopes []string) error {
