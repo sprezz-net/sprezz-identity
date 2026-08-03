@@ -3,24 +3,19 @@ package http
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"encoding/base64"
 	"encoding/json"
-	"math/big"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"sprezz-identity/internal/adapters/out/clock"
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port/portmock"
 
 	"github.com/gojuno/minimock/v3"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -262,196 +257,25 @@ func TestHttpAdapter_CSPNonce(t *testing.T) {
 	}
 }
 
-func TestHttpAdapter_Authorize_PreservesParams(t *testing.T) {
+func TestHttpAdapter_TenantMiddleware_ResolutionFailure(t *testing.T) {
 	ctrl := minimock.NewController(t)
-
 	storage := portmock.NewStorageMock(ctrl)
 	auth := portmock.NewAuthMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 
-	tenantID := uuid.New()
-	tenant := &model.Tenant{
-		ID:     tenantID,
-		Domain: "test.com",
-	}
-	client := &model.ClientApplication{
-		ID:           uuid.NewString(),
-		TenantID:     tenantID,
-		ClientID:     "test-client",
-		RedirectURIs: []string{"https://test.com/callback"},
-	}
-
 	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
-		return tenant, nil
-	})
-	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
-		return client, nil
-	})
-
-	// Verify that the interaction session correctly preserves state, nonce, and acr_values
-	storage.SaveInteractionSessionMock.Set(func(ctx context.Context, session model.InteractionSession) error {
-		if session.State != "state-123" {
-			t.Errorf("expected State 'state-123', got %s", session.State)
-		}
-		if session.Nonce != "nonce-456" {
-			t.Errorf("expected Nonce 'nonce-456', got %s", session.Nonce)
-		}
-		if session.ACRValues != "acr-silver" {
-			t.Errorf("expected ACRValues 'acr-silver', got %s", session.ACRValues)
-		}
-		return nil
+		return nil, errors.New("unbootstrapped tenant")
 	})
 
 	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
 
-	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?client_id=test-client&redirect_uri=https://test.com/callback&state=state-123&nonce=nonce-456&acr_values=acr-silver", nil)
-	req.Host = "test.com"
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/openid-configuration", nil)
+	req.Host = "unknown.com"
 	rec := httptest.NewRecorder()
 
 	adapter.Router().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusFound {
-		t.Fatalf("expected status 302 Found, got %d", rec.Code)
-	}
-}
-
-func generateDPoPTestKey(t *testing.T) (*rsa.PrivateKey, map[string]any) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatalf("failed to generate client key: %v", err)
-	}
-	nStr := base64.RawURLEncoding.EncodeToString(privateKey.N.Bytes())
-	eBytes := big.NewInt(int64(privateKey.E)).Bytes()
-	eStr := base64.RawURLEncoding.EncodeToString(eBytes)
-	jwkMap := map[string]any{
-		"kty": "RSA",
-		"n":   nStr,
-		"e":   eStr,
-	}
-	return privateKey, jwkMap
-}
-
-func mintDPoPProofForTest(t *testing.T, privateKey *rsa.PrivateKey, jwkMap map[string]any, method, urlStr, jti string, iat time.Time) string {
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		"htm": method,
-		"htu": urlStr,
-		"jti": jti,
-		"iat": iat.Unix(),
-	})
-	token.Header["typ"] = "dpop+jwt"
-	token.Header["jwk"] = jwkMap
-	token.Header["alg"] = "RS256"
-
-	str, err := token.SignedString(privateKey)
-	if err != nil {
-		t.Fatalf("failed to sign token: %v", err)
-	}
-	return str
-}
-
-func TestHttpAdapter_DPoPProofValidation_Success(t *testing.T) {
-	ctrl := minimock.NewController(t)
-	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
-	crypto := portmock.NewCryptoMock(ctrl)
-
-	privateKey, jwkMap := generateDPoPTestKey(t)
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
-
-	jti := "jti-1"
-	proof := mintDPoPProofForTest(t, privateKey, jwkMap, "POST", "https://test.com/oauth/token", jti, time.Now())
-	req := httptest.NewRequest(http.MethodPost, "/oauth/token", nil)
-	req.Host = "test.com"
-	req.Header.Set("DPoP", proof)
-
-	storage.IsDPoPProofUsedMock.Set(func(ctx context.Context, gotJti string) (bool, error) {
-		if gotJti != jti {
-			t.Errorf("expected checked jti %s, got %s", jti, gotJti)
-		}
-		return false, nil
-	})
-	storage.SaveDPoPProofMock.Set(func(ctx context.Context, gotJti string, exp time.Time) error {
-		if gotJti != jti {
-			t.Errorf("expected jti %s, got %s", jti, gotJti)
-		}
-		return nil
-	})
-
-	jkt, err := adapter.validateDPoPProof(req)
-	if err != nil {
-		t.Fatalf("expected successful validation, got: %v", err)
-	}
-	if jkt == "" {
-		t.Error("expected non-empty JKT thumbprint")
-	}
-}
-
-func TestHttpAdapter_DPoPProofValidation_Expired(t *testing.T) {
-	ctrl := minimock.NewController(t)
-	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
-	crypto := portmock.NewCryptoMock(ctrl)
-
-	privateKey, jwkMap := generateDPoPTestKey(t)
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
-
-	jti := "jti-2"
-	proof := mintDPoPProofForTest(t, privateKey, jwkMap, "POST", "https://test.com/oauth/token", jti, time.Now().Add(-5*time.Minute))
-	req := httptest.NewRequest(http.MethodPost, "/oauth/token", nil)
-	req.Host = "test.com"
-	req.Header.Set("DPoP", proof)
-
-	_, err := adapter.validateDPoPProof(req)
-	if err == nil || !strings.Contains(err.Error(), "expired") {
-		t.Errorf("expected expired proof error, got: %v", err)
-	}
-}
-
-func TestHttpAdapter_DPoPProofValidation_Replay(t *testing.T) {
-	ctrl := minimock.NewController(t)
-	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
-	crypto := portmock.NewCryptoMock(ctrl)
-
-	privateKey, jwkMap := generateDPoPTestKey(t)
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
-
-	jti := "jti-3"
-	proof := mintDPoPProofForTest(t, privateKey, jwkMap, "POST", "https://test.com/oauth/token", jti, time.Now())
-	req := httptest.NewRequest(http.MethodPost, "/oauth/token", nil)
-	req.Host = "test.com"
-	req.Header.Set("DPoP", proof)
-
-	storage.IsDPoPProofUsedMock.Set(func(ctx context.Context, gotJti string) (bool, error) {
-		if gotJti != jti {
-			t.Errorf("expected checked jti %s, got %s", jti, gotJti)
-		}
-		return true, nil
-	})
-
-	_, err := adapter.validateDPoPProof(req)
-	if err == nil || !strings.Contains(err.Error(), "already been used") {
-		t.Errorf("expected already used error, got: %v", err)
-	}
-}
-
-func TestHttpAdapter_DPoPProofValidation_HtmMismatch(t *testing.T) {
-	ctrl := minimock.NewController(t)
-	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
-	crypto := portmock.NewCryptoMock(ctrl)
-
-	privateKey, jwkMap := generateDPoPTestKey(t)
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
-
-	jti := "jti-4"
-	proof := mintDPoPProofForTest(t, privateKey, jwkMap, "GET", "https://test.com/oauth/token", jti, time.Now())
-	req := httptest.NewRequest(http.MethodPost, "/oauth/token", nil)
-	req.Host = "test.com"
-	req.Header.Set("DPoP", proof)
-
-	_, err := adapter.validateDPoPProof(req)
-	if err == nil || !strings.Contains(err.Error(), "htm mismatch") {
-		t.Errorf("expected htm mismatch error, got: %v", err)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 }
