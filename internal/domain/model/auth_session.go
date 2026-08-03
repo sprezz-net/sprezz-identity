@@ -16,6 +16,7 @@ type AuthorizationCodeSession struct {
 	RedirectURI     string
 	Scopes          []string
 	ExpiresAt       time.Time
+	SessionID       string
 }
 
 type InteractionSession struct {

@@ -13,7 +13,8 @@ INSERT INTO auth_sessions (
     challenge_method,
     redirect_uri,
     scopes,
-    expires_at
+    expires_at,
+    session_id
 )
 SELECT
     $2,
@@ -24,7 +25,8 @@ SELECT
     $6,
     $7,
     $8,
-    $9
+    $9,
+    $10
 FROM tenant;
 
 -- name: ConsumeAuthSession :one
@@ -40,7 +42,8 @@ WITH deleted AS (
         challenge_method,
         redirect_uri,
         scopes,
-        expires_at
+        expires_at,
+        session_id
 )
 SELECT
     code,
@@ -50,6 +53,7 @@ SELECT
     challenge_method,
     redirect_uri,
     scopes,
-    expires_at
+    expires_at,
+    session_id
 FROM deleted
 LIMIT 1;

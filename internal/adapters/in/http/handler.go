@@ -88,6 +88,50 @@ func (h *HttpAdapter) registerRoutes() {
 	h.router.Get(routeLogout, h.logout)
 }
 
+type ssoSession struct {
+	SubjectID  string
+	ProviderID string
+	SessionID  string
+}
+
+func (h *HttpAdapter) setSSOSessionCookie(w http.ResponseWriter, session ssoSession) {
+	val := fmt.Sprintf("%s:%s:%s", session.SubjectID, session.ProviderID, session.SessionID)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "spz_session",
+		Value:    val,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func (h *HttpAdapter) getSSOSessionCookie(r *http.Request) *ssoSession {
+	cookie, err := r.Cookie("spz_session")
+	if err != nil || cookie.Value == "" {
+		return nil
+	}
+	parts := strings.Split(cookie.Value, ":")
+	if len(parts) != 3 {
+		return nil
+	}
+	return &ssoSession{
+		SubjectID:  parts[0],
+		ProviderID: parts[1],
+		SessionID:  parts[2],
+	}
+}
+
+func (h *HttpAdapter) clearSSOSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "spz_session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
 func (h *HttpAdapter) loginRoot(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(contentTypeHeader, "text/html; charset=utf-8")
 	component := views.Login("")
@@ -164,8 +208,11 @@ func (h *HttpAdapter) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{Name: "spz_login_subject", Value: result.UserProfile.ID.String(), Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
-	http.SetCookie(w, &http.Cookie{Name: "spz_login_provider", Value: result.Identity.IdentityProviderID.String(), Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	h.setSSOSessionCookie(w, ssoSession{
+		SubjectID:  result.UserProfile.ID.String(),
+		ProviderID: result.Identity.IdentityProviderID.String(),
+		SessionID:  uuid.NewString(),
+	})
 
 	if h.processInteractionRedirect(w, r) {
 		return
@@ -316,7 +363,7 @@ func (h *HttpAdapter) handleUnauthenticatedAuthorize(w http.ResponseWriter, r *h
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-func (h *HttpAdapter) handleAuthenticatedAuthorize(w http.ResponseWriter, r *http.Request, client *model.ClientApplication, subject string) {
+func (h *HttpAdapter) handleAuthenticatedAuthorize(w http.ResponseWriter, r *http.Request, client *model.ClientApplication, sso *ssoSession) {
 	redirectURI := r.FormValue("redirect_uri")
 	codeChallenge := r.FormValue("code_challenge")
 	challengeMethod := r.FormValue("code_challenge_method")
@@ -337,12 +384,13 @@ func (h *HttpAdapter) handleAuthenticatedAuthorize(w http.ResponseWriter, r *htt
 		Code:            code,
 		TenantID:        client.TenantID.String(),
 		ClientID:        client.ClientID,
-		Subject:         subject,
+		Subject:         sso.SubjectID,
 		CodeChallenge:   codeChallenge,
 		ChallengeMethod: challengeMethod,
 		RedirectURI:     redirectURI,
 		Scopes:          client.DefaultScopes,
 		ExpiresAt:       time.Now().Add(10 * time.Minute),
+		SessionID:       sso.SessionID,
 	}
 	if err := h.authPort.InitiateAuthorize(r.Context(), authSession); err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -393,8 +441,8 @@ func (h *HttpAdapter) authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cookie, cookieErr := r.Cookie("spz_login_subject")
-	if cookieErr != nil || cookie.Value == "" {
+	sso := h.getSSOSessionCookie(r)
+	if sso == nil {
 		session := model.InteractionSession{
 			ID:              uuid.New(),
 			TenantID:        tenant.ID,
@@ -409,7 +457,7 @@ func (h *HttpAdapter) authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.handleAuthenticatedAuthorize(w, r, client, cookie.Value)
+	h.handleAuthenticatedAuthorize(w, r, client, sso)
 }
 
 func (h *HttpAdapter) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Request, tenant *model.Tenant) {
@@ -599,19 +647,15 @@ func (h *HttpAdapter) logout(w http.ResponseWriter, r *http.Request) {
 
 	subject, clientID := h.parseIDTokenHint(idTokenHint)
 
-	if subject == "" {
-		if cookie, err := r.Cookie("spz_login_subject"); err == nil {
-			subject = cookie.Value
-		}
+	sso := h.getSSOSessionCookie(r)
+	if subject == "" && sso != nil {
+		subject = sso.SubjectID
 	}
-	if clientID == "" {
-		if cookie, err := r.Cookie("spz_login_provider"); err == nil {
-			clientID = cookie.Value
-		}
+	if clientID == "" && sso != nil {
+		clientID = sso.ProviderID
 	}
 
-	http.SetCookie(w, &http.Cookie{Name: "spz_login_subject", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
-	http.SetCookie(w, &http.Cookie{Name: "spz_login_provider", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	h.clearSSOSessionCookie(w)
 
 	frontChannelURIs, _ := h.authPort.ProcessLogout(r.Context(), tenant.ID, subject, clientID)
 

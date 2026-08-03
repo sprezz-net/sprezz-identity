@@ -25,7 +25,8 @@ WITH deleted AS (
         challenge_method,
         redirect_uri,
         scopes,
-        expires_at
+        expires_at,
+        session_id
 )
 SELECT
     code,
@@ -35,7 +36,8 @@ SELECT
     challenge_method,
     redirect_uri,
     scopes,
-    expires_at
+    expires_at,
+    session_id
 FROM deleted
 LIMIT 1
 `
@@ -54,6 +56,7 @@ type ConsumeAuthSessionRow struct {
 	RedirectUri     string             `json:"redirect_uri"`
 	Scopes          []string           `json:"scopes"`
 	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
+	SessionID       string             `json:"session_id"`
 }
 
 func (q *Queries) ConsumeAuthSession(ctx context.Context, arg ConsumeAuthSessionParams) (ConsumeAuthSessionRow, error) {
@@ -68,6 +71,7 @@ func (q *Queries) ConsumeAuthSession(ctx context.Context, arg ConsumeAuthSession
 		&i.RedirectUri,
 		&i.Scopes,
 		&i.ExpiresAt,
+		&i.SessionID,
 	)
 	return i, err
 }
@@ -87,7 +91,8 @@ INSERT INTO auth_sessions (
     challenge_method,
     redirect_uri,
     scopes,
-    expires_at
+    expires_at,
+    session_id
 )
 SELECT
     $2,
@@ -98,7 +103,8 @@ SELECT
     $6,
     $7,
     $8,
-    $9
+    $9,
+    $10
 FROM tenant
 `
 
@@ -112,6 +118,7 @@ type SaveAuthSessionParams struct {
 	RedirectUri     string             `json:"redirect_uri"`
 	Scopes          []string           `json:"scopes"`
 	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
+	SessionID       string             `json:"session_id"`
 }
 
 func (q *Queries) SaveAuthSession(ctx context.Context, arg SaveAuthSessionParams) (pgconn.CommandTag, error) {
@@ -125,5 +132,6 @@ func (q *Queries) SaveAuthSession(ctx context.Context, arg SaveAuthSessionParams
 		arg.RedirectUri,
 		arg.Scopes,
 		arg.ExpiresAt,
+		arg.SessionID,
 	)
 }

@@ -261,6 +261,7 @@ func (s *PostgresStorage) SaveAuthSession(ctx context.Context, session model.Aut
 		RedirectUri:     session.RedirectURI,
 		Scopes:          session.Scopes,
 		ExpiresAt:       toPGTimestamptz(session.ExpiresAt),
+		SessionID:       session.SessionID,
 	})
 	if err != nil {
 		return fmt.Errorf("save auth session: %w", err)
@@ -298,6 +299,7 @@ func (s *PostgresStorage) GetAndConsumeAuthSession(ctx context.Context, tenantID
 		RedirectURI:     row.RedirectUri,
 		Scopes:          row.Scopes,
 		ExpiresAt:       expiresAt,
+		SessionID:       row.SessionID,
 	}, nil
 }
 

@@ -51,6 +51,7 @@ type AuthSession struct {
 	RedirectUri     string             `json:"redirect_uri"`
 	Scopes          []string           `json:"scopes"`
 	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
+	SessionID       string             `json:"session_id"`
 }
 
 type Identity struct {

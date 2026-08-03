@@ -250,8 +250,9 @@ Sprezz Identity exposes standard RFC 7662 Token Introspection at the POST endpoi
 
 Sprezz Identity implements OIDC Front-Channel Logout 1.0 to clear browser cookie sessions across multiple logged-in client applications.
 
-* **The `"sid"` Session Claim**: Issued ID Tokens contain a unique, stable `"sid"` (Session ID) claim tied to the user's active login browser session. This identifier is passed to client applications during logout integration workflows.
-* **The Iframe Rendering Flow**: Upon receiving a valid GET request at `/oauth/logout`, the HttpAdapter clears the IDP session cookies and queries the usecase for front-channel logout URLs. If present, it serves `views.Logout`, rendering a hidden `<iframe>` targeting each client's registered `front_channel_logout_uri`.
+* **The Single Cookie `spz_session` & `"sid"` claim**: To comply with modern strict cookie policies, consent minimization guidelines, and simplify auditing, Sprezz Identity combines the active SSO session details into a single first-party cookie named `spz_session`. This cookie securely encapsulates the authenticated subject, identity provider, and a cryptographically stable, unique Session ID in the format `<subject_id>:<provider_id>:<sso_session_id>`.
+* **The `"sid"` Session Claim**: Issued ID Tokens contain a unique, stable `"sid"` (Session ID) claim populated directly from the `sso_session_id` stored inside the single `spz_session` cookie. This links the client's token directly to the active login browser session, making back-channel session trackability possible.
+* **The Iframe Rendering Flow**: Upon receiving a valid GET request at `/oauth/logout`, the HttpAdapter clears the `spz_session` cookie and queries the usecase for front-channel logout URLs. If present, it serves `views.Logout`, rendering a hidden `<iframe>` targeting each client's registered `front_channel_logout_uri`.
 * **Robust Redirection Timout**: To guarantee browser navigation, the template implements a dual-timer scheme: an unconditional 2-second safety timeout coupled to a faster `window.onload` callback, ensuring a reliable user redirect to the validated `post_logout_redirect_uri` even if client endpoints are slow or offline.
 
 ### 9.8 OIDC Back-Channel Logout 1.0
