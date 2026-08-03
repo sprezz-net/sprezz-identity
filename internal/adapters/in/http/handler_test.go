@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"sprezz-identity/internal/adapters/out/clock"
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port/portmock"
 
@@ -35,7 +36,7 @@ func TestHttpAdapter_OpenIDConfiguration_Success(t *testing.T) {
 		return tenant, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto)
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/openid-configuration", nil)
 	req.Host = "test.com"
@@ -163,7 +164,7 @@ func runRegisterTestCase(t *testing.T, tt registerTestCase) {
 		})
 	}
 
-	adapter := NewHttpAdapter(auth, storage, crypto)
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
 
 	payload := registerRequest{
 		ClientName:       "test-app",

@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"time"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -15,10 +14,11 @@ import (
 // the configured admin tenant domain resolves to a tenant record.
 type TenantBootstrapService struct {
 	storage port.Storage
+	clock   port.Clock
 }
 
-func NewTenantBootstrapService(storage port.Storage) *TenantBootstrapService {
-	return &TenantBootstrapService{storage: storage}
+func NewTenantBootstrapService(storage port.Storage, cl port.Clock) *TenantBootstrapService {
+	return &TenantBootstrapService{storage: storage, clock: cl}
 }
 
 func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domain string) (*model.Tenant, error) {
@@ -52,7 +52,7 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 		Name:             domain,
 		Domain:           domain,
 		IsActive:         true,
-		CreatedAt:        time.Now().UTC(),
+		CreatedAt:        s.clock.Now(),
 		PredefinedScopes: []string{"openid", "profile", "email", "offline_access"},
 	}
 

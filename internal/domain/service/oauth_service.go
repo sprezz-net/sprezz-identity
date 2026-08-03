@@ -20,10 +20,11 @@ type OAuthService struct {
 	crypto   port.Crypto
 	event    port.Event
 	notifier port.LogoutNotifier
+	clock    port.Clock
 }
 
-func NewOAuthService(s port.Storage, c port.Crypto, e port.Event, n port.LogoutNotifier) *OAuthService {
-	return &OAuthService{storage: s, crypto: c, event: e, notifier: n}
+func NewOAuthService(s port.Storage, c port.Crypto, e port.Event, n port.LogoutNotifier, cl port.Clock) *OAuthService {
+	return &OAuthService{storage: s, crypto: c, event: e, notifier: n, clock: cl}
 }
 
 func (s *OAuthService) InitiateAuthorize(ctx context.Context, session model.AuthorizationCodeSession) error {
@@ -61,7 +62,7 @@ func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.
 	}
 
 	issuer := "https://" + tenant.Domain
-	now := time.Now().UTC()
+	now := s.clock.Now()
 	accessToken, err := s.crypto.SignAccessToken(model.TokenClaims{
 		TokenID:   uuid.NewString(),
 		Issuer:    issuer,
@@ -111,7 +112,7 @@ func (s *OAuthService) ProcessLogout(ctx context.Context, tenantID uuid.UUID, su
 	}
 
 	var frontChannelURIs []string
-	now := time.Now().UTC()
+	now := s.clock.Now()
 
 	for _, client := range clients {
 		if client.BackChannelLogoutURI != "" {
@@ -158,7 +159,7 @@ func (s *OAuthService) RevokeToken(ctx context.Context, tenantID uuid.UUID, clie
 	if expVal, ok := claims["exp"].(float64); ok {
 		expiresAt = time.Unix(int64(expVal), 0)
 	} else {
-		expiresAt = time.Now().Add(24 * time.Hour)
+		expiresAt = s.clock.Now().Add(24 * time.Hour)
 	}
 
 	return s.storage.RevokeToken(ctx, tokenID, expiresAt)
@@ -180,7 +181,7 @@ func (s *OAuthService) IntrospectToken(ctx context.Context, tenantID uuid.UUID, 
 	}
 
 	exp := time.Unix(int64(expVal), 0)
-	if time.Now().After(exp) {
+	if s.clock.Now().After(exp) {
 		return &model.IntrospectionResponse{Active: false}, nil
 	}
 

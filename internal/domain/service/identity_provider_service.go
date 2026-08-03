@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -15,10 +14,11 @@ import (
 
 type IdentityProviderService struct {
 	storage port.Storage
+	clock   port.Clock
 }
 
-func NewIdentityProviderService(storage port.Storage) *IdentityProviderService {
-	return &IdentityProviderService{storage: storage}
+func NewIdentityProviderService(storage port.Storage, cl port.Clock) *IdentityProviderService {
+	return &IdentityProviderService{storage: storage, clock: cl}
 }
 
 func (s *IdentityProviderService) AuthenticateUsernamePassword(ctx context.Context, tenantID uuid.UUID, username string, password string) (*model.LoginResult, error) {
@@ -53,7 +53,7 @@ func (s *IdentityProviderService) AuthenticateUsernamePassword(ctx context.Conte
 		return nil, errors.New("invalid credentials")
 	}
 
-	now := time.Now().UTC()
+	now := s.clock.Now()
 	identity, err := s.storage.GetIdentityByProfileAndProvider(ctx, profile.ID, provider.ID)
 	if err != nil {
 		identity = &model.UserIdentity{

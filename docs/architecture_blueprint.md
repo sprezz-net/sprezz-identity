@@ -73,6 +73,7 @@ Ports define the rigid, un-compromised structural abstract contracts of the syst
 
 * **Identity Storage Contract**: Abstracts state interactions, decoupling the business engine from physical databases for clients, sessions, and profile tracking.
 * **Asymmetric Crypto Engine Contract**: Encapsulates token minting tasks, raw payload cryptographic signing, and public signature set distributions.
+* **Clock Contract**: Abstracts time generation to ensure deterministic service calculations, support precise unit testing of temporal boundaries (e.g. token expirations), and resolve sub-second database/JWT comparison flakiness.
 
 ## 5. Specification Flow Control Matrix
 

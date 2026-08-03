@@ -53,12 +53,12 @@ type registerRequest struct {
 	TokenEndpointMethod string   `json:"token_endpoint_auth_method"`
 }
 
-func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto) *HttpAdapter {
+func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock) *HttpAdapter {
 	h := &HttpAdapter{
 		authPort:    a,
 		storagePort: s,
 		cryptoPort:  c,
-		idpService:  service.NewIdentityProviderService(s),
+		idpService:  service.NewIdentityProviderService(s, cl),
 		router:      chi.NewRouter(),
 	}
 	h.registerRoutes()

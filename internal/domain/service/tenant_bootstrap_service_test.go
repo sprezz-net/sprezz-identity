@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -15,7 +16,7 @@ import (
 func TestTenantBootstrapService_BootstrapAdminTenant_InitialCreation(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
-	service := NewTenantBootstrapService(storage)
+	service := NewTenantBootstrapService(storage, portmock.NewMockClock(time.Now()))
 
 	domain := "admin.example.com"
 

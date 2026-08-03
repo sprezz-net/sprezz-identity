@@ -17,7 +17,7 @@ import (
 func TestIdentityProviderService_AuthenticateUsernamePassword_Success(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
-	service := NewIdentityProviderService(storage)
+	service := NewIdentityProviderService(storage, portmock.NewMockClock(time.Now()))
 
 	tenantID := uuid.New()
 	providerID := uuid.New()
@@ -95,7 +95,7 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_Success(t *testing
 func TestIdentityProviderService_AuthenticateUsernamePassword_InvalidCredentials(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
-	service := NewIdentityProviderService(storage)
+	service := NewIdentityProviderService(storage, portmock.NewMockClock(time.Now()))
 
 	tenantID := uuid.New()
 	providerID := uuid.New()
@@ -138,7 +138,7 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_InvalidCredentials
 func TestIdentityProviderService_AuthenticateUsernamePassword_IncrementLoginCount(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
-	service := NewIdentityProviderService(storage)
+	service := NewIdentityProviderService(storage, portmock.NewMockClock(time.Now()))
 
 	tenantID := uuid.New()
 	providerID := uuid.New()
@@ -195,7 +195,7 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_IncrementLoginCoun
 func TestIdentityProviderService_AuthenticateUsernamePassword_GetEnabledProvidersError(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
-	service := NewIdentityProviderService(storage)
+	service := NewIdentityProviderService(storage, portmock.NewMockClock(time.Now()))
 
 	tenantID := uuid.New()
 	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return(nil, errors.New("database failure"))
@@ -209,7 +209,7 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_GetEnabledProvider
 func TestIdentityProviderService_AuthenticateUsernamePassword_NoProviders(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
-	service := NewIdentityProviderService(storage)
+	service := NewIdentityProviderService(storage, portmock.NewMockClock(time.Now()))
 
 	tenantID := uuid.New()
 	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{}, nil)
@@ -226,7 +226,7 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_NoProviders(t *tes
 func TestIdentityProviderService_AuthenticateUsernamePassword_NoUsernamePasswordIDP(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
-	service := NewIdentityProviderService(storage)
+	service := NewIdentityProviderService(storage, portmock.NewMockClock(time.Now()))
 
 	tenantID := uuid.New()
 	provider := model.IdentityProvider{
@@ -247,7 +247,7 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_NoUsernamePassword
 func TestIdentityProviderService_AuthenticateUsernamePassword_ProfileLookupError(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
-	service := NewIdentityProviderService(storage)
+	service := NewIdentityProviderService(storage, portmock.NewMockClock(time.Now()))
 
 	tenantID := uuid.New()
 	providerID := uuid.New()
@@ -270,7 +270,7 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_ProfileLookupError
 func TestIdentityProviderService_AuthenticateUsernamePassword_CredentialLookupError(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
-	service := NewIdentityProviderService(storage)
+	service := NewIdentityProviderService(storage, portmock.NewMockClock(time.Now()))
 
 	tenantID := uuid.New()
 	providerID := uuid.New()
@@ -300,7 +300,7 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_CredentialLookupEr
 func TestIdentityProviderService_AuthenticateUsernamePassword_UpsertError(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
-	service := NewIdentityProviderService(storage)
+	service := NewIdentityProviderService(storage, portmock.NewMockClock(time.Now()))
 
 	tenantID := uuid.New()
 	providerID := uuid.New()

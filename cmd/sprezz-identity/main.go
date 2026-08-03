@@ -8,6 +8,7 @@ import (
 	"time"
 
 	httpadapter "sprezz-identity/internal/adapters/in/http"
+	"sprezz-identity/internal/adapters/out/clock"
 	jwtcrypto "sprezz-identity/internal/adapters/out/crypto"
 	"sprezz-identity/internal/adapters/out/logout"
 	"sprezz-identity/internal/adapters/out/postgres"
@@ -26,7 +27,9 @@ func main() {
 	log.Println("Starting Sprezz token server...")
 
 	deps := initDependencies()
-	bootstrap := service.NewTenantBootstrapService(deps.storage)
+	sysClock := clock.NewSystemClock()
+
+	bootstrap := service.NewTenantBootstrapService(deps.storage, sysClock)
 	if _, err := bootstrap.BootstrapAdminTenant(context.Background(), deps.cfg.IdentityServer.AdminTenantDomain); err != nil {
 		log.Fatalf("Admin tenant bootstrap failed: %v", err)
 	}
@@ -38,8 +41,8 @@ func main() {
 
 	signer := jwtcrypto.NewJWTSigner()
 	notifier := logout.NewLogoutHttpClient()
-	oauthService := service.NewOAuthService(deps.storage, signer, nil, notifier)
-	handler := httpadapter.NewHttpAdapter(oauthService, deps.storage, signer)
+	oauthService := service.NewOAuthService(deps.storage, signer, nil, notifier, sysClock)
+	handler := httpadapter.NewHttpAdapter(oauthService, deps.storage, signer, sysClock)
 	server := &http.Server{
 		Addr:    ":" + deps.cfg.Port,
 		Handler: handler.Router(),
