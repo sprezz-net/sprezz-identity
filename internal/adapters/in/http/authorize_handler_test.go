@@ -201,7 +201,7 @@ func TestHttpAdapter_Login_Failure(t *testing.T) {
 
 	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
 
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("username=admin&password=wrongpassword"))
+	req := httptest.NewRequest(http.MethodPost, routeWebLogin, strings.NewReader("username=admin&password=wrongpassword"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
@@ -228,7 +228,7 @@ func TestHttpAdapter_Login_Malformed(t *testing.T) {
 
 	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
 
-	req := httptest.NewRequest(http.MethodPost, "/login", nil) // no payload, but post
+	req := httptest.NewRequest(http.MethodPost, routeWebLogin, nil) // no payload, but post
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()

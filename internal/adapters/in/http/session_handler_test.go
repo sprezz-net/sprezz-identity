@@ -479,3 +479,57 @@ func TestHttpAdapter_ClientAuthMiddleware_Failure_MissingCredentials(t *testing.
 		t.Fatalf("expected status 401 Unauthorized, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestHttpAdapter_WebLogout_Success(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	auth := portmock.NewAuthMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+
+	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
+		return tenant, nil
+	})
+	auth.ProcessLogoutMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, subject string, clientID string) ([]string, error) {
+		if subject != "sub1" || clientID != "prov1" {
+			t.Errorf("unexpected subject/clientID passed to ProcessLogout: %s/%s", subject, clientID)
+		}
+		return nil, nil
+	})
+
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+
+	req := httptest.NewRequest(http.MethodGet, routeWebLogout, nil)
+	req.Host = "test.com"
+	req.AddCookie(&http.Cookie{
+		Name:  "spz_session",
+		Value: "sub1:prov1:session1",
+	})
+	rec := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("expected status 302 Found, got %d", rec.Code)
+	}
+
+	loc := rec.Header().Get("Location")
+	if loc != "/" {
+		t.Fatalf("expected redirect to '/', got %s", loc)
+	}
+
+	// Verify cookie has been cleared
+	cookies := rec.Result().Cookies()
+	cleared := false
+	for _, cookie := range cookies {
+		if cookie.Name == "spz_session" && cookie.MaxAge < 0 {
+			cleared = true
+			break
+		}
+	}
+	if !cleared {
+		t.Fatal("expected spz_session cookie to be cleared")
+	}
+}

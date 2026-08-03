@@ -273,6 +273,14 @@ Sprezz Identity implements OIDC Back-Channel Logout 1.0 to trigger secure, out-o
   `"events": { "http://schemas.openid.net/event/back-channel-logout": {} }`
 * **Non-Blocking Asynchronous Propagation**: To keep logout execution extremely fast for the browser, the usecase invokes our SSRF-protected `port.LogoutNotifier` adapter asynchronously inside separate background goroutines, shielding client-to-server HTTP request times from the user.
 
+### 9.9 Direct Web Portal Logout (Local Session Cleanup)
+
+Sprezz Identity supports a direct, non-federated session termination route `/logout` specifically designed for local web portal applications.
+
+* **Local Session Invalidation**: Upon receiving a request at `/logout`, the HttpAdapter extracts the active user's credentials from the `spz_session` cookie and immediately calls the core session usecase (`ProcessLogout`) to revoke the session inside transactional persistence.
+* **Cookie Expiration**: The adapter forcefully expires and clears the browser's `spz_session` first-party cookie by returning a standard `Set-Cookie` header with a negative `Max-Age` attribute.
+* **Out-of-Band Single Logout Propagations**: To guarantee secure state cleanup across the workspace, the usecase automatically triggers all asynchronous backchannel logout requests to currently coupled third-party clients, ensuring zero orphan sessions remain active after the user leaves the direct web interface.
+
 ## 10. Audience Governance and Token Minting
 
 Sprezz Identity implements Audience Governance to restrict the intended recipients (Resource Servers) of minted Access Tokens and ensure least privilege access.

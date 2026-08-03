@@ -96,14 +96,14 @@ func (h *HttpAdapter) parseIDTokenHint(idTokenHint string) (string, string) {
 }
 
 func (h *HttpAdapter) determinePostLogoutRedirectURI(r *http.Request, tenant *model.Tenant, clientID, requestedURI string) string {
-	if requestedURI != "" && clientID != "" {
+	if []string{requestedURI}[0] != "" && clientID != "" {
 		if client, err := h.storagePort.GetClient(r.Context(), tenant.ID, clientID); err == nil {
 			if contains(client.PostLogoutRedirectURIs, requestedURI) {
 				return requestedURI
 			}
 		}
 	}
-	return "/"
+	return routeRoot
 }
 
 func (h *HttpAdapter) logout(w http.ResponseWriter, r *http.Request) {
@@ -140,6 +140,22 @@ func (h *HttpAdapter) logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, redirectURI, http.StatusFound)
+}
+
+func (h *HttpAdapter) webLogout(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := TenantFromContext(r.Context())
+	if !ok {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": errTenantNotResolved})
+		return
+	}
+
+	sso := h.getSSOSessionCookie(r)
+	if sso != nil {
+		_, _ = h.authPort.ProcessLogout(r.Context(), tenant.ID, sso.SubjectID, sso.ProviderID)
+	}
+
+	h.clearSSOSessionCookie(w)
+	http.Redirect(w, r, routeRoot, http.StatusFound)
 }
 
 func (h *HttpAdapter) userinfo(w http.ResponseWriter, r *http.Request) {

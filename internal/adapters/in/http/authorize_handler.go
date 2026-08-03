@@ -154,7 +154,7 @@ func (h *HttpAdapter) handleUnauthenticatedAuthorize(w http.ResponseWriter, r *h
 	}
 
 	http.SetCookie(w, &http.Cookie{Name: "spz_auth_session_id", Value: session.ID.String(), Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, routeRoot, http.StatusFound)
 }
 
 func (h *HttpAdapter) handleAuthenticatedAuthorize(w http.ResponseWriter, r *http.Request, client *model.ClientApplication, sso *ssoSession) {

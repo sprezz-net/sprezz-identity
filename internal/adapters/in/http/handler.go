@@ -37,6 +37,10 @@ const (
 	schemeHttps       = "https://"
 	errInvalidDPoP    = "invalid DPoP proof: "
 
+	routeRoot      = "/"
+	routeWebLogin  = "/login"
+	routeWebLogout = "/logout"
+
 	errTenantNotResolved = "tenant not resolved"
 )
 
@@ -93,7 +97,7 @@ func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock) *
 func (h *HttpAdapter) tenantMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		if path == "/" || path == routeKeys || path == routeUserInfo {
+		if path == routeRoot || path == routeKeys || path == routeUserInfo {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -128,8 +132,8 @@ func (h *HttpAdapter) Router() http.Handler {
 }
 
 func (h *HttpAdapter) registerRoutes() {
-	h.router.Get("/", h.loginRoot)
-	h.router.Post("/login", h.login)
+	h.router.Get(routeRoot, h.loginRoot)
+	h.router.Post(routeWebLogin, h.login)
 	h.router.Get(routeOpenIDConfig, h.openIDConfiguration)
 	h.router.Get(routeKeys, h.jwks)
 	h.router.Post(routeRegister, h.register)
@@ -138,6 +142,7 @@ func (h *HttpAdapter) registerRoutes() {
 	h.router.Post(routeToken, h.token)
 	h.router.Get(routeUserInfo, h.userinfo)
 	h.router.Get(routeLogout, h.logout)
+	h.router.Get(routeWebLogout, h.webLogout)
 
 	// Routes requiring mandatory client authentication
 	h.router.Group(func(r chi.Router) {
