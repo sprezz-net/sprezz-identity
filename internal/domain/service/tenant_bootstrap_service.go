@@ -48,12 +48,13 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 	}
 
 	newTenant := &model.Tenant{
-		ID:               uuid.New(),
-		Name:             domain,
-		Domain:           domain,
-		IsActive:         true,
-		CreatedAt:        s.clock.Now(),
-		PredefinedScopes: []string{"openid", "profile", "email", "offline_access"},
+		ID:                  uuid.New(),
+		Name:                domain,
+		Domain:              domain,
+		IsActive:            true,
+		CreatedAt:           s.clock.Now(),
+		PredefinedScopes:    []string{"openid", "profile", "email", "offline_access"},
+		PredefinedAudiences: []string{},
 	}
 
 	if err := s.storage.CreateTenant(ctx, *newTenant); err != nil {
