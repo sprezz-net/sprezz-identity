@@ -214,10 +214,11 @@ func TestJWTSigner_VerifyToken_Failures(t *testing.T) {
 
 	// 2. Missing kid header
 	// Sign using key directly to bypass kid injection
-	privateKey, err := signer.getOrCreateKeyPair("auth.example.com", "https://auth.example.com", "kid-123")
+	keyring, err := signer.getOrCreateKeyring("auth.example.com", "https://auth.example.com")
 	if err != nil {
-		t.Fatalf("failed to get private key: %v", err)
+		t.Fatalf("failed to get keyring: %v", err)
 	}
+	privateKey := keyring.Keys[keyring.ActiveKid]
 	tokenNoKid := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{"sub": "user-sub"})
 	tokenStrNoKid, _ := tokenNoKid.SignedString(privateKey)
 	_, err = signer.VerifyToken(tokenStrNoKid)
@@ -318,5 +319,87 @@ func TestJWTSigner_IssuerFallbackAndEmpty(t *testing.T) {
 	}
 	if claimsVerifiedLogout["iss"] != "https://auth.example.com" {
 		t.Errorf("expected fallback issuer 'https://auth.example.com', got %v", claimsVerifiedLogout["iss"])
+	}
+}
+
+func TestJWTSigner_RotateKeys(t *testing.T) {
+	signer := NewJWTSigner()
+
+	domain := "test-tenant.com"
+	issuer := "https://" + domain
+
+	// 1. Initialize keyring
+	jwks, err := signer.JWKSForTenant(domain)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(jwks) != 1 {
+		t.Fatalf("expected 1 key in JWKS, got %d", len(jwks))
+	}
+
+	initialKid := jwks[0]["kid"].(string)
+
+	// 2. Sign token with initial key
+	claims1 := model.TokenClaims{
+		TokenID:   "token-1",
+		Issuer:    issuer,
+		Subject:   "user-1",
+		ClientID:  "client-1",
+		IssuedAt:  time.Now().UTC(),
+		ExpiresAt: time.Now().UTC().Add(time.Hour),
+	}
+	tokenStr1, err := signer.SignAccessToken(claims1, model.AlgRS256)
+	if err != nil {
+		t.Fatalf("unexpected signing error: %v", err)
+	}
+
+	// 3. Rotate keys
+	if err := signer.RotateKeys(domain); err != nil {
+		t.Fatalf("unexpected key rotation error: %v", err)
+	}
+
+	// 4. Verify JWKS now has 2 keys and the active kid changed
+	jwksRotated, err := signer.JWKSForTenant(domain)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(jwksRotated) != 2 {
+		t.Fatalf("expected 2 keys in JWKS after rotation, got %d", len(jwksRotated))
+	}
+
+	activeKid := jwksRotated[0]["kid"].(string)
+	if activeKid == initialKid {
+		t.Fatal("expected ActiveKid to change after key rotation")
+	}
+
+	// 5. Sign token with rotated key
+	claims2 := model.TokenClaims{
+		TokenID:   "token-2",
+		Issuer:    issuer,
+		Subject:   "user-1",
+		ClientID:  "client-1",
+		IssuedAt:  time.Now().UTC(),
+		ExpiresAt: time.Now().UTC().Add(time.Hour),
+	}
+	tokenStr2, err := signer.SignAccessToken(claims2, model.AlgRS256)
+	if err != nil {
+		t.Fatalf("unexpected signing error: %v", err)
+	}
+
+	// 6. Verify BOTH tokens are still fully verifiable (no downtime for old tokens)
+	claimsVerified1, err := signer.VerifyToken(tokenStr1)
+	if err != nil {
+		t.Fatalf("failed to verify token signed with initial key: %v", err)
+	}
+	if claimsVerified1["jti"] != "token-1" {
+		t.Errorf("expected token-1, got %v", claimsVerified1["jti"])
+	}
+
+	claimsVerified2, err := signer.VerifyToken(tokenStr2)
+	if err != nil {
+		t.Fatalf("failed to verify token signed with rotated key: %v", err)
+	}
+	if claimsVerified2["jti"] != "token-2" {
+		t.Errorf("expected token-2, got %v", claimsVerified2["jti"])
 	}
 }

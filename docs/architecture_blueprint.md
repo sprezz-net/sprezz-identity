@@ -138,7 +138,7 @@ To safeguard critical security audit trails and history files against accidental
 * **Security & Auditing Protection**: Physical tenant hard-deletion is blocked by the engine if the tenant has associated audit log records, ensuring that historical security trails can never be deleted or purged as an unintended cascade side-effect.
 * **Soft-Deletions**: Rather than hard-deleting tenant schemas, deactivation is performed by setting the soft-delete marker `is_active = FALSE`. This preserves all underlying logs, client records, and blacklists.
 
-## 7. Cryptographic Strategy & Universal JWKS Layout
+## 7. Cryptographic Strategy, Universal JWKS Layout & Key Rotation
 
 Sprezz Identity implements concurrent asymmetric dual-signing. It uses an internal Key Registry pattern mapping keys by Key ID (`kid`) and signature algorithm type (`alg`).
 
@@ -146,6 +146,10 @@ Sprezz Identity implements concurrent asymmetric dual-signing. It uses an intern
 * **The Single-GET JWKS Route**: The infrastructure exposes `/.well-known/jwks.json`, grouping both signatures into an immutable pre-computed memory byte array.
 * **Dynamic OIDC Issuer Claim Matching**: When minting an identity payload certificate (the ID Token), the crypto engine no longer pushes a static server-wide root domain string. It reads the specific resolved tenant parameters to generate distinct, isolated identity issuers dynamically matching the client's origin (e.g., `"iss": "https://idp.com"`).
 * **The `"tid"` Tenant ID Claim**: Every minted Access Token and ID Token contains a **`"tid"` (Tenant ID) claim** populated with the string representation of the resolved Tenant UUIDv4, allowing downstream resource servers to perform stateless, multi-tenant boundary checks.
+* **Automatic Key Rotation (OIDC Compliant)**: Sprezz Identity implements automatic key rotation to cycle signing keys on a regular timeline without downtime or invalidating active sessions.
+  * **Multi-Key Ring Mapping**: For each tenant, the engine maintains a keyring tracking the current `ActiveKid`, a registry of private keys (`Keys map[string]*rsa.PrivateKey`), and a pre-computed array of public JWKs (`JWKS []map[string]any`).
+  * **No-Downtime Token Verification**: Incoming tokens are verified dynamically by extracting the `kid` from their header and querying the tenant's registry of active and retired keys. This ensures tokens minted prior to rotation remain perfectly valid until they naturally expire.
+  * **Automated Background Worker**: A background key rotation worker running on a customizable schedule (e.g. `24h` ticks) automatically generates fresh key pairs for bootstrapped tenants and publishes them in the public JWKS.
 
 ## 8. Protocol Compliance Interface Map
 

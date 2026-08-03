@@ -22,6 +22,7 @@ type DatabaseConfig struct {
 type IdentityServerConfig struct {
 	AdminTenantDomain    string        `yaml:"admin_tenant_domain" env:"ADMIN_TENANT_DOMAIN" env-default:"localhost:8100"`
 	TokenPruningInterval time.Duration `yaml:"token_pruning_interval" env:"TOKEN_PRUNING_INTERVAL" env-default:"15m"`
+	KeyRotationInterval  time.Duration `yaml:"key_rotation_interval" env:"KEY_ROTATION_INTERVAL" env-default:"24h"`
 }
 
 type Config struct {

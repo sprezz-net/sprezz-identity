@@ -18,6 +18,13 @@ type CryptoMock struct {
 	t          minimock.Tester
 	finishOnce sync.Once
 
+	funcRotateKeys          func(tenant string) (err error)
+	funcRotateKeysOrigin    string
+	inspectFuncRotateKeys   func(tenant string)
+	afterRotateKeysCounter  uint64
+	beforeRotateKeysCounter uint64
+	RotateKeysMock          mCryptoMockRotateKeys
+
 	funcSignAccessToken          func(claims model.TokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)
 	funcSignAccessTokenOrigin    string
 	inspectFuncSignAccessToken   func(claims model.TokenClaims, alg model.SignatureAlgorithm)
@@ -55,6 +62,9 @@ func NewCryptoMock(t minimock.Tester) *CryptoMock {
 		controller.RegisterMocker(m)
 	}
 
+	m.RotateKeysMock = mCryptoMockRotateKeys{mock: m}
+	m.RotateKeysMock.callArgs = []*CryptoMockRotateKeysParams{}
+
 	m.SignAccessTokenMock = mCryptoMockSignAccessToken{mock: m}
 	m.SignAccessTokenMock.callArgs = []*CryptoMockSignAccessTokenParams{}
 
@@ -70,6 +80,317 @@ func NewCryptoMock(t minimock.Tester) *CryptoMock {
 	t.Cleanup(m.MinimockFinish)
 
 	return m
+}
+
+type mCryptoMockRotateKeys struct {
+	optional           bool
+	mock               *CryptoMock
+	defaultExpectation *CryptoMockRotateKeysExpectation
+	expectations       []*CryptoMockRotateKeysExpectation
+
+	callArgs []*CryptoMockRotateKeysParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// CryptoMockRotateKeysExpectation specifies expectation struct of the Crypto.RotateKeys
+type CryptoMockRotateKeysExpectation struct {
+	mock               *CryptoMock
+	params             *CryptoMockRotateKeysParams
+	paramPtrs          *CryptoMockRotateKeysParamPtrs
+	expectationOrigins CryptoMockRotateKeysExpectationOrigins
+	results            *CryptoMockRotateKeysResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// CryptoMockRotateKeysParams contains parameters of the Crypto.RotateKeys
+type CryptoMockRotateKeysParams struct {
+	tenant string
+}
+
+// CryptoMockRotateKeysParamPtrs contains pointers to parameters of the Crypto.RotateKeys
+type CryptoMockRotateKeysParamPtrs struct {
+	tenant *string
+}
+
+// CryptoMockRotateKeysResults contains results of the Crypto.RotateKeys
+type CryptoMockRotateKeysResults struct {
+	err error
+}
+
+// CryptoMockRotateKeysOrigins contains origins of expectations of the Crypto.RotateKeys
+type CryptoMockRotateKeysExpectationOrigins struct {
+	origin       string
+	originTenant string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmRotateKeys *mCryptoMockRotateKeys) Optional() *mCryptoMockRotateKeys {
+	mmRotateKeys.optional = true
+	return mmRotateKeys
+}
+
+// Expect sets up expected params for Crypto.RotateKeys
+func (mmRotateKeys *mCryptoMockRotateKeys) Expect(tenant string) *mCryptoMockRotateKeys {
+	if mmRotateKeys.mock.funcRotateKeys != nil {
+		mmRotateKeys.mock.t.Fatalf("CryptoMock.RotateKeys mock is already set by Set")
+	}
+
+	if mmRotateKeys.defaultExpectation == nil {
+		mmRotateKeys.defaultExpectation = &CryptoMockRotateKeysExpectation{}
+	}
+
+	if mmRotateKeys.defaultExpectation.paramPtrs != nil {
+		mmRotateKeys.mock.t.Fatalf("CryptoMock.RotateKeys mock is already set by ExpectParams functions")
+	}
+
+	mmRotateKeys.defaultExpectation.params = &CryptoMockRotateKeysParams{tenant}
+	mmRotateKeys.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmRotateKeys.expectations {
+		if minimock.Equal(e.params, mmRotateKeys.defaultExpectation.params) {
+			mmRotateKeys.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmRotateKeys.defaultExpectation.params)
+		}
+	}
+
+	return mmRotateKeys
+}
+
+// ExpectTenantParam1 sets up expected param tenant for Crypto.RotateKeys
+func (mmRotateKeys *mCryptoMockRotateKeys) ExpectTenantParam1(tenant string) *mCryptoMockRotateKeys {
+	if mmRotateKeys.mock.funcRotateKeys != nil {
+		mmRotateKeys.mock.t.Fatalf("CryptoMock.RotateKeys mock is already set by Set")
+	}
+
+	if mmRotateKeys.defaultExpectation == nil {
+		mmRotateKeys.defaultExpectation = &CryptoMockRotateKeysExpectation{}
+	}
+
+	if mmRotateKeys.defaultExpectation.params != nil {
+		mmRotateKeys.mock.t.Fatalf("CryptoMock.RotateKeys mock is already set by Expect")
+	}
+
+	if mmRotateKeys.defaultExpectation.paramPtrs == nil {
+		mmRotateKeys.defaultExpectation.paramPtrs = &CryptoMockRotateKeysParamPtrs{}
+	}
+	mmRotateKeys.defaultExpectation.paramPtrs.tenant = &tenant
+	mmRotateKeys.defaultExpectation.expectationOrigins.originTenant = minimock.CallerInfo(1)
+
+	return mmRotateKeys
+}
+
+// Inspect accepts an inspector function that has same arguments as the Crypto.RotateKeys
+func (mmRotateKeys *mCryptoMockRotateKeys) Inspect(f func(tenant string)) *mCryptoMockRotateKeys {
+	if mmRotateKeys.mock.inspectFuncRotateKeys != nil {
+		mmRotateKeys.mock.t.Fatalf("Inspect function is already set for CryptoMock.RotateKeys")
+	}
+
+	mmRotateKeys.mock.inspectFuncRotateKeys = f
+
+	return mmRotateKeys
+}
+
+// Return sets up results that will be returned by Crypto.RotateKeys
+func (mmRotateKeys *mCryptoMockRotateKeys) Return(err error) *CryptoMock {
+	if mmRotateKeys.mock.funcRotateKeys != nil {
+		mmRotateKeys.mock.t.Fatalf("CryptoMock.RotateKeys mock is already set by Set")
+	}
+
+	if mmRotateKeys.defaultExpectation == nil {
+		mmRotateKeys.defaultExpectation = &CryptoMockRotateKeysExpectation{mock: mmRotateKeys.mock}
+	}
+	mmRotateKeys.defaultExpectation.results = &CryptoMockRotateKeysResults{err}
+	mmRotateKeys.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmRotateKeys.mock
+}
+
+// Set uses given function f to mock the Crypto.RotateKeys method
+func (mmRotateKeys *mCryptoMockRotateKeys) Set(f func(tenant string) (err error)) *CryptoMock {
+	if mmRotateKeys.defaultExpectation != nil {
+		mmRotateKeys.mock.t.Fatalf("Default expectation is already set for the Crypto.RotateKeys method")
+	}
+
+	if len(mmRotateKeys.expectations) > 0 {
+		mmRotateKeys.mock.t.Fatalf("Some expectations are already set for the Crypto.RotateKeys method")
+	}
+
+	mmRotateKeys.mock.funcRotateKeys = f
+	mmRotateKeys.mock.funcRotateKeysOrigin = minimock.CallerInfo(1)
+	return mmRotateKeys.mock
+}
+
+// When sets expectation for the Crypto.RotateKeys which will trigger the result defined by the following
+// Then helper
+func (mmRotateKeys *mCryptoMockRotateKeys) When(tenant string) *CryptoMockRotateKeysExpectation {
+	if mmRotateKeys.mock.funcRotateKeys != nil {
+		mmRotateKeys.mock.t.Fatalf("CryptoMock.RotateKeys mock is already set by Set")
+	}
+
+	expectation := &CryptoMockRotateKeysExpectation{
+		mock:               mmRotateKeys.mock,
+		params:             &CryptoMockRotateKeysParams{tenant},
+		expectationOrigins: CryptoMockRotateKeysExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmRotateKeys.expectations = append(mmRotateKeys.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Crypto.RotateKeys return parameters for the expectation previously defined by the When method
+func (e *CryptoMockRotateKeysExpectation) Then(err error) *CryptoMock {
+	e.results = &CryptoMockRotateKeysResults{err}
+	return e.mock
+}
+
+// Times sets number of times Crypto.RotateKeys should be invoked
+func (mmRotateKeys *mCryptoMockRotateKeys) Times(n uint64) *mCryptoMockRotateKeys {
+	if n == 0 {
+		mmRotateKeys.mock.t.Fatalf("Times of CryptoMock.RotateKeys mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmRotateKeys.expectedInvocations, n)
+	mmRotateKeys.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmRotateKeys
+}
+
+func (mmRotateKeys *mCryptoMockRotateKeys) invocationsDone() bool {
+	if len(mmRotateKeys.expectations) == 0 && mmRotateKeys.defaultExpectation == nil && mmRotateKeys.mock.funcRotateKeys == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmRotateKeys.mock.afterRotateKeysCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmRotateKeys.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// RotateKeys implements mm_port.Crypto
+func (mmRotateKeys *CryptoMock) RotateKeys(tenant string) (err error) {
+	mm_atomic.AddUint64(&mmRotateKeys.beforeRotateKeysCounter, 1)
+	defer mm_atomic.AddUint64(&mmRotateKeys.afterRotateKeysCounter, 1)
+
+	mmRotateKeys.t.Helper()
+
+	if mmRotateKeys.inspectFuncRotateKeys != nil {
+		mmRotateKeys.inspectFuncRotateKeys(tenant)
+	}
+
+	mm_params := CryptoMockRotateKeysParams{tenant}
+
+	// Record call args
+	mmRotateKeys.RotateKeysMock.mutex.Lock()
+	mmRotateKeys.RotateKeysMock.callArgs = append(mmRotateKeys.RotateKeysMock.callArgs, &mm_params)
+	mmRotateKeys.RotateKeysMock.mutex.Unlock()
+
+	for _, e := range mmRotateKeys.RotateKeysMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmRotateKeys.RotateKeysMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmRotateKeys.RotateKeysMock.defaultExpectation.Counter, 1)
+		mm_want := mmRotateKeys.RotateKeysMock.defaultExpectation.params
+		mm_want_ptrs := mmRotateKeys.RotateKeysMock.defaultExpectation.paramPtrs
+
+		mm_got := CryptoMockRotateKeysParams{tenant}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.tenant != nil && !minimock.Equal(*mm_want_ptrs.tenant, mm_got.tenant) {
+				mmRotateKeys.t.Errorf("CryptoMock.RotateKeys got unexpected parameter tenant, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRotateKeys.RotateKeysMock.defaultExpectation.expectationOrigins.originTenant, *mm_want_ptrs.tenant, mm_got.tenant, minimock.Diff(*mm_want_ptrs.tenant, mm_got.tenant))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmRotateKeys.t.Errorf("CryptoMock.RotateKeys got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRotateKeys.RotateKeysMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmRotateKeys.RotateKeysMock.defaultExpectation.results
+		if mm_results == nil {
+			mmRotateKeys.t.Fatal("No results are set for the CryptoMock.RotateKeys")
+		}
+		return (*mm_results).err
+	}
+	if mmRotateKeys.funcRotateKeys != nil {
+		return mmRotateKeys.funcRotateKeys(tenant)
+	}
+	mmRotateKeys.t.Fatalf("Unexpected call to CryptoMock.RotateKeys. %v", tenant)
+	return
+}
+
+// RotateKeysAfterCounter returns a count of finished CryptoMock.RotateKeys invocations
+func (mmRotateKeys *CryptoMock) RotateKeysAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRotateKeys.afterRotateKeysCounter)
+}
+
+// RotateKeysBeforeCounter returns a count of CryptoMock.RotateKeys invocations
+func (mmRotateKeys *CryptoMock) RotateKeysBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRotateKeys.beforeRotateKeysCounter)
+}
+
+// Calls returns a list of arguments used in each call to CryptoMock.RotateKeys.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmRotateKeys *mCryptoMockRotateKeys) Calls() []*CryptoMockRotateKeysParams {
+	mmRotateKeys.mutex.RLock()
+
+	argCopy := make([]*CryptoMockRotateKeysParams, len(mmRotateKeys.callArgs))
+	copy(argCopy, mmRotateKeys.callArgs)
+
+	mmRotateKeys.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockRotateKeysDone returns true if the count of the RotateKeys invocations corresponds
+// the number of defined expectations
+func (m *CryptoMock) MinimockRotateKeysDone() bool {
+	if m.RotateKeysMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.RotateKeysMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.RotateKeysMock.invocationsDone()
+}
+
+// MinimockRotateKeysInspect logs each unmet expectation
+func (m *CryptoMock) MinimockRotateKeysInspect() {
+	for _, e := range m.RotateKeysMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to CryptoMock.RotateKeys at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterRotateKeysCounter := mm_atomic.LoadUint64(&m.afterRotateKeysCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.RotateKeysMock.defaultExpectation != nil && afterRotateKeysCounter < 1 {
+		if m.RotateKeysMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to CryptoMock.RotateKeys at\n%s", m.RotateKeysMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to CryptoMock.RotateKeys at\n%s with params: %#v", m.RotateKeysMock.defaultExpectation.expectationOrigins.origin, *m.RotateKeysMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcRotateKeys != nil && afterRotateKeysCounter < 1 {
+		m.t.Errorf("Expected call to CryptoMock.RotateKeys at\n%s", m.funcRotateKeysOrigin)
+	}
+
+	if !m.RotateKeysMock.invocationsDone() && afterRotateKeysCounter > 0 {
+		m.t.Errorf("Expected %d calls to CryptoMock.RotateKeys at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.RotateKeysMock.expectedInvocations), m.RotateKeysMock.expectedInvocationsOrigin, afterRotateKeysCounter)
+	}
 }
 
 type mCryptoMockSignAccessToken struct {
@@ -1417,6 +1738,8 @@ func (m *CryptoMock) MinimockVerifyTokenInspect() {
 func (m *CryptoMock) MinimockFinish() {
 	m.finishOnce.Do(func() {
 		if !m.minimockDone() {
+			m.MinimockRotateKeysInspect()
+
 			m.MinimockSignAccessTokenInspect()
 
 			m.MinimockSignIDTokenInspect()
@@ -1447,6 +1770,7 @@ func (m *CryptoMock) MinimockWait(timeout mm_time.Duration) {
 func (m *CryptoMock) minimockDone() bool {
 	done := true
 	return done &&
+		m.MinimockRotateKeysDone() &&
 		m.MinimockSignAccessTokenDone() &&
 		m.MinimockSignIDTokenDone() &&
 		m.MinimockSignLogoutTokenDone() &&

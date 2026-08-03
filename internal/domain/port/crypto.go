@@ -9,4 +9,5 @@ type Crypto interface {
 	SignIDToken(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error)
 	VerifyToken(tokenStr string) (map[string]any, error)
 	SignLogoutToken(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (string, error)
+	RotateKeys(tenant string) error
 }

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"sprezz-identity/internal/domain/model"
 
@@ -18,16 +19,20 @@ import (
 
 const httpsScheme = "https://"
 
+type tenantKeyring struct {
+	ActiveKid string
+	Keys      map[string]*rsa.PrivateKey
+	JWKS      []map[string]any
+}
+
 type JWTSigner struct {
 	mu       sync.RWMutex
-	keyrings map[string]*rsa.PrivateKey
-	jwks     map[string][]map[string]any
+	keyrings map[string]*tenantKeyring
 }
 
 func NewJWTSigner() *JWTSigner {
 	return &JWTSigner{
-		keyrings: make(map[string]*rsa.PrivateKey),
-		jwks:     make(map[string][]map[string]any),
+		keyrings: make(map[string]*tenantKeyring),
 	}
 }
 
@@ -41,13 +46,14 @@ func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.Signatur
 		issuer = httpsScheme + strings.TrimPrefix(claims.TenantID, httpsScheme)
 	}
 	issuer = strings.TrimSuffix(issuer, "/")
-	tenantKey := strings.TrimPrefix(issuer, httpsScheme)
-	kid := s.tenantKeyID(issuer)
-	privateKey, err := s.getOrCreateKeyPair(tenantKey, issuer, kid)
+	tenant := strings.TrimPrefix(issuer, httpsScheme)
+
+	keyring, err := s.getOrCreateKeyring(tenant, issuer)
 	if err != nil {
 		return "", err
 	}
 
+	privateKey := keyring.Keys[keyring.ActiveKid]
 	audClaim := any(claims.ClientID)
 	if len(claims.Audiences) > 0 {
 		audClaim = claims.Audiences
@@ -70,8 +76,9 @@ func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.Signatur
 			"jkt": claims.DPoPHash,
 		}
 	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, mapClaims)
-	token.Header["kid"] = kid
+	token.Header["kid"] = keyring.ActiveKid
 	token.Header["typ"] = "JWT"
 
 	return token.SignedString(privateKey)
@@ -87,13 +94,14 @@ func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.Signatur
 		issuer = httpsScheme + strings.TrimPrefix(claims.TenantID, httpsScheme)
 	}
 	issuer = strings.TrimSuffix(issuer, "/")
-	tenantKey := strings.TrimPrefix(issuer, httpsScheme)
-	kid := s.tenantKeyID(issuer)
-	privateKey, err := s.getOrCreateKeyPair(tenantKey, issuer, kid)
+	tenant := strings.TrimPrefix(issuer, httpsScheme)
+
+	keyring, err := s.getOrCreateKeyring(tenant, issuer)
 	if err != nil {
 		return "", err
 	}
 
+	privateKey := keyring.Keys[keyring.ActiveKid]
 	mapClaims := jwt.MapClaims{
 		"iss":       issuer,
 		"sub":       claims.Subject,
@@ -109,8 +117,9 @@ func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.Signatur
 	if claims.SessionID != "" {
 		mapClaims["sid"] = claims.SessionID
 	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, mapClaims)
-	token.Header["kid"] = kid
+	token.Header["kid"] = keyring.ActiveKid
 	token.Header["typ"] = "JWT"
 
 	return token.SignedString(privateKey)
@@ -126,13 +135,14 @@ func (s *JWTSigner) SignLogoutToken(claims model.LogoutTokenClaims, alg model.Si
 		issuer = httpsScheme + strings.TrimPrefix(claims.Subject, httpsScheme)
 	}
 	issuer = strings.TrimSuffix(issuer, "/")
-	tenantKey := strings.TrimPrefix(issuer, httpsScheme)
-	kid := s.tenantKeyID(issuer)
-	privateKey, err := s.getOrCreateKeyPair(tenantKey, issuer, kid)
+	tenant := strings.TrimPrefix(issuer, httpsScheme)
+
+	keyring, err := s.getOrCreateKeyring(tenant, issuer)
 	if err != nil {
 		return "", err
 	}
 
+	privateKey := keyring.Keys[keyring.ActiveKid]
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 		"iss": issuer,
 		"sub": claims.Subject,
@@ -143,7 +153,7 @@ func (s *JWTSigner) SignLogoutToken(claims model.LogoutTokenClaims, alg model.Si
 			"http://schemas.openid.net/event/back-channel-logout": map[string]any{},
 		},
 	})
-	token.Header["kid"] = kid
+	token.Header["kid"] = keyring.ActiveKid
 	token.Header["typ"] = "JWT"
 
 	return token.SignedString(privateKey)
@@ -161,8 +171,10 @@ func (s *JWTSigner) VerifyToken(tokenStr string) (map[string]any, error) {
 
 		s.mu.RLock()
 		defer s.mu.RUnlock()
-		for _, key := range s.keyrings {
-			return &key.PublicKey, nil
+		for _, keyring := range s.keyrings {
+			if key, exists := keyring.Keys[kid]; exists {
+				return &key.PublicKey, nil
+			}
 		}
 		return nil, fmt.Errorf("key not found for kid: %s", kid)
 	})
@@ -179,22 +191,15 @@ func (s *JWTSigner) VerifyToken(tokenStr string) (map[string]any, error) {
 }
 
 func (s *JWTSigner) JWKSForTenant(domain string) ([]map[string]any, error) {
-	s.mu.RLock()
-	jwkSet, ok := s.jwks[domain]
-	s.mu.RUnlock()
-	if ok {
-		return jwkSet, nil
-	}
-
-	issuer, kid := s.tenantIdentity(domain)
-	_, err := s.getOrCreateKeyPair(domain, issuer, kid)
+	issuer, _ := s.tenantIdentity(domain)
+	keyring, err := s.getOrCreateKeyring(domain, issuer)
 	if err != nil {
 		return nil, err
 	}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.jwks[domain], nil
+	return keyring.JWKS, nil
 }
 
 func (s *JWTSigner) MarshalJWKSet(tenant string) (string, error) {
@@ -207,6 +212,36 @@ func (s *JWTSigner) MarshalJWKSet(tenant string) (string, error) {
 		return "", err
 	}
 	return string(body), nil
+}
+
+func (s *JWTSigner) RotateKeys(tenant string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	keyring, ok := s.keyrings[tenant]
+	if !ok {
+		return fmt.Errorf("tenant %s keyring not initialized", tenant)
+	}
+
+	newKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return fmt.Errorf("rotate keys: generate key: %w", err)
+	}
+
+	// Generate a unique kid
+	kidHash := sha256.Sum256(fmt.Appendf(nil, "%s-%d", tenant, time.Now().UnixNano()))
+	newKid := fmt.Sprintf("kid-%x", kidHash)
+
+	jwk, err := s.buildJWK(newKid, newKey)
+	if err != nil {
+		return fmt.Errorf("rotate keys: build jwk: %w", err)
+	}
+
+	keyring.ActiveKid = newKid
+	keyring.Keys[newKid] = newKey
+	keyring.JWKS = append([]map[string]any{jwk}, keyring.JWKS...)
+
+	return nil
 }
 
 func (s *JWTSigner) tenantIdentity(tenant string) (string, string) {
@@ -226,27 +261,8 @@ func (s *JWTSigner) tenantKeyID(tenant string) string {
 	return fmt.Sprintf("kid-%x", kidHash)
 }
 
-func (s *JWTSigner) getOrCreateKeyPair(tenant string, issuer string, kid string) (*rsa.PrivateKey, error) {
-	s.mu.RLock()
-	privateKey, ok := s.keyrings[issuer]
-	s.mu.RUnlock()
-	if ok {
-		return privateKey, nil
-	}
-
-	generatedKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, fmt.Errorf("generate tenant signing key: %w", err)
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if existing, exists := s.keyrings[issuer]; exists {
-		return existing, nil
-	}
-
-	s.keyrings[issuer] = generatedKey
-	publicKeyBytes, err := x509.MarshalPKIXPublicKey(&generatedKey.PublicKey)
+func (s *JWTSigner) buildJWK(kid string, privateKey *rsa.PrivateKey) (map[string]any, error) {
+	publicKeyBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
 	if err != nil {
 		return nil, fmt.Errorf("marshal public key: %w", err)
 	}
@@ -260,14 +276,46 @@ func (s *JWTSigner) getOrCreateKeyPair(tenant string, issuer string, kid string)
 	}
 	modulus := base64.RawURLEncoding.EncodeToString(rsaPublic.N.Bytes())
 	exponent := base64.RawURLEncoding.EncodeToString([]byte{1, 0, 1})
-	jwk := map[string]any{
+	return map[string]any{
 		"kty": "RSA",
 		"kid": kid,
 		"use": "sig",
 		"alg": "RS256",
 		"n":   modulus,
 		"e":   exponent,
+	}, nil
+}
+
+func (s *JWTSigner) getOrCreateKeyring(tenant string, issuer string) (*tenantKeyring, error) {
+	s.mu.RLock()
+	keyring, ok := s.keyrings[tenant]
+	s.mu.RUnlock()
+	if ok {
+		return keyring, nil
 	}
-	s.jwks[tenant] = []map[string]any{jwk}
-	return generatedKey, nil
+
+	generatedKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, fmt.Errorf("generate tenant signing key: %w", err)
+	}
+
+	kid := s.tenantKeyID(issuer)
+	jwk, err := s.buildJWK(kid, generatedKey)
+	if err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if existing, exists := s.keyrings[tenant]; exists {
+		return existing, nil
+	}
+
+	newKeyring := &tenantKeyring{
+		ActiveKid: kid,
+		Keys:      map[string]*rsa.PrivateKey{kid: generatedKey},
+		JWKS:      []map[string]any{jwk},
+	}
+	s.keyrings[tenant] = newKeyring
+	return newKeyring, nil
 }

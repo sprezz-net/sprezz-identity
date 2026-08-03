@@ -34,12 +34,14 @@ func main() {
 		log.Fatalf("Admin tenant bootstrap failed: %v", err)
 	}
 
+	signer := jwtcrypto.NewJWTSigner()
+
 	// Start the background token and session pruning worker (15-Minute Ticks)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	startTokenPruningWorker(ctx, deps.storage, deps.cfg.IdentityServer.TokenPruningInterval)
+	startKeyRotationWorker(ctx, signer, deps.cfg.IdentityServer.AdminTenantDomain, deps.cfg.IdentityServer.KeyRotationInterval)
 
-	signer := jwtcrypto.NewJWTSigner()
 	notifier := logout.NewLogoutHttpClient()
 	oauthService := service.NewOAuthService(deps.storage, signer, nil, notifier, sysClock)
 	handler := httpadapter.NewHttpAdapter(oauthService, deps.storage, signer, sysClock)
@@ -68,6 +70,28 @@ func startTokenPruningWorker(ctx context.Context, storage *postgres.PostgresStor
 			case <-ctx.Done():
 				ticker.Stop()
 				log.Println("Pruning worker stopped.")
+				return
+			}
+		}
+	}()
+}
+
+func startKeyRotationWorker(ctx context.Context, signer *jwtcrypto.JWTSigner, domain string, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	go func() {
+		log.Printf("Starting background key rotation worker (interval: %v)...", interval)
+		for {
+			select {
+			case <-ticker.C:
+				log.Printf("Triggering periodic cryptographic key rotation for tenant: %s", domain)
+				if err := signer.RotateKeys(domain); err != nil {
+					log.Printf("Error during background key rotation: %v", err)
+				} else {
+					log.Printf("Cryptographic keys successfully rotated for tenant: %s. New active key is published to JWKS.", domain)
+				}
+			case <-ctx.Done():
+				ticker.Stop()
+				log.Println("Key rotation worker stopped.")
 				return
 			}
 		}
