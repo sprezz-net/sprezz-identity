@@ -3,15 +3,12 @@ package http
 import (
 	"errors"
 	"net/http"
+	"net/url"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/views"
 
 	"github.com/google/uuid"
-)
-
-const (
-	contentTypeHtml = "text/html; charset=utf-8"
 )
 
 func (h *HttpAdapter) signUpForm(w http.ResponseWriter, r *http.Request) {
@@ -33,7 +30,7 @@ func (h *HttpAdapter) signUpForm(w http.ResponseWriter, r *http.Request) {
 	_ = component.Render(r.Context(), w)
 }
 
-func (h *HttpAdapter) processSignUpRegistration(r *http.Request, tenant *model.Tenant, provider *model.IdentityProvider) error {
+func (h *HttpAdapter) processSignUpRegistration(r *http.Request, tenant *model.Tenant, provider *model.IdentityProvider) (*model.UserProfile, error) {
 	name := r.FormValue("name")
 	username := r.FormValue("username")
 	email := r.FormValue("email")
@@ -41,7 +38,7 @@ func (h *HttpAdapter) processSignUpRegistration(r *http.Request, tenant *model.T
 	confirmPassword := r.FormValue("confirm_password")
 
 	if password != confirmPassword {
-		return errors.New("passwords do not match")
+		return nil, errors.New("passwords do not match")
 	}
 
 	// In email-as-username mode, copy email to username
@@ -50,8 +47,7 @@ func (h *HttpAdapter) processSignUpRegistration(r *http.Request, tenant *model.T
 	}
 
 	// Trigger domain registration service logic
-	_, err := h.signupService.RegisterUser(r.Context(), tenant.ID, name, username, email, password)
-	return err
+	return h.signupService.RegisterUser(r.Context(), tenant.ID, name, username, email, password)
 }
 
 func (h *HttpAdapter) resolveSignUpRedirectURL(r *http.Request, tenant *model.Tenant) string {
@@ -60,7 +56,23 @@ func (h *HttpAdapter) resolveSignUpRedirectURL(r *http.Request, tenant *model.Te
 		if cookie, err := r.Cookie("spz_auth_session_id"); err == nil && cookie.Value != "" {
 			if sessionUUID, parseErr := uuid.Parse(cookie.Value); parseErr == nil {
 				if session, loadErr := h.storagePort.GetAndConsumeInteractionSession(r.Context(), tenant.ID, sessionUUID); loadErr == nil {
-					targetURL = session.RedirectURI
+					// Reconstruct the /oauth/authorize redirect URL with all preserved parameters!
+					targetURL = routeAuthorize + "?client_id=" + url.QueryEscape(session.ClientID) + "&redirect_uri=" + url.QueryEscape(session.RedirectURI)
+					if session.CodeChallenge != "" {
+						targetURL += "&code_challenge=" + url.QueryEscape(session.CodeChallenge)
+					}
+					if session.ChallengeMethod != "" {
+						targetURL += "&code_challenge_method=" + url.QueryEscape(session.ChallengeMethod)
+					}
+					if session.IDPHint != "" {
+						targetURL += "&idp_hint=" + url.QueryEscape(session.IDPHint)
+					}
+					if session.State != "" {
+						targetURL += "&state=" + url.QueryEscape(session.State)
+					}
+					if session.Nonce != "" {
+						targetURL += "&nonce=" + url.QueryEscape(session.Nonce)
+					}
 				}
 			}
 		}
@@ -93,13 +105,21 @@ func (h *HttpAdapter) signUpSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.processSignUpRegistration(r, tenant, provider); err != nil {
+	profile, err := h.processSignUpRegistration(r, tenant, provider)
+	if err != nil {
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
 		w.WriteHeader(http.StatusOK) // Return HTML back to HTMX or browser with the error message rendered
 		component := views.SignUp(err.Error(), provider, r.FormValue("email"), r.FormValue("username"), r.FormValue("name"))
 		_ = component.Render(r.Context(), w)
 		return
 	}
+
+	// Auto-login after successful registration!
+	h.setSSOSessionCookie(w, ssoSession{
+		SubjectID:  profile.ID.String(),
+		ProviderID: provider.ID.String(),
+		SessionID:  uuid.NewString(),
+	})
 
 	targetURL := h.resolveSignUpRedirectURL(r, tenant)
 	w.Header().Set("HX-Redirect", targetURL)

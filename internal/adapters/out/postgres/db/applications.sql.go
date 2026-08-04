@@ -33,7 +33,8 @@ SELECT
     a.default_scopes,
     a.allowed_idps,
     a.default_idp,
-    a.allowed_audiences
+    a.allowed_audiences,
+    a.client_type
 FROM applications AS a
 JOIN tenants AS t ON t.id = a.tenant_id
 WHERE t.tenant_uuid = $1
@@ -70,6 +71,7 @@ func (q *Queries) GetClient(ctx context.Context, arg GetClientParams) (Applicati
 		&i.AllowedIdps,
 		&i.DefaultIdp,
 		&i.AllowedAudiences,
+		&i.ClientType,
 	)
 	return i, err
 }
@@ -114,7 +116,8 @@ INSERT INTO applications (
     default_scopes,
     allowed_idps,
     default_idp,
-    allowed_audiences
+    allowed_audiences,
+    client_type
 )
 SELECT
     $2,
@@ -136,7 +139,8 @@ SELECT
     $17,
     $18,
     $19,
-    $20
+    $20,
+    $21
 FROM tenant
 ON CONFLICT (tenant_id, client_id)
 DO UPDATE SET
@@ -156,7 +160,8 @@ DO UPDATE SET
     default_scopes = EXCLUDED.default_scopes,
     allowed_idps = EXCLUDED.allowed_idps,
     default_idp = EXCLUDED.default_idp,
-    allowed_audiences = EXCLUDED.allowed_audiences
+    allowed_audiences = EXCLUDED.allowed_audiences,
+    client_type = EXCLUDED.client_type
 `
 
 type SaveClientParams struct {
@@ -180,6 +185,7 @@ type SaveClientParams struct {
 	AllowedIdps            []string        `json:"allowed_idps"`
 	DefaultIdp             *string         `json:"default_idp"`
 	AllowedAudiences       []string        `json:"allowed_audiences"`
+	ClientType             string          `json:"client_type"`
 }
 
 func (q *Queries) SaveClient(ctx context.Context, arg SaveClientParams) (pgconn.CommandTag, error) {
@@ -204,5 +210,6 @@ func (q *Queries) SaveClient(ctx context.Context, arg SaveClientParams) (pgconn.
 		arg.AllowedIdps,
 		arg.DefaultIdp,
 		arg.AllowedAudiences,
+		arg.ClientType,
 	)
 }

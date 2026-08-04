@@ -6,6 +6,12 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	ClientTypePublic            = "public"
+	ClientTypeConfidential      = "confidential"
+	ClientTypeInternalEphemeral = "internal_ephemeral"
+)
+
 type ClientApplication struct {
 	ID                     string
 	TenantID               uuid.UUID
@@ -27,4 +33,5 @@ type ClientApplication struct {
 	AllowedIDPs            []string
 	DefaultIDP             string
 	AllowedAudiences       []string
+	ClientType             string
 }

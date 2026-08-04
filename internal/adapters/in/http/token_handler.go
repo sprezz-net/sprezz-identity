@@ -48,9 +48,22 @@ func (h *HttpAdapter) authenticateClient(w http.ResponseWriter, r *http.Request,
 	}
 
 	client, err := h.storagePort.GetClient(r.Context(), tenant.ID, clientID)
-	if err != nil || client.ClientSecret == nil || *client.ClientSecret != clientSecret {
-		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "client authentication failed"})
-		return nil, fmt.Errorf("client authentication failed")
+	if err != nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
+		return nil, fmt.Errorf("%s", errClientAuthFailed)
+	}
+
+	if client.ClientType == model.ClientTypeInternalEphemeral {
+		if h.adminState == nil || h.adminState.GetEphemeralSecret() != clientSecret {
+			respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
+			return nil, fmt.Errorf("%s", errClientAuthFailed)
+		}
+		return client, nil
+	}
+
+	if client.ClientSecret == nil || *client.ClientSecret != clientSecret {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
+		return nil, fmt.Errorf("%s", errClientAuthFailed)
 	}
 
 	return client, nil

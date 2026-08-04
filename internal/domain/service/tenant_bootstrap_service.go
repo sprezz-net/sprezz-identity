@@ -3,11 +3,19 @@ package service
 import (
 	"context"
 	"errors"
+	"time"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
 
 	"github.com/google/uuid"
+)
+
+const (
+	schemeHttp    = "http://"
+	schemeHttps   = "https://"
+	routeAdmin    = "/admin"
+	routeCallback = "/admin/callback"
 )
 
 // TenantBootstrapService is the domain-level orchestration point that ensures
@@ -40,6 +48,9 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 				return nil, err
 			}
 		}
+		if err := s.ensureAdminClient(ctx, tenant.ID, domain); err != nil {
+			return nil, err
+		}
 		return tenant, nil
 	}
 
@@ -56,8 +67,9 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 		Config: model.TenantConfig{
 			PredefinedScopes:    []string{"openid", "profile", "email", "offline_access"},
 			PredefinedAudiences: []string{},
-			DefaultRedirectURI:  "https://" + domain + "/admin",
-			RedirectWhitelist:   []string{"https://" + domain + "/admin"},
+			DefaultRedirectURI:  schemeHttps + domain + routeAdmin,
+			RedirectWhitelist:   []string{schemeHttps + domain + routeAdmin, schemeHttp + domain + routeAdmin, schemeHttp + domain + routeCallback, schemeHttps + domain + routeCallback},
+			AllowSignup:         true,
 		},
 	}
 
@@ -79,5 +91,43 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 		return nil, err
 	}
 
+	if err := s.ensureAdminClient(ctx, newTenant.ID, domain); err != nil {
+		return nil, err
+	}
+
 	return newTenant, nil
+}
+
+func (s *TenantBootstrapService) ensureAdminClient(ctx context.Context, tenantID uuid.UUID, domain string) error {
+	_, err := s.storage.GetClient(ctx, tenantID, "admin_ui")
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, port.ErrClientNotFound) {
+		return err
+	}
+
+	adminClient := model.ClientApplication{
+		ID:                     uuid.New().String(),
+		TenantID:               tenantID,
+		ClientID:               "admin_ui",
+		ClientSecret:           nil,
+		ClientName:             "Admin Interface",
+		RedirectURIs:           []string{schemeHttp + domain + routeCallback, schemeHttps + domain + routeCallback},
+		PostLogoutRedirectURIs: []string{schemeHttp + domain + routeAdmin, schemeHttps + domain + routeAdmin},
+		GrantTypes:             []string{"authorization_code"},
+		ResponseTypes:          []string{"code"},
+		Algorithm:              model.AlgRS256,
+		AccessTokenLifetime:    30 * time.Minute,
+		RefreshTokenLifetime:   24 * time.Hour,
+		IDTokenLifetime:        5 * time.Minute,
+		AllowedScopes:          []string{"openid", "profile", "email"},
+		DefaultScopes:          []string{"openid", "profile", "email"},
+		AllowedIDPs:            []string{"username-password"},
+		DefaultIDP:             "username-password",
+		AllowedAudiences:       []string{},
+		ClientType:             model.ClientTypeInternalEphemeral,
+	}
+
+	return s.storage.SaveClient(ctx, adminClient)
 }

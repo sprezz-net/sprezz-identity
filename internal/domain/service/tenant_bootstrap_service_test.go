@@ -29,6 +29,10 @@ func TestTenantBootstrapService_BootstrapAdminTenant_InitialCreation(t *testing.
 	// Mock CreateIdentityProvider
 	storage.CreateIdentityProviderMock.Set(validateIdentityProvider(t))
 
+	// Mock GetClient and SaveClient for ensureAdminClient
+	storage.GetClientMock.Return(nil, port.ErrClientNotFound)
+	storage.SaveClientMock.Return(nil)
+
 	tenant, err := service.BootstrapAdminTenant(context.Background(), domain)
 	if err != nil {
 		t.Fatalf("unexpected error during initial bootstrap: %v", err)

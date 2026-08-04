@@ -23,20 +23,23 @@ import (
 )
 
 const (
-	routeAuthorize    = "/oauth/authorize"
-	routeToken        = "/oauth/token"
-	routeUserInfo     = "/oauth/userinfo"
-	routeRegister     = "/oauth/register"
-	routeOpenIDConfig = "/.well-known/openid-configuration"
-	routeKeys         = "/.well-known/jwks.json"
-	routeRevoke       = "/oauth/revoke"
-	routeIntrospect   = "/oauth/introspect"
-	routeLogout       = "/oauth/logout"
-	routePAR          = "/oauth/par"
-	contentTypeHeader = "Content-Type"
-	contentTypeJSON   = "application/json"
-	schemeHttps       = "https://"
-	errInvalidDPoP    = "invalid DPoP proof: "
+	routeAuthorize      = "/oauth/authorize"
+	routeToken          = "/oauth/token"
+	routeUserInfo       = "/oauth/userinfo"
+	routeRegister       = "/oauth/register"
+	routeOpenIDConfig   = "/.well-known/openid-configuration"
+	routeKeys           = "/.well-known/jwks.json"
+	routeRevoke         = "/oauth/revoke"
+	routeIntrospect     = "/oauth/introspect"
+	routeLogout         = "/oauth/logout"
+	routePAR            = "/oauth/par"
+	contentTypeHeader   = "Content-Type"
+	contentTypeJSON     = "application/json"
+	contentTypeHtml     = "text/html; charset=utf-8"
+	schemeHttps         = "https://"
+	schemeHttp          = "http://"
+	errInvalidDPoP      = "invalid DPoP proof: "
+	errClientAuthFailed = "client authentication failed"
 
 	routeRoot      = "/"
 	routeWebLogin  = "/login"
@@ -54,6 +57,7 @@ type HttpAdapter struct {
 	signupService  *service.UserRegistrationService
 	oauthValidator *service.OAuthValidatorService
 	router         chi.Router
+	adminState     port.AdminState
 }
 
 type registerRequest struct {
@@ -87,7 +91,11 @@ func ClientFromContext(ctx context.Context) (*model.ClientApplication, bool) {
 	return client, ok
 }
 
-func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock) *HttpAdapter {
+func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock, as ...port.AdminState) *HttpAdapter {
+	var adminState port.AdminState
+	if len(as) > 0 {
+		adminState = as[0]
+	}
 	h := &HttpAdapter{
 		authPort:       a,
 		storagePort:    s,
@@ -96,6 +104,7 @@ func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock) *
 		signupService:  service.NewUserRegistrationService(s),
 		oauthValidator: service.NewOAuthValidatorService(),
 		router:         chi.NewRouter(),
+		adminState:     adminState,
 	}
 	h.router.Use(h.cspMiddleware)
 	h.router.Use(h.tenantMiddleware)
@@ -162,6 +171,16 @@ func (h *HttpAdapter) registerRoutes() {
 	h.router.Post(routeUserInfo, h.userinfo)
 	h.router.Get(routeLogout, h.logout)
 	h.router.Get(routeWebLogout, h.webLogout)
+
+	// Admin Routes
+	h.router.Route("/admin", func(r chi.Router) {
+		r.Get("/", h.adminDashboardView)
+		r.Get("/dashboard", h.adminDashboardView)
+		r.Get("/callback", h.adminCallback)
+		r.Get("/tenants/new", h.adminNewTenantForm)
+		r.Post("/tenants", h.adminCreateTenant)
+		r.Patch("/tenants/{id}/toggle-signup", h.adminToggleSignup)
+	})
 
 	// Routes requiring mandatory client authentication
 	h.router.Group(func(r chi.Router) {

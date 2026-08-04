@@ -35,6 +35,11 @@ func (s *PostgresStorage) SaveClient(ctx context.Context, client model.ClientApp
 		return fmt.Errorf("save client: parse client UUID: %w", err)
 	}
 
+	clientType := client.ClientType
+	if clientType == "" {
+		clientType = model.ClientTypeConfidential
+	}
+
 	commandTag, err := s.queries.SaveClient(ctx, sqlcdb.SaveClientParams{
 		TenantUuid:             toPGUUID(client.TenantID),
 		ID:                     toPGUUID(clientUUID),
@@ -56,6 +61,7 @@ func (s *PostgresStorage) SaveClient(ctx context.Context, client model.ClientApp
 		AllowedIdps:            client.AllowedIDPs,
 		DefaultIdp:             stringPtr(client.DefaultIDP),
 		AllowedAudiences:       client.AllowedAudiences,
+		ClientType:             clientType,
 	})
 	if err != nil {
 		return fmt.Errorf("save client: %w", err)
@@ -116,6 +122,7 @@ func (s *PostgresStorage) GetClient(ctx context.Context, tenantID uuid.UUID, cli
 		AllowedIDPs:            row.AllowedIdps,
 		DefaultIDP:             valueOrEmpty(row.DefaultIdp),
 		AllowedAudiences:       row.AllowedAudiences,
+		ClientType:             row.ClientType,
 	}, nil
 }
 
@@ -140,7 +147,8 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 			a.default_scopes,
 			a.allowed_idps,
 			a.default_idp,
-			a.allowed_audiences
+			a.allowed_audiences,
+			a.client_type
 		FROM applications AS a
 		JOIN tenants AS t ON t.id = a.tenant_id
 		WHERE t.tenant_uuid = $1::uuid
@@ -171,6 +179,7 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 		var allowedIdps []string
 		var defaultIdp *string
 		var allowedAudiences []string
+		var clientType string
 
 		err = rows.Scan(
 			&id,
@@ -192,6 +201,7 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 			&allowedIdps,
 			&defaultIdp,
 			&allowedAudiences,
+			&clientType,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan client application: %w", err)
@@ -235,6 +245,7 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 			AllowedIDPs:            allowedIdps,
 			DefaultIDP:             valueOrEmpty(defaultIdp),
 			AllowedAudiences:       allowedAudiences,
+			ClientType:             clientType,
 		})
 	}
 
@@ -381,6 +392,65 @@ func (s *PostgresStorage) ResolveTenantByID(ctx context.Context, tenantID uuid.U
 	}, nil
 }
 
+func (s *PostgresStorage) GetAllTenants(ctx context.Context) ([]model.Tenant, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT tenant_uuid, name, domain_name, is_active, created_at, config
+		FROM tenants
+		ORDER BY name ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("get all tenants: %w", err)
+	}
+	defer rows.Close()
+
+	var tenants []model.Tenant
+	for rows.Next() {
+		var tenantUUID pgtype.UUID
+		var name string
+		var domainName string
+		var isActive bool
+		var createdAt pgtype.Timestamptz
+		var configJSON []byte
+
+		err = rows.Scan(&tenantUUID, &name, &domainName, &isActive, &createdAt, &configJSON)
+		if err != nil {
+			return nil, fmt.Errorf("scan tenant: %w", err)
+		}
+
+		parsedID, err := pgUUIDToUUID(tenantUUID)
+		if err != nil {
+			return nil, fmt.Errorf("parse tenant UUID: %w", err)
+		}
+
+		parsedCreatedAt, err := pgTimestamptzToTime(createdAt)
+		if err != nil {
+			return nil, fmt.Errorf("parse created_at: %w", err)
+		}
+
+		var cfg model.TenantConfig
+		if len(configJSON) > 0 {
+			if err := json.Unmarshal(configJSON, &cfg); err != nil {
+				return nil, fmt.Errorf("unmarshal config: %w", err)
+			}
+		}
+
+		tenants = append(tenants, model.Tenant{
+			ID:        parsedID,
+			Name:      name,
+			Domain:    domainName,
+			IsActive:  isActive,
+			CreatedAt: parsedCreatedAt,
+			Config:    cfg,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate tenants: %w", err)
+	}
+
+	return tenants, nil
+}
+
 func (s *PostgresStorage) CreateTenant(ctx context.Context, tenant model.Tenant) error {
 	configJSON, err := json.Marshal(tenant.Config)
 	if err != nil {
@@ -416,10 +486,8 @@ func (s *PostgresStorage) CreateIdentityProvider(ctx context.Context, tenantID u
 		SELECT $1::uuid, t.id, $2, $3, $4, $5::jsonb
 		FROM tenants t
 		WHERE t.tenant_uuid = $6::uuid
-		ON CONFLICT (id) DO UPDATE SET
-			idp_type = EXCLUDED.idp_type,
+		ON CONFLICT (tenant_id, idp_type, alias_name) DO UPDATE SET
 			enabled = EXCLUDED.enabled,
-			alias_name = EXCLUDED.alias_name,
 			config = EXCLUDED.config
 	`, toPGUUID(provider.ID), provider.IDPType, provider.Enabled, provider.Alias, string(configJSON), toPGUUID(tenantID))
 	if err != nil {
@@ -572,7 +640,7 @@ func (s *PostgresStorage) GetEnabledIdentityProviders(ctx context.Context, tenan
 func (s *PostgresStorage) GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.UUID, providerID uuid.UUID, identifier string) (*model.UserProfile, error) {
 	var configJSON []byte
 	err := s.pool.QueryRow(ctx, `
-		SELECT config
+		SELECT ip.config
 		FROM identity_providers ip
 		JOIN tenants t ON t.id = ip.tenant_id
 		WHERE t.tenant_uuid = $1::uuid AND ip.id = $2::uuid
@@ -766,11 +834,11 @@ func (s *PostgresStorage) RevokeSession(ctx context.Context, tenantID uuid.UUID,
 
 func (s *PostgresStorage) SaveInteractionSession(ctx context.Context, session model.InteractionSession) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO interaction_sessions (id, tenant_id, client_id, redirect_uri, code_challenge, code_challenge_method, idp_hint, expires_at)
-		SELECT $1::uuid, t.id, $2, $3, $4, $5, $6, $7::timestamptz
+		INSERT INTO interaction_sessions (id, tenant_id, client_id, redirect_uri, code_challenge, code_challenge_method, idp_hint, expires_at, state, nonce, acr_values)
+		SELECT $1::uuid, t.id, $2, $3, $4, $5, $6, $7::timestamptz, $9, $10, $11
 		FROM tenants t
 		WHERE t.tenant_uuid = $8::uuid
-	`, toPGUUID(session.ID), session.ClientID, session.RedirectURI, session.CodeChallenge, session.ChallengeMethod, stringPtr(session.IDPHint), toPGTimestamptz(session.ExpiresAt), toPGUUID(session.TenantID))
+	`, toPGUUID(session.ID), session.ClientID, session.RedirectURI, session.CodeChallenge, session.ChallengeMethod, stringPtr(session.IDPHint), toPGTimestamptz(session.ExpiresAt), toPGUUID(session.TenantID), session.State, session.Nonce, session.ACRValues)
 	if err != nil {
 		return fmt.Errorf("save interaction session: %w", err)
 	}
@@ -785,13 +853,16 @@ func (s *PostgresStorage) GetAndConsumeInteractionSession(ctx context.Context, t
 	var idpHint *string
 	var expiresAt pgtype.Timestamptz
 	var tenantUUID pgtype.UUID
+	var state string
+	var nonce string
+	var acrValues string
 
 	err := s.pool.QueryRow(ctx, `
 		DELETE FROM interaction_sessions
 		WHERE id = $1::uuid AND tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $2::uuid)
-		RETURNING client_id, redirect_uri, code_challenge, code_challenge_method, idp_hint, expires_at,
+		RETURNING client_id, redirect_uri, code_challenge, code_challenge_method, idp_hint, expires_at, state, nonce, acr_values,
 		          (SELECT tenant_uuid FROM tenants WHERE id = tenant_id)
-	`, toPGUUID(id), toPGUUID(tenantID)).Scan(&clientID, &redirectURI, &codeChallenge, &codeChallengeMethod, &idpHint, &expiresAt, &tenantUUID)
+	`, toPGUUID(id), toPGUUID(tenantID)).Scan(&clientID, &redirectURI, &codeChallenge, &codeChallengeMethod, &idpHint, &expiresAt, &state, &nonce, &acrValues, &tenantUUID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("interaction session %s not found: %w", id, port.ErrInteractionSessionNotFound)
@@ -817,6 +888,9 @@ func (s *PostgresStorage) GetAndConsumeInteractionSession(ctx context.Context, t
 		ChallengeMethod: codeChallengeMethod,
 		IDPHint:         valueOrEmpty(idpHint),
 		ExpiresAt:       parsedExpiresAt,
+		State:           state,
+		Nonce:           nonce,
+		ACRValues:       acrValues,
 	}, nil
 }
 

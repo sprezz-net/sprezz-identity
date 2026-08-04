@@ -29,6 +29,7 @@ type Application struct {
 	AllowedIdps            []string        `json:"allowed_idps"`
 	DefaultIdp             *string         `json:"default_idp"`
 	AllowedAudiences       []string        `json:"allowed_audiences"`
+	ClientType             string          `json:"client_type"`
 }
 
 type AuditEventLog struct {

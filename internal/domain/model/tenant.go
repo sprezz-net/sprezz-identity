@@ -27,4 +27,5 @@ type TenantConfig struct {
 	RedirectWhitelist   []string          `json:"redirect_whitelist"`
 	ACRToLevels         map[string]Levels `json:"acr_to_levels"`
 	ACREssential        bool              `json:"acr_essential"`
+	AllowSignup         bool              `json:"allow_signup"`
 }

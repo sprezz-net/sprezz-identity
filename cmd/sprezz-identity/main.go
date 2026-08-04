@@ -12,6 +12,7 @@ import (
 	jwtcrypto "sprezz-identity/internal/adapters/out/crypto"
 	"sprezz-identity/internal/adapters/out/logout"
 	"sprezz-identity/internal/adapters/out/postgres"
+	"sprezz-identity/internal/adapters/out/state"
 	"sprezz-identity/internal/config"
 	"sprezz-identity/internal/domain/service"
 
@@ -42,9 +43,14 @@ func main() {
 	startTokenPruningWorker(ctx, deps.storage, deps.cfg.IdentityServer.TokenPruningInterval)
 	startKeyRotationWorker(ctx, signer, deps.cfg.IdentityServer.AdminTenantDomain, deps.cfg.IdentityServer.KeyRotationInterval)
 
+	ephemeralStore, err := state.NewEphemeralStore()
+	if err != nil {
+		log.Fatalf("Failed to generate ephemeral secret store: %v", err)
+	}
+
 	notifier := logout.NewLogoutHttpClient()
 	oauthService := service.NewOAuthService(deps.storage, signer, nil, notifier, sysClock)
-	handler := httpadapter.NewHttpAdapter(oauthService, deps.storage, signer, sysClock)
+	handler := httpadapter.NewHttpAdapter(oauthService, deps.storage, signer, sysClock, ephemeralStore)
 	server := &http.Server{
 		Addr:    ":" + deps.cfg.Port,
 		Handler: handler.Router(),
