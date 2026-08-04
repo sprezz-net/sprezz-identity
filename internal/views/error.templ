@@ -2,19 +2,36 @@ package views
 
 templ Error(errorMessage string) {
 	<!doctype html>
-	<html lang="en">
+	<html lang="en" class="h-full bg-slate-50">
 	<head>
 		<meta charset="utf-8" />
-		<title>Error - Sprezz Identity</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Security Alert - Sprezz Identity</title>
 		<script src="https://unpkg.com/htmx.org@1.9.12" nonce={ templ.GetNonce(ctx) }></script>
+		<script src="https://cdn.tailwindcss.com" nonce={ templ.GetNonce(ctx) }></script>
 	</head>
-	<body style="font-family:sans-serif;max-width:480px;margin:4rem auto;text-align:center;">
-		<h1 style="color:#e53e3e;">Security Alert</h1>
-		<div style="background-color:#fff5f5;border:1px solid #fed7d7;color:#c53030;padding:1.5rem;border-radius:0.375rem;margin-top:2rem;">
-			<p style="font-weight:bold;font-size:1.125rem;margin-top:0;">Request Blocked</p>
-			<p>{ errorMessage }</p>
+	<body class="h-full flex items-center justify-center p-6">
+		<div class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden text-center">
+			<!-- Alert Header -->
+			<div class="px-8 pt-8 pb-6 bg-red-600 text-white flex flex-col items-center">
+				<svg class="h-16 w-16 mb-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+				</svg>
+				<h1 class="text-2xl font-bold tracking-wider">SECURITY ALERT</h1>
+			</div>
+
+			<!-- Alert Body -->
+			<div class="p-8 space-y-6">
+				<div class="p-4 bg-red-50 border border-red-100 rounded-xl text-red-900 text-sm font-medium">
+					<p class="font-bold text-base mb-1 text-red-800">Request Blocked</p>
+					<p class="break-words">{ errorMessage }</p>
+				</div>
+
+				<p class="text-xs text-slate-500">
+					Please contact your administrator if you believe this is an error.
+				</p>
+			</div>
 		</div>
-		<p style="margin-top:2rem;color:#718096;font-size:0.875rem;">Please contact your administrator if you believe this is an error.</p>
 	</body>
 	</html>
 }

@@ -29,43 +29,56 @@ func Logout(iframeURIs []string, redirectURI string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Logging out...</title><script nonce=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\" class=\"h-full bg-slate-50\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>Signing out - Sprezz Identity</title><script src=\"https://cdn.tailwindcss.com\" nonce=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/logout.templ`, Line: 9, Col: 37}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/logout.templ`, Line: 10, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\">\n\t\t\t// 1. Set an unconditional safety timeout of 2 seconds\n\t\t\t// This guarantees the user is redirected even if some client iframes fail, block, or timeout\n\t\t\tvar redirectTimeout = setTimeout(function() {\n\t\t\t\twindow.location.href = \"{ redirectURI }\";\n\t\t\t}, 2000);\n\n\t\t\t// 2. If all iframes load successfully before the 2 seconds, redirect sooner\n\t\t\twindow.onload = function() {\n\t\t\t\tclearTimeout(redirectTimeout); // Cancel the safety timeout\n\t\t\t\tsetTimeout(function() {\n\t\t\t\t\twindow.location.href = \"{ redirectURI }\";\n\t\t\t\t}, 500); // Small 500ms visual grace period\n\t\t\t};\n\t\t</script></head><body style=\"font-family:sans-serif;text-align:center;margin-top:8rem;\"><h1>Signing out of your applications...</h1><p>Please wait while we securely end your sessions.</p><!-- Render hidden iframes for Front-Channel logout propagation -->")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\"></script><script nonce=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var3 string
+		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/logout.templ`, Line: 11, Col: 37}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\">\n\t\t\t// 1. Set an unconditional safety timeout of 2 seconds\n\t\t\t// This guarantees the user is redirected even if some client iframes fail, block, or timeout\n\t\t\tvar redirectTimeout = setTimeout(function() {\n\t\t\t\twindow.location.href = \"{ redirectURI }\";\n\t\t\t}, 2000);\n\n\t\t\t// 2. If all iframes load successfully before the 2 seconds, redirect sooner\n\t\t\twindow.onload = function() {\n\t\t\t\tclearTimeout(redirectTimeout); // Cancel the safety timeout\n\t\t\t\tsetTimeout(function() {\n\t\t\t\t\twindow.location.href = \"{ redirectURI }\";\n\t\t\t\t}, 500); // Small 500ms visual grace period\n\t\t\t};\n\t\t</script></head><body class=\"h-full flex items-center justify-center p-6\"><div class=\"w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-8 text-center space-y-6\"><!-- Spinner --><div class=\"flex justify-center\"><svg class=\"animate-spin h-12 w-12 text-blue-600\" fill=\"none\" viewBox=\"0 0 24 24\"><circle class=\"opacity-25\" cx=\"12\" cy=\"12\" r=\"10\" stroke=\"currentColor\" stroke-width=\"4\"></circle> <path class=\"opacity-75\" fill=\"currentColor\" d=\"M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z\"></path></svg></div><div class=\"space-y-2\"><h1 class=\"text-xl font-bold text-slate-900\">Signing out...</h1><p class=\"text-sm text-slate-500\">Please wait while we securely end your sessions.</p></div><!-- Render hidden iframes for Front-Channel logout propagation --><div class=\"hidden\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, uri := range iframeURIs {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<iframe src=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<iframe src=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var3 string
-			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(uri)
+			var templ_7745c5c3_Var4 string
+			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(uri)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/logout.templ`, Line: 31, Col: 20}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/logout.templ`, Line: 45, Col: 22}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" style=\"display:none;width:0;height:0;border:0;\"></iframe>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" class=\"w-0 h-0 border-0\"></iframe>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div></div></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

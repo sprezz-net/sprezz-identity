@@ -2,10 +2,12 @@ package views
 
 templ Logout(iframeURIs []string, redirectURI string) {
 	<!doctype html>
-	<html lang="en">
+	<html lang="en" class="h-full bg-slate-50">
 	<head>
 		<meta charset="utf-8" />
-		<title>Logging out...</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Signing out - Sprezz Identity</title>
+		<script src="https://cdn.tailwindcss.com" nonce={ templ.GetNonce(ctx) }></script>
 		<script nonce={ templ.GetNonce(ctx) }>
 			// 1. Set an unconditional safety timeout of 2 seconds
 			// This guarantees the user is redirected even if some client iframes fail, block, or timeout
@@ -22,14 +24,28 @@ templ Logout(iframeURIs []string, redirectURI string) {
 			};
 		</script>
 	</head>
-	<body style="font-family:sans-serif;text-align:center;margin-top:8rem;">
-		<h1>Signing out of your applications...</h1>
-		<p>Please wait while we securely end your sessions.</p>
+	<body class="h-full flex items-center justify-center p-6">
+		<div class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-8 text-center space-y-6">
+			<!-- Spinner -->
+			<div class="flex justify-center">
+				<svg class="animate-spin h-12 w-12 text-blue-600" fill="none" viewBox="0 0 24 24">
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+				</svg>
+			</div>
 
-		<!-- Render hidden iframes for Front-Channel logout propagation -->
-		for _, uri := range iframeURIs {
-			<iframe src={ uri } style="display:none;width:0;height:0;border:0;"></iframe>
-		}
+			<div class="space-y-2">
+				<h1 class="text-xl font-bold text-slate-900">Signing out...</h1>
+				<p class="text-sm text-slate-500">Please wait while we securely end your sessions.</p>
+			</div>
+
+			<!-- Render hidden iframes for Front-Channel logout propagation -->
+			<div class="hidden">
+				for _, uri := range iframeURIs {
+					<iframe src={ uri } class="w-0 h-0 border-0"></iframe>
+				}
+			</div>
+		</div>
 	</body>
 	</html>
 }
