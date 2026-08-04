@@ -212,6 +212,16 @@ func TestHttpAdapter_CSPNonce(t *testing.T) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
+		return &model.Tenant{
+			ID:     uuid.New(),
+			Domain: "example.com",
+			Config: model.TenantConfig{
+				AllowSignup: false,
+			},
+		}, nil
+	})
+
 	auth := portmock.NewAuthMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 

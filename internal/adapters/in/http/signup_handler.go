@@ -2,6 +2,7 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 
@@ -52,34 +53,52 @@ func (h *HttpAdapter) processSignUpRegistration(r *http.Request, tenant *model.T
 
 func (h *HttpAdapter) resolveSignUpRedirectURL(r *http.Request, tenant *model.Tenant) string {
 	targetURL := r.FormValue("redirect_uri")
-	if targetURL == "" {
-		if cookie, err := r.Cookie("spz_auth_session_id"); err == nil && cookie.Value != "" {
-			if sessionUUID, parseErr := uuid.Parse(cookie.Value); parseErr == nil {
-				if session, loadErr := h.storagePort.GetAndConsumeInteractionSession(r.Context(), tenant.ID, sessionUUID); loadErr == nil {
-					// Reconstruct the /oauth/authorize redirect URL with all preserved parameters!
-					targetURL = routeAuthorize + "?client_id=" + url.QueryEscape(session.ClientID) + "&redirect_uri=" + url.QueryEscape(session.RedirectURI)
-					if session.CodeChallenge != "" {
-						targetURL += "&code_challenge=" + url.QueryEscape(session.CodeChallenge)
-					}
-					if session.ChallengeMethod != "" {
-						targetURL += "&code_challenge_method=" + url.QueryEscape(session.ChallengeMethod)
-					}
-					if session.IDPHint != "" {
-						targetURL += "&idp_hint=" + url.QueryEscape(session.IDPHint)
-					}
-					if session.State != "" {
-						targetURL += "&state=" + url.QueryEscape(session.State)
-					}
-					if session.Nonce != "" {
-						targetURL += "&nonce=" + url.QueryEscape(session.Nonce)
-					}
-				}
-			}
-		}
+	if targetURL != "" {
+		return targetURL
 	}
 
-	if targetURL == "" {
-		targetURL = tenant.Config.DefaultRedirectURI
+	if session := h.loadInteractionSessionFromCookie(r, tenant); session != nil {
+		return h.reconstructAuthorizeURL(session)
+	}
+
+	return tenant.Config.DefaultRedirectURI
+}
+
+func (h *HttpAdapter) loadInteractionSessionFromCookie(r *http.Request, tenant *model.Tenant) *model.InteractionSession {
+	cookie, err := r.Cookie("spz_auth_session_id")
+	if err != nil || cookie.Value == "" {
+		return nil
+	}
+
+	sessionUUID, err := uuid.Parse(cookie.Value)
+	if err != nil {
+		return nil
+	}
+
+	session, err := h.storagePort.GetAndConsumeInteractionSession(r.Context(), tenant.ID, sessionUUID)
+	if err != nil {
+		return nil
+	}
+
+	return session
+}
+
+func (h *HttpAdapter) reconstructAuthorizeURL(session *model.InteractionSession) string {
+	targetURL := fmt.Sprintf("%s?client_id=%s&redirect_uri=%s", routeAuthorize, url.QueryEscape(session.ClientID), url.QueryEscape(session.RedirectURI))
+	if session.CodeChallenge != "" {
+		targetURL += "&code_challenge=" + url.QueryEscape(session.CodeChallenge)
+	}
+	if session.ChallengeMethod != "" {
+		targetURL += "&code_challenge_method=" + url.QueryEscape(session.ChallengeMethod)
+	}
+	if session.IDPHint != "" {
+		targetURL += "&idp_hint=" + url.QueryEscape(session.IDPHint)
+	}
+	if session.State != "" {
+		targetURL += "&state=" + url.QueryEscape(session.State)
+	}
+	if session.Nonce != "" {
+		targetURL += "&nonce=" + url.QueryEscape(session.Nonce)
 	}
 	return targetURL
 }
@@ -123,5 +142,6 @@ func (h *HttpAdapter) signUpSubmit(w http.ResponseWriter, r *http.Request) {
 
 	targetURL := h.resolveSignUpRedirectURL(r, tenant)
 	w.Header().Set("HX-Redirect", targetURL)
-	http.Redirect(w, r, targetURL, http.StatusSeeOther)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("Signed up and authenticated"))
 }

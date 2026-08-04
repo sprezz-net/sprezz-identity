@@ -12,10 +12,11 @@ import (
 )
 
 const (
-	schemeHttp    = "http://"
-	schemeHttps   = "https://"
-	routeAdmin    = "/admin"
-	routeCallback = "/admin/callback"
+	schemeHttp               = "http://"
+	schemeHttps              = "https://"
+	routeAdmin               = "/admin"
+	routeCallback            = "/admin/callback"
+	usernamePasswordIDPAlias = "username-password"
 )
 
 // TenantBootstrapService is the domain-level orchestration point that ensures
@@ -39,7 +40,7 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 				TenantID: tenant.ID,
 				IDPType:  model.UsernamePasswordIDPType,
 				Enabled:  true,
-				Alias:    "username-password",
+				Alias:    usernamePasswordIDPAlias,
 				Config: model.IdentityProviderConfig{
 					UsernameField: "preferredUsername",
 				},
@@ -82,7 +83,7 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 		TenantID: newTenant.ID,
 		IDPType:  model.UsernamePasswordIDPType,
 		Enabled:  true,
-		Alias:    "username-password",
+		Alias:    usernamePasswordIDPAlias,
 		Config: model.IdentityProviderConfig{
 			UsernameField: "preferredUsername",
 		},
@@ -123,8 +124,8 @@ func (s *TenantBootstrapService) ensureAdminClient(ctx context.Context, tenantID
 		IDTokenLifetime:        5 * time.Minute,
 		AllowedScopes:          []string{"openid", "profile", "email"},
 		DefaultScopes:          []string{"openid", "profile", "email"},
-		AllowedIDPs:            []string{"username-password"},
-		DefaultIDP:             "username-password",
+		AllowedIDPs:            []string{usernamePasswordIDPAlias},
+		DefaultIDP:             usernamePasswordIDPAlias,
 		AllowedAudiences:       []string{},
 		ClientType:             model.ClientTypeInternalEphemeral,
 	}

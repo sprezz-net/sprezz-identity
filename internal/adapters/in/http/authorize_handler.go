@@ -60,8 +60,14 @@ func (h *HttpAdapter) clearSSOSessionCookie(w http.ResponseWriter) {
 }
 
 func (h *HttpAdapter) loginRoot(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set(contentTypeHeader, "text/html; charset=utf-8")
-	component := views.Login("")
+	w.Header().Set(contentTypeHeader, contentTypeHtml)
+
+	allowSignup := false
+	if tenant, err := h.resolveTenant(r.Context(), r.Host); err == nil {
+		allowSignup = tenant.Config.AllowSignup
+	}
+
+	component := views.Login("", allowSignup)
 	_ = component.Render(r.Context(), w)
 }
 
