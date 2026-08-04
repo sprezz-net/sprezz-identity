@@ -40,6 +40,7 @@ const (
 	schemeHttp          = "http://"
 	errInvalidDPoP      = "invalid DPoP proof: "
 	errClientAuthFailed = "client authentication failed"
+	xForwardedProto     = "X-Forwarded-Proto"
 
 	routeRoot      = "/"
 	routeWebLogin  = "/login"

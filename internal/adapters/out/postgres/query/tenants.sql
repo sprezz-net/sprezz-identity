@@ -12,4 +12,9 @@ LIMIT 1;
 
 -- name: CreateTenant :execresult
 INSERT INTO tenants (tenant_uuid, name, domain_name, is_active, created_at, config)
-VALUES ($1, $2, $3, $4, $5, $6);
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (tenant_uuid) DO UPDATE SET
+    name = EXCLUDED.name,
+    domain_name = EXCLUDED.domain_name,
+    is_active = EXCLUDED.is_active,
+    config = EXCLUDED.config;

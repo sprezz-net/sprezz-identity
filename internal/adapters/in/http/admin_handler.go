@@ -63,7 +63,7 @@ func (h *HttpAdapter) adminDashboardView(w http.ResponseWriter, r *http.Request)
 
 func (h *HttpAdapter) initiateAdminOIDC(w http.ResponseWriter, r *http.Request) {
 	scheme := schemeHttp
-	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+	if r.TLS != nil || r.Header.Get(xForwardedProto) == "https" {
 		scheme = schemeHttps
 	}
 	redirectURI := scheme + r.Host + "/admin/callback"
@@ -128,7 +128,7 @@ func (h *HttpAdapter) adminCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	scheme := schemeHttp
-	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+	if r.TLS != nil || r.Header.Get(xForwardedProto) == "https" {
 		scheme = schemeHttps
 	}
 	redirectURI := scheme + r.Host + "/admin/callback"
@@ -217,6 +217,11 @@ func (h *HttpAdapter) adminCreateTenant(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	scheme := schemeHttp
+	if r.TLS != nil || r.Header.Get(xForwardedProto) == "https" {
+		scheme = schemeHttps
+	}
+
 	newTenant := model.Tenant{
 		ID:        uuid.New(),
 		Name:      name,
@@ -226,8 +231,8 @@ func (h *HttpAdapter) adminCreateTenant(w http.ResponseWriter, r *http.Request) 
 		Config: model.TenantConfig{
 			PredefinedScopes:    []string{"openid", "profile", "email", "offline_access"},
 			PredefinedAudiences: []string{},
-			DefaultRedirectURI:  schemeHttps + domain,
-			RedirectWhitelist:   []string{schemeHttps + domain},
+			DefaultRedirectURI:  scheme + domain,
+			RedirectWhitelist:   []string{scheme + domain},
 			AllowSignup:         false,
 		},
 	}

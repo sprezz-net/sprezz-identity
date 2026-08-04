@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"sprezz-identity/internal/domain/model"
@@ -33,30 +34,46 @@ func NewTenantBootstrapService(storage port.Storage, cl port.Clock) *TenantBoots
 func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domain string) (*model.Tenant, error) {
 	tenant, err := s.storage.ResolveTenantByDomain(ctx, domain)
 	if err == nil {
-		providers, providerErr := s.storage.GetEnabledIdentityProviders(ctx, tenant.ID)
-		if providerErr != nil || len(providers) == 0 {
-			defaultProvider := model.IdentityProvider{
-				ID:       uuid.New(),
-				TenantID: tenant.ID,
-				IDPType:  model.UsernamePasswordIDPType,
-				Enabled:  true,
-				Alias:    usernamePasswordIDPAlias,
-				Config: model.IdentityProviderConfig{
-					UsernameField: "preferredUsername",
-				},
-			}
-			if err := s.storage.CreateIdentityProvider(ctx, tenant.ID, defaultProvider); err != nil {
-				return nil, err
-			}
-		}
-		if err := s.ensureAdminClient(ctx, tenant.ID, domain); err != nil {
-			return nil, err
-		}
-		return tenant, nil
+		return s.bootstrapExistingTenant(ctx, tenant, domain)
 	}
 
 	if !errors.Is(err, port.ErrTenantNotFound) {
 		return nil, err
+	}
+
+	return s.bootstrapNewTenant(ctx, domain)
+}
+
+func (s *TenantBootstrapService) bootstrapExistingTenant(ctx context.Context, tenant *model.Tenant, domain string) (*model.Tenant, error) {
+	scheme := schemeHttps
+	if domain == "localhost:8100" || strings.HasPrefix(domain, "localhost:") || strings.HasPrefix(domain, "127.0.0.1") {
+		scheme = schemeHttp
+	}
+
+	expectedRedirect := scheme + domain + routeAdmin
+	if tenant.Config.DefaultRedirectURI != expectedRedirect {
+		tenant.Config.DefaultRedirectURI = expectedRedirect
+		tenant.Config.RedirectWhitelist = []string{schemeHttps + domain + routeAdmin, schemeHttp + domain + routeAdmin, schemeHttp + domain + routeCallback, schemeHttps + domain + routeCallback}
+		if err := s.storage.CreateTenant(ctx, *tenant); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := s.ensureDefaultIdentityProvider(ctx, tenant.ID); err != nil {
+		return nil, err
+	}
+
+	if err := s.ensureAdminClient(ctx, tenant.ID, domain); err != nil {
+		return nil, err
+	}
+
+	return tenant, nil
+}
+
+func (s *TenantBootstrapService) bootstrapNewTenant(ctx context.Context, domain string) (*model.Tenant, error) {
+	scheme := schemeHttps
+	if domain == "localhost:8100" || strings.HasPrefix(domain, "localhost:") || strings.HasPrefix(domain, "127.0.0.1") {
+		scheme = schemeHttp
 	}
 
 	newTenant := &model.Tenant{
@@ -68,7 +85,7 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 		Config: model.TenantConfig{
 			PredefinedScopes:    []string{"openid", "profile", "email", "offline_access"},
 			PredefinedAudiences: []string{},
-			DefaultRedirectURI:  schemeHttps + domain + routeAdmin,
+			DefaultRedirectURI:  scheme + domain + routeAdmin,
 			RedirectWhitelist:   []string{schemeHttps + domain + routeAdmin, schemeHttp + domain + routeAdmin, schemeHttp + domain + routeCallback, schemeHttps + domain + routeCallback},
 			AllowSignup:         true,
 		},
@@ -78,17 +95,7 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 		return nil, err
 	}
 
-	defaultProvider := model.IdentityProvider{
-		ID:       uuid.New(),
-		TenantID: newTenant.ID,
-		IDPType:  model.UsernamePasswordIDPType,
-		Enabled:  true,
-		Alias:    usernamePasswordIDPAlias,
-		Config: model.IdentityProviderConfig{
-			UsernameField: "preferredUsername",
-		},
-	}
-	if err := s.storage.CreateIdentityProvider(ctx, newTenant.ID, defaultProvider); err != nil {
+	if err := s.ensureDefaultIdentityProvider(ctx, newTenant.ID); err != nil {
 		return nil, err
 	}
 
@@ -97,6 +104,25 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 	}
 
 	return newTenant, nil
+}
+
+func (s *TenantBootstrapService) ensureDefaultIdentityProvider(ctx context.Context, tenantID uuid.UUID) error {
+	providers, err := s.storage.GetEnabledIdentityProviders(ctx, tenantID)
+	if err == nil && len(providers) > 0 {
+		return nil
+	}
+
+	defaultProvider := model.IdentityProvider{
+		ID:       uuid.New(),
+		TenantID: tenantID,
+		IDPType:  model.UsernamePasswordIDPType,
+		Enabled:  true,
+		Alias:    usernamePasswordIDPAlias,
+		Config: model.IdentityProviderConfig{
+			UsernameField: "preferredUsername",
+		},
+	}
+	return s.storage.CreateIdentityProvider(ctx, tenantID, defaultProvider)
 }
 
 func (s *TenantBootstrapService) ensureAdminClient(ctx context.Context, tenantID uuid.UUID, domain string) error {

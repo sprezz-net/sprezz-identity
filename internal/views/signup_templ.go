@@ -57,7 +57,7 @@ func SignUp(errorMessage string, provider *model.IdentityProvider, email string,
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"></script></head><body class=\"h-full flex items-center justify-center p-6\"><div class=\"w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden\"><!-- Header --><div class=\"px-8 pt-8 pb-6 bg-slate-900 text-center text-white\"><h1 class=\"text-2xl font-bold tracking-wider\">CREATE ACCOUNT</h1><p class=\"text-sm text-slate-400 mt-2\">Get started with your new admin profile</p></div><!-- Body --><div class=\"p-8\"><div id=\"signup-result\" class=\"mb-6\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"></script></head><body class=\"h-full flex items-center justify-center p-6\"><div class=\"w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden\"><!-- Header --><div class=\"px-8 pt-8 pb-6 bg-slate-900 text-center text-white\"><h1 class=\"text-2xl font-bold tracking-wider\">CREATE ACCOUNT</h1><p class=\"text-sm text-slate-400 mt-2\">Get started with your new profile</p></div><!-- Body --><div class=\"p-8\"><div id=\"signup-result\" class=\"mb-6\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

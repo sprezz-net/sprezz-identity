@@ -28,6 +28,7 @@ func TestTenantBootstrapService_BootstrapAdminTenant_InitialCreation(t *testing.
 
 	// Mock CreateIdentityProvider
 	storage.CreateIdentityProviderMock.Set(validateIdentityProvider(t))
+	storage.GetEnabledIdentityProvidersMock.Return(nil, port.ErrIdentityProviderNotFound)
 
 	// Mock GetClient and SaveClient for ensureAdminClient
 	storage.GetClientMock.Return(nil, port.ErrClientNotFound)

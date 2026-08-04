@@ -121,6 +121,12 @@ func (h *HttpAdapter) processInteractionRedirect(w http.ResponseWriter, r *http.
 	if session.IDPHint != "" {
 		redirectURL += "&idp_hint=" + url.QueryEscape(session.IDPHint)
 	}
+	if session.State != "" {
+		redirectURL += "&state=" + url.QueryEscape(session.State)
+	}
+	if session.Nonce != "" {
+		redirectURL += "&nonce=" + url.QueryEscape(session.Nonce)
+	}
 	w.Header().Set("HX-Redirect", redirectURL)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("Authenticated"))
