@@ -4,8 +4,6 @@ This document establishes the definitive functional and architectural design for
 
 The Admin UI functions as an internal OIDC client executing the Authorization Code Flow with PKCE against the root `admin` tenant of the Sprezz Identity server itself.
 
----
-
 ## 1. Architectural Topology & Authentication Loop
 
 The Admin UI is fully self-contained within the Sprezz Identity Go binary, acting as an internal OpenID Connect (OIDC) client. Rather than relying on separate infrastructure or specialized backdoors, it uses standard OIDC authorization channels to authenticate its administrators.
@@ -32,8 +30,6 @@ sequenceDiagram
     AdminUI->>AdminUI: Save session cookie (encrypted/secured)
     AdminUI->>Admin: Redirect to /admin/dashboard
 ```
-
----
 
 ## 2. Bootstrapping Strategy & Chicken-and-Egg Resolution
 
@@ -70,39 +66,7 @@ Once the first administrator signs up via the OIDC sign-up interface and logs in
 - The backend updates the tenant config JSONB (`allow_signup = false`).
 - Subsequent signup requests are rejected, sealing the admin partition.
 
----
-
-## 3. Database Schema Extensions
-
-To support the ephemeral client type and signup configurations, the schema is extended as follows:
-
-```sql
--- Client type and secret configuration
--- 1. Ensure `client_secret_hash` is NULLABLE.
--- 2. Add client_type check constraint or enum ('public', 'confidential', 'internal_ephemeral').
-ALTER TABLE oauth_clients ADD COLUMN client_type TEXT NOT NULL DEFAULT 'confidential'
-  CONSTRAINT chk_client_type CHECK (client_type IN ('public', 'confidential', 'internal_ephemeral'));
-
-ALTER TABLE oauth_clients ALTER COLUMN client_secret_hash DROP NOT NULL;
-
--- Ensure that internal_ephemeral client type has a null secret hash in database
-ALTER TABLE oauth_clients ADD CONSTRAINT chk_ephemeral_null_secret
-  CHECK (client_type <> 'internal_ephemeral' OR client_secret_hash IS NULL);
-
--- Extend Tenant Config JSONB structure to contain 'allow_signup' boolean flag
--- Example tenant config JSON representation:
--- {
---   "predefined_scopes": ["openid", "profile", "email"],
---   "predefined_audiences": [],
---   "default_redirect_uri": "https://admin.identity.local/admin",
---   "redirect_whitelist": ["https://admin.identity.local/admin"],
---   "allow_signup": true
--- }
-```
-
----
-
-## 4. OIDC Token Verification & Middleware Update
+## 3. OIDC Token Verification & Middleware Update
 
 Standard clients require matching database hashes for their secrets. To support `internal_ephemeral` clients:
 
@@ -112,9 +76,7 @@ Standard clients require matching database hashes for their secrets. To support 
    - Assert that the incoming `client_secret` matches the transient in-memory secret exactly.
    - If it matches, client authentication succeeds.
 
----
-
-## 5. Hexagonal Architecture Compliance & Boundaries
+## 4. Hexagonal Architecture Compliance & Boundaries
 
 The implementation strictly honors the hexagonal domain boundaries.
 
@@ -128,6 +90,10 @@ internal/
 │   │   └── admin_state.go             # Contract representing runtime ephemeral admin state
 │   └── service/
 │       ├── tenant_bootstrap_service.go # Seeding and first-boot logic
+│       ├── tenant_service.go          # Core Tenant CRUD & update operations
+│       ├── client_service.go          # Core Client CRUD & update operations
+│       ├── user_profile_service.go    # User Profile management & decoupling
+│       ├── identity_provider_service.go # Identity Provider CRUD & update operations
 │       └── oauth_validator.go         # Token/Client credentials validator updated
 └── adapters/
     ├── in/
@@ -139,9 +105,7 @@ internal/
             └── ephemeral_store.go     # Thread-safe in-memory store for the ephemeral secret
 ```
 
----
-
-## 6. Reusable UI Component Library (`/views/admin/`)
+## 5. Reusable UI Component Library (`/views/admin/`)
 
 Using type-safe `templ` components, Tailwind CSS, and Alpine.js, we construct the Admin UI layout and widgets:
 
@@ -150,7 +114,13 @@ Using type-safe `templ` components, Tailwind CSS, and Alpine.js, we construct th
 - **`StatusBadge(isActive bool)`**: Dynamic visual indicators utilizing `templ.KV` Tailwind mapping to reflect active (green) and inactive (red) configurations.
 - **`Modal(title, fetchUrl string)`**: Alpine.js managed modal overlay (`x-data="{ isOpen: false }"`, `@click.outside`) incorporating HTMX lazy-loading (`hx-get`) to fetch administrative sub-forms dynamically into a `#modal-body` container.
 
----
+## 6. Terminology Layer Adjustments (Clients to Applications)
+
+To simplify the interface for end administrators while preserving strict conformance with the OpenID Connect (OIDC) specification, a clean mapping is applied between the domain models and the visual HTML/UI layer:
+
+1. **Sidebar Navigation**: The sidebar navigation item is displayed as **"Applications"** (referencing the standard URL path `/admin/clients`).
+2. **Page & Card Headers**: Headings are represented as **"OIDC Applications"** and the primary creation button is mapped to **"+ New Application"**.
+3. **Core OIDC Fields**: The underlying technical standard terms, specifically **"Client ID"** and **"Client Secret"**, are strictly preserved as-is to remain clear and specification-compliant for developers.
 
 ## 7. Performance & Quality Targets
 

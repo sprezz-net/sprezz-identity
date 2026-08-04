@@ -35,6 +35,34 @@ type StorageMock struct {
 	beforeCreateTenantCounter uint64
 	CreateTenantMock          mStorageMockCreateTenant
 
+	funcDecoupleIdentity          func(ctx context.Context, userProfileID uuid.UUID, identityProviderID uuid.UUID) (err error)
+	funcDecoupleIdentityOrigin    string
+	inspectFuncDecoupleIdentity   func(ctx context.Context, userProfileID uuid.UUID, identityProviderID uuid.UUID)
+	afterDecoupleIdentityCounter  uint64
+	beforeDecoupleIdentityCounter uint64
+	DecoupleIdentityMock          mStorageMockDecoupleIdentity
+
+	funcDeleteClient          func(ctx context.Context, tenantID uuid.UUID, clientID string) (err error)
+	funcDeleteClientOrigin    string
+	inspectFuncDeleteClient   func(ctx context.Context, tenantID uuid.UUID, clientID string)
+	afterDeleteClientCounter  uint64
+	beforeDeleteClientCounter uint64
+	DeleteClientMock          mStorageMockDeleteClient
+
+	funcDeleteIdentityProvider          func(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) (err error)
+	funcDeleteIdentityProviderOrigin    string
+	inspectFuncDeleteIdentityProvider   func(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID)
+	afterDeleteIdentityProviderCounter  uint64
+	beforeDeleteIdentityProviderCounter uint64
+	DeleteIdentityProviderMock          mStorageMockDeleteIdentityProvider
+
+	funcDeleteUserProfile          func(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) (err error)
+	funcDeleteUserProfileOrigin    string
+	inspectFuncDeleteUserProfile   func(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID)
+	afterDeleteUserProfileCounter  uint64
+	beforeDeleteUserProfileCounter uint64
+	DeleteUserProfileMock          mStorageMockDeleteUserProfile
+
 	funcGetAllTenants          func(ctx context.Context) (ta1 []model.Tenant, err error)
 	funcGetAllTenantsOrigin    string
 	inspectFuncGetAllTenants   func(ctx context.Context)
@@ -98,12 +126,26 @@ type StorageMock struct {
 	beforeGetIdentityProviderByTypeCounter uint64
 	GetIdentityProviderByTypeMock          mStorageMockGetIdentityProviderByType
 
+	funcGetIdentityProviders          func(ctx context.Context, tenantID uuid.UUID) (ia1 []model.IdentityProvider, err error)
+	funcGetIdentityProvidersOrigin    string
+	inspectFuncGetIdentityProviders   func(ctx context.Context, tenantID uuid.UUID)
+	afterGetIdentityProvidersCounter  uint64
+	beforeGetIdentityProvidersCounter uint64
+	GetIdentityProvidersMock          mStorageMockGetIdentityProviders
+
 	funcGetPasswordCredential          func(ctx context.Context, userProfileID uuid.UUID, providerID uuid.UUID) (pp1 *model.PasswordCredential, err error)
 	funcGetPasswordCredentialOrigin    string
 	inspectFuncGetPasswordCredential   func(ctx context.Context, userProfileID uuid.UUID, providerID uuid.UUID)
 	afterGetPasswordCredentialCounter  uint64
 	beforeGetPasswordCredentialCounter uint64
 	GetPasswordCredentialMock          mStorageMockGetPasswordCredential
+
+	funcGetUserIdentities          func(ctx context.Context, userProfileID uuid.UUID) (ua1 []model.UserIdentity, err error)
+	funcGetUserIdentitiesOrigin    string
+	inspectFuncGetUserIdentities   func(ctx context.Context, userProfileID uuid.UUID)
+	afterGetUserIdentitiesCounter  uint64
+	beforeGetUserIdentitiesCounter uint64
+	GetUserIdentitiesMock          mStorageMockGetUserIdentities
 
 	funcGetUserProfileByID          func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (up1 *model.UserProfile, err error)
 	funcGetUserProfileByIDOrigin    string
@@ -118,6 +160,13 @@ type StorageMock struct {
 	afterGetUserProfileByIdentifierCounter  uint64
 	beforeGetUserProfileByIdentifierCounter uint64
 	GetUserProfileByIdentifierMock          mStorageMockGetUserProfileByIdentifier
+
+	funcGetUserProfilesByTenant          func(ctx context.Context, tenantID uuid.UUID) (ua1 []model.UserProfile, err error)
+	funcGetUserProfilesByTenantOrigin    string
+	inspectFuncGetUserProfilesByTenant   func(ctx context.Context, tenantID uuid.UUID)
+	afterGetUserProfilesByTenantCounter  uint64
+	beforeGetUserProfilesByTenantCounter uint64
+	GetUserProfilesByTenantMock          mStorageMockGetUserProfilesByTenant
 
 	funcIsDPoPProofUsed          func(ctx context.Context, jti string) (b1 bool, err error)
 	funcIsDPoPProofUsedOrigin    string
@@ -217,6 +266,13 @@ type StorageMock struct {
 	beforeSaveUserProfileCounter uint64
 	SaveUserProfileMock          mStorageMockSaveUserProfile
 
+	funcUpdateUserProfile          func(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) (err error)
+	funcUpdateUserProfileOrigin    string
+	inspectFuncUpdateUserProfile   func(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile)
+	afterUpdateUserProfileCounter  uint64
+	beforeUpdateUserProfileCounter uint64
+	UpdateUserProfileMock          mStorageMockUpdateUserProfile
+
 	funcUpsertIdentity          func(ctx context.Context, identity model.UserIdentity) (err error)
 	funcUpsertIdentityOrigin    string
 	inspectFuncUpsertIdentity   func(ctx context.Context, identity model.UserIdentity)
@@ -238,6 +294,18 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 
 	m.CreateTenantMock = mStorageMockCreateTenant{mock: m}
 	m.CreateTenantMock.callArgs = []*StorageMockCreateTenantParams{}
+
+	m.DecoupleIdentityMock = mStorageMockDecoupleIdentity{mock: m}
+	m.DecoupleIdentityMock.callArgs = []*StorageMockDecoupleIdentityParams{}
+
+	m.DeleteClientMock = mStorageMockDeleteClient{mock: m}
+	m.DeleteClientMock.callArgs = []*StorageMockDeleteClientParams{}
+
+	m.DeleteIdentityProviderMock = mStorageMockDeleteIdentityProvider{mock: m}
+	m.DeleteIdentityProviderMock.callArgs = []*StorageMockDeleteIdentityProviderParams{}
+
+	m.DeleteUserProfileMock = mStorageMockDeleteUserProfile{mock: m}
+	m.DeleteUserProfileMock.callArgs = []*StorageMockDeleteUserProfileParams{}
 
 	m.GetAllTenantsMock = mStorageMockGetAllTenants{mock: m}
 	m.GetAllTenantsMock.callArgs = []*StorageMockGetAllTenantsParams{}
@@ -266,14 +334,23 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 	m.GetIdentityProviderByTypeMock = mStorageMockGetIdentityProviderByType{mock: m}
 	m.GetIdentityProviderByTypeMock.callArgs = []*StorageMockGetIdentityProviderByTypeParams{}
 
+	m.GetIdentityProvidersMock = mStorageMockGetIdentityProviders{mock: m}
+	m.GetIdentityProvidersMock.callArgs = []*StorageMockGetIdentityProvidersParams{}
+
 	m.GetPasswordCredentialMock = mStorageMockGetPasswordCredential{mock: m}
 	m.GetPasswordCredentialMock.callArgs = []*StorageMockGetPasswordCredentialParams{}
+
+	m.GetUserIdentitiesMock = mStorageMockGetUserIdentities{mock: m}
+	m.GetUserIdentitiesMock.callArgs = []*StorageMockGetUserIdentitiesParams{}
 
 	m.GetUserProfileByIDMock = mStorageMockGetUserProfileByID{mock: m}
 	m.GetUserProfileByIDMock.callArgs = []*StorageMockGetUserProfileByIDParams{}
 
 	m.GetUserProfileByIdentifierMock = mStorageMockGetUserProfileByIdentifier{mock: m}
 	m.GetUserProfileByIdentifierMock.callArgs = []*StorageMockGetUserProfileByIdentifierParams{}
+
+	m.GetUserProfilesByTenantMock = mStorageMockGetUserProfilesByTenant{mock: m}
+	m.GetUserProfilesByTenantMock.callArgs = []*StorageMockGetUserProfilesByTenantParams{}
 
 	m.IsDPoPProofUsedMock = mStorageMockIsDPoPProofUsed{mock: m}
 	m.IsDPoPProofUsedMock.callArgs = []*StorageMockIsDPoPProofUsedParams{}
@@ -316,6 +393,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 
 	m.SaveUserProfileMock = mStorageMockSaveUserProfile{mock: m}
 	m.SaveUserProfileMock.callArgs = []*StorageMockSaveUserProfileParams{}
+
+	m.UpdateUserProfileMock = mStorageMockUpdateUserProfile{mock: m}
+	m.UpdateUserProfileMock.callArgs = []*StorageMockUpdateUserProfileParams{}
 
 	m.UpsertIdentityMock = mStorageMockUpsertIdentity{mock: m}
 	m.UpsertIdentityMock.callArgs = []*StorageMockUpsertIdentityParams{}
@@ -1037,6 +1117,1498 @@ func (m *StorageMock) MinimockCreateTenantInspect() {
 	if !m.CreateTenantMock.invocationsDone() && afterCreateTenantCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageMock.CreateTenant at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.CreateTenantMock.expectedInvocations), m.CreateTenantMock.expectedInvocationsOrigin, afterCreateTenantCounter)
+	}
+}
+
+type mStorageMockDecoupleIdentity struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockDecoupleIdentityExpectation
+	expectations       []*StorageMockDecoupleIdentityExpectation
+
+	callArgs []*StorageMockDecoupleIdentityParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockDecoupleIdentityExpectation specifies expectation struct of the Storage.DecoupleIdentity
+type StorageMockDecoupleIdentityExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockDecoupleIdentityParams
+	paramPtrs          *StorageMockDecoupleIdentityParamPtrs
+	expectationOrigins StorageMockDecoupleIdentityExpectationOrigins
+	results            *StorageMockDecoupleIdentityResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockDecoupleIdentityParams contains parameters of the Storage.DecoupleIdentity
+type StorageMockDecoupleIdentityParams struct {
+	ctx                context.Context
+	userProfileID      uuid.UUID
+	identityProviderID uuid.UUID
+}
+
+// StorageMockDecoupleIdentityParamPtrs contains pointers to parameters of the Storage.DecoupleIdentity
+type StorageMockDecoupleIdentityParamPtrs struct {
+	ctx                *context.Context
+	userProfileID      *uuid.UUID
+	identityProviderID *uuid.UUID
+}
+
+// StorageMockDecoupleIdentityResults contains results of the Storage.DecoupleIdentity
+type StorageMockDecoupleIdentityResults struct {
+	err error
+}
+
+// StorageMockDecoupleIdentityOrigins contains origins of expectations of the Storage.DecoupleIdentity
+type StorageMockDecoupleIdentityExpectationOrigins struct {
+	origin                   string
+	originCtx                string
+	originUserProfileID      string
+	originIdentityProviderID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmDecoupleIdentity *mStorageMockDecoupleIdentity) Optional() *mStorageMockDecoupleIdentity {
+	mmDecoupleIdentity.optional = true
+	return mmDecoupleIdentity
+}
+
+// Expect sets up expected params for Storage.DecoupleIdentity
+func (mmDecoupleIdentity *mStorageMockDecoupleIdentity) Expect(ctx context.Context, userProfileID uuid.UUID, identityProviderID uuid.UUID) *mStorageMockDecoupleIdentity {
+	if mmDecoupleIdentity.mock.funcDecoupleIdentity != nil {
+		mmDecoupleIdentity.mock.t.Fatalf("StorageMock.DecoupleIdentity mock is already set by Set")
+	}
+
+	if mmDecoupleIdentity.defaultExpectation == nil {
+		mmDecoupleIdentity.defaultExpectation = &StorageMockDecoupleIdentityExpectation{}
+	}
+
+	if mmDecoupleIdentity.defaultExpectation.paramPtrs != nil {
+		mmDecoupleIdentity.mock.t.Fatalf("StorageMock.DecoupleIdentity mock is already set by ExpectParams functions")
+	}
+
+	mmDecoupleIdentity.defaultExpectation.params = &StorageMockDecoupleIdentityParams{ctx, userProfileID, identityProviderID}
+	mmDecoupleIdentity.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmDecoupleIdentity.expectations {
+		if minimock.Equal(e.params, mmDecoupleIdentity.defaultExpectation.params) {
+			mmDecoupleIdentity.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmDecoupleIdentity.defaultExpectation.params)
+		}
+	}
+
+	return mmDecoupleIdentity
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.DecoupleIdentity
+func (mmDecoupleIdentity *mStorageMockDecoupleIdentity) ExpectCtxParam1(ctx context.Context) *mStorageMockDecoupleIdentity {
+	if mmDecoupleIdentity.mock.funcDecoupleIdentity != nil {
+		mmDecoupleIdentity.mock.t.Fatalf("StorageMock.DecoupleIdentity mock is already set by Set")
+	}
+
+	if mmDecoupleIdentity.defaultExpectation == nil {
+		mmDecoupleIdentity.defaultExpectation = &StorageMockDecoupleIdentityExpectation{}
+	}
+
+	if mmDecoupleIdentity.defaultExpectation.params != nil {
+		mmDecoupleIdentity.mock.t.Fatalf("StorageMock.DecoupleIdentity mock is already set by Expect")
+	}
+
+	if mmDecoupleIdentity.defaultExpectation.paramPtrs == nil {
+		mmDecoupleIdentity.defaultExpectation.paramPtrs = &StorageMockDecoupleIdentityParamPtrs{}
+	}
+	mmDecoupleIdentity.defaultExpectation.paramPtrs.ctx = &ctx
+	mmDecoupleIdentity.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmDecoupleIdentity
+}
+
+// ExpectUserProfileIDParam2 sets up expected param userProfileID for Storage.DecoupleIdentity
+func (mmDecoupleIdentity *mStorageMockDecoupleIdentity) ExpectUserProfileIDParam2(userProfileID uuid.UUID) *mStorageMockDecoupleIdentity {
+	if mmDecoupleIdentity.mock.funcDecoupleIdentity != nil {
+		mmDecoupleIdentity.mock.t.Fatalf("StorageMock.DecoupleIdentity mock is already set by Set")
+	}
+
+	if mmDecoupleIdentity.defaultExpectation == nil {
+		mmDecoupleIdentity.defaultExpectation = &StorageMockDecoupleIdentityExpectation{}
+	}
+
+	if mmDecoupleIdentity.defaultExpectation.params != nil {
+		mmDecoupleIdentity.mock.t.Fatalf("StorageMock.DecoupleIdentity mock is already set by Expect")
+	}
+
+	if mmDecoupleIdentity.defaultExpectation.paramPtrs == nil {
+		mmDecoupleIdentity.defaultExpectation.paramPtrs = &StorageMockDecoupleIdentityParamPtrs{}
+	}
+	mmDecoupleIdentity.defaultExpectation.paramPtrs.userProfileID = &userProfileID
+	mmDecoupleIdentity.defaultExpectation.expectationOrigins.originUserProfileID = minimock.CallerInfo(1)
+
+	return mmDecoupleIdentity
+}
+
+// ExpectIdentityProviderIDParam3 sets up expected param identityProviderID for Storage.DecoupleIdentity
+func (mmDecoupleIdentity *mStorageMockDecoupleIdentity) ExpectIdentityProviderIDParam3(identityProviderID uuid.UUID) *mStorageMockDecoupleIdentity {
+	if mmDecoupleIdentity.mock.funcDecoupleIdentity != nil {
+		mmDecoupleIdentity.mock.t.Fatalf("StorageMock.DecoupleIdentity mock is already set by Set")
+	}
+
+	if mmDecoupleIdentity.defaultExpectation == nil {
+		mmDecoupleIdentity.defaultExpectation = &StorageMockDecoupleIdentityExpectation{}
+	}
+
+	if mmDecoupleIdentity.defaultExpectation.params != nil {
+		mmDecoupleIdentity.mock.t.Fatalf("StorageMock.DecoupleIdentity mock is already set by Expect")
+	}
+
+	if mmDecoupleIdentity.defaultExpectation.paramPtrs == nil {
+		mmDecoupleIdentity.defaultExpectation.paramPtrs = &StorageMockDecoupleIdentityParamPtrs{}
+	}
+	mmDecoupleIdentity.defaultExpectation.paramPtrs.identityProviderID = &identityProviderID
+	mmDecoupleIdentity.defaultExpectation.expectationOrigins.originIdentityProviderID = minimock.CallerInfo(1)
+
+	return mmDecoupleIdentity
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.DecoupleIdentity
+func (mmDecoupleIdentity *mStorageMockDecoupleIdentity) Inspect(f func(ctx context.Context, userProfileID uuid.UUID, identityProviderID uuid.UUID)) *mStorageMockDecoupleIdentity {
+	if mmDecoupleIdentity.mock.inspectFuncDecoupleIdentity != nil {
+		mmDecoupleIdentity.mock.t.Fatalf("Inspect function is already set for StorageMock.DecoupleIdentity")
+	}
+
+	mmDecoupleIdentity.mock.inspectFuncDecoupleIdentity = f
+
+	return mmDecoupleIdentity
+}
+
+// Return sets up results that will be returned by Storage.DecoupleIdentity
+func (mmDecoupleIdentity *mStorageMockDecoupleIdentity) Return(err error) *StorageMock {
+	if mmDecoupleIdentity.mock.funcDecoupleIdentity != nil {
+		mmDecoupleIdentity.mock.t.Fatalf("StorageMock.DecoupleIdentity mock is already set by Set")
+	}
+
+	if mmDecoupleIdentity.defaultExpectation == nil {
+		mmDecoupleIdentity.defaultExpectation = &StorageMockDecoupleIdentityExpectation{mock: mmDecoupleIdentity.mock}
+	}
+	mmDecoupleIdentity.defaultExpectation.results = &StorageMockDecoupleIdentityResults{err}
+	mmDecoupleIdentity.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmDecoupleIdentity.mock
+}
+
+// Set uses given function f to mock the Storage.DecoupleIdentity method
+func (mmDecoupleIdentity *mStorageMockDecoupleIdentity) Set(f func(ctx context.Context, userProfileID uuid.UUID, identityProviderID uuid.UUID) (err error)) *StorageMock {
+	if mmDecoupleIdentity.defaultExpectation != nil {
+		mmDecoupleIdentity.mock.t.Fatalf("Default expectation is already set for the Storage.DecoupleIdentity method")
+	}
+
+	if len(mmDecoupleIdentity.expectations) > 0 {
+		mmDecoupleIdentity.mock.t.Fatalf("Some expectations are already set for the Storage.DecoupleIdentity method")
+	}
+
+	mmDecoupleIdentity.mock.funcDecoupleIdentity = f
+	mmDecoupleIdentity.mock.funcDecoupleIdentityOrigin = minimock.CallerInfo(1)
+	return mmDecoupleIdentity.mock
+}
+
+// When sets expectation for the Storage.DecoupleIdentity which will trigger the result defined by the following
+// Then helper
+func (mmDecoupleIdentity *mStorageMockDecoupleIdentity) When(ctx context.Context, userProfileID uuid.UUID, identityProviderID uuid.UUID) *StorageMockDecoupleIdentityExpectation {
+	if mmDecoupleIdentity.mock.funcDecoupleIdentity != nil {
+		mmDecoupleIdentity.mock.t.Fatalf("StorageMock.DecoupleIdentity mock is already set by Set")
+	}
+
+	expectation := &StorageMockDecoupleIdentityExpectation{
+		mock:               mmDecoupleIdentity.mock,
+		params:             &StorageMockDecoupleIdentityParams{ctx, userProfileID, identityProviderID},
+		expectationOrigins: StorageMockDecoupleIdentityExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmDecoupleIdentity.expectations = append(mmDecoupleIdentity.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.DecoupleIdentity return parameters for the expectation previously defined by the When method
+func (e *StorageMockDecoupleIdentityExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockDecoupleIdentityResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.DecoupleIdentity should be invoked
+func (mmDecoupleIdentity *mStorageMockDecoupleIdentity) Times(n uint64) *mStorageMockDecoupleIdentity {
+	if n == 0 {
+		mmDecoupleIdentity.mock.t.Fatalf("Times of StorageMock.DecoupleIdentity mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmDecoupleIdentity.expectedInvocations, n)
+	mmDecoupleIdentity.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmDecoupleIdentity
+}
+
+func (mmDecoupleIdentity *mStorageMockDecoupleIdentity) invocationsDone() bool {
+	if len(mmDecoupleIdentity.expectations) == 0 && mmDecoupleIdentity.defaultExpectation == nil && mmDecoupleIdentity.mock.funcDecoupleIdentity == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmDecoupleIdentity.mock.afterDecoupleIdentityCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmDecoupleIdentity.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// DecoupleIdentity implements mm_port.Storage
+func (mmDecoupleIdentity *StorageMock) DecoupleIdentity(ctx context.Context, userProfileID uuid.UUID, identityProviderID uuid.UUID) (err error) {
+	mm_atomic.AddUint64(&mmDecoupleIdentity.beforeDecoupleIdentityCounter, 1)
+	defer mm_atomic.AddUint64(&mmDecoupleIdentity.afterDecoupleIdentityCounter, 1)
+
+	mmDecoupleIdentity.t.Helper()
+
+	if mmDecoupleIdentity.inspectFuncDecoupleIdentity != nil {
+		mmDecoupleIdentity.inspectFuncDecoupleIdentity(ctx, userProfileID, identityProviderID)
+	}
+
+	mm_params := StorageMockDecoupleIdentityParams{ctx, userProfileID, identityProviderID}
+
+	// Record call args
+	mmDecoupleIdentity.DecoupleIdentityMock.mutex.Lock()
+	mmDecoupleIdentity.DecoupleIdentityMock.callArgs = append(mmDecoupleIdentity.DecoupleIdentityMock.callArgs, &mm_params)
+	mmDecoupleIdentity.DecoupleIdentityMock.mutex.Unlock()
+
+	for _, e := range mmDecoupleIdentity.DecoupleIdentityMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmDecoupleIdentity.DecoupleIdentityMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmDecoupleIdentity.DecoupleIdentityMock.defaultExpectation.Counter, 1)
+		mm_want := mmDecoupleIdentity.DecoupleIdentityMock.defaultExpectation.params
+		mm_want_ptrs := mmDecoupleIdentity.DecoupleIdentityMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockDecoupleIdentityParams{ctx, userProfileID, identityProviderID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmDecoupleIdentity.t.Errorf("StorageMock.DecoupleIdentity got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDecoupleIdentity.DecoupleIdentityMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.userProfileID != nil && !minimock.Equal(*mm_want_ptrs.userProfileID, mm_got.userProfileID) {
+				mmDecoupleIdentity.t.Errorf("StorageMock.DecoupleIdentity got unexpected parameter userProfileID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDecoupleIdentity.DecoupleIdentityMock.defaultExpectation.expectationOrigins.originUserProfileID, *mm_want_ptrs.userProfileID, mm_got.userProfileID, minimock.Diff(*mm_want_ptrs.userProfileID, mm_got.userProfileID))
+			}
+
+			if mm_want_ptrs.identityProviderID != nil && !minimock.Equal(*mm_want_ptrs.identityProviderID, mm_got.identityProviderID) {
+				mmDecoupleIdentity.t.Errorf("StorageMock.DecoupleIdentity got unexpected parameter identityProviderID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDecoupleIdentity.DecoupleIdentityMock.defaultExpectation.expectationOrigins.originIdentityProviderID, *mm_want_ptrs.identityProviderID, mm_got.identityProviderID, minimock.Diff(*mm_want_ptrs.identityProviderID, mm_got.identityProviderID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmDecoupleIdentity.t.Errorf("StorageMock.DecoupleIdentity got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmDecoupleIdentity.DecoupleIdentityMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmDecoupleIdentity.DecoupleIdentityMock.defaultExpectation.results
+		if mm_results == nil {
+			mmDecoupleIdentity.t.Fatal("No results are set for the StorageMock.DecoupleIdentity")
+		}
+		return (*mm_results).err
+	}
+	if mmDecoupleIdentity.funcDecoupleIdentity != nil {
+		return mmDecoupleIdentity.funcDecoupleIdentity(ctx, userProfileID, identityProviderID)
+	}
+	mmDecoupleIdentity.t.Fatalf("Unexpected call to StorageMock.DecoupleIdentity. %v %v %v", ctx, userProfileID, identityProviderID)
+	return
+}
+
+// DecoupleIdentityAfterCounter returns a count of finished StorageMock.DecoupleIdentity invocations
+func (mmDecoupleIdentity *StorageMock) DecoupleIdentityAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDecoupleIdentity.afterDecoupleIdentityCounter)
+}
+
+// DecoupleIdentityBeforeCounter returns a count of StorageMock.DecoupleIdentity invocations
+func (mmDecoupleIdentity *StorageMock) DecoupleIdentityBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDecoupleIdentity.beforeDecoupleIdentityCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.DecoupleIdentity.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmDecoupleIdentity *mStorageMockDecoupleIdentity) Calls() []*StorageMockDecoupleIdentityParams {
+	mmDecoupleIdentity.mutex.RLock()
+
+	argCopy := make([]*StorageMockDecoupleIdentityParams, len(mmDecoupleIdentity.callArgs))
+	copy(argCopy, mmDecoupleIdentity.callArgs)
+
+	mmDecoupleIdentity.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockDecoupleIdentityDone returns true if the count of the DecoupleIdentity invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockDecoupleIdentityDone() bool {
+	if m.DecoupleIdentityMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.DecoupleIdentityMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.DecoupleIdentityMock.invocationsDone()
+}
+
+// MinimockDecoupleIdentityInspect logs each unmet expectation
+func (m *StorageMock) MinimockDecoupleIdentityInspect() {
+	for _, e := range m.DecoupleIdentityMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.DecoupleIdentity at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterDecoupleIdentityCounter := mm_atomic.LoadUint64(&m.afterDecoupleIdentityCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.DecoupleIdentityMock.defaultExpectation != nil && afterDecoupleIdentityCounter < 1 {
+		if m.DecoupleIdentityMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.DecoupleIdentity at\n%s", m.DecoupleIdentityMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.DecoupleIdentity at\n%s with params: %#v", m.DecoupleIdentityMock.defaultExpectation.expectationOrigins.origin, *m.DecoupleIdentityMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcDecoupleIdentity != nil && afterDecoupleIdentityCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.DecoupleIdentity at\n%s", m.funcDecoupleIdentityOrigin)
+	}
+
+	if !m.DecoupleIdentityMock.invocationsDone() && afterDecoupleIdentityCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.DecoupleIdentity at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.DecoupleIdentityMock.expectedInvocations), m.DecoupleIdentityMock.expectedInvocationsOrigin, afterDecoupleIdentityCounter)
+	}
+}
+
+type mStorageMockDeleteClient struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockDeleteClientExpectation
+	expectations       []*StorageMockDeleteClientExpectation
+
+	callArgs []*StorageMockDeleteClientParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockDeleteClientExpectation specifies expectation struct of the Storage.DeleteClient
+type StorageMockDeleteClientExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockDeleteClientParams
+	paramPtrs          *StorageMockDeleteClientParamPtrs
+	expectationOrigins StorageMockDeleteClientExpectationOrigins
+	results            *StorageMockDeleteClientResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockDeleteClientParams contains parameters of the Storage.DeleteClient
+type StorageMockDeleteClientParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+	clientID string
+}
+
+// StorageMockDeleteClientParamPtrs contains pointers to parameters of the Storage.DeleteClient
+type StorageMockDeleteClientParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+	clientID *string
+}
+
+// StorageMockDeleteClientResults contains results of the Storage.DeleteClient
+type StorageMockDeleteClientResults struct {
+	err error
+}
+
+// StorageMockDeleteClientOrigins contains origins of expectations of the Storage.DeleteClient
+type StorageMockDeleteClientExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+	originClientID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmDeleteClient *mStorageMockDeleteClient) Optional() *mStorageMockDeleteClient {
+	mmDeleteClient.optional = true
+	return mmDeleteClient
+}
+
+// Expect sets up expected params for Storage.DeleteClient
+func (mmDeleteClient *mStorageMockDeleteClient) Expect(ctx context.Context, tenantID uuid.UUID, clientID string) *mStorageMockDeleteClient {
+	if mmDeleteClient.mock.funcDeleteClient != nil {
+		mmDeleteClient.mock.t.Fatalf("StorageMock.DeleteClient mock is already set by Set")
+	}
+
+	if mmDeleteClient.defaultExpectation == nil {
+		mmDeleteClient.defaultExpectation = &StorageMockDeleteClientExpectation{}
+	}
+
+	if mmDeleteClient.defaultExpectation.paramPtrs != nil {
+		mmDeleteClient.mock.t.Fatalf("StorageMock.DeleteClient mock is already set by ExpectParams functions")
+	}
+
+	mmDeleteClient.defaultExpectation.params = &StorageMockDeleteClientParams{ctx, tenantID, clientID}
+	mmDeleteClient.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmDeleteClient.expectations {
+		if minimock.Equal(e.params, mmDeleteClient.defaultExpectation.params) {
+			mmDeleteClient.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmDeleteClient.defaultExpectation.params)
+		}
+	}
+
+	return mmDeleteClient
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.DeleteClient
+func (mmDeleteClient *mStorageMockDeleteClient) ExpectCtxParam1(ctx context.Context) *mStorageMockDeleteClient {
+	if mmDeleteClient.mock.funcDeleteClient != nil {
+		mmDeleteClient.mock.t.Fatalf("StorageMock.DeleteClient mock is already set by Set")
+	}
+
+	if mmDeleteClient.defaultExpectation == nil {
+		mmDeleteClient.defaultExpectation = &StorageMockDeleteClientExpectation{}
+	}
+
+	if mmDeleteClient.defaultExpectation.params != nil {
+		mmDeleteClient.mock.t.Fatalf("StorageMock.DeleteClient mock is already set by Expect")
+	}
+
+	if mmDeleteClient.defaultExpectation.paramPtrs == nil {
+		mmDeleteClient.defaultExpectation.paramPtrs = &StorageMockDeleteClientParamPtrs{}
+	}
+	mmDeleteClient.defaultExpectation.paramPtrs.ctx = &ctx
+	mmDeleteClient.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmDeleteClient
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.DeleteClient
+func (mmDeleteClient *mStorageMockDeleteClient) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockDeleteClient {
+	if mmDeleteClient.mock.funcDeleteClient != nil {
+		mmDeleteClient.mock.t.Fatalf("StorageMock.DeleteClient mock is already set by Set")
+	}
+
+	if mmDeleteClient.defaultExpectation == nil {
+		mmDeleteClient.defaultExpectation = &StorageMockDeleteClientExpectation{}
+	}
+
+	if mmDeleteClient.defaultExpectation.params != nil {
+		mmDeleteClient.mock.t.Fatalf("StorageMock.DeleteClient mock is already set by Expect")
+	}
+
+	if mmDeleteClient.defaultExpectation.paramPtrs == nil {
+		mmDeleteClient.defaultExpectation.paramPtrs = &StorageMockDeleteClientParamPtrs{}
+	}
+	mmDeleteClient.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmDeleteClient.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmDeleteClient
+}
+
+// ExpectClientIDParam3 sets up expected param clientID for Storage.DeleteClient
+func (mmDeleteClient *mStorageMockDeleteClient) ExpectClientIDParam3(clientID string) *mStorageMockDeleteClient {
+	if mmDeleteClient.mock.funcDeleteClient != nil {
+		mmDeleteClient.mock.t.Fatalf("StorageMock.DeleteClient mock is already set by Set")
+	}
+
+	if mmDeleteClient.defaultExpectation == nil {
+		mmDeleteClient.defaultExpectation = &StorageMockDeleteClientExpectation{}
+	}
+
+	if mmDeleteClient.defaultExpectation.params != nil {
+		mmDeleteClient.mock.t.Fatalf("StorageMock.DeleteClient mock is already set by Expect")
+	}
+
+	if mmDeleteClient.defaultExpectation.paramPtrs == nil {
+		mmDeleteClient.defaultExpectation.paramPtrs = &StorageMockDeleteClientParamPtrs{}
+	}
+	mmDeleteClient.defaultExpectation.paramPtrs.clientID = &clientID
+	mmDeleteClient.defaultExpectation.expectationOrigins.originClientID = minimock.CallerInfo(1)
+
+	return mmDeleteClient
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.DeleteClient
+func (mmDeleteClient *mStorageMockDeleteClient) Inspect(f func(ctx context.Context, tenantID uuid.UUID, clientID string)) *mStorageMockDeleteClient {
+	if mmDeleteClient.mock.inspectFuncDeleteClient != nil {
+		mmDeleteClient.mock.t.Fatalf("Inspect function is already set for StorageMock.DeleteClient")
+	}
+
+	mmDeleteClient.mock.inspectFuncDeleteClient = f
+
+	return mmDeleteClient
+}
+
+// Return sets up results that will be returned by Storage.DeleteClient
+func (mmDeleteClient *mStorageMockDeleteClient) Return(err error) *StorageMock {
+	if mmDeleteClient.mock.funcDeleteClient != nil {
+		mmDeleteClient.mock.t.Fatalf("StorageMock.DeleteClient mock is already set by Set")
+	}
+
+	if mmDeleteClient.defaultExpectation == nil {
+		mmDeleteClient.defaultExpectation = &StorageMockDeleteClientExpectation{mock: mmDeleteClient.mock}
+	}
+	mmDeleteClient.defaultExpectation.results = &StorageMockDeleteClientResults{err}
+	mmDeleteClient.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmDeleteClient.mock
+}
+
+// Set uses given function f to mock the Storage.DeleteClient method
+func (mmDeleteClient *mStorageMockDeleteClient) Set(f func(ctx context.Context, tenantID uuid.UUID, clientID string) (err error)) *StorageMock {
+	if mmDeleteClient.defaultExpectation != nil {
+		mmDeleteClient.mock.t.Fatalf("Default expectation is already set for the Storage.DeleteClient method")
+	}
+
+	if len(mmDeleteClient.expectations) > 0 {
+		mmDeleteClient.mock.t.Fatalf("Some expectations are already set for the Storage.DeleteClient method")
+	}
+
+	mmDeleteClient.mock.funcDeleteClient = f
+	mmDeleteClient.mock.funcDeleteClientOrigin = minimock.CallerInfo(1)
+	return mmDeleteClient.mock
+}
+
+// When sets expectation for the Storage.DeleteClient which will trigger the result defined by the following
+// Then helper
+func (mmDeleteClient *mStorageMockDeleteClient) When(ctx context.Context, tenantID uuid.UUID, clientID string) *StorageMockDeleteClientExpectation {
+	if mmDeleteClient.mock.funcDeleteClient != nil {
+		mmDeleteClient.mock.t.Fatalf("StorageMock.DeleteClient mock is already set by Set")
+	}
+
+	expectation := &StorageMockDeleteClientExpectation{
+		mock:               mmDeleteClient.mock,
+		params:             &StorageMockDeleteClientParams{ctx, tenantID, clientID},
+		expectationOrigins: StorageMockDeleteClientExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmDeleteClient.expectations = append(mmDeleteClient.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.DeleteClient return parameters for the expectation previously defined by the When method
+func (e *StorageMockDeleteClientExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockDeleteClientResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.DeleteClient should be invoked
+func (mmDeleteClient *mStorageMockDeleteClient) Times(n uint64) *mStorageMockDeleteClient {
+	if n == 0 {
+		mmDeleteClient.mock.t.Fatalf("Times of StorageMock.DeleteClient mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmDeleteClient.expectedInvocations, n)
+	mmDeleteClient.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmDeleteClient
+}
+
+func (mmDeleteClient *mStorageMockDeleteClient) invocationsDone() bool {
+	if len(mmDeleteClient.expectations) == 0 && mmDeleteClient.defaultExpectation == nil && mmDeleteClient.mock.funcDeleteClient == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmDeleteClient.mock.afterDeleteClientCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmDeleteClient.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// DeleteClient implements mm_port.Storage
+func (mmDeleteClient *StorageMock) DeleteClient(ctx context.Context, tenantID uuid.UUID, clientID string) (err error) {
+	mm_atomic.AddUint64(&mmDeleteClient.beforeDeleteClientCounter, 1)
+	defer mm_atomic.AddUint64(&mmDeleteClient.afterDeleteClientCounter, 1)
+
+	mmDeleteClient.t.Helper()
+
+	if mmDeleteClient.inspectFuncDeleteClient != nil {
+		mmDeleteClient.inspectFuncDeleteClient(ctx, tenantID, clientID)
+	}
+
+	mm_params := StorageMockDeleteClientParams{ctx, tenantID, clientID}
+
+	// Record call args
+	mmDeleteClient.DeleteClientMock.mutex.Lock()
+	mmDeleteClient.DeleteClientMock.callArgs = append(mmDeleteClient.DeleteClientMock.callArgs, &mm_params)
+	mmDeleteClient.DeleteClientMock.mutex.Unlock()
+
+	for _, e := range mmDeleteClient.DeleteClientMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmDeleteClient.DeleteClientMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmDeleteClient.DeleteClientMock.defaultExpectation.Counter, 1)
+		mm_want := mmDeleteClient.DeleteClientMock.defaultExpectation.params
+		mm_want_ptrs := mmDeleteClient.DeleteClientMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockDeleteClientParams{ctx, tenantID, clientID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmDeleteClient.t.Errorf("StorageMock.DeleteClient got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteClient.DeleteClientMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmDeleteClient.t.Errorf("StorageMock.DeleteClient got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteClient.DeleteClientMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.clientID != nil && !minimock.Equal(*mm_want_ptrs.clientID, mm_got.clientID) {
+				mmDeleteClient.t.Errorf("StorageMock.DeleteClient got unexpected parameter clientID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteClient.DeleteClientMock.defaultExpectation.expectationOrigins.originClientID, *mm_want_ptrs.clientID, mm_got.clientID, minimock.Diff(*mm_want_ptrs.clientID, mm_got.clientID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmDeleteClient.t.Errorf("StorageMock.DeleteClient got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmDeleteClient.DeleteClientMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmDeleteClient.DeleteClientMock.defaultExpectation.results
+		if mm_results == nil {
+			mmDeleteClient.t.Fatal("No results are set for the StorageMock.DeleteClient")
+		}
+		return (*mm_results).err
+	}
+	if mmDeleteClient.funcDeleteClient != nil {
+		return mmDeleteClient.funcDeleteClient(ctx, tenantID, clientID)
+	}
+	mmDeleteClient.t.Fatalf("Unexpected call to StorageMock.DeleteClient. %v %v %v", ctx, tenantID, clientID)
+	return
+}
+
+// DeleteClientAfterCounter returns a count of finished StorageMock.DeleteClient invocations
+func (mmDeleteClient *StorageMock) DeleteClientAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteClient.afterDeleteClientCounter)
+}
+
+// DeleteClientBeforeCounter returns a count of StorageMock.DeleteClient invocations
+func (mmDeleteClient *StorageMock) DeleteClientBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteClient.beforeDeleteClientCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.DeleteClient.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmDeleteClient *mStorageMockDeleteClient) Calls() []*StorageMockDeleteClientParams {
+	mmDeleteClient.mutex.RLock()
+
+	argCopy := make([]*StorageMockDeleteClientParams, len(mmDeleteClient.callArgs))
+	copy(argCopy, mmDeleteClient.callArgs)
+
+	mmDeleteClient.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockDeleteClientDone returns true if the count of the DeleteClient invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockDeleteClientDone() bool {
+	if m.DeleteClientMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.DeleteClientMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.DeleteClientMock.invocationsDone()
+}
+
+// MinimockDeleteClientInspect logs each unmet expectation
+func (m *StorageMock) MinimockDeleteClientInspect() {
+	for _, e := range m.DeleteClientMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.DeleteClient at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterDeleteClientCounter := mm_atomic.LoadUint64(&m.afterDeleteClientCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.DeleteClientMock.defaultExpectation != nil && afterDeleteClientCounter < 1 {
+		if m.DeleteClientMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.DeleteClient at\n%s", m.DeleteClientMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.DeleteClient at\n%s with params: %#v", m.DeleteClientMock.defaultExpectation.expectationOrigins.origin, *m.DeleteClientMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcDeleteClient != nil && afterDeleteClientCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.DeleteClient at\n%s", m.funcDeleteClientOrigin)
+	}
+
+	if !m.DeleteClientMock.invocationsDone() && afterDeleteClientCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.DeleteClient at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.DeleteClientMock.expectedInvocations), m.DeleteClientMock.expectedInvocationsOrigin, afterDeleteClientCounter)
+	}
+}
+
+type mStorageMockDeleteIdentityProvider struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockDeleteIdentityProviderExpectation
+	expectations       []*StorageMockDeleteIdentityProviderExpectation
+
+	callArgs []*StorageMockDeleteIdentityProviderParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockDeleteIdentityProviderExpectation specifies expectation struct of the Storage.DeleteIdentityProvider
+type StorageMockDeleteIdentityProviderExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockDeleteIdentityProviderParams
+	paramPtrs          *StorageMockDeleteIdentityProviderParamPtrs
+	expectationOrigins StorageMockDeleteIdentityProviderExpectationOrigins
+	results            *StorageMockDeleteIdentityProviderResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockDeleteIdentityProviderParams contains parameters of the Storage.DeleteIdentityProvider
+type StorageMockDeleteIdentityProviderParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+	idpID    uuid.UUID
+}
+
+// StorageMockDeleteIdentityProviderParamPtrs contains pointers to parameters of the Storage.DeleteIdentityProvider
+type StorageMockDeleteIdentityProviderParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+	idpID    *uuid.UUID
+}
+
+// StorageMockDeleteIdentityProviderResults contains results of the Storage.DeleteIdentityProvider
+type StorageMockDeleteIdentityProviderResults struct {
+	err error
+}
+
+// StorageMockDeleteIdentityProviderOrigins contains origins of expectations of the Storage.DeleteIdentityProvider
+type StorageMockDeleteIdentityProviderExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+	originIdpID    string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmDeleteIdentityProvider *mStorageMockDeleteIdentityProvider) Optional() *mStorageMockDeleteIdentityProvider {
+	mmDeleteIdentityProvider.optional = true
+	return mmDeleteIdentityProvider
+}
+
+// Expect sets up expected params for Storage.DeleteIdentityProvider
+func (mmDeleteIdentityProvider *mStorageMockDeleteIdentityProvider) Expect(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) *mStorageMockDeleteIdentityProvider {
+	if mmDeleteIdentityProvider.mock.funcDeleteIdentityProvider != nil {
+		mmDeleteIdentityProvider.mock.t.Fatalf("StorageMock.DeleteIdentityProvider mock is already set by Set")
+	}
+
+	if mmDeleteIdentityProvider.defaultExpectation == nil {
+		mmDeleteIdentityProvider.defaultExpectation = &StorageMockDeleteIdentityProviderExpectation{}
+	}
+
+	if mmDeleteIdentityProvider.defaultExpectation.paramPtrs != nil {
+		mmDeleteIdentityProvider.mock.t.Fatalf("StorageMock.DeleteIdentityProvider mock is already set by ExpectParams functions")
+	}
+
+	mmDeleteIdentityProvider.defaultExpectation.params = &StorageMockDeleteIdentityProviderParams{ctx, tenantID, idpID}
+	mmDeleteIdentityProvider.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmDeleteIdentityProvider.expectations {
+		if minimock.Equal(e.params, mmDeleteIdentityProvider.defaultExpectation.params) {
+			mmDeleteIdentityProvider.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmDeleteIdentityProvider.defaultExpectation.params)
+		}
+	}
+
+	return mmDeleteIdentityProvider
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.DeleteIdentityProvider
+func (mmDeleteIdentityProvider *mStorageMockDeleteIdentityProvider) ExpectCtxParam1(ctx context.Context) *mStorageMockDeleteIdentityProvider {
+	if mmDeleteIdentityProvider.mock.funcDeleteIdentityProvider != nil {
+		mmDeleteIdentityProvider.mock.t.Fatalf("StorageMock.DeleteIdentityProvider mock is already set by Set")
+	}
+
+	if mmDeleteIdentityProvider.defaultExpectation == nil {
+		mmDeleteIdentityProvider.defaultExpectation = &StorageMockDeleteIdentityProviderExpectation{}
+	}
+
+	if mmDeleteIdentityProvider.defaultExpectation.params != nil {
+		mmDeleteIdentityProvider.mock.t.Fatalf("StorageMock.DeleteIdentityProvider mock is already set by Expect")
+	}
+
+	if mmDeleteIdentityProvider.defaultExpectation.paramPtrs == nil {
+		mmDeleteIdentityProvider.defaultExpectation.paramPtrs = &StorageMockDeleteIdentityProviderParamPtrs{}
+	}
+	mmDeleteIdentityProvider.defaultExpectation.paramPtrs.ctx = &ctx
+	mmDeleteIdentityProvider.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmDeleteIdentityProvider
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.DeleteIdentityProvider
+func (mmDeleteIdentityProvider *mStorageMockDeleteIdentityProvider) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockDeleteIdentityProvider {
+	if mmDeleteIdentityProvider.mock.funcDeleteIdentityProvider != nil {
+		mmDeleteIdentityProvider.mock.t.Fatalf("StorageMock.DeleteIdentityProvider mock is already set by Set")
+	}
+
+	if mmDeleteIdentityProvider.defaultExpectation == nil {
+		mmDeleteIdentityProvider.defaultExpectation = &StorageMockDeleteIdentityProviderExpectation{}
+	}
+
+	if mmDeleteIdentityProvider.defaultExpectation.params != nil {
+		mmDeleteIdentityProvider.mock.t.Fatalf("StorageMock.DeleteIdentityProvider mock is already set by Expect")
+	}
+
+	if mmDeleteIdentityProvider.defaultExpectation.paramPtrs == nil {
+		mmDeleteIdentityProvider.defaultExpectation.paramPtrs = &StorageMockDeleteIdentityProviderParamPtrs{}
+	}
+	mmDeleteIdentityProvider.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmDeleteIdentityProvider.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmDeleteIdentityProvider
+}
+
+// ExpectIdpIDParam3 sets up expected param idpID for Storage.DeleteIdentityProvider
+func (mmDeleteIdentityProvider *mStorageMockDeleteIdentityProvider) ExpectIdpIDParam3(idpID uuid.UUID) *mStorageMockDeleteIdentityProvider {
+	if mmDeleteIdentityProvider.mock.funcDeleteIdentityProvider != nil {
+		mmDeleteIdentityProvider.mock.t.Fatalf("StorageMock.DeleteIdentityProvider mock is already set by Set")
+	}
+
+	if mmDeleteIdentityProvider.defaultExpectation == nil {
+		mmDeleteIdentityProvider.defaultExpectation = &StorageMockDeleteIdentityProviderExpectation{}
+	}
+
+	if mmDeleteIdentityProvider.defaultExpectation.params != nil {
+		mmDeleteIdentityProvider.mock.t.Fatalf("StorageMock.DeleteIdentityProvider mock is already set by Expect")
+	}
+
+	if mmDeleteIdentityProvider.defaultExpectation.paramPtrs == nil {
+		mmDeleteIdentityProvider.defaultExpectation.paramPtrs = &StorageMockDeleteIdentityProviderParamPtrs{}
+	}
+	mmDeleteIdentityProvider.defaultExpectation.paramPtrs.idpID = &idpID
+	mmDeleteIdentityProvider.defaultExpectation.expectationOrigins.originIdpID = minimock.CallerInfo(1)
+
+	return mmDeleteIdentityProvider
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.DeleteIdentityProvider
+func (mmDeleteIdentityProvider *mStorageMockDeleteIdentityProvider) Inspect(f func(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID)) *mStorageMockDeleteIdentityProvider {
+	if mmDeleteIdentityProvider.mock.inspectFuncDeleteIdentityProvider != nil {
+		mmDeleteIdentityProvider.mock.t.Fatalf("Inspect function is already set for StorageMock.DeleteIdentityProvider")
+	}
+
+	mmDeleteIdentityProvider.mock.inspectFuncDeleteIdentityProvider = f
+
+	return mmDeleteIdentityProvider
+}
+
+// Return sets up results that will be returned by Storage.DeleteIdentityProvider
+func (mmDeleteIdentityProvider *mStorageMockDeleteIdentityProvider) Return(err error) *StorageMock {
+	if mmDeleteIdentityProvider.mock.funcDeleteIdentityProvider != nil {
+		mmDeleteIdentityProvider.mock.t.Fatalf("StorageMock.DeleteIdentityProvider mock is already set by Set")
+	}
+
+	if mmDeleteIdentityProvider.defaultExpectation == nil {
+		mmDeleteIdentityProvider.defaultExpectation = &StorageMockDeleteIdentityProviderExpectation{mock: mmDeleteIdentityProvider.mock}
+	}
+	mmDeleteIdentityProvider.defaultExpectation.results = &StorageMockDeleteIdentityProviderResults{err}
+	mmDeleteIdentityProvider.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmDeleteIdentityProvider.mock
+}
+
+// Set uses given function f to mock the Storage.DeleteIdentityProvider method
+func (mmDeleteIdentityProvider *mStorageMockDeleteIdentityProvider) Set(f func(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) (err error)) *StorageMock {
+	if mmDeleteIdentityProvider.defaultExpectation != nil {
+		mmDeleteIdentityProvider.mock.t.Fatalf("Default expectation is already set for the Storage.DeleteIdentityProvider method")
+	}
+
+	if len(mmDeleteIdentityProvider.expectations) > 0 {
+		mmDeleteIdentityProvider.mock.t.Fatalf("Some expectations are already set for the Storage.DeleteIdentityProvider method")
+	}
+
+	mmDeleteIdentityProvider.mock.funcDeleteIdentityProvider = f
+	mmDeleteIdentityProvider.mock.funcDeleteIdentityProviderOrigin = minimock.CallerInfo(1)
+	return mmDeleteIdentityProvider.mock
+}
+
+// When sets expectation for the Storage.DeleteIdentityProvider which will trigger the result defined by the following
+// Then helper
+func (mmDeleteIdentityProvider *mStorageMockDeleteIdentityProvider) When(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) *StorageMockDeleteIdentityProviderExpectation {
+	if mmDeleteIdentityProvider.mock.funcDeleteIdentityProvider != nil {
+		mmDeleteIdentityProvider.mock.t.Fatalf("StorageMock.DeleteIdentityProvider mock is already set by Set")
+	}
+
+	expectation := &StorageMockDeleteIdentityProviderExpectation{
+		mock:               mmDeleteIdentityProvider.mock,
+		params:             &StorageMockDeleteIdentityProviderParams{ctx, tenantID, idpID},
+		expectationOrigins: StorageMockDeleteIdentityProviderExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmDeleteIdentityProvider.expectations = append(mmDeleteIdentityProvider.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.DeleteIdentityProvider return parameters for the expectation previously defined by the When method
+func (e *StorageMockDeleteIdentityProviderExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockDeleteIdentityProviderResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.DeleteIdentityProvider should be invoked
+func (mmDeleteIdentityProvider *mStorageMockDeleteIdentityProvider) Times(n uint64) *mStorageMockDeleteIdentityProvider {
+	if n == 0 {
+		mmDeleteIdentityProvider.mock.t.Fatalf("Times of StorageMock.DeleteIdentityProvider mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmDeleteIdentityProvider.expectedInvocations, n)
+	mmDeleteIdentityProvider.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmDeleteIdentityProvider
+}
+
+func (mmDeleteIdentityProvider *mStorageMockDeleteIdentityProvider) invocationsDone() bool {
+	if len(mmDeleteIdentityProvider.expectations) == 0 && mmDeleteIdentityProvider.defaultExpectation == nil && mmDeleteIdentityProvider.mock.funcDeleteIdentityProvider == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmDeleteIdentityProvider.mock.afterDeleteIdentityProviderCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmDeleteIdentityProvider.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// DeleteIdentityProvider implements mm_port.Storage
+func (mmDeleteIdentityProvider *StorageMock) DeleteIdentityProvider(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) (err error) {
+	mm_atomic.AddUint64(&mmDeleteIdentityProvider.beforeDeleteIdentityProviderCounter, 1)
+	defer mm_atomic.AddUint64(&mmDeleteIdentityProvider.afterDeleteIdentityProviderCounter, 1)
+
+	mmDeleteIdentityProvider.t.Helper()
+
+	if mmDeleteIdentityProvider.inspectFuncDeleteIdentityProvider != nil {
+		mmDeleteIdentityProvider.inspectFuncDeleteIdentityProvider(ctx, tenantID, idpID)
+	}
+
+	mm_params := StorageMockDeleteIdentityProviderParams{ctx, tenantID, idpID}
+
+	// Record call args
+	mmDeleteIdentityProvider.DeleteIdentityProviderMock.mutex.Lock()
+	mmDeleteIdentityProvider.DeleteIdentityProviderMock.callArgs = append(mmDeleteIdentityProvider.DeleteIdentityProviderMock.callArgs, &mm_params)
+	mmDeleteIdentityProvider.DeleteIdentityProviderMock.mutex.Unlock()
+
+	for _, e := range mmDeleteIdentityProvider.DeleteIdentityProviderMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmDeleteIdentityProvider.DeleteIdentityProviderMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmDeleteIdentityProvider.DeleteIdentityProviderMock.defaultExpectation.Counter, 1)
+		mm_want := mmDeleteIdentityProvider.DeleteIdentityProviderMock.defaultExpectation.params
+		mm_want_ptrs := mmDeleteIdentityProvider.DeleteIdentityProviderMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockDeleteIdentityProviderParams{ctx, tenantID, idpID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmDeleteIdentityProvider.t.Errorf("StorageMock.DeleteIdentityProvider got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteIdentityProvider.DeleteIdentityProviderMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmDeleteIdentityProvider.t.Errorf("StorageMock.DeleteIdentityProvider got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteIdentityProvider.DeleteIdentityProviderMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.idpID != nil && !minimock.Equal(*mm_want_ptrs.idpID, mm_got.idpID) {
+				mmDeleteIdentityProvider.t.Errorf("StorageMock.DeleteIdentityProvider got unexpected parameter idpID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteIdentityProvider.DeleteIdentityProviderMock.defaultExpectation.expectationOrigins.originIdpID, *mm_want_ptrs.idpID, mm_got.idpID, minimock.Diff(*mm_want_ptrs.idpID, mm_got.idpID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmDeleteIdentityProvider.t.Errorf("StorageMock.DeleteIdentityProvider got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmDeleteIdentityProvider.DeleteIdentityProviderMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmDeleteIdentityProvider.DeleteIdentityProviderMock.defaultExpectation.results
+		if mm_results == nil {
+			mmDeleteIdentityProvider.t.Fatal("No results are set for the StorageMock.DeleteIdentityProvider")
+		}
+		return (*mm_results).err
+	}
+	if mmDeleteIdentityProvider.funcDeleteIdentityProvider != nil {
+		return mmDeleteIdentityProvider.funcDeleteIdentityProvider(ctx, tenantID, idpID)
+	}
+	mmDeleteIdentityProvider.t.Fatalf("Unexpected call to StorageMock.DeleteIdentityProvider. %v %v %v", ctx, tenantID, idpID)
+	return
+}
+
+// DeleteIdentityProviderAfterCounter returns a count of finished StorageMock.DeleteIdentityProvider invocations
+func (mmDeleteIdentityProvider *StorageMock) DeleteIdentityProviderAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteIdentityProvider.afterDeleteIdentityProviderCounter)
+}
+
+// DeleteIdentityProviderBeforeCounter returns a count of StorageMock.DeleteIdentityProvider invocations
+func (mmDeleteIdentityProvider *StorageMock) DeleteIdentityProviderBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteIdentityProvider.beforeDeleteIdentityProviderCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.DeleteIdentityProvider.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmDeleteIdentityProvider *mStorageMockDeleteIdentityProvider) Calls() []*StorageMockDeleteIdentityProviderParams {
+	mmDeleteIdentityProvider.mutex.RLock()
+
+	argCopy := make([]*StorageMockDeleteIdentityProviderParams, len(mmDeleteIdentityProvider.callArgs))
+	copy(argCopy, mmDeleteIdentityProvider.callArgs)
+
+	mmDeleteIdentityProvider.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockDeleteIdentityProviderDone returns true if the count of the DeleteIdentityProvider invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockDeleteIdentityProviderDone() bool {
+	if m.DeleteIdentityProviderMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.DeleteIdentityProviderMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.DeleteIdentityProviderMock.invocationsDone()
+}
+
+// MinimockDeleteIdentityProviderInspect logs each unmet expectation
+func (m *StorageMock) MinimockDeleteIdentityProviderInspect() {
+	for _, e := range m.DeleteIdentityProviderMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.DeleteIdentityProvider at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterDeleteIdentityProviderCounter := mm_atomic.LoadUint64(&m.afterDeleteIdentityProviderCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.DeleteIdentityProviderMock.defaultExpectation != nil && afterDeleteIdentityProviderCounter < 1 {
+		if m.DeleteIdentityProviderMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.DeleteIdentityProvider at\n%s", m.DeleteIdentityProviderMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.DeleteIdentityProvider at\n%s with params: %#v", m.DeleteIdentityProviderMock.defaultExpectation.expectationOrigins.origin, *m.DeleteIdentityProviderMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcDeleteIdentityProvider != nil && afterDeleteIdentityProviderCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.DeleteIdentityProvider at\n%s", m.funcDeleteIdentityProviderOrigin)
+	}
+
+	if !m.DeleteIdentityProviderMock.invocationsDone() && afterDeleteIdentityProviderCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.DeleteIdentityProvider at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.DeleteIdentityProviderMock.expectedInvocations), m.DeleteIdentityProviderMock.expectedInvocationsOrigin, afterDeleteIdentityProviderCounter)
+	}
+}
+
+type mStorageMockDeleteUserProfile struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockDeleteUserProfileExpectation
+	expectations       []*StorageMockDeleteUserProfileExpectation
+
+	callArgs []*StorageMockDeleteUserProfileParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockDeleteUserProfileExpectation specifies expectation struct of the Storage.DeleteUserProfile
+type StorageMockDeleteUserProfileExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockDeleteUserProfileParams
+	paramPtrs          *StorageMockDeleteUserProfileParamPtrs
+	expectationOrigins StorageMockDeleteUserProfileExpectationOrigins
+	results            *StorageMockDeleteUserProfileResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockDeleteUserProfileParams contains parameters of the Storage.DeleteUserProfile
+type StorageMockDeleteUserProfileParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+	userID   uuid.UUID
+}
+
+// StorageMockDeleteUserProfileParamPtrs contains pointers to parameters of the Storage.DeleteUserProfile
+type StorageMockDeleteUserProfileParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+	userID   *uuid.UUID
+}
+
+// StorageMockDeleteUserProfileResults contains results of the Storage.DeleteUserProfile
+type StorageMockDeleteUserProfileResults struct {
+	err error
+}
+
+// StorageMockDeleteUserProfileOrigins contains origins of expectations of the Storage.DeleteUserProfile
+type StorageMockDeleteUserProfileExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+	originUserID   string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmDeleteUserProfile *mStorageMockDeleteUserProfile) Optional() *mStorageMockDeleteUserProfile {
+	mmDeleteUserProfile.optional = true
+	return mmDeleteUserProfile
+}
+
+// Expect sets up expected params for Storage.DeleteUserProfile
+func (mmDeleteUserProfile *mStorageMockDeleteUserProfile) Expect(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) *mStorageMockDeleteUserProfile {
+	if mmDeleteUserProfile.mock.funcDeleteUserProfile != nil {
+		mmDeleteUserProfile.mock.t.Fatalf("StorageMock.DeleteUserProfile mock is already set by Set")
+	}
+
+	if mmDeleteUserProfile.defaultExpectation == nil {
+		mmDeleteUserProfile.defaultExpectation = &StorageMockDeleteUserProfileExpectation{}
+	}
+
+	if mmDeleteUserProfile.defaultExpectation.paramPtrs != nil {
+		mmDeleteUserProfile.mock.t.Fatalf("StorageMock.DeleteUserProfile mock is already set by ExpectParams functions")
+	}
+
+	mmDeleteUserProfile.defaultExpectation.params = &StorageMockDeleteUserProfileParams{ctx, tenantID, userID}
+	mmDeleteUserProfile.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmDeleteUserProfile.expectations {
+		if minimock.Equal(e.params, mmDeleteUserProfile.defaultExpectation.params) {
+			mmDeleteUserProfile.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmDeleteUserProfile.defaultExpectation.params)
+		}
+	}
+
+	return mmDeleteUserProfile
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.DeleteUserProfile
+func (mmDeleteUserProfile *mStorageMockDeleteUserProfile) ExpectCtxParam1(ctx context.Context) *mStorageMockDeleteUserProfile {
+	if mmDeleteUserProfile.mock.funcDeleteUserProfile != nil {
+		mmDeleteUserProfile.mock.t.Fatalf("StorageMock.DeleteUserProfile mock is already set by Set")
+	}
+
+	if mmDeleteUserProfile.defaultExpectation == nil {
+		mmDeleteUserProfile.defaultExpectation = &StorageMockDeleteUserProfileExpectation{}
+	}
+
+	if mmDeleteUserProfile.defaultExpectation.params != nil {
+		mmDeleteUserProfile.mock.t.Fatalf("StorageMock.DeleteUserProfile mock is already set by Expect")
+	}
+
+	if mmDeleteUserProfile.defaultExpectation.paramPtrs == nil {
+		mmDeleteUserProfile.defaultExpectation.paramPtrs = &StorageMockDeleteUserProfileParamPtrs{}
+	}
+	mmDeleteUserProfile.defaultExpectation.paramPtrs.ctx = &ctx
+	mmDeleteUserProfile.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmDeleteUserProfile
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.DeleteUserProfile
+func (mmDeleteUserProfile *mStorageMockDeleteUserProfile) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockDeleteUserProfile {
+	if mmDeleteUserProfile.mock.funcDeleteUserProfile != nil {
+		mmDeleteUserProfile.mock.t.Fatalf("StorageMock.DeleteUserProfile mock is already set by Set")
+	}
+
+	if mmDeleteUserProfile.defaultExpectation == nil {
+		mmDeleteUserProfile.defaultExpectation = &StorageMockDeleteUserProfileExpectation{}
+	}
+
+	if mmDeleteUserProfile.defaultExpectation.params != nil {
+		mmDeleteUserProfile.mock.t.Fatalf("StorageMock.DeleteUserProfile mock is already set by Expect")
+	}
+
+	if mmDeleteUserProfile.defaultExpectation.paramPtrs == nil {
+		mmDeleteUserProfile.defaultExpectation.paramPtrs = &StorageMockDeleteUserProfileParamPtrs{}
+	}
+	mmDeleteUserProfile.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmDeleteUserProfile.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmDeleteUserProfile
+}
+
+// ExpectUserIDParam3 sets up expected param userID for Storage.DeleteUserProfile
+func (mmDeleteUserProfile *mStorageMockDeleteUserProfile) ExpectUserIDParam3(userID uuid.UUID) *mStorageMockDeleteUserProfile {
+	if mmDeleteUserProfile.mock.funcDeleteUserProfile != nil {
+		mmDeleteUserProfile.mock.t.Fatalf("StorageMock.DeleteUserProfile mock is already set by Set")
+	}
+
+	if mmDeleteUserProfile.defaultExpectation == nil {
+		mmDeleteUserProfile.defaultExpectation = &StorageMockDeleteUserProfileExpectation{}
+	}
+
+	if mmDeleteUserProfile.defaultExpectation.params != nil {
+		mmDeleteUserProfile.mock.t.Fatalf("StorageMock.DeleteUserProfile mock is already set by Expect")
+	}
+
+	if mmDeleteUserProfile.defaultExpectation.paramPtrs == nil {
+		mmDeleteUserProfile.defaultExpectation.paramPtrs = &StorageMockDeleteUserProfileParamPtrs{}
+	}
+	mmDeleteUserProfile.defaultExpectation.paramPtrs.userID = &userID
+	mmDeleteUserProfile.defaultExpectation.expectationOrigins.originUserID = minimock.CallerInfo(1)
+
+	return mmDeleteUserProfile
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.DeleteUserProfile
+func (mmDeleteUserProfile *mStorageMockDeleteUserProfile) Inspect(f func(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID)) *mStorageMockDeleteUserProfile {
+	if mmDeleteUserProfile.mock.inspectFuncDeleteUserProfile != nil {
+		mmDeleteUserProfile.mock.t.Fatalf("Inspect function is already set for StorageMock.DeleteUserProfile")
+	}
+
+	mmDeleteUserProfile.mock.inspectFuncDeleteUserProfile = f
+
+	return mmDeleteUserProfile
+}
+
+// Return sets up results that will be returned by Storage.DeleteUserProfile
+func (mmDeleteUserProfile *mStorageMockDeleteUserProfile) Return(err error) *StorageMock {
+	if mmDeleteUserProfile.mock.funcDeleteUserProfile != nil {
+		mmDeleteUserProfile.mock.t.Fatalf("StorageMock.DeleteUserProfile mock is already set by Set")
+	}
+
+	if mmDeleteUserProfile.defaultExpectation == nil {
+		mmDeleteUserProfile.defaultExpectation = &StorageMockDeleteUserProfileExpectation{mock: mmDeleteUserProfile.mock}
+	}
+	mmDeleteUserProfile.defaultExpectation.results = &StorageMockDeleteUserProfileResults{err}
+	mmDeleteUserProfile.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmDeleteUserProfile.mock
+}
+
+// Set uses given function f to mock the Storage.DeleteUserProfile method
+func (mmDeleteUserProfile *mStorageMockDeleteUserProfile) Set(f func(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) (err error)) *StorageMock {
+	if mmDeleteUserProfile.defaultExpectation != nil {
+		mmDeleteUserProfile.mock.t.Fatalf("Default expectation is already set for the Storage.DeleteUserProfile method")
+	}
+
+	if len(mmDeleteUserProfile.expectations) > 0 {
+		mmDeleteUserProfile.mock.t.Fatalf("Some expectations are already set for the Storage.DeleteUserProfile method")
+	}
+
+	mmDeleteUserProfile.mock.funcDeleteUserProfile = f
+	mmDeleteUserProfile.mock.funcDeleteUserProfileOrigin = minimock.CallerInfo(1)
+	return mmDeleteUserProfile.mock
+}
+
+// When sets expectation for the Storage.DeleteUserProfile which will trigger the result defined by the following
+// Then helper
+func (mmDeleteUserProfile *mStorageMockDeleteUserProfile) When(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) *StorageMockDeleteUserProfileExpectation {
+	if mmDeleteUserProfile.mock.funcDeleteUserProfile != nil {
+		mmDeleteUserProfile.mock.t.Fatalf("StorageMock.DeleteUserProfile mock is already set by Set")
+	}
+
+	expectation := &StorageMockDeleteUserProfileExpectation{
+		mock:               mmDeleteUserProfile.mock,
+		params:             &StorageMockDeleteUserProfileParams{ctx, tenantID, userID},
+		expectationOrigins: StorageMockDeleteUserProfileExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmDeleteUserProfile.expectations = append(mmDeleteUserProfile.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.DeleteUserProfile return parameters for the expectation previously defined by the When method
+func (e *StorageMockDeleteUserProfileExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockDeleteUserProfileResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.DeleteUserProfile should be invoked
+func (mmDeleteUserProfile *mStorageMockDeleteUserProfile) Times(n uint64) *mStorageMockDeleteUserProfile {
+	if n == 0 {
+		mmDeleteUserProfile.mock.t.Fatalf("Times of StorageMock.DeleteUserProfile mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmDeleteUserProfile.expectedInvocations, n)
+	mmDeleteUserProfile.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmDeleteUserProfile
+}
+
+func (mmDeleteUserProfile *mStorageMockDeleteUserProfile) invocationsDone() bool {
+	if len(mmDeleteUserProfile.expectations) == 0 && mmDeleteUserProfile.defaultExpectation == nil && mmDeleteUserProfile.mock.funcDeleteUserProfile == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmDeleteUserProfile.mock.afterDeleteUserProfileCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmDeleteUserProfile.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// DeleteUserProfile implements mm_port.Storage
+func (mmDeleteUserProfile *StorageMock) DeleteUserProfile(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) (err error) {
+	mm_atomic.AddUint64(&mmDeleteUserProfile.beforeDeleteUserProfileCounter, 1)
+	defer mm_atomic.AddUint64(&mmDeleteUserProfile.afterDeleteUserProfileCounter, 1)
+
+	mmDeleteUserProfile.t.Helper()
+
+	if mmDeleteUserProfile.inspectFuncDeleteUserProfile != nil {
+		mmDeleteUserProfile.inspectFuncDeleteUserProfile(ctx, tenantID, userID)
+	}
+
+	mm_params := StorageMockDeleteUserProfileParams{ctx, tenantID, userID}
+
+	// Record call args
+	mmDeleteUserProfile.DeleteUserProfileMock.mutex.Lock()
+	mmDeleteUserProfile.DeleteUserProfileMock.callArgs = append(mmDeleteUserProfile.DeleteUserProfileMock.callArgs, &mm_params)
+	mmDeleteUserProfile.DeleteUserProfileMock.mutex.Unlock()
+
+	for _, e := range mmDeleteUserProfile.DeleteUserProfileMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmDeleteUserProfile.DeleteUserProfileMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmDeleteUserProfile.DeleteUserProfileMock.defaultExpectation.Counter, 1)
+		mm_want := mmDeleteUserProfile.DeleteUserProfileMock.defaultExpectation.params
+		mm_want_ptrs := mmDeleteUserProfile.DeleteUserProfileMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockDeleteUserProfileParams{ctx, tenantID, userID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmDeleteUserProfile.t.Errorf("StorageMock.DeleteUserProfile got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteUserProfile.DeleteUserProfileMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmDeleteUserProfile.t.Errorf("StorageMock.DeleteUserProfile got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteUserProfile.DeleteUserProfileMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.userID != nil && !minimock.Equal(*mm_want_ptrs.userID, mm_got.userID) {
+				mmDeleteUserProfile.t.Errorf("StorageMock.DeleteUserProfile got unexpected parameter userID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteUserProfile.DeleteUserProfileMock.defaultExpectation.expectationOrigins.originUserID, *mm_want_ptrs.userID, mm_got.userID, minimock.Diff(*mm_want_ptrs.userID, mm_got.userID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmDeleteUserProfile.t.Errorf("StorageMock.DeleteUserProfile got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmDeleteUserProfile.DeleteUserProfileMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmDeleteUserProfile.DeleteUserProfileMock.defaultExpectation.results
+		if mm_results == nil {
+			mmDeleteUserProfile.t.Fatal("No results are set for the StorageMock.DeleteUserProfile")
+		}
+		return (*mm_results).err
+	}
+	if mmDeleteUserProfile.funcDeleteUserProfile != nil {
+		return mmDeleteUserProfile.funcDeleteUserProfile(ctx, tenantID, userID)
+	}
+	mmDeleteUserProfile.t.Fatalf("Unexpected call to StorageMock.DeleteUserProfile. %v %v %v", ctx, tenantID, userID)
+	return
+}
+
+// DeleteUserProfileAfterCounter returns a count of finished StorageMock.DeleteUserProfile invocations
+func (mmDeleteUserProfile *StorageMock) DeleteUserProfileAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteUserProfile.afterDeleteUserProfileCounter)
+}
+
+// DeleteUserProfileBeforeCounter returns a count of StorageMock.DeleteUserProfile invocations
+func (mmDeleteUserProfile *StorageMock) DeleteUserProfileBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteUserProfile.beforeDeleteUserProfileCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.DeleteUserProfile.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmDeleteUserProfile *mStorageMockDeleteUserProfile) Calls() []*StorageMockDeleteUserProfileParams {
+	mmDeleteUserProfile.mutex.RLock()
+
+	argCopy := make([]*StorageMockDeleteUserProfileParams, len(mmDeleteUserProfile.callArgs))
+	copy(argCopy, mmDeleteUserProfile.callArgs)
+
+	mmDeleteUserProfile.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockDeleteUserProfileDone returns true if the count of the DeleteUserProfile invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockDeleteUserProfileDone() bool {
+	if m.DeleteUserProfileMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.DeleteUserProfileMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.DeleteUserProfileMock.invocationsDone()
+}
+
+// MinimockDeleteUserProfileInspect logs each unmet expectation
+func (m *StorageMock) MinimockDeleteUserProfileInspect() {
+	for _, e := range m.DeleteUserProfileMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.DeleteUserProfile at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterDeleteUserProfileCounter := mm_atomic.LoadUint64(&m.afterDeleteUserProfileCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.DeleteUserProfileMock.defaultExpectation != nil && afterDeleteUserProfileCounter < 1 {
+		if m.DeleteUserProfileMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.DeleteUserProfile at\n%s", m.DeleteUserProfileMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.DeleteUserProfile at\n%s with params: %#v", m.DeleteUserProfileMock.defaultExpectation.expectationOrigins.origin, *m.DeleteUserProfileMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcDeleteUserProfile != nil && afterDeleteUserProfileCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.DeleteUserProfile at\n%s", m.funcDeleteUserProfileOrigin)
+	}
+
+	if !m.DeleteUserProfileMock.invocationsDone() && afterDeleteUserProfileCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.DeleteUserProfile at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.DeleteUserProfileMock.expectedInvocations), m.DeleteUserProfileMock.expectedInvocationsOrigin, afterDeleteUserProfileCounter)
 	}
 }
 
@@ -4282,6 +5854,349 @@ func (m *StorageMock) MinimockGetIdentityProviderByTypeInspect() {
 	}
 }
 
+type mStorageMockGetIdentityProviders struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockGetIdentityProvidersExpectation
+	expectations       []*StorageMockGetIdentityProvidersExpectation
+
+	callArgs []*StorageMockGetIdentityProvidersParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockGetIdentityProvidersExpectation specifies expectation struct of the Storage.GetIdentityProviders
+type StorageMockGetIdentityProvidersExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockGetIdentityProvidersParams
+	paramPtrs          *StorageMockGetIdentityProvidersParamPtrs
+	expectationOrigins StorageMockGetIdentityProvidersExpectationOrigins
+	results            *StorageMockGetIdentityProvidersResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockGetIdentityProvidersParams contains parameters of the Storage.GetIdentityProviders
+type StorageMockGetIdentityProvidersParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+}
+
+// StorageMockGetIdentityProvidersParamPtrs contains pointers to parameters of the Storage.GetIdentityProviders
+type StorageMockGetIdentityProvidersParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+}
+
+// StorageMockGetIdentityProvidersResults contains results of the Storage.GetIdentityProviders
+type StorageMockGetIdentityProvidersResults struct {
+	ia1 []model.IdentityProvider
+	err error
+}
+
+// StorageMockGetIdentityProvidersOrigins contains origins of expectations of the Storage.GetIdentityProviders
+type StorageMockGetIdentityProvidersExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetIdentityProviders *mStorageMockGetIdentityProviders) Optional() *mStorageMockGetIdentityProviders {
+	mmGetIdentityProviders.optional = true
+	return mmGetIdentityProviders
+}
+
+// Expect sets up expected params for Storage.GetIdentityProviders
+func (mmGetIdentityProviders *mStorageMockGetIdentityProviders) Expect(ctx context.Context, tenantID uuid.UUID) *mStorageMockGetIdentityProviders {
+	if mmGetIdentityProviders.mock.funcGetIdentityProviders != nil {
+		mmGetIdentityProviders.mock.t.Fatalf("StorageMock.GetIdentityProviders mock is already set by Set")
+	}
+
+	if mmGetIdentityProviders.defaultExpectation == nil {
+		mmGetIdentityProviders.defaultExpectation = &StorageMockGetIdentityProvidersExpectation{}
+	}
+
+	if mmGetIdentityProviders.defaultExpectation.paramPtrs != nil {
+		mmGetIdentityProviders.mock.t.Fatalf("StorageMock.GetIdentityProviders mock is already set by ExpectParams functions")
+	}
+
+	mmGetIdentityProviders.defaultExpectation.params = &StorageMockGetIdentityProvidersParams{ctx, tenantID}
+	mmGetIdentityProviders.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetIdentityProviders.expectations {
+		if minimock.Equal(e.params, mmGetIdentityProviders.defaultExpectation.params) {
+			mmGetIdentityProviders.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetIdentityProviders.defaultExpectation.params)
+		}
+	}
+
+	return mmGetIdentityProviders
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.GetIdentityProviders
+func (mmGetIdentityProviders *mStorageMockGetIdentityProviders) ExpectCtxParam1(ctx context.Context) *mStorageMockGetIdentityProviders {
+	if mmGetIdentityProviders.mock.funcGetIdentityProviders != nil {
+		mmGetIdentityProviders.mock.t.Fatalf("StorageMock.GetIdentityProviders mock is already set by Set")
+	}
+
+	if mmGetIdentityProviders.defaultExpectation == nil {
+		mmGetIdentityProviders.defaultExpectation = &StorageMockGetIdentityProvidersExpectation{}
+	}
+
+	if mmGetIdentityProviders.defaultExpectation.params != nil {
+		mmGetIdentityProviders.mock.t.Fatalf("StorageMock.GetIdentityProviders mock is already set by Expect")
+	}
+
+	if mmGetIdentityProviders.defaultExpectation.paramPtrs == nil {
+		mmGetIdentityProviders.defaultExpectation.paramPtrs = &StorageMockGetIdentityProvidersParamPtrs{}
+	}
+	mmGetIdentityProviders.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetIdentityProviders.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetIdentityProviders
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.GetIdentityProviders
+func (mmGetIdentityProviders *mStorageMockGetIdentityProviders) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockGetIdentityProviders {
+	if mmGetIdentityProviders.mock.funcGetIdentityProviders != nil {
+		mmGetIdentityProviders.mock.t.Fatalf("StorageMock.GetIdentityProviders mock is already set by Set")
+	}
+
+	if mmGetIdentityProviders.defaultExpectation == nil {
+		mmGetIdentityProviders.defaultExpectation = &StorageMockGetIdentityProvidersExpectation{}
+	}
+
+	if mmGetIdentityProviders.defaultExpectation.params != nil {
+		mmGetIdentityProviders.mock.t.Fatalf("StorageMock.GetIdentityProviders mock is already set by Expect")
+	}
+
+	if mmGetIdentityProviders.defaultExpectation.paramPtrs == nil {
+		mmGetIdentityProviders.defaultExpectation.paramPtrs = &StorageMockGetIdentityProvidersParamPtrs{}
+	}
+	mmGetIdentityProviders.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetIdentityProviders.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetIdentityProviders
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.GetIdentityProviders
+func (mmGetIdentityProviders *mStorageMockGetIdentityProviders) Inspect(f func(ctx context.Context, tenantID uuid.UUID)) *mStorageMockGetIdentityProviders {
+	if mmGetIdentityProviders.mock.inspectFuncGetIdentityProviders != nil {
+		mmGetIdentityProviders.mock.t.Fatalf("Inspect function is already set for StorageMock.GetIdentityProviders")
+	}
+
+	mmGetIdentityProviders.mock.inspectFuncGetIdentityProviders = f
+
+	return mmGetIdentityProviders
+}
+
+// Return sets up results that will be returned by Storage.GetIdentityProviders
+func (mmGetIdentityProviders *mStorageMockGetIdentityProviders) Return(ia1 []model.IdentityProvider, err error) *StorageMock {
+	if mmGetIdentityProviders.mock.funcGetIdentityProviders != nil {
+		mmGetIdentityProviders.mock.t.Fatalf("StorageMock.GetIdentityProviders mock is already set by Set")
+	}
+
+	if mmGetIdentityProviders.defaultExpectation == nil {
+		mmGetIdentityProviders.defaultExpectation = &StorageMockGetIdentityProvidersExpectation{mock: mmGetIdentityProviders.mock}
+	}
+	mmGetIdentityProviders.defaultExpectation.results = &StorageMockGetIdentityProvidersResults{ia1, err}
+	mmGetIdentityProviders.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetIdentityProviders.mock
+}
+
+// Set uses given function f to mock the Storage.GetIdentityProviders method
+func (mmGetIdentityProviders *mStorageMockGetIdentityProviders) Set(f func(ctx context.Context, tenantID uuid.UUID) (ia1 []model.IdentityProvider, err error)) *StorageMock {
+	if mmGetIdentityProviders.defaultExpectation != nil {
+		mmGetIdentityProviders.mock.t.Fatalf("Default expectation is already set for the Storage.GetIdentityProviders method")
+	}
+
+	if len(mmGetIdentityProviders.expectations) > 0 {
+		mmGetIdentityProviders.mock.t.Fatalf("Some expectations are already set for the Storage.GetIdentityProviders method")
+	}
+
+	mmGetIdentityProviders.mock.funcGetIdentityProviders = f
+	mmGetIdentityProviders.mock.funcGetIdentityProvidersOrigin = minimock.CallerInfo(1)
+	return mmGetIdentityProviders.mock
+}
+
+// When sets expectation for the Storage.GetIdentityProviders which will trigger the result defined by the following
+// Then helper
+func (mmGetIdentityProviders *mStorageMockGetIdentityProviders) When(ctx context.Context, tenantID uuid.UUID) *StorageMockGetIdentityProvidersExpectation {
+	if mmGetIdentityProviders.mock.funcGetIdentityProviders != nil {
+		mmGetIdentityProviders.mock.t.Fatalf("StorageMock.GetIdentityProviders mock is already set by Set")
+	}
+
+	expectation := &StorageMockGetIdentityProvidersExpectation{
+		mock:               mmGetIdentityProviders.mock,
+		params:             &StorageMockGetIdentityProvidersParams{ctx, tenantID},
+		expectationOrigins: StorageMockGetIdentityProvidersExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetIdentityProviders.expectations = append(mmGetIdentityProviders.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.GetIdentityProviders return parameters for the expectation previously defined by the When method
+func (e *StorageMockGetIdentityProvidersExpectation) Then(ia1 []model.IdentityProvider, err error) *StorageMock {
+	e.results = &StorageMockGetIdentityProvidersResults{ia1, err}
+	return e.mock
+}
+
+// Times sets number of times Storage.GetIdentityProviders should be invoked
+func (mmGetIdentityProviders *mStorageMockGetIdentityProviders) Times(n uint64) *mStorageMockGetIdentityProviders {
+	if n == 0 {
+		mmGetIdentityProviders.mock.t.Fatalf("Times of StorageMock.GetIdentityProviders mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetIdentityProviders.expectedInvocations, n)
+	mmGetIdentityProviders.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetIdentityProviders
+}
+
+func (mmGetIdentityProviders *mStorageMockGetIdentityProviders) invocationsDone() bool {
+	if len(mmGetIdentityProviders.expectations) == 0 && mmGetIdentityProviders.defaultExpectation == nil && mmGetIdentityProviders.mock.funcGetIdentityProviders == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetIdentityProviders.mock.afterGetIdentityProvidersCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetIdentityProviders.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetIdentityProviders implements mm_port.Storage
+func (mmGetIdentityProviders *StorageMock) GetIdentityProviders(ctx context.Context, tenantID uuid.UUID) (ia1 []model.IdentityProvider, err error) {
+	mm_atomic.AddUint64(&mmGetIdentityProviders.beforeGetIdentityProvidersCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetIdentityProviders.afterGetIdentityProvidersCounter, 1)
+
+	mmGetIdentityProviders.t.Helper()
+
+	if mmGetIdentityProviders.inspectFuncGetIdentityProviders != nil {
+		mmGetIdentityProviders.inspectFuncGetIdentityProviders(ctx, tenantID)
+	}
+
+	mm_params := StorageMockGetIdentityProvidersParams{ctx, tenantID}
+
+	// Record call args
+	mmGetIdentityProviders.GetIdentityProvidersMock.mutex.Lock()
+	mmGetIdentityProviders.GetIdentityProvidersMock.callArgs = append(mmGetIdentityProviders.GetIdentityProvidersMock.callArgs, &mm_params)
+	mmGetIdentityProviders.GetIdentityProvidersMock.mutex.Unlock()
+
+	for _, e := range mmGetIdentityProviders.GetIdentityProvidersMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.ia1, e.results.err
+		}
+	}
+
+	if mmGetIdentityProviders.GetIdentityProvidersMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetIdentityProviders.GetIdentityProvidersMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetIdentityProviders.GetIdentityProvidersMock.defaultExpectation.params
+		mm_want_ptrs := mmGetIdentityProviders.GetIdentityProvidersMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockGetIdentityProvidersParams{ctx, tenantID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetIdentityProviders.t.Errorf("StorageMock.GetIdentityProviders got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetIdentityProviders.GetIdentityProvidersMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetIdentityProviders.t.Errorf("StorageMock.GetIdentityProviders got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetIdentityProviders.GetIdentityProvidersMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetIdentityProviders.t.Errorf("StorageMock.GetIdentityProviders got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetIdentityProviders.GetIdentityProvidersMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetIdentityProviders.GetIdentityProvidersMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetIdentityProviders.t.Fatal("No results are set for the StorageMock.GetIdentityProviders")
+		}
+		return (*mm_results).ia1, (*mm_results).err
+	}
+	if mmGetIdentityProviders.funcGetIdentityProviders != nil {
+		return mmGetIdentityProviders.funcGetIdentityProviders(ctx, tenantID)
+	}
+	mmGetIdentityProviders.t.Fatalf("Unexpected call to StorageMock.GetIdentityProviders. %v %v", ctx, tenantID)
+	return
+}
+
+// GetIdentityProvidersAfterCounter returns a count of finished StorageMock.GetIdentityProviders invocations
+func (mmGetIdentityProviders *StorageMock) GetIdentityProvidersAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetIdentityProviders.afterGetIdentityProvidersCounter)
+}
+
+// GetIdentityProvidersBeforeCounter returns a count of StorageMock.GetIdentityProviders invocations
+func (mmGetIdentityProviders *StorageMock) GetIdentityProvidersBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetIdentityProviders.beforeGetIdentityProvidersCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.GetIdentityProviders.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetIdentityProviders *mStorageMockGetIdentityProviders) Calls() []*StorageMockGetIdentityProvidersParams {
+	mmGetIdentityProviders.mutex.RLock()
+
+	argCopy := make([]*StorageMockGetIdentityProvidersParams, len(mmGetIdentityProviders.callArgs))
+	copy(argCopy, mmGetIdentityProviders.callArgs)
+
+	mmGetIdentityProviders.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetIdentityProvidersDone returns true if the count of the GetIdentityProviders invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockGetIdentityProvidersDone() bool {
+	if m.GetIdentityProvidersMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetIdentityProvidersMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetIdentityProvidersMock.invocationsDone()
+}
+
+// MinimockGetIdentityProvidersInspect logs each unmet expectation
+func (m *StorageMock) MinimockGetIdentityProvidersInspect() {
+	for _, e := range m.GetIdentityProvidersMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.GetIdentityProviders at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetIdentityProvidersCounter := mm_atomic.LoadUint64(&m.afterGetIdentityProvidersCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetIdentityProvidersMock.defaultExpectation != nil && afterGetIdentityProvidersCounter < 1 {
+		if m.GetIdentityProvidersMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.GetIdentityProviders at\n%s", m.GetIdentityProvidersMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.GetIdentityProviders at\n%s with params: %#v", m.GetIdentityProvidersMock.defaultExpectation.expectationOrigins.origin, *m.GetIdentityProvidersMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetIdentityProviders != nil && afterGetIdentityProvidersCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.GetIdentityProviders at\n%s", m.funcGetIdentityProvidersOrigin)
+	}
+
+	if !m.GetIdentityProvidersMock.invocationsDone() && afterGetIdentityProvidersCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.GetIdentityProviders at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetIdentityProvidersMock.expectedInvocations), m.GetIdentityProvidersMock.expectedInvocationsOrigin, afterGetIdentityProvidersCounter)
+	}
+}
+
 type mStorageMockGetPasswordCredential struct {
 	optional           bool
 	mock               *StorageMock
@@ -4653,6 +6568,349 @@ func (m *StorageMock) MinimockGetPasswordCredentialInspect() {
 	if !m.GetPasswordCredentialMock.invocationsDone() && afterGetPasswordCredentialCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageMock.GetPasswordCredential at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.GetPasswordCredentialMock.expectedInvocations), m.GetPasswordCredentialMock.expectedInvocationsOrigin, afterGetPasswordCredentialCounter)
+	}
+}
+
+type mStorageMockGetUserIdentities struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockGetUserIdentitiesExpectation
+	expectations       []*StorageMockGetUserIdentitiesExpectation
+
+	callArgs []*StorageMockGetUserIdentitiesParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockGetUserIdentitiesExpectation specifies expectation struct of the Storage.GetUserIdentities
+type StorageMockGetUserIdentitiesExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockGetUserIdentitiesParams
+	paramPtrs          *StorageMockGetUserIdentitiesParamPtrs
+	expectationOrigins StorageMockGetUserIdentitiesExpectationOrigins
+	results            *StorageMockGetUserIdentitiesResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockGetUserIdentitiesParams contains parameters of the Storage.GetUserIdentities
+type StorageMockGetUserIdentitiesParams struct {
+	ctx           context.Context
+	userProfileID uuid.UUID
+}
+
+// StorageMockGetUserIdentitiesParamPtrs contains pointers to parameters of the Storage.GetUserIdentities
+type StorageMockGetUserIdentitiesParamPtrs struct {
+	ctx           *context.Context
+	userProfileID *uuid.UUID
+}
+
+// StorageMockGetUserIdentitiesResults contains results of the Storage.GetUserIdentities
+type StorageMockGetUserIdentitiesResults struct {
+	ua1 []model.UserIdentity
+	err error
+}
+
+// StorageMockGetUserIdentitiesOrigins contains origins of expectations of the Storage.GetUserIdentities
+type StorageMockGetUserIdentitiesExpectationOrigins struct {
+	origin              string
+	originCtx           string
+	originUserProfileID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetUserIdentities *mStorageMockGetUserIdentities) Optional() *mStorageMockGetUserIdentities {
+	mmGetUserIdentities.optional = true
+	return mmGetUserIdentities
+}
+
+// Expect sets up expected params for Storage.GetUserIdentities
+func (mmGetUserIdentities *mStorageMockGetUserIdentities) Expect(ctx context.Context, userProfileID uuid.UUID) *mStorageMockGetUserIdentities {
+	if mmGetUserIdentities.mock.funcGetUserIdentities != nil {
+		mmGetUserIdentities.mock.t.Fatalf("StorageMock.GetUserIdentities mock is already set by Set")
+	}
+
+	if mmGetUserIdentities.defaultExpectation == nil {
+		mmGetUserIdentities.defaultExpectation = &StorageMockGetUserIdentitiesExpectation{}
+	}
+
+	if mmGetUserIdentities.defaultExpectation.paramPtrs != nil {
+		mmGetUserIdentities.mock.t.Fatalf("StorageMock.GetUserIdentities mock is already set by ExpectParams functions")
+	}
+
+	mmGetUserIdentities.defaultExpectation.params = &StorageMockGetUserIdentitiesParams{ctx, userProfileID}
+	mmGetUserIdentities.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetUserIdentities.expectations {
+		if minimock.Equal(e.params, mmGetUserIdentities.defaultExpectation.params) {
+			mmGetUserIdentities.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetUserIdentities.defaultExpectation.params)
+		}
+	}
+
+	return mmGetUserIdentities
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.GetUserIdentities
+func (mmGetUserIdentities *mStorageMockGetUserIdentities) ExpectCtxParam1(ctx context.Context) *mStorageMockGetUserIdentities {
+	if mmGetUserIdentities.mock.funcGetUserIdentities != nil {
+		mmGetUserIdentities.mock.t.Fatalf("StorageMock.GetUserIdentities mock is already set by Set")
+	}
+
+	if mmGetUserIdentities.defaultExpectation == nil {
+		mmGetUserIdentities.defaultExpectation = &StorageMockGetUserIdentitiesExpectation{}
+	}
+
+	if mmGetUserIdentities.defaultExpectation.params != nil {
+		mmGetUserIdentities.mock.t.Fatalf("StorageMock.GetUserIdentities mock is already set by Expect")
+	}
+
+	if mmGetUserIdentities.defaultExpectation.paramPtrs == nil {
+		mmGetUserIdentities.defaultExpectation.paramPtrs = &StorageMockGetUserIdentitiesParamPtrs{}
+	}
+	mmGetUserIdentities.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetUserIdentities.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetUserIdentities
+}
+
+// ExpectUserProfileIDParam2 sets up expected param userProfileID for Storage.GetUserIdentities
+func (mmGetUserIdentities *mStorageMockGetUserIdentities) ExpectUserProfileIDParam2(userProfileID uuid.UUID) *mStorageMockGetUserIdentities {
+	if mmGetUserIdentities.mock.funcGetUserIdentities != nil {
+		mmGetUserIdentities.mock.t.Fatalf("StorageMock.GetUserIdentities mock is already set by Set")
+	}
+
+	if mmGetUserIdentities.defaultExpectation == nil {
+		mmGetUserIdentities.defaultExpectation = &StorageMockGetUserIdentitiesExpectation{}
+	}
+
+	if mmGetUserIdentities.defaultExpectation.params != nil {
+		mmGetUserIdentities.mock.t.Fatalf("StorageMock.GetUserIdentities mock is already set by Expect")
+	}
+
+	if mmGetUserIdentities.defaultExpectation.paramPtrs == nil {
+		mmGetUserIdentities.defaultExpectation.paramPtrs = &StorageMockGetUserIdentitiesParamPtrs{}
+	}
+	mmGetUserIdentities.defaultExpectation.paramPtrs.userProfileID = &userProfileID
+	mmGetUserIdentities.defaultExpectation.expectationOrigins.originUserProfileID = minimock.CallerInfo(1)
+
+	return mmGetUserIdentities
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.GetUserIdentities
+func (mmGetUserIdentities *mStorageMockGetUserIdentities) Inspect(f func(ctx context.Context, userProfileID uuid.UUID)) *mStorageMockGetUserIdentities {
+	if mmGetUserIdentities.mock.inspectFuncGetUserIdentities != nil {
+		mmGetUserIdentities.mock.t.Fatalf("Inspect function is already set for StorageMock.GetUserIdentities")
+	}
+
+	mmGetUserIdentities.mock.inspectFuncGetUserIdentities = f
+
+	return mmGetUserIdentities
+}
+
+// Return sets up results that will be returned by Storage.GetUserIdentities
+func (mmGetUserIdentities *mStorageMockGetUserIdentities) Return(ua1 []model.UserIdentity, err error) *StorageMock {
+	if mmGetUserIdentities.mock.funcGetUserIdentities != nil {
+		mmGetUserIdentities.mock.t.Fatalf("StorageMock.GetUserIdentities mock is already set by Set")
+	}
+
+	if mmGetUserIdentities.defaultExpectation == nil {
+		mmGetUserIdentities.defaultExpectation = &StorageMockGetUserIdentitiesExpectation{mock: mmGetUserIdentities.mock}
+	}
+	mmGetUserIdentities.defaultExpectation.results = &StorageMockGetUserIdentitiesResults{ua1, err}
+	mmGetUserIdentities.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetUserIdentities.mock
+}
+
+// Set uses given function f to mock the Storage.GetUserIdentities method
+func (mmGetUserIdentities *mStorageMockGetUserIdentities) Set(f func(ctx context.Context, userProfileID uuid.UUID) (ua1 []model.UserIdentity, err error)) *StorageMock {
+	if mmGetUserIdentities.defaultExpectation != nil {
+		mmGetUserIdentities.mock.t.Fatalf("Default expectation is already set for the Storage.GetUserIdentities method")
+	}
+
+	if len(mmGetUserIdentities.expectations) > 0 {
+		mmGetUserIdentities.mock.t.Fatalf("Some expectations are already set for the Storage.GetUserIdentities method")
+	}
+
+	mmGetUserIdentities.mock.funcGetUserIdentities = f
+	mmGetUserIdentities.mock.funcGetUserIdentitiesOrigin = minimock.CallerInfo(1)
+	return mmGetUserIdentities.mock
+}
+
+// When sets expectation for the Storage.GetUserIdentities which will trigger the result defined by the following
+// Then helper
+func (mmGetUserIdentities *mStorageMockGetUserIdentities) When(ctx context.Context, userProfileID uuid.UUID) *StorageMockGetUserIdentitiesExpectation {
+	if mmGetUserIdentities.mock.funcGetUserIdentities != nil {
+		mmGetUserIdentities.mock.t.Fatalf("StorageMock.GetUserIdentities mock is already set by Set")
+	}
+
+	expectation := &StorageMockGetUserIdentitiesExpectation{
+		mock:               mmGetUserIdentities.mock,
+		params:             &StorageMockGetUserIdentitiesParams{ctx, userProfileID},
+		expectationOrigins: StorageMockGetUserIdentitiesExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetUserIdentities.expectations = append(mmGetUserIdentities.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.GetUserIdentities return parameters for the expectation previously defined by the When method
+func (e *StorageMockGetUserIdentitiesExpectation) Then(ua1 []model.UserIdentity, err error) *StorageMock {
+	e.results = &StorageMockGetUserIdentitiesResults{ua1, err}
+	return e.mock
+}
+
+// Times sets number of times Storage.GetUserIdentities should be invoked
+func (mmGetUserIdentities *mStorageMockGetUserIdentities) Times(n uint64) *mStorageMockGetUserIdentities {
+	if n == 0 {
+		mmGetUserIdentities.mock.t.Fatalf("Times of StorageMock.GetUserIdentities mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetUserIdentities.expectedInvocations, n)
+	mmGetUserIdentities.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetUserIdentities
+}
+
+func (mmGetUserIdentities *mStorageMockGetUserIdentities) invocationsDone() bool {
+	if len(mmGetUserIdentities.expectations) == 0 && mmGetUserIdentities.defaultExpectation == nil && mmGetUserIdentities.mock.funcGetUserIdentities == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetUserIdentities.mock.afterGetUserIdentitiesCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetUserIdentities.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetUserIdentities implements mm_port.Storage
+func (mmGetUserIdentities *StorageMock) GetUserIdentities(ctx context.Context, userProfileID uuid.UUID) (ua1 []model.UserIdentity, err error) {
+	mm_atomic.AddUint64(&mmGetUserIdentities.beforeGetUserIdentitiesCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetUserIdentities.afterGetUserIdentitiesCounter, 1)
+
+	mmGetUserIdentities.t.Helper()
+
+	if mmGetUserIdentities.inspectFuncGetUserIdentities != nil {
+		mmGetUserIdentities.inspectFuncGetUserIdentities(ctx, userProfileID)
+	}
+
+	mm_params := StorageMockGetUserIdentitiesParams{ctx, userProfileID}
+
+	// Record call args
+	mmGetUserIdentities.GetUserIdentitiesMock.mutex.Lock()
+	mmGetUserIdentities.GetUserIdentitiesMock.callArgs = append(mmGetUserIdentities.GetUserIdentitiesMock.callArgs, &mm_params)
+	mmGetUserIdentities.GetUserIdentitiesMock.mutex.Unlock()
+
+	for _, e := range mmGetUserIdentities.GetUserIdentitiesMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.ua1, e.results.err
+		}
+	}
+
+	if mmGetUserIdentities.GetUserIdentitiesMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetUserIdentities.GetUserIdentitiesMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetUserIdentities.GetUserIdentitiesMock.defaultExpectation.params
+		mm_want_ptrs := mmGetUserIdentities.GetUserIdentitiesMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockGetUserIdentitiesParams{ctx, userProfileID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetUserIdentities.t.Errorf("StorageMock.GetUserIdentities got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetUserIdentities.GetUserIdentitiesMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.userProfileID != nil && !minimock.Equal(*mm_want_ptrs.userProfileID, mm_got.userProfileID) {
+				mmGetUserIdentities.t.Errorf("StorageMock.GetUserIdentities got unexpected parameter userProfileID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetUserIdentities.GetUserIdentitiesMock.defaultExpectation.expectationOrigins.originUserProfileID, *mm_want_ptrs.userProfileID, mm_got.userProfileID, minimock.Diff(*mm_want_ptrs.userProfileID, mm_got.userProfileID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetUserIdentities.t.Errorf("StorageMock.GetUserIdentities got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetUserIdentities.GetUserIdentitiesMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetUserIdentities.GetUserIdentitiesMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetUserIdentities.t.Fatal("No results are set for the StorageMock.GetUserIdentities")
+		}
+		return (*mm_results).ua1, (*mm_results).err
+	}
+	if mmGetUserIdentities.funcGetUserIdentities != nil {
+		return mmGetUserIdentities.funcGetUserIdentities(ctx, userProfileID)
+	}
+	mmGetUserIdentities.t.Fatalf("Unexpected call to StorageMock.GetUserIdentities. %v %v", ctx, userProfileID)
+	return
+}
+
+// GetUserIdentitiesAfterCounter returns a count of finished StorageMock.GetUserIdentities invocations
+func (mmGetUserIdentities *StorageMock) GetUserIdentitiesAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetUserIdentities.afterGetUserIdentitiesCounter)
+}
+
+// GetUserIdentitiesBeforeCounter returns a count of StorageMock.GetUserIdentities invocations
+func (mmGetUserIdentities *StorageMock) GetUserIdentitiesBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetUserIdentities.beforeGetUserIdentitiesCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.GetUserIdentities.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetUserIdentities *mStorageMockGetUserIdentities) Calls() []*StorageMockGetUserIdentitiesParams {
+	mmGetUserIdentities.mutex.RLock()
+
+	argCopy := make([]*StorageMockGetUserIdentitiesParams, len(mmGetUserIdentities.callArgs))
+	copy(argCopy, mmGetUserIdentities.callArgs)
+
+	mmGetUserIdentities.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetUserIdentitiesDone returns true if the count of the GetUserIdentities invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockGetUserIdentitiesDone() bool {
+	if m.GetUserIdentitiesMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetUserIdentitiesMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetUserIdentitiesMock.invocationsDone()
+}
+
+// MinimockGetUserIdentitiesInspect logs each unmet expectation
+func (m *StorageMock) MinimockGetUserIdentitiesInspect() {
+	for _, e := range m.GetUserIdentitiesMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.GetUserIdentities at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetUserIdentitiesCounter := mm_atomic.LoadUint64(&m.afterGetUserIdentitiesCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetUserIdentitiesMock.defaultExpectation != nil && afterGetUserIdentitiesCounter < 1 {
+		if m.GetUserIdentitiesMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.GetUserIdentities at\n%s", m.GetUserIdentitiesMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.GetUserIdentities at\n%s with params: %#v", m.GetUserIdentitiesMock.defaultExpectation.expectationOrigins.origin, *m.GetUserIdentitiesMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetUserIdentities != nil && afterGetUserIdentitiesCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.GetUserIdentities at\n%s", m.funcGetUserIdentitiesOrigin)
+	}
+
+	if !m.GetUserIdentitiesMock.invocationsDone() && afterGetUserIdentitiesCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.GetUserIdentities at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetUserIdentitiesMock.expectedInvocations), m.GetUserIdentitiesMock.expectedInvocationsOrigin, afterGetUserIdentitiesCounter)
 	}
 }
 
@@ -5432,6 +7690,349 @@ func (m *StorageMock) MinimockGetUserProfileByIdentifierInspect() {
 	if !m.GetUserProfileByIdentifierMock.invocationsDone() && afterGetUserProfileByIdentifierCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageMock.GetUserProfileByIdentifier at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.GetUserProfileByIdentifierMock.expectedInvocations), m.GetUserProfileByIdentifierMock.expectedInvocationsOrigin, afterGetUserProfileByIdentifierCounter)
+	}
+}
+
+type mStorageMockGetUserProfilesByTenant struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockGetUserProfilesByTenantExpectation
+	expectations       []*StorageMockGetUserProfilesByTenantExpectation
+
+	callArgs []*StorageMockGetUserProfilesByTenantParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockGetUserProfilesByTenantExpectation specifies expectation struct of the Storage.GetUserProfilesByTenant
+type StorageMockGetUserProfilesByTenantExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockGetUserProfilesByTenantParams
+	paramPtrs          *StorageMockGetUserProfilesByTenantParamPtrs
+	expectationOrigins StorageMockGetUserProfilesByTenantExpectationOrigins
+	results            *StorageMockGetUserProfilesByTenantResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockGetUserProfilesByTenantParams contains parameters of the Storage.GetUserProfilesByTenant
+type StorageMockGetUserProfilesByTenantParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+}
+
+// StorageMockGetUserProfilesByTenantParamPtrs contains pointers to parameters of the Storage.GetUserProfilesByTenant
+type StorageMockGetUserProfilesByTenantParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+}
+
+// StorageMockGetUserProfilesByTenantResults contains results of the Storage.GetUserProfilesByTenant
+type StorageMockGetUserProfilesByTenantResults struct {
+	ua1 []model.UserProfile
+	err error
+}
+
+// StorageMockGetUserProfilesByTenantOrigins contains origins of expectations of the Storage.GetUserProfilesByTenant
+type StorageMockGetUserProfilesByTenantExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetUserProfilesByTenant *mStorageMockGetUserProfilesByTenant) Optional() *mStorageMockGetUserProfilesByTenant {
+	mmGetUserProfilesByTenant.optional = true
+	return mmGetUserProfilesByTenant
+}
+
+// Expect sets up expected params for Storage.GetUserProfilesByTenant
+func (mmGetUserProfilesByTenant *mStorageMockGetUserProfilesByTenant) Expect(ctx context.Context, tenantID uuid.UUID) *mStorageMockGetUserProfilesByTenant {
+	if mmGetUserProfilesByTenant.mock.funcGetUserProfilesByTenant != nil {
+		mmGetUserProfilesByTenant.mock.t.Fatalf("StorageMock.GetUserProfilesByTenant mock is already set by Set")
+	}
+
+	if mmGetUserProfilesByTenant.defaultExpectation == nil {
+		mmGetUserProfilesByTenant.defaultExpectation = &StorageMockGetUserProfilesByTenantExpectation{}
+	}
+
+	if mmGetUserProfilesByTenant.defaultExpectation.paramPtrs != nil {
+		mmGetUserProfilesByTenant.mock.t.Fatalf("StorageMock.GetUserProfilesByTenant mock is already set by ExpectParams functions")
+	}
+
+	mmGetUserProfilesByTenant.defaultExpectation.params = &StorageMockGetUserProfilesByTenantParams{ctx, tenantID}
+	mmGetUserProfilesByTenant.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetUserProfilesByTenant.expectations {
+		if minimock.Equal(e.params, mmGetUserProfilesByTenant.defaultExpectation.params) {
+			mmGetUserProfilesByTenant.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetUserProfilesByTenant.defaultExpectation.params)
+		}
+	}
+
+	return mmGetUserProfilesByTenant
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.GetUserProfilesByTenant
+func (mmGetUserProfilesByTenant *mStorageMockGetUserProfilesByTenant) ExpectCtxParam1(ctx context.Context) *mStorageMockGetUserProfilesByTenant {
+	if mmGetUserProfilesByTenant.mock.funcGetUserProfilesByTenant != nil {
+		mmGetUserProfilesByTenant.mock.t.Fatalf("StorageMock.GetUserProfilesByTenant mock is already set by Set")
+	}
+
+	if mmGetUserProfilesByTenant.defaultExpectation == nil {
+		mmGetUserProfilesByTenant.defaultExpectation = &StorageMockGetUserProfilesByTenantExpectation{}
+	}
+
+	if mmGetUserProfilesByTenant.defaultExpectation.params != nil {
+		mmGetUserProfilesByTenant.mock.t.Fatalf("StorageMock.GetUserProfilesByTenant mock is already set by Expect")
+	}
+
+	if mmGetUserProfilesByTenant.defaultExpectation.paramPtrs == nil {
+		mmGetUserProfilesByTenant.defaultExpectation.paramPtrs = &StorageMockGetUserProfilesByTenantParamPtrs{}
+	}
+	mmGetUserProfilesByTenant.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetUserProfilesByTenant.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetUserProfilesByTenant
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.GetUserProfilesByTenant
+func (mmGetUserProfilesByTenant *mStorageMockGetUserProfilesByTenant) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockGetUserProfilesByTenant {
+	if mmGetUserProfilesByTenant.mock.funcGetUserProfilesByTenant != nil {
+		mmGetUserProfilesByTenant.mock.t.Fatalf("StorageMock.GetUserProfilesByTenant mock is already set by Set")
+	}
+
+	if mmGetUserProfilesByTenant.defaultExpectation == nil {
+		mmGetUserProfilesByTenant.defaultExpectation = &StorageMockGetUserProfilesByTenantExpectation{}
+	}
+
+	if mmGetUserProfilesByTenant.defaultExpectation.params != nil {
+		mmGetUserProfilesByTenant.mock.t.Fatalf("StorageMock.GetUserProfilesByTenant mock is already set by Expect")
+	}
+
+	if mmGetUserProfilesByTenant.defaultExpectation.paramPtrs == nil {
+		mmGetUserProfilesByTenant.defaultExpectation.paramPtrs = &StorageMockGetUserProfilesByTenantParamPtrs{}
+	}
+	mmGetUserProfilesByTenant.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetUserProfilesByTenant.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetUserProfilesByTenant
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.GetUserProfilesByTenant
+func (mmGetUserProfilesByTenant *mStorageMockGetUserProfilesByTenant) Inspect(f func(ctx context.Context, tenantID uuid.UUID)) *mStorageMockGetUserProfilesByTenant {
+	if mmGetUserProfilesByTenant.mock.inspectFuncGetUserProfilesByTenant != nil {
+		mmGetUserProfilesByTenant.mock.t.Fatalf("Inspect function is already set for StorageMock.GetUserProfilesByTenant")
+	}
+
+	mmGetUserProfilesByTenant.mock.inspectFuncGetUserProfilesByTenant = f
+
+	return mmGetUserProfilesByTenant
+}
+
+// Return sets up results that will be returned by Storage.GetUserProfilesByTenant
+func (mmGetUserProfilesByTenant *mStorageMockGetUserProfilesByTenant) Return(ua1 []model.UserProfile, err error) *StorageMock {
+	if mmGetUserProfilesByTenant.mock.funcGetUserProfilesByTenant != nil {
+		mmGetUserProfilesByTenant.mock.t.Fatalf("StorageMock.GetUserProfilesByTenant mock is already set by Set")
+	}
+
+	if mmGetUserProfilesByTenant.defaultExpectation == nil {
+		mmGetUserProfilesByTenant.defaultExpectation = &StorageMockGetUserProfilesByTenantExpectation{mock: mmGetUserProfilesByTenant.mock}
+	}
+	mmGetUserProfilesByTenant.defaultExpectation.results = &StorageMockGetUserProfilesByTenantResults{ua1, err}
+	mmGetUserProfilesByTenant.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetUserProfilesByTenant.mock
+}
+
+// Set uses given function f to mock the Storage.GetUserProfilesByTenant method
+func (mmGetUserProfilesByTenant *mStorageMockGetUserProfilesByTenant) Set(f func(ctx context.Context, tenantID uuid.UUID) (ua1 []model.UserProfile, err error)) *StorageMock {
+	if mmGetUserProfilesByTenant.defaultExpectation != nil {
+		mmGetUserProfilesByTenant.mock.t.Fatalf("Default expectation is already set for the Storage.GetUserProfilesByTenant method")
+	}
+
+	if len(mmGetUserProfilesByTenant.expectations) > 0 {
+		mmGetUserProfilesByTenant.mock.t.Fatalf("Some expectations are already set for the Storage.GetUserProfilesByTenant method")
+	}
+
+	mmGetUserProfilesByTenant.mock.funcGetUserProfilesByTenant = f
+	mmGetUserProfilesByTenant.mock.funcGetUserProfilesByTenantOrigin = minimock.CallerInfo(1)
+	return mmGetUserProfilesByTenant.mock
+}
+
+// When sets expectation for the Storage.GetUserProfilesByTenant which will trigger the result defined by the following
+// Then helper
+func (mmGetUserProfilesByTenant *mStorageMockGetUserProfilesByTenant) When(ctx context.Context, tenantID uuid.UUID) *StorageMockGetUserProfilesByTenantExpectation {
+	if mmGetUserProfilesByTenant.mock.funcGetUserProfilesByTenant != nil {
+		mmGetUserProfilesByTenant.mock.t.Fatalf("StorageMock.GetUserProfilesByTenant mock is already set by Set")
+	}
+
+	expectation := &StorageMockGetUserProfilesByTenantExpectation{
+		mock:               mmGetUserProfilesByTenant.mock,
+		params:             &StorageMockGetUserProfilesByTenantParams{ctx, tenantID},
+		expectationOrigins: StorageMockGetUserProfilesByTenantExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetUserProfilesByTenant.expectations = append(mmGetUserProfilesByTenant.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.GetUserProfilesByTenant return parameters for the expectation previously defined by the When method
+func (e *StorageMockGetUserProfilesByTenantExpectation) Then(ua1 []model.UserProfile, err error) *StorageMock {
+	e.results = &StorageMockGetUserProfilesByTenantResults{ua1, err}
+	return e.mock
+}
+
+// Times sets number of times Storage.GetUserProfilesByTenant should be invoked
+func (mmGetUserProfilesByTenant *mStorageMockGetUserProfilesByTenant) Times(n uint64) *mStorageMockGetUserProfilesByTenant {
+	if n == 0 {
+		mmGetUserProfilesByTenant.mock.t.Fatalf("Times of StorageMock.GetUserProfilesByTenant mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetUserProfilesByTenant.expectedInvocations, n)
+	mmGetUserProfilesByTenant.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetUserProfilesByTenant
+}
+
+func (mmGetUserProfilesByTenant *mStorageMockGetUserProfilesByTenant) invocationsDone() bool {
+	if len(mmGetUserProfilesByTenant.expectations) == 0 && mmGetUserProfilesByTenant.defaultExpectation == nil && mmGetUserProfilesByTenant.mock.funcGetUserProfilesByTenant == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetUserProfilesByTenant.mock.afterGetUserProfilesByTenantCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetUserProfilesByTenant.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetUserProfilesByTenant implements mm_port.Storage
+func (mmGetUserProfilesByTenant *StorageMock) GetUserProfilesByTenant(ctx context.Context, tenantID uuid.UUID) (ua1 []model.UserProfile, err error) {
+	mm_atomic.AddUint64(&mmGetUserProfilesByTenant.beforeGetUserProfilesByTenantCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetUserProfilesByTenant.afterGetUserProfilesByTenantCounter, 1)
+
+	mmGetUserProfilesByTenant.t.Helper()
+
+	if mmGetUserProfilesByTenant.inspectFuncGetUserProfilesByTenant != nil {
+		mmGetUserProfilesByTenant.inspectFuncGetUserProfilesByTenant(ctx, tenantID)
+	}
+
+	mm_params := StorageMockGetUserProfilesByTenantParams{ctx, tenantID}
+
+	// Record call args
+	mmGetUserProfilesByTenant.GetUserProfilesByTenantMock.mutex.Lock()
+	mmGetUserProfilesByTenant.GetUserProfilesByTenantMock.callArgs = append(mmGetUserProfilesByTenant.GetUserProfilesByTenantMock.callArgs, &mm_params)
+	mmGetUserProfilesByTenant.GetUserProfilesByTenantMock.mutex.Unlock()
+
+	for _, e := range mmGetUserProfilesByTenant.GetUserProfilesByTenantMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.ua1, e.results.err
+		}
+	}
+
+	if mmGetUserProfilesByTenant.GetUserProfilesByTenantMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetUserProfilesByTenant.GetUserProfilesByTenantMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetUserProfilesByTenant.GetUserProfilesByTenantMock.defaultExpectation.params
+		mm_want_ptrs := mmGetUserProfilesByTenant.GetUserProfilesByTenantMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockGetUserProfilesByTenantParams{ctx, tenantID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetUserProfilesByTenant.t.Errorf("StorageMock.GetUserProfilesByTenant got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetUserProfilesByTenant.GetUserProfilesByTenantMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetUserProfilesByTenant.t.Errorf("StorageMock.GetUserProfilesByTenant got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetUserProfilesByTenant.GetUserProfilesByTenantMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetUserProfilesByTenant.t.Errorf("StorageMock.GetUserProfilesByTenant got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetUserProfilesByTenant.GetUserProfilesByTenantMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetUserProfilesByTenant.GetUserProfilesByTenantMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetUserProfilesByTenant.t.Fatal("No results are set for the StorageMock.GetUserProfilesByTenant")
+		}
+		return (*mm_results).ua1, (*mm_results).err
+	}
+	if mmGetUserProfilesByTenant.funcGetUserProfilesByTenant != nil {
+		return mmGetUserProfilesByTenant.funcGetUserProfilesByTenant(ctx, tenantID)
+	}
+	mmGetUserProfilesByTenant.t.Fatalf("Unexpected call to StorageMock.GetUserProfilesByTenant. %v %v", ctx, tenantID)
+	return
+}
+
+// GetUserProfilesByTenantAfterCounter returns a count of finished StorageMock.GetUserProfilesByTenant invocations
+func (mmGetUserProfilesByTenant *StorageMock) GetUserProfilesByTenantAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetUserProfilesByTenant.afterGetUserProfilesByTenantCounter)
+}
+
+// GetUserProfilesByTenantBeforeCounter returns a count of StorageMock.GetUserProfilesByTenant invocations
+func (mmGetUserProfilesByTenant *StorageMock) GetUserProfilesByTenantBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetUserProfilesByTenant.beforeGetUserProfilesByTenantCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.GetUserProfilesByTenant.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetUserProfilesByTenant *mStorageMockGetUserProfilesByTenant) Calls() []*StorageMockGetUserProfilesByTenantParams {
+	mmGetUserProfilesByTenant.mutex.RLock()
+
+	argCopy := make([]*StorageMockGetUserProfilesByTenantParams, len(mmGetUserProfilesByTenant.callArgs))
+	copy(argCopy, mmGetUserProfilesByTenant.callArgs)
+
+	mmGetUserProfilesByTenant.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetUserProfilesByTenantDone returns true if the count of the GetUserProfilesByTenant invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockGetUserProfilesByTenantDone() bool {
+	if m.GetUserProfilesByTenantMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetUserProfilesByTenantMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetUserProfilesByTenantMock.invocationsDone()
+}
+
+// MinimockGetUserProfilesByTenantInspect logs each unmet expectation
+func (m *StorageMock) MinimockGetUserProfilesByTenantInspect() {
+	for _, e := range m.GetUserProfilesByTenantMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.GetUserProfilesByTenant at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetUserProfilesByTenantCounter := mm_atomic.LoadUint64(&m.afterGetUserProfilesByTenantCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetUserProfilesByTenantMock.defaultExpectation != nil && afterGetUserProfilesByTenantCounter < 1 {
+		if m.GetUserProfilesByTenantMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.GetUserProfilesByTenant at\n%s", m.GetUserProfilesByTenantMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.GetUserProfilesByTenant at\n%s with params: %#v", m.GetUserProfilesByTenantMock.defaultExpectation.expectationOrigins.origin, *m.GetUserProfilesByTenantMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetUserProfilesByTenant != nil && afterGetUserProfilesByTenantCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.GetUserProfilesByTenant at\n%s", m.funcGetUserProfilesByTenantOrigin)
+	}
+
+	if !m.GetUserProfilesByTenantMock.invocationsDone() && afterGetUserProfilesByTenantCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.GetUserProfilesByTenant at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetUserProfilesByTenantMock.expectedInvocations), m.GetUserProfilesByTenantMock.expectedInvocationsOrigin, afterGetUserProfilesByTenantCounter)
 	}
 }
 
@@ -10351,6 +12952,379 @@ func (m *StorageMock) MinimockSaveUserProfileInspect() {
 	}
 }
 
+type mStorageMockUpdateUserProfile struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockUpdateUserProfileExpectation
+	expectations       []*StorageMockUpdateUserProfileExpectation
+
+	callArgs []*StorageMockUpdateUserProfileParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockUpdateUserProfileExpectation specifies expectation struct of the Storage.UpdateUserProfile
+type StorageMockUpdateUserProfileExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockUpdateUserProfileParams
+	paramPtrs          *StorageMockUpdateUserProfileParamPtrs
+	expectationOrigins StorageMockUpdateUserProfileExpectationOrigins
+	results            *StorageMockUpdateUserProfileResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockUpdateUserProfileParams contains parameters of the Storage.UpdateUserProfile
+type StorageMockUpdateUserProfileParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+	profile  model.UserProfile
+}
+
+// StorageMockUpdateUserProfileParamPtrs contains pointers to parameters of the Storage.UpdateUserProfile
+type StorageMockUpdateUserProfileParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+	profile  *model.UserProfile
+}
+
+// StorageMockUpdateUserProfileResults contains results of the Storage.UpdateUserProfile
+type StorageMockUpdateUserProfileResults struct {
+	err error
+}
+
+// StorageMockUpdateUserProfileOrigins contains origins of expectations of the Storage.UpdateUserProfile
+type StorageMockUpdateUserProfileExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+	originProfile  string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmUpdateUserProfile *mStorageMockUpdateUserProfile) Optional() *mStorageMockUpdateUserProfile {
+	mmUpdateUserProfile.optional = true
+	return mmUpdateUserProfile
+}
+
+// Expect sets up expected params for Storage.UpdateUserProfile
+func (mmUpdateUserProfile *mStorageMockUpdateUserProfile) Expect(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) *mStorageMockUpdateUserProfile {
+	if mmUpdateUserProfile.mock.funcUpdateUserProfile != nil {
+		mmUpdateUserProfile.mock.t.Fatalf("StorageMock.UpdateUserProfile mock is already set by Set")
+	}
+
+	if mmUpdateUserProfile.defaultExpectation == nil {
+		mmUpdateUserProfile.defaultExpectation = &StorageMockUpdateUserProfileExpectation{}
+	}
+
+	if mmUpdateUserProfile.defaultExpectation.paramPtrs != nil {
+		mmUpdateUserProfile.mock.t.Fatalf("StorageMock.UpdateUserProfile mock is already set by ExpectParams functions")
+	}
+
+	mmUpdateUserProfile.defaultExpectation.params = &StorageMockUpdateUserProfileParams{ctx, tenantID, profile}
+	mmUpdateUserProfile.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmUpdateUserProfile.expectations {
+		if minimock.Equal(e.params, mmUpdateUserProfile.defaultExpectation.params) {
+			mmUpdateUserProfile.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmUpdateUserProfile.defaultExpectation.params)
+		}
+	}
+
+	return mmUpdateUserProfile
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.UpdateUserProfile
+func (mmUpdateUserProfile *mStorageMockUpdateUserProfile) ExpectCtxParam1(ctx context.Context) *mStorageMockUpdateUserProfile {
+	if mmUpdateUserProfile.mock.funcUpdateUserProfile != nil {
+		mmUpdateUserProfile.mock.t.Fatalf("StorageMock.UpdateUserProfile mock is already set by Set")
+	}
+
+	if mmUpdateUserProfile.defaultExpectation == nil {
+		mmUpdateUserProfile.defaultExpectation = &StorageMockUpdateUserProfileExpectation{}
+	}
+
+	if mmUpdateUserProfile.defaultExpectation.params != nil {
+		mmUpdateUserProfile.mock.t.Fatalf("StorageMock.UpdateUserProfile mock is already set by Expect")
+	}
+
+	if mmUpdateUserProfile.defaultExpectation.paramPtrs == nil {
+		mmUpdateUserProfile.defaultExpectation.paramPtrs = &StorageMockUpdateUserProfileParamPtrs{}
+	}
+	mmUpdateUserProfile.defaultExpectation.paramPtrs.ctx = &ctx
+	mmUpdateUserProfile.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmUpdateUserProfile
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.UpdateUserProfile
+func (mmUpdateUserProfile *mStorageMockUpdateUserProfile) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockUpdateUserProfile {
+	if mmUpdateUserProfile.mock.funcUpdateUserProfile != nil {
+		mmUpdateUserProfile.mock.t.Fatalf("StorageMock.UpdateUserProfile mock is already set by Set")
+	}
+
+	if mmUpdateUserProfile.defaultExpectation == nil {
+		mmUpdateUserProfile.defaultExpectation = &StorageMockUpdateUserProfileExpectation{}
+	}
+
+	if mmUpdateUserProfile.defaultExpectation.params != nil {
+		mmUpdateUserProfile.mock.t.Fatalf("StorageMock.UpdateUserProfile mock is already set by Expect")
+	}
+
+	if mmUpdateUserProfile.defaultExpectation.paramPtrs == nil {
+		mmUpdateUserProfile.defaultExpectation.paramPtrs = &StorageMockUpdateUserProfileParamPtrs{}
+	}
+	mmUpdateUserProfile.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmUpdateUserProfile.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmUpdateUserProfile
+}
+
+// ExpectProfileParam3 sets up expected param profile for Storage.UpdateUserProfile
+func (mmUpdateUserProfile *mStorageMockUpdateUserProfile) ExpectProfileParam3(profile model.UserProfile) *mStorageMockUpdateUserProfile {
+	if mmUpdateUserProfile.mock.funcUpdateUserProfile != nil {
+		mmUpdateUserProfile.mock.t.Fatalf("StorageMock.UpdateUserProfile mock is already set by Set")
+	}
+
+	if mmUpdateUserProfile.defaultExpectation == nil {
+		mmUpdateUserProfile.defaultExpectation = &StorageMockUpdateUserProfileExpectation{}
+	}
+
+	if mmUpdateUserProfile.defaultExpectation.params != nil {
+		mmUpdateUserProfile.mock.t.Fatalf("StorageMock.UpdateUserProfile mock is already set by Expect")
+	}
+
+	if mmUpdateUserProfile.defaultExpectation.paramPtrs == nil {
+		mmUpdateUserProfile.defaultExpectation.paramPtrs = &StorageMockUpdateUserProfileParamPtrs{}
+	}
+	mmUpdateUserProfile.defaultExpectation.paramPtrs.profile = &profile
+	mmUpdateUserProfile.defaultExpectation.expectationOrigins.originProfile = minimock.CallerInfo(1)
+
+	return mmUpdateUserProfile
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.UpdateUserProfile
+func (mmUpdateUserProfile *mStorageMockUpdateUserProfile) Inspect(f func(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile)) *mStorageMockUpdateUserProfile {
+	if mmUpdateUserProfile.mock.inspectFuncUpdateUserProfile != nil {
+		mmUpdateUserProfile.mock.t.Fatalf("Inspect function is already set for StorageMock.UpdateUserProfile")
+	}
+
+	mmUpdateUserProfile.mock.inspectFuncUpdateUserProfile = f
+
+	return mmUpdateUserProfile
+}
+
+// Return sets up results that will be returned by Storage.UpdateUserProfile
+func (mmUpdateUserProfile *mStorageMockUpdateUserProfile) Return(err error) *StorageMock {
+	if mmUpdateUserProfile.mock.funcUpdateUserProfile != nil {
+		mmUpdateUserProfile.mock.t.Fatalf("StorageMock.UpdateUserProfile mock is already set by Set")
+	}
+
+	if mmUpdateUserProfile.defaultExpectation == nil {
+		mmUpdateUserProfile.defaultExpectation = &StorageMockUpdateUserProfileExpectation{mock: mmUpdateUserProfile.mock}
+	}
+	mmUpdateUserProfile.defaultExpectation.results = &StorageMockUpdateUserProfileResults{err}
+	mmUpdateUserProfile.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmUpdateUserProfile.mock
+}
+
+// Set uses given function f to mock the Storage.UpdateUserProfile method
+func (mmUpdateUserProfile *mStorageMockUpdateUserProfile) Set(f func(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) (err error)) *StorageMock {
+	if mmUpdateUserProfile.defaultExpectation != nil {
+		mmUpdateUserProfile.mock.t.Fatalf("Default expectation is already set for the Storage.UpdateUserProfile method")
+	}
+
+	if len(mmUpdateUserProfile.expectations) > 0 {
+		mmUpdateUserProfile.mock.t.Fatalf("Some expectations are already set for the Storage.UpdateUserProfile method")
+	}
+
+	mmUpdateUserProfile.mock.funcUpdateUserProfile = f
+	mmUpdateUserProfile.mock.funcUpdateUserProfileOrigin = minimock.CallerInfo(1)
+	return mmUpdateUserProfile.mock
+}
+
+// When sets expectation for the Storage.UpdateUserProfile which will trigger the result defined by the following
+// Then helper
+func (mmUpdateUserProfile *mStorageMockUpdateUserProfile) When(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) *StorageMockUpdateUserProfileExpectation {
+	if mmUpdateUserProfile.mock.funcUpdateUserProfile != nil {
+		mmUpdateUserProfile.mock.t.Fatalf("StorageMock.UpdateUserProfile mock is already set by Set")
+	}
+
+	expectation := &StorageMockUpdateUserProfileExpectation{
+		mock:               mmUpdateUserProfile.mock,
+		params:             &StorageMockUpdateUserProfileParams{ctx, tenantID, profile},
+		expectationOrigins: StorageMockUpdateUserProfileExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmUpdateUserProfile.expectations = append(mmUpdateUserProfile.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.UpdateUserProfile return parameters for the expectation previously defined by the When method
+func (e *StorageMockUpdateUserProfileExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockUpdateUserProfileResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.UpdateUserProfile should be invoked
+func (mmUpdateUserProfile *mStorageMockUpdateUserProfile) Times(n uint64) *mStorageMockUpdateUserProfile {
+	if n == 0 {
+		mmUpdateUserProfile.mock.t.Fatalf("Times of StorageMock.UpdateUserProfile mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmUpdateUserProfile.expectedInvocations, n)
+	mmUpdateUserProfile.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmUpdateUserProfile
+}
+
+func (mmUpdateUserProfile *mStorageMockUpdateUserProfile) invocationsDone() bool {
+	if len(mmUpdateUserProfile.expectations) == 0 && mmUpdateUserProfile.defaultExpectation == nil && mmUpdateUserProfile.mock.funcUpdateUserProfile == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmUpdateUserProfile.mock.afterUpdateUserProfileCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmUpdateUserProfile.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// UpdateUserProfile implements mm_port.Storage
+func (mmUpdateUserProfile *StorageMock) UpdateUserProfile(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) (err error) {
+	mm_atomic.AddUint64(&mmUpdateUserProfile.beforeUpdateUserProfileCounter, 1)
+	defer mm_atomic.AddUint64(&mmUpdateUserProfile.afterUpdateUserProfileCounter, 1)
+
+	mmUpdateUserProfile.t.Helper()
+
+	if mmUpdateUserProfile.inspectFuncUpdateUserProfile != nil {
+		mmUpdateUserProfile.inspectFuncUpdateUserProfile(ctx, tenantID, profile)
+	}
+
+	mm_params := StorageMockUpdateUserProfileParams{ctx, tenantID, profile}
+
+	// Record call args
+	mmUpdateUserProfile.UpdateUserProfileMock.mutex.Lock()
+	mmUpdateUserProfile.UpdateUserProfileMock.callArgs = append(mmUpdateUserProfile.UpdateUserProfileMock.callArgs, &mm_params)
+	mmUpdateUserProfile.UpdateUserProfileMock.mutex.Unlock()
+
+	for _, e := range mmUpdateUserProfile.UpdateUserProfileMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmUpdateUserProfile.UpdateUserProfileMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmUpdateUserProfile.UpdateUserProfileMock.defaultExpectation.Counter, 1)
+		mm_want := mmUpdateUserProfile.UpdateUserProfileMock.defaultExpectation.params
+		mm_want_ptrs := mmUpdateUserProfile.UpdateUserProfileMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockUpdateUserProfileParams{ctx, tenantID, profile}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmUpdateUserProfile.t.Errorf("StorageMock.UpdateUserProfile got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmUpdateUserProfile.UpdateUserProfileMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmUpdateUserProfile.t.Errorf("StorageMock.UpdateUserProfile got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmUpdateUserProfile.UpdateUserProfileMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.profile != nil && !minimock.Equal(*mm_want_ptrs.profile, mm_got.profile) {
+				mmUpdateUserProfile.t.Errorf("StorageMock.UpdateUserProfile got unexpected parameter profile, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmUpdateUserProfile.UpdateUserProfileMock.defaultExpectation.expectationOrigins.originProfile, *mm_want_ptrs.profile, mm_got.profile, minimock.Diff(*mm_want_ptrs.profile, mm_got.profile))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmUpdateUserProfile.t.Errorf("StorageMock.UpdateUserProfile got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmUpdateUserProfile.UpdateUserProfileMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmUpdateUserProfile.UpdateUserProfileMock.defaultExpectation.results
+		if mm_results == nil {
+			mmUpdateUserProfile.t.Fatal("No results are set for the StorageMock.UpdateUserProfile")
+		}
+		return (*mm_results).err
+	}
+	if mmUpdateUserProfile.funcUpdateUserProfile != nil {
+		return mmUpdateUserProfile.funcUpdateUserProfile(ctx, tenantID, profile)
+	}
+	mmUpdateUserProfile.t.Fatalf("Unexpected call to StorageMock.UpdateUserProfile. %v %v %v", ctx, tenantID, profile)
+	return
+}
+
+// UpdateUserProfileAfterCounter returns a count of finished StorageMock.UpdateUserProfile invocations
+func (mmUpdateUserProfile *StorageMock) UpdateUserProfileAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmUpdateUserProfile.afterUpdateUserProfileCounter)
+}
+
+// UpdateUserProfileBeforeCounter returns a count of StorageMock.UpdateUserProfile invocations
+func (mmUpdateUserProfile *StorageMock) UpdateUserProfileBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmUpdateUserProfile.beforeUpdateUserProfileCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.UpdateUserProfile.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmUpdateUserProfile *mStorageMockUpdateUserProfile) Calls() []*StorageMockUpdateUserProfileParams {
+	mmUpdateUserProfile.mutex.RLock()
+
+	argCopy := make([]*StorageMockUpdateUserProfileParams, len(mmUpdateUserProfile.callArgs))
+	copy(argCopy, mmUpdateUserProfile.callArgs)
+
+	mmUpdateUserProfile.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockUpdateUserProfileDone returns true if the count of the UpdateUserProfile invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockUpdateUserProfileDone() bool {
+	if m.UpdateUserProfileMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.UpdateUserProfileMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.UpdateUserProfileMock.invocationsDone()
+}
+
+// MinimockUpdateUserProfileInspect logs each unmet expectation
+func (m *StorageMock) MinimockUpdateUserProfileInspect() {
+	for _, e := range m.UpdateUserProfileMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.UpdateUserProfile at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterUpdateUserProfileCounter := mm_atomic.LoadUint64(&m.afterUpdateUserProfileCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.UpdateUserProfileMock.defaultExpectation != nil && afterUpdateUserProfileCounter < 1 {
+		if m.UpdateUserProfileMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.UpdateUserProfile at\n%s", m.UpdateUserProfileMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.UpdateUserProfile at\n%s with params: %#v", m.UpdateUserProfileMock.defaultExpectation.expectationOrigins.origin, *m.UpdateUserProfileMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcUpdateUserProfile != nil && afterUpdateUserProfileCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.UpdateUserProfile at\n%s", m.funcUpdateUserProfileOrigin)
+	}
+
+	if !m.UpdateUserProfileMock.invocationsDone() && afterUpdateUserProfileCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.UpdateUserProfile at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.UpdateUserProfileMock.expectedInvocations), m.UpdateUserProfileMock.expectedInvocationsOrigin, afterUpdateUserProfileCounter)
+	}
+}
+
 type mStorageMockUpsertIdentity struct {
 	optional           bool
 	mock               *StorageMock
@@ -10701,6 +13675,14 @@ func (m *StorageMock) MinimockFinish() {
 
 			m.MinimockCreateTenantInspect()
 
+			m.MinimockDecoupleIdentityInspect()
+
+			m.MinimockDeleteClientInspect()
+
+			m.MinimockDeleteIdentityProviderInspect()
+
+			m.MinimockDeleteUserProfileInspect()
+
 			m.MinimockGetAllTenantsInspect()
 
 			m.MinimockGetAndConsumeAuthSessionInspect()
@@ -10719,11 +13701,17 @@ func (m *StorageMock) MinimockFinish() {
 
 			m.MinimockGetIdentityProviderByTypeInspect()
 
+			m.MinimockGetIdentityProvidersInspect()
+
 			m.MinimockGetPasswordCredentialInspect()
+
+			m.MinimockGetUserIdentitiesInspect()
 
 			m.MinimockGetUserProfileByIDInspect()
 
 			m.MinimockGetUserProfileByIdentifierInspect()
+
+			m.MinimockGetUserProfilesByTenantInspect()
 
 			m.MinimockIsDPoPProofUsedInspect()
 
@@ -10753,6 +13741,8 @@ func (m *StorageMock) MinimockFinish() {
 
 			m.MinimockSaveUserProfileInspect()
 
+			m.MinimockUpdateUserProfileInspect()
+
 			m.MinimockUpsertIdentityInspect()
 		}
 	})
@@ -10779,6 +13769,10 @@ func (m *StorageMock) minimockDone() bool {
 	return done &&
 		m.MinimockCreateIdentityProviderDone() &&
 		m.MinimockCreateTenantDone() &&
+		m.MinimockDecoupleIdentityDone() &&
+		m.MinimockDeleteClientDone() &&
+		m.MinimockDeleteIdentityProviderDone() &&
+		m.MinimockDeleteUserProfileDone() &&
 		m.MinimockGetAllTenantsDone() &&
 		m.MinimockGetAndConsumeAuthSessionDone() &&
 		m.MinimockGetAndConsumeInteractionSessionDone() &&
@@ -10788,9 +13782,12 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockGetEnabledIdentityProvidersDone() &&
 		m.MinimockGetIdentityByProfileAndProviderDone() &&
 		m.MinimockGetIdentityProviderByTypeDone() &&
+		m.MinimockGetIdentityProvidersDone() &&
 		m.MinimockGetPasswordCredentialDone() &&
+		m.MinimockGetUserIdentitiesDone() &&
 		m.MinimockGetUserProfileByIDDone() &&
 		m.MinimockGetUserProfileByIdentifierDone() &&
+		m.MinimockGetUserProfilesByTenantDone() &&
 		m.MinimockIsDPoPProofUsedDone() &&
 		m.MinimockIsTokenRevokedDone() &&
 		m.MinimockPruneExpiredTokensDone() &&
@@ -10805,5 +13802,6 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockSavePARDone() &&
 		m.MinimockSavePasswordCredentialDone() &&
 		m.MinimockSaveUserProfileDone() &&
+		m.MinimockUpdateUserProfileDone() &&
 		m.MinimockUpsertIdentityDone()
 }

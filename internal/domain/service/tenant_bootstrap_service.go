@@ -78,7 +78,7 @@ func (s *TenantBootstrapService) bootstrapNewTenant(ctx context.Context, domain 
 
 	newTenant := &model.Tenant{
 		ID:        uuid.New(),
-		Name:      domain,
+		Name:      "Administrative Tenant",
 		Domain:    domain,
 		IsActive:  true,
 		CreatedAt: s.clock.Now(),

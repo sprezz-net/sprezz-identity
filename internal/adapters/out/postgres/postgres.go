@@ -1080,3 +1080,167 @@ func pgTimestamptzToTime(pgTime pgtype.Timestamptz) (time.Time, error) {
 	}
 	return pgTime.Time, nil
 }
+
+func pgTimestamptzToTimeOrZero(pgTime pgtype.Timestamptz) time.Time {
+	if !pgTime.Valid {
+		return time.Time{}
+	}
+	return pgTime.Time
+}
+
+func (s *PostgresStorage) DeleteClient(ctx context.Context, tenantID uuid.UUID, clientID string) error {
+	_, err := s.pool.Exec(ctx, `
+		DELETE FROM applications
+		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid) AND client_id = $2
+	`, toPGUUID(tenantID), clientID)
+	return err
+}
+
+func (s *PostgresStorage) GetIdentityProviders(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProvider, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT ip.id, ip.idp_type, ip.enabled, ip.alias_name, ip.config
+		FROM identity_providers ip
+		JOIN tenants t ON t.id = ip.tenant_id
+		WHERE t.tenant_uuid = $1::uuid
+		ORDER BY ip.alias_name ASC
+	`, toPGUUID(tenantID))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var providers []model.IdentityProvider
+	for rows.Next() {
+		var id pgtype.UUID
+		var idpType string
+		var enabled bool
+		var aliasName string
+		var configJSON []byte
+		if err := rows.Scan(&id, &idpType, &enabled, &aliasName, &configJSON); err != nil {
+			return nil, err
+		}
+		parsedID, _ := pgUUIDToUUID(id)
+		var config model.IdentityProviderConfig
+		if len(configJSON) > 0 {
+			_ = json.Unmarshal(configJSON, &config)
+		}
+		providers = append(providers, model.IdentityProvider{
+			ID:       parsedID,
+			TenantID: tenantID,
+			IDPType:  idpType,
+			Enabled:  enabled,
+			Alias:    aliasName,
+			Config:   config,
+		})
+	}
+	return providers, nil
+}
+
+func (s *PostgresStorage) DeleteIdentityProvider(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `
+		DELETE FROM identity_providers
+		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid) AND id = $2::uuid
+	`, toPGUUID(tenantID), toPGUUID(idpID))
+	return err
+}
+
+func (s *PostgresStorage) GetUserProfilesByTenant(ctx context.Context, tenantID uuid.UUID) ([]model.UserProfile, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT up.id, up.preferred_username, up.name, up.email, up.email_verified
+		FROM user_profiles up
+		JOIN tenants t ON t.id = up.tenant_id
+		WHERE t.tenant_uuid = $1::uuid
+		ORDER BY up.preferred_username ASC
+	`, toPGUUID(tenantID))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var profiles []model.UserProfile
+	for rows.Next() {
+		var id pgtype.UUID
+		var preferredUsername string
+		var name string
+		var email string
+		var emailVerified bool
+		if err := rows.Scan(&id, &preferredUsername, &name, &email, &emailVerified); err != nil {
+			return nil, err
+		}
+		parsedID, _ := pgUUIDToUUID(id)
+		profiles = append(profiles, model.UserProfile{
+			ID:                parsedID,
+			TenantID:          tenantID,
+			PreferredUsername: preferredUsername,
+			Name:              name,
+			Email:             email,
+			EmailVerified:     emailVerified,
+		})
+	}
+	return profiles, nil
+}
+
+func (s *PostgresStorage) DeleteUserProfile(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `
+		DELETE FROM user_profiles
+		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid) AND id = $2::uuid
+	`, toPGUUID(tenantID), toPGUUID(userID))
+	return err
+}
+
+func (s *PostgresStorage) UpdateUserProfile(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE user_profiles
+		SET preferred_username = $1, name = $2, email = $3, email_verified = $4
+		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $5::uuid) AND id = $6::uuid
+	`, profile.PreferredUsername, profile.Name, profile.Email, profile.EmailVerified, toPGUUID(tenantID), toPGUUID(profile.ID))
+	return err
+}
+
+func (s *PostgresStorage) GetUserIdentities(ctx context.Context, userProfileID uuid.UUID) ([]model.UserIdentity, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, user_profile_id, identity_provider_id, external_identity_id, login_count, last_login_at, last_login_attempt, blocked, coupled_at
+		FROM identities
+		WHERE user_profile_id = $1::uuid
+	`, toPGUUID(userProfileID))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var identities []model.UserIdentity
+	for rows.Next() {
+		var id, upID, idpID pgtype.UUID
+		var extID string
+		var loginCount int
+		var lastLogin, lastAttempt pgtype.Timestamptz
+		var blocked bool
+		var coupled pgtype.Timestamptz
+		if err := rows.Scan(&id, &upID, &idpID, &extID, &loginCount, &lastLogin, &lastAttempt, &blocked, &coupled); err != nil {
+			return nil, err
+		}
+		parsedID, _ := pgUUIDToUUID(id)
+		parsedUP, _ := pgUUIDToUUID(upID)
+		parsedIDP, _ := pgUUIDToUUID(idpID)
+		identities = append(identities, model.UserIdentity{
+			ID:                 parsedID,
+			UserProfileID:      parsedUP,
+			IdentityProviderID: parsedIDP,
+			ExternalIdentityID: extID,
+			LoginCount:         loginCount,
+			LastLoginAt:        pgTimestamptzToTimeOrZero(lastLogin),
+			LastLoginAttemptAt: pgTimestamptzToTimeOrZero(lastAttempt),
+			Blocked:            blocked,
+			CoupledAt:          pgTimestamptzToTimeOrZero(coupled),
+		})
+	}
+	return identities, nil
+}
+
+func (s *PostgresStorage) DecoupleIdentity(ctx context.Context, userProfileID uuid.UUID, identityProviderID uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `
+		DELETE FROM identities
+		WHERE user_profile_id = $1::uuid AND identity_provider_id = $2::uuid
+	`, toPGUUID(userProfileID), toPGUUID(identityProviderID))
+	return err
+}

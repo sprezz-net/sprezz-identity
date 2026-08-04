@@ -51,14 +51,17 @@ const (
 )
 
 type HttpAdapter struct {
-	authPort       port.Auth
-	storagePort    port.Storage
-	cryptoPort     port.Crypto
-	idpService     *service.IdentityProviderService
-	signupService  *service.UserRegistrationService
-	oauthValidator *service.OAuthValidatorService
-	router         chi.Router
-	adminState     port.AdminState
+	authPort           port.Auth
+	storagePort        port.Storage
+	cryptoPort         port.Crypto
+	idpService         *service.IdentityProviderService
+	signupService      *service.UserRegistrationService
+	oauthValidator     *service.OAuthValidatorService
+	tenantService      *service.TenantService
+	clientService      *service.ClientService
+	userProfileService *service.UserProfileService
+	router             chi.Router
+	adminState         port.AdminState
 }
 
 type registerRequest struct {
@@ -98,14 +101,17 @@ func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock, a
 		adminState = as[0]
 	}
 	h := &HttpAdapter{
-		authPort:       a,
-		storagePort:    s,
-		cryptoPort:     c,
-		idpService:     service.NewIdentityProviderService(s, cl),
-		signupService:  service.NewUserRegistrationService(s),
-		oauthValidator: service.NewOAuthValidatorService(),
-		router:         chi.NewRouter(),
-		adminState:     adminState,
+		authPort:           a,
+		storagePort:        s,
+		cryptoPort:         c,
+		idpService:         service.NewIdentityProviderService(s, cl),
+		signupService:      service.NewUserRegistrationService(s),
+		oauthValidator:     service.NewOAuthValidatorService(),
+		tenantService:      service.NewTenantService(s, cl),
+		clientService:      service.NewClientService(s),
+		userProfileService: service.NewUserProfileService(s),
+		router:             chi.NewRouter(),
+		adminState:         adminState,
 	}
 	h.router.Use(h.cspMiddleware)
 	h.router.Use(h.tenantMiddleware)
@@ -178,9 +184,32 @@ func (h *HttpAdapter) registerRoutes() {
 		r.Get("/", h.adminDashboardView)
 		r.Get("/dashboard", h.adminDashboardView)
 		r.Get("/callback", h.adminCallback)
+
+		r.Get("/tenants", h.adminTenantsPage)
 		r.Get("/tenants/new", h.adminNewTenantForm)
 		r.Post("/tenants", h.adminCreateTenant)
+		r.Post("/tenants/settings", h.adminSaveTenantSettings)
 		r.Patch("/tenants/{id}/toggle-signup", h.adminToggleSignup)
+
+		r.Get("/clients", h.adminClientsPage)
+		r.Get("/clients/new", h.adminNewClientForm)
+		r.Get("/clients/edit", h.adminEditClientForm)
+		r.Get("/clients/view", h.adminViewClient)
+		r.Post("/clients", h.adminSaveClient)
+		r.Delete("/clients/{id}", h.adminDeleteClient)
+
+		r.Get("/idps", h.adminIDPsPage)
+		r.Get("/idps/new", h.adminNewIDPForm)
+		r.Get("/idps/edit", h.adminEditIDPForm)
+		r.Post("/idps", h.adminSaveIDP)
+		r.Delete("/idps/{id}", h.adminDeleteIDP)
+
+		r.Get("/users", h.adminUsersPage)
+		r.Get("/users/view", h.adminViewUser)
+		r.Get("/users/edit", h.adminEditUserForm)
+		r.Post("/users", h.adminSaveUser)
+		r.Delete("/users/{id}", h.adminDeleteUser)
+		r.Delete("/users/{id}/identities/{idp}", h.adminDecoupleIdentity)
 	})
 
 	// Routes requiring mandatory client authentication

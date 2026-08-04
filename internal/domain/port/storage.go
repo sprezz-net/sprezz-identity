@@ -46,6 +46,14 @@ type Storage interface {
 	IsTokenRevoked(ctx context.Context, tokenID string) (bool, error)
 	PruneExpiredTokens(ctx context.Context) error
 	GetClientsByTenant(ctx context.Context, tenantID uuid.UUID) ([]model.ClientApplication, error)
+	DeleteClient(ctx context.Context, tenantID uuid.UUID, clientID string) error
+	GetIdentityProviders(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProvider, error)
+	DeleteIdentityProvider(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) error
+	GetUserProfilesByTenant(ctx context.Context, tenantID uuid.UUID) ([]model.UserProfile, error)
+	DeleteUserProfile(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) error
+	UpdateUserProfile(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) error
+	GetUserIdentities(ctx context.Context, userProfileID uuid.UUID) ([]model.UserIdentity, error)
+	DecoupleIdentity(ctx context.Context, userProfileID uuid.UUID, identityProviderID uuid.UUID) error
 
 	SavePAR(ctx context.Context, req model.PushedAuthorizationRequest) error
 	GetAndConsumePAR(ctx context.Context, tenantID uuid.UUID, requestURI string) (*model.PushedAuthorizationRequest, error)

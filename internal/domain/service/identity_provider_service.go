@@ -82,3 +82,46 @@ func verifyArgon2idPassword(password string, hash string) bool {
 	match, err := argon2id.ComparePasswordAndHash(password, hash)
 	return err == nil && match
 }
+
+func (s *IdentityProviderService) GetIdentityProviders(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProvider, error) {
+	return s.storage.GetIdentityProviders(ctx, tenantID)
+}
+
+func (s *IdentityProviderService) CreateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) (*model.IdentityProvider, error) {
+	if provider.Alias == "" {
+		return nil, fmt.Errorf("provider alias is required")
+	}
+	if provider.IDPType == "" {
+		return nil, fmt.Errorf("provider IDP type is required")
+	}
+
+	provider.ID = uuid.New()
+	provider.TenantID = tenantID
+
+	if err := s.storage.CreateIdentityProvider(ctx, tenantID, provider); err != nil {
+		return nil, err
+	}
+
+	return &provider, nil
+}
+
+func (s *IdentityProviderService) DeleteIdentityProvider(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) error {
+	return s.storage.DeleteIdentityProvider(ctx, tenantID, idpID)
+}
+
+func (s *IdentityProviderService) UpdateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) (*model.IdentityProvider, error) {
+	if provider.Alias == "" {
+		return nil, fmt.Errorf("provider alias is required")
+	}
+	if provider.IDPType == "" {
+		return nil, fmt.Errorf("provider IDP type is required")
+	}
+
+	provider.TenantID = tenantID
+	// In our PostgresStorage implementation, CreateIdentityProvider uses ON CONFLICT DO UPDATE
+	if err := s.storage.CreateIdentityProvider(ctx, tenantID, provider); err != nil {
+		return nil, err
+	}
+
+	return &provider, nil
+}

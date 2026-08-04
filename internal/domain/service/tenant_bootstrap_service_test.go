@@ -52,8 +52,8 @@ func validateTenant(t *testing.T, expectedDomain string) func(context.Context, m
 		if tenant.Domain != expectedDomain {
 			t.Errorf("expected tenant domain %s, got %s", expectedDomain, tenant.Domain)
 		}
-		if tenant.Name != expectedDomain {
-			t.Errorf("expected tenant name %s, got %s", expectedDomain, tenant.Name)
+		if tenant.Name != "Administrative Tenant" {
+			t.Errorf("expected tenant name %s, got %s", "Administrative Tenant", tenant.Name)
 		}
 		if tenant.ID == uuid.Nil {
 			t.Error("expected non-nil tenant ID")
