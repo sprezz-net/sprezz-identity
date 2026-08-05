@@ -82,22 +82,80 @@ func (s *ClientService) UpdateClient(ctx context.Context, tenantID uuid.UUID, cl
 		return nil, err
 	}
 
-	existing.ClientName = client.ClientName
-	existing.RedirectURIs = client.RedirectURIs
-	existing.PostLogoutRedirectURIs = client.PostLogoutRedirectURIs
-	existing.FrontChannelLogoutURI = client.FrontChannelLogoutURI
-	existing.BackChannelLogoutURI = client.BackChannelLogoutURI
-	existing.GrantTypes = client.GrantTypes
-	existing.ResponseTypes = client.ResponseTypes
-	existing.AllowedScopes = client.AllowedScopes
-	existing.DefaultScopes = client.DefaultScopes
-	existing.AllowedIDPs = client.AllowedIDPs
-	existing.DefaultIDP = client.DefaultIDP
-	existing.AllowedAudiences = client.AllowedAudiences
-	existing.ClientType = client.ClientType
-	existing.AccessTokenLifetime = client.AccessTokenLifetime
-	existing.RefreshTokenLifetime = client.RefreshTokenLifetime
-	existing.IDTokenLifetime = client.IDTokenLifetime
+	if client.ClientName != "" {
+		existing.ClientName = client.ClientName
+	}
+	if client.ClientType != "" {
+		existing.ClientType = client.ClientType
+	}
+	if client.RedirectURIs != nil {
+		existing.RedirectURIs = client.RedirectURIs
+	}
+	if client.PostLogoutRedirectURIs != nil {
+		existing.PostLogoutRedirectURIs = client.PostLogoutRedirectURIs
+	}
+	if client.FrontChannelLogoutURI != "" {
+		existing.FrontChannelLogoutURI = client.FrontChannelLogoutURI
+	}
+	if client.BackChannelLogoutURI != "" {
+		existing.BackChannelLogoutURI = client.BackChannelLogoutURI
+	}
+	if client.GrantTypes != nil {
+		existing.GrantTypes = client.GrantTypes
+	}
+	if client.ResponseTypes != nil {
+		existing.ResponseTypes = client.ResponseTypes
+	}
+	if client.AllowedScopes != nil {
+		existing.AllowedScopes = client.AllowedScopes
+	}
+	if client.DefaultScopes != nil {
+		existing.DefaultScopes = client.DefaultScopes
+	}
+	if client.AllowedIDPs != nil {
+		existing.AllowedIDPs = client.AllowedIDPs
+	}
+	if client.DefaultIDP != "" {
+		existing.DefaultIDP = client.DefaultIDP
+	}
+	if client.AllowedAudiences != nil {
+		existing.AllowedAudiences = client.AllowedAudiences
+	}
+	if client.AccessTokenLifetime > 0 {
+		existing.AccessTokenLifetime = client.AccessTokenLifetime
+	}
+	if client.RefreshTokenLifetime > 0 {
+		existing.RefreshTokenLifetime = client.RefreshTokenLifetime
+	}
+	if client.IDTokenLifetime > 0 {
+		existing.IDTokenLifetime = client.IDTokenLifetime
+	}
+
+	// Double check schema NOT NULL constraints on nested slice fields before save
+	if existing.RedirectURIs == nil {
+		existing.RedirectURIs = []string{}
+	}
+	if existing.PostLogoutRedirectURIs == nil {
+		existing.PostLogoutRedirectURIs = []string{}
+	}
+	if existing.GrantTypes == nil {
+		existing.GrantTypes = []string{"authorization_code"}
+	}
+	if existing.ResponseTypes == nil {
+		existing.ResponseTypes = []string{"code"}
+	}
+	if existing.AllowedScopes == nil {
+		existing.AllowedScopes = []string{"openid", "profile", "email"}
+	}
+	if existing.DefaultScopes == nil {
+		existing.DefaultScopes = []string{"openid", "profile", "email"}
+	}
+	if existing.AllowedIDPs == nil {
+		existing.AllowedIDPs = []string{"username-password"}
+	}
+	if existing.AllowedAudiences == nil {
+		existing.AllowedAudiences = []string{}
+	}
 
 	if err := s.storage.SaveClient(ctx, *existing); err != nil {
 		return nil, err

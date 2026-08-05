@@ -6,10 +6,10 @@ COVERAGE_FILE=coverage.out
 -include .env
 export
 
-.PHONY: all tidy sqlc-gen sqlc-check mock-gen fmt lint test cover clean run build
+.PHONY: all tidy sqlc-gen sqlc-check mock-gen templ-gen fmt lint test cover clean run build
 
 # Default target runs code generation and verification to guarantee a pristine repository state
-all: tidy sqlc-gen mock-gen fmt lint test
+all: tidy sqlc-gen templ-gen mock-gen fmt lint test
 
 ## tidy: Run go mod tidy to add missing and prune unused modules
 tidy:
@@ -23,6 +23,16 @@ sqlc-gen:
 		sqlc generate; \
 	else \
 		echo "ERROR: sqlc command not found. Install it via 'brew install sqlc' or visit sqlc.dev"; \
+		exit 1; \
+	fi
+
+## templ-gen: Compile templ templates into Go source code
+templ-gen:
+	@echo "=> Compiling templ templates..."
+	@if command -v templ > /dev/null; then \
+		templ generate; \
+	else \
+		echo "ERROR: templ command not found. Install it via 'go install github.com/a-h/templ/cmd/templ@latest'"; \
 		exit 1; \
 	fi
 
@@ -71,7 +81,7 @@ cover:
 	go tool cover -html=$(COVERAGE_FILE)
 
 ## build: Compile the core program binary into a transport target
-build: tidy sqlc-gen
+build: tidy sqlc-gen templ-gen
 	@echo "=> Building system production binary..."
 	go build -o $(BINARY_NAME) cmd/sprezz-identity/main.go
 

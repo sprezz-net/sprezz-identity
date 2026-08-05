@@ -14,7 +14,6 @@ import (
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/views"
 
-	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -268,8 +267,8 @@ func (h *HttpAdapter) adminCreateTenant(w http.ResponseWriter, r *http.Request) 
 	}
 	_ = h.storagePort.CreateIdentityProvider(r.Context(), newTenant.ID, defaultProvider)
 
-	w.Header().Set(hxTriggerHeader, "reloadDashboard")
-	_, _ = w.Write([]byte(`<script nonce="` + templ.GetNonce(r.Context()) + `">window.location.href="/admin/dashboard?msg=Tenant+created+successfully"</script>`))
+	w.Header().Set("HX-Redirect", "/admin/dashboard?msg=Tenant+created+successfully")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *HttpAdapter) adminToggleSignup(w http.ResponseWriter, r *http.Request) {
@@ -300,9 +299,8 @@ func (h *HttpAdapter) adminToggleSignup(w http.ResponseWriter, r *http.Request) 
 	component := views.StatusBadge(tenant.Config.AllowSignup)
 	_ = component.Render(r.Context(), w)
 
-	// We also return a script to trigger a reload or visually update the toggle button state
-	// In the dashboard we have hx-swap="outerHTML" targeting the button/badge wrapper, but let's do a simple full page refresh to show the updated message/state correctly
-	_, _ = w.Write([]byte(`<script nonce="` + templ.GetNonce(r.Context()) + `">window.location.href="/admin/dashboard?msg=Registration+status+updated+successfully"</script>`))
+	// We use HX-Redirect to natively trigger a full page refresh with the success message
+	w.Header().Set("HX-Redirect", "/admin/dashboard?msg=Registration+status+updated+successfully")
 }
 
 func (h *HttpAdapter) adminTenantsPage(w http.ResponseWriter, r *http.Request) {
@@ -331,10 +329,29 @@ func (h *HttpAdapter) adminTenantsPage(w http.ResponseWriter, r *http.Request) {
 	_ = component.Render(r.Context(), w)
 }
 
+func parseCommaSeparated(s string) []string {
+	if s == "" {
+		return []string{}
+	}
+	parts := strings.Split(s, ",")
+	res := make([]string, 0, len(parts))
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			res = append(res, trimmed)
+		}
+	}
+	return res
+}
+
 func (h *HttpAdapter) adminSaveTenantSettings(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
 	name := r.FormValue("name")
 	domain := r.FormValue("domain")
+	defaultRedirectURI := r.FormValue("default_redirect_uri")
+	redirectWhitelistStr := r.FormValue("redirect_whitelist")
+	predefinedScopesStr := r.FormValue("predefined_scopes")
+	predefinedAudiencesStr := r.FormValue("predefined_audiences")
 
 	errs := make(map[string]string)
 	if name == "" {
@@ -343,6 +360,12 @@ func (h *HttpAdapter) adminSaveTenantSettings(w http.ResponseWriter, r *http.Req
 	if domain == "" {
 		errs["domain"] = "canonical domain is required"
 	}
+
+	config := tenant.Config
+	config.DefaultRedirectURI = defaultRedirectURI
+	config.RedirectWhitelist = parseCommaSeparated(redirectWhitelistStr)
+	config.PredefinedScopes = parseCommaSeparated(predefinedScopesStr)
+	config.PredefinedAudiences = parseCommaSeparated(predefinedAudiencesStr)
 
 	if len(errs) > 0 {
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
@@ -361,7 +384,7 @@ func (h *HttpAdapter) adminSaveTenantSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	_, err := h.tenantService.UpdateTenant(r.Context(), tenant.ID, name, domain, tenant.Config)
+	_, err := h.tenantService.UpdateTenant(r.Context(), tenant.ID, name, domain, config)
 	if err != nil {
 		h.renderError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -456,6 +479,11 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 	id := r.FormValue("id")
 	clientID := r.FormValue("client_id")
 	clientName := r.FormValue("client_name")
+	clientType := r.FormValue("client_type")
+	redirectURIs := parseCommaSeparated(r.FormValue("redirect_uris"))
+	postLogoutURIs := parseCommaSeparated(r.FormValue("post_logout_redirect_uris"))
+	frontChannelLogoutURI := r.FormValue("front_channel_logout_uri")
+	backChannelLogoutURI := r.FormValue("back_channel_logout_uri")
 
 	errs := make(map[string]string)
 	if clientID == "" {
@@ -478,16 +506,57 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate whitelists and produce warning messages
+	var warnings []string
+	isWhitelisted := func(uri string) bool {
+		if uri == "" {
+			return true
+		}
+		for _, w := range tenant.Config.RedirectWhitelist {
+			if strings.HasPrefix(uri, w) || uri == w {
+				return true
+			}
+		}
+		return false
+	}
+
+	for _, u := range redirectURIs {
+		if !isWhitelisted(u) {
+			warnings = append(warnings, fmt.Sprintf("Redirect URI '%s' is not in the Whitelist", u))
+		}
+	}
+	for _, u := range postLogoutURIs {
+		if !isWhitelisted(u) {
+			warnings = append(warnings, fmt.Sprintf("Post-Logout URI '%s' is not in the Whitelist", u))
+		}
+	}
+	if frontChannelLogoutURI != "" && !isWhitelisted(frontChannelLogoutURI) {
+		warnings = append(warnings, fmt.Sprintf("Front-Channel Logout URI '%s' is not in the Whitelist", frontChannelLogoutURI))
+	}
+	if backChannelLogoutURI != "" && !isWhitelisted(backChannelLogoutURI) {
+		warnings = append(warnings, fmt.Sprintf("Back-Channel Logout URI '%s' is not in the Whitelist", backChannelLogoutURI))
+	}
+
 	var err error
 	if isEdit {
 		_, err = h.clientService.UpdateClient(r.Context(), tenant.ID, model.ClientApplication{
-			ClientID:   clientID,
-			ClientName: clientName,
+			ClientID:               clientID,
+			ClientName:             clientName,
+			ClientType:             clientType,
+			RedirectURIs:           redirectURIs,
+			PostLogoutRedirectURIs: postLogoutURIs,
+			FrontChannelLogoutURI:  frontChannelLogoutURI,
+			BackChannelLogoutURI:   backChannelLogoutURI,
 		})
 	} else {
 		_, err = h.clientService.CreateClient(r.Context(), tenant.ID, model.ClientApplication{
-			ClientID:   clientID,
-			ClientName: clientName,
+			ClientID:               clientID,
+			ClientName:             clientName,
+			ClientType:             clientType,
+			RedirectURIs:           redirectURIs,
+			PostLogoutRedirectURIs: postLogoutURIs,
+			FrontChannelLogoutURI:  frontChannelLogoutURI,
+			BackChannelLogoutURI:   backChannelLogoutURI,
 		})
 	}
 
@@ -496,8 +565,13 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set(hxTriggerHeader, "reloadDashboard")
-	_, _ = w.Write([]byte(`<script nonce="` + templ.GetNonce(r.Context()) + `">window.location.href="/admin/clients?msg=Client+saved+successfully"</script>`))
+	msgStr := "Application saved successfully"
+	if len(warnings) > 0 {
+		msgStr += ". Warning: some URIs are not in the tenant whitelist: " + strings.Join(warnings, "; ")
+	}
+
+	w.Header().Set("HX-Redirect", "/admin/clients?msg="+url.QueryEscape(msgStr))
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *HttpAdapter) adminDeleteClient(w http.ResponseWriter, r *http.Request) {
@@ -509,8 +583,8 @@ func (h *HttpAdapter) adminDeleteClient(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.Header().Set(hxTriggerHeader, "reloadDashboard")
-	_, _ = w.Write([]byte(`<script nonce="` + templ.GetNonce(r.Context()) + `">window.location.href="/admin/clients?msg=Client+deleted+successfully"</script>`))
+	w.Header().Set("HX-Redirect", "/admin/clients?msg=Client+deleted+successfully")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *HttpAdapter) adminIDPsPage(w http.ResponseWriter, r *http.Request) {
@@ -593,6 +667,13 @@ func (h *HttpAdapter) adminSaveIDP(w http.ResponseWriter, r *http.Request) {
 	idpType := r.FormValue("idp_type")
 	alias := r.FormValue("alias")
 	enabled := r.FormValue("enabled") == "true"
+	usernameField := r.FormValue("username_field")
+	ialStr := r.FormValue("ial")
+	aalStr := r.FormValue("aal")
+
+	var ial, aal int
+	_, _ = fmt.Sscanf(ialStr, "%d", &ial)
+	_, _ = fmt.Sscanf(aalStr, "%d", &aal)
 
 	errs := make(map[string]string)
 	if alias == "" {
@@ -611,10 +692,23 @@ func (h *HttpAdapter) adminSaveIDP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	provider := model.IdentityProvider{
+		ID:       idpUUID,
+		TenantID: tenant.ID,
+		IDPType:  idpType,
+		Alias:    alias,
+		Enabled:  enabled,
+		Config: model.IdentityProviderConfig{
+			UsernameField: usernameField,
+			IAL:           ial,
+			AAL:           aal,
+		},
+	}
+
 	if len(errs) > 0 {
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
 		component := views.IDPForm(views.IDPFormProps{
-			Provider: model.IdentityProvider{ID: idpUUID, IDPType: idpType, Alias: alias, Enabled: enabled},
+			Provider: provider,
 			Errors:   errs,
 			IsEdit:   isEdit,
 		})
@@ -623,11 +717,6 @@ func (h *HttpAdapter) adminSaveIDP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var err error
-	provider := model.IdentityProvider{
-		IDPType: idpType,
-		Alias:   alias,
-		Enabled: enabled,
-	}
 
 	if isEdit {
 		provider.ID = idpUUID
@@ -641,8 +730,8 @@ func (h *HttpAdapter) adminSaveIDP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set(hxTriggerHeader, "reloadDashboard")
-	_, _ = w.Write([]byte(`<script nonce="` + templ.GetNonce(r.Context()) + `">window.location.href="/admin/idps?msg=Identity+Provider+saved+successfully"</script>`))
+	w.Header().Set("HX-Redirect", "/admin/idps?msg=Identity+Provider+saved+successfully")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *HttpAdapter) adminDeleteIDP(w http.ResponseWriter, r *http.Request) {
@@ -659,8 +748,8 @@ func (h *HttpAdapter) adminDeleteIDP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set(hxTriggerHeader, "reloadDashboard")
-	_, _ = w.Write([]byte(`<script nonce="` + templ.GetNonce(r.Context()) + `">window.location.href="/admin/idps?msg=Identity+Provider+deleted+successfully"</script>`))
+	w.Header().Set("HX-Redirect", "/admin/idps?msg=Identity+Provider+deleted+successfully")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *HttpAdapter) adminUsersPage(w http.ResponseWriter, r *http.Request) {
@@ -797,8 +886,8 @@ func (h *HttpAdapter) adminSaveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set(hxTriggerHeader, "reloadDashboard")
-	_, _ = w.Write([]byte(`<script nonce="` + templ.GetNonce(r.Context()) + `">window.location.href="/admin/users?msg=User+saved+successfully"</script>`))
+	w.Header().Set("HX-Redirect", "/admin/users?msg=User+saved+successfully")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *HttpAdapter) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
@@ -815,8 +904,8 @@ func (h *HttpAdapter) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set(hxTriggerHeader, "reloadDashboard")
-	_, _ = w.Write([]byte(`<script nonce="` + templ.GetNonce(r.Context()) + `">window.location.href="/admin/users?msg=User+deleted+successfully"</script>`))
+	w.Header().Set("HX-Redirect", "/admin/users?msg=User+deleted+successfully")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *HttpAdapter) adminDecoupleIdentity(w http.ResponseWriter, r *http.Request) {

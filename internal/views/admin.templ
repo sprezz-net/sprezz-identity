@@ -2,6 +2,7 @@ package views
 
 import (
     "fmt"
+    "strings"
     "sprezz-identity/internal/domain/model"
 )
 
@@ -25,7 +26,7 @@ templ AdminLayout(props AdminLayoutProps) {
         <!-- Alpine.js (deferred) -->
         <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/csp@3.x.x/dist/cdn.min.js" nonce={ templ.GetNonce(ctx) }></script>
     </head>
-    <body class="bg-slate-50 font-sans antialiased text-gray-900" x-data="{ mobileMenu: false }">
+    <body class="bg-slate-50 font-sans antialiased text-gray-900" :class="modalOpen ? 'overflow-hidden h-screen' : ''" x-data="{ mobileMenu: false, modalOpen: false }" @modal-open.window="modalOpen = true" @modal-close.window="modalOpen = false">
         <div class="flex min-h-screen">
             <!-- Sidebar Layout -->
             <aside class="w-64 bg-slate-900 text-slate-300 fixed h-full flex flex-col justify-between z-40">
@@ -89,23 +90,35 @@ templ StatusBadge(isActive bool) {
     }
 }
 
+templ VerifiedBadge(isVerified bool) {
+    if isVerified {
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+            Verified
+        </span>
+    } else {
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+            Unverified
+        </span>
+    }
+}
+
 templ Modal(title, fetchUrl string) {
     <div
         x-data="{ isOpen: true }"
         x-show="isOpen"
         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
-        @keydown.escape.window="isOpen = false; document.getElementById('modal-container').innerHTML = ''"
+        @keydown.escape.window="isOpen = false"
     >
         <div
             class="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col transform transition-all"
-            @click.outside="isOpen = false; document.getElementById('modal-container').innerHTML = ''"
+            @click.outside="isOpen = false"
         >
             <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
                 <h3 class="text-lg font-bold text-slate-800">{ title }</h3>
                 <button
                     type="button"
                     class="text-slate-400 hover:text-slate-600 transition"
-                    @click="isOpen = false; document.getElementById('modal-container').innerHTML = ''"
+                    @click="isOpen = false"
                 >
                     ✕
                 </button>
@@ -235,6 +248,10 @@ templ TenantsPage(props TenantsPageProps) {
                         <form hx-post="/admin/tenants/settings" hx-indicator="#global-spinner" class="space-y-4">
                             @InputField("Tenant Name", "name", "text", props.ActiveTenant.Name, props.Errors["name"])
                             @InputField("Canonical Domain", "domain", "text", props.ActiveTenant.Domain, props.Errors["domain"])
+                            @InputField("Default Redirect URI", "default_redirect_uri", "text", props.ActiveTenant.Config.DefaultRedirectURI, props.Errors["default_redirect_uri"])
+                            @InputField("Redirect Whitelist (comma-separated)", "redirect_whitelist", "text", strings.Join(props.ActiveTenant.Config.RedirectWhitelist, ", "), props.Errors["redirect_whitelist"])
+                            @InputField("Predefined Scopes (comma-separated)", "predefined_scopes", "text", strings.Join(props.ActiveTenant.Config.PredefinedScopes, ", "), props.Errors["predefined_scopes"])
+                            @InputField("Predefined Audiences (comma-separated)", "predefined_audiences", "text", strings.Join(props.ActiveTenant.Config.PredefinedAudiences, ", "), props.Errors["predefined_audiences"])
 
                             <div class="flex items-center justify-between pt-4 border-t border-gray-200">
                                 <div>
@@ -269,6 +286,10 @@ templ TenantsPage(props TenantsPageProps) {
                     <form hx-post="/admin/tenants/settings" hx-indicator="#global-spinner" class="space-y-4">
                         @InputField("Tenant Name", "name", "text", props.ActiveTenant.Name, props.Errors["name"])
                         @InputField("Canonical Domain", "domain", "text", props.ActiveTenant.Domain, props.Errors["domain"])
+                        @InputField("Default Redirect URI", "default_redirect_uri", "text", props.ActiveTenant.Config.DefaultRedirectURI, props.Errors["default_redirect_uri"])
+                        @InputField("Redirect Whitelist (comma-separated)", "redirect_whitelist", "text", strings.Join(props.ActiveTenant.Config.RedirectWhitelist, ", "), props.Errors["redirect_whitelist"])
+                        @InputField("Predefined Scopes (comma-separated)", "predefined_scopes", "text", strings.Join(props.ActiveTenant.Config.PredefinedScopes, ", "), props.Errors["predefined_scopes"])
+                        @InputField("Predefined Audiences (comma-separated)", "predefined_audiences", "text", strings.Join(props.ActiveTenant.Config.PredefinedAudiences, ", "), props.Errors["predefined_audiences"])
 
                         <div class="flex items-center justify-between pt-4 border-t border-gray-200">
                             <div>
@@ -308,7 +329,7 @@ templ CreateTenantForm(errors map[string]string) {
             <button
                 type="button"
                 class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition"
-                @click="isOpen = false; document.getElementById('modal-container').innerHTML = ''"
+                @click="isOpen = false"
             >
                 Cancel
             </button>
@@ -420,11 +441,24 @@ templ ClientForm(props ClientFormProps) {
             @InputField("Client ID", "client_id", "text", props.Client.ClientID, props.Errors["client_id"])
         }
 
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Client Type</label>
+            <select name="client_type" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="confidential" selected?={ props.Client.ClientType == "confidential" }>Confidential</option>
+                <option value="public" selected?={ props.Client.ClientType == "public" }>Public</option>
+            </select>
+        </div>
+
+        @InputField("OIDC Redirect URIs (comma-separated)", "redirect_uris", "text", strings.Join(props.Client.RedirectURIs, ", "), props.Errors["redirect_uris"])
+        @InputField("Post-Logout Redirect URIs (comma-separated)", "post_logout_redirect_uris", "text", strings.Join(props.Client.PostLogoutRedirectURIs, ", "), props.Errors["post_logout_redirect_uris"])
+        @InputField("Front-Channel Logout URI", "front_channel_logout_uri", "text", props.Client.FrontChannelLogoutURI, props.Errors["front_channel_logout_uri"])
+        @InputField("Back-Channel Logout URI", "back_channel_logout_uri", "text", props.Client.BackChannelLogoutURI, props.Errors["back_channel_logout_uri"])
+
         <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
             <button
                 type="button"
                 class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition"
-                @click="isOpen = false; document.getElementById('modal-container').innerHTML = ''"
+                @click="isOpen = false"
             >
                 Close
             </button>
@@ -555,11 +589,39 @@ templ IDPForm(props IDPFormProps) {
             <label for="enabled" class="text-sm font-medium text-slate-700">Enabled</label>
         </div>
 
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Username Field Mapping</label>
+            <select name="username_field" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="preferredUsername" selected?={ props.Provider.Config.UsernameField == "preferredUsername" }>Username (preferredUsername)</option>
+                <option value="email" selected?={ props.Provider.Config.UsernameField == "email" }>Email</option>
+            </select>
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Identity Assurance Level (IAL)</label>
+            <select name="ial" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="0" selected?={ props.Provider.Config.IAL == 0 }>IAL 0</option>
+                <option value="1" selected?={ props.Provider.Config.IAL == 1 }>IAL 1</option>
+                <option value="2" selected?={ props.Provider.Config.IAL == 2 }>IAL 2</option>
+                <option value="3" selected?={ props.Provider.Config.IAL == 3 }>IAL 3</option>
+            </select>
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Authenticator Assurance Level (AAL)</label>
+            <select name="aal" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="0" selected?={ props.Provider.Config.AAL == 0 }>AAL 0</option>
+                <option value="1" selected?={ props.Provider.Config.AAL == 1 }>AAL 1</option>
+                <option value="2" selected?={ props.Provider.Config.AAL == 2 }>AAL 2</option>
+                <option value="3" selected?={ props.Provider.Config.AAL == 3 }>AAL 3</option>
+            </select>
+        </div>
+
         <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
             <button
                 type="button"
                 class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition"
-                @click="isOpen = false; document.getElementById('modal-container').innerHTML = ''"
+                @click="isOpen = false"
             >
                 Cancel
             </button>
@@ -675,7 +737,7 @@ templ UserForm(props UserFormProps) {
             <button
                 type="button"
                 class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition"
-                @click="isOpen = false; document.getElementById('modal-container').innerHTML = ''"
+                @click="isOpen = false"
             >
                 Cancel
             </button>
@@ -713,13 +775,13 @@ templ UserDetails(props UserDetailsProps) {
             </div>
             <div>
                 <p class="text-xs text-slate-500 font-semibold uppercase">Email Verified</p>
-                @StatusBadge(props.User.EmailVerified)
+                @VerifiedBadge(props.User.EmailVerified)
             </div>
         </div>
 
         <!-- Coupled identities section -->
         <div class="space-y-3">
-            <h4 class="font-bold text-gray-800 text-sm border-b border-gray-200 pb-2">Coupled OIDC/SAML Identities</h4>
+            <h4 class="font-bold text-gray-800 text-sm border-b border-gray-200 pb-2">Coupled Identities</h4>
             if len(props.Identities) == 0 {
                 <p class="text-sm text-gray-500">No identities coupled to this profile yet.</p>
             } else {
@@ -735,6 +797,7 @@ templ UserDetails(props UserDetailsProps) {
                                     }
                                 </p>
                                 <p class="font-mono text-xs text-gray-500 mt-1">External Sub/ID: { ident.ExternalIdentityID }</p>
+                                <p class="text-xs text-gray-500">Login Count: { fmt.Sprintf("%d", ident.LoginCount) } | Blocked: { fmt.Sprintf("%t", ident.Blocked) }</p>
                                 <p class="text-xs text-gray-400 mt-0.5">Coupled at: { ident.CoupledAt.Format("2006-01-02 15:04:05") }</p>
                             </div>
                             <button
@@ -755,7 +818,7 @@ templ UserDetails(props UserDetailsProps) {
             <button
                 type="button"
                 class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition"
-                @click="isOpen = false; document.getElementById('modal-container').innerHTML = ''"
+                @click="isOpen = false"
             >
                 Close
             </button>
