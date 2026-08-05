@@ -771,15 +771,16 @@ func (s *PostgresStorage) GetIdentityByProfileAndProvider(ctx context.Context, u
 	var externalIdentityID string
 	var loginCount int
 	var lastLoginAt pgtype.Timestamptz
-	var lastLoginAttempt pgtype.Timestamptz
+	var lastVerificationAttempt pgtype.Timestamptz
+	var failedVerificationCount int
 	var blocked bool
 	var coupledAt pgtype.Timestamptz
 
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, external_identity_id, login_count, last_login_at, last_login_attempt, blocked, coupled_at
+		SELECT id, external_identity_id, login_count, last_login_at, last_verification_attempt, failed_verification_count, blocked, coupled_at
 		FROM identities
 		WHERE user_profile_id = $1::uuid AND identity_provider_id = $2::uuid
-	`, toPGUUID(userProfileID), toPGUUID(providerID)).Scan(&id, &externalIdentityID, &loginCount, &lastLoginAt, &lastLoginAttempt, &blocked, &coupledAt)
+	`, toPGUUID(userProfileID), toPGUUID(providerID)).Scan(&id, &externalIdentityID, &loginCount, &lastLoginAt, &lastVerificationAttempt, &failedVerificationCount, &blocked, &coupledAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("identity not found: %w", port.ErrIdentityNotFound)
@@ -800,40 +801,42 @@ func (s *PostgresStorage) GetIdentityByProfileAndProvider(ctx context.Context, u
 		return nil, fmt.Errorf("parse coupled time: %w", err)
 	}
 	var parsedAttempt time.Time
-	if lastLoginAttempt.Valid {
-		parsedAttempt, _ = pgTimestamptzToTime(lastLoginAttempt)
+	if lastVerificationAttempt.Valid {
+		parsedAttempt, _ = pgTimestamptzToTime(lastVerificationAttempt)
 	}
 
 	return &model.UserIdentity{
-		ID:                 identityUUID,
-		UserProfileID:      userProfileID,
-		IdentityProviderID: providerID,
-		ExternalIdentityID: externalIdentityID,
-		LoginCount:         loginCount,
-		LastLoginAt:        lastLoginTime,
-		LastLoginAttemptAt: parsedAttempt,
-		Blocked:            blocked,
-		CoupledAt:          coupledTime,
+		ID:                        identityUUID,
+		UserProfileID:             userProfileID,
+		IdentityProviderID:        providerID,
+		ExternalIdentityID:        externalIdentityID,
+		LoginCount:                loginCount,
+		LastLoginAt:               lastLoginTime,
+		LastVerificationAttemptAt: parsedAttempt,
+		FailedVerificationCount:   failedVerificationCount,
+		Blocked:                   blocked,
+		CoupledAt:                 coupledTime,
 	}, nil
 }
 
 func (s *PostgresStorage) UpsertIdentity(ctx context.Context, identity model.UserIdentity) error {
 	var attempt pgtype.Timestamptz
-	if !identity.LastLoginAttemptAt.IsZero() {
-		attempt = toPGTimestamptz(identity.LastLoginAttemptAt)
+	if !identity.LastVerificationAttemptAt.IsZero() {
+		attempt = toPGTimestamptz(identity.LastVerificationAttemptAt)
 	}
 
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO identities (id, user_profile_id, identity_provider_id, external_identity_id, login_count, last_login_at, last_login_attempt, blocked, coupled_at)
-		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6::timestamptz, $7::timestamptz, $8, $9::timestamptz)
+		INSERT INTO identities (id, user_profile_id, identity_provider_id, external_identity_id, login_count, last_login_at, last_verification_attempt, failed_verification_count, blocked, coupled_at)
+		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6::timestamptz, $7::timestamptz, $8, $9, $10::timestamptz)
 		ON CONFLICT (user_profile_id, identity_provider_id) DO UPDATE SET
 			external_identity_id = EXCLUDED.external_identity_id,
 			login_count = EXCLUDED.login_count,
 			last_login_at = EXCLUDED.last_login_at,
-			last_login_attempt = EXCLUDED.last_login_attempt,
+			last_verification_attempt = EXCLUDED.last_verification_attempt,
+			failed_verification_count = EXCLUDED.failed_verification_count,
 			blocked = EXCLUDED.blocked,
 			coupled_at = EXCLUDED.coupled_at
-	`, toPGUUID(identity.ID), toPGUUID(identity.UserProfileID), toPGUUID(identity.IdentityProviderID), identity.ExternalIdentityID, identity.LoginCount, toPGTimestamptz(identity.LastLoginAt), attempt, identity.Blocked, toPGTimestamptz(identity.CoupledAt))
+	`, toPGUUID(identity.ID), toPGUUID(identity.UserProfileID), toPGUUID(identity.IdentityProviderID), identity.ExternalIdentityID, identity.LoginCount, toPGTimestamptz(identity.LastLoginAt), attempt, identity.FailedVerificationCount, identity.Blocked, toPGTimestamptz(identity.CoupledAt))
 	if err != nil {
 		return fmt.Errorf("upsert identity: %w", err)
 	}
@@ -1211,7 +1214,7 @@ func (s *PostgresStorage) UpdateUserProfile(ctx context.Context, tenantID uuid.U
 
 func (s *PostgresStorage) GetUserIdentities(ctx context.Context, userProfileID uuid.UUID) ([]model.UserIdentity, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, user_profile_id, identity_provider_id, external_identity_id, login_count, last_login_at, last_login_attempt, blocked, coupled_at
+		SELECT id, user_profile_id, identity_provider_id, external_identity_id, login_count, last_login_at, last_verification_attempt, failed_verification_count, blocked, coupled_at
 		FROM identities
 		WHERE user_profile_id = $1::uuid
 	`, toPGUUID(userProfileID))
@@ -1226,24 +1229,26 @@ func (s *PostgresStorage) GetUserIdentities(ctx context.Context, userProfileID u
 		var extID string
 		var loginCount int
 		var lastLogin, lastAttempt pgtype.Timestamptz
+		var failedVerificationCount int
 		var blocked bool
 		var coupled pgtype.Timestamptz
-		if err := rows.Scan(&id, &upID, &idpID, &extID, &loginCount, &lastLogin, &lastAttempt, &blocked, &coupled); err != nil {
+		if err := rows.Scan(&id, &upID, &idpID, &extID, &loginCount, &lastLogin, &lastAttempt, &failedVerificationCount, &blocked, &coupled); err != nil {
 			return nil, err
 		}
 		parsedID, _ := pgUUIDToUUID(id)
 		parsedUP, _ := pgUUIDToUUID(upID)
 		parsedIDP, _ := pgUUIDToUUID(idpID)
 		identities = append(identities, model.UserIdentity{
-			ID:                 parsedID,
-			UserProfileID:      parsedUP,
-			IdentityProviderID: parsedIDP,
-			ExternalIdentityID: extID,
-			LoginCount:         loginCount,
-			LastLoginAt:        pgTimestamptzToTimeOrZero(lastLogin),
-			LastLoginAttemptAt: pgTimestamptzToTimeOrZero(lastAttempt),
-			Blocked:            blocked,
-			CoupledAt:          pgTimestamptzToTimeOrZero(coupled),
+			ID:                        parsedID,
+			UserProfileID:             parsedUP,
+			IdentityProviderID:        parsedIDP,
+			ExternalIdentityID:        extID,
+			LoginCount:                loginCount,
+			LastLoginAt:               pgTimestamptzToTimeOrZero(lastLogin),
+			LastVerificationAttemptAt: pgTimestamptzToTimeOrZero(lastAttempt),
+			FailedVerificationCount:   failedVerificationCount,
+			Blocked:                   blocked,
+			CoupledAt:                 pgTimestamptzToTimeOrZero(coupled),
 		})
 	}
 	return identities, nil

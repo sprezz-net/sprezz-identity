@@ -1146,7 +1146,7 @@ func (h *HttpAdapter) adminDecoupleIdentity(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := h.userProfileService.DecoupleIdentity(r.Context(), userUUID, idpUUID); err != nil {
+	if err := h.userProfileService.DecoupleIdentity(r.Context(), tenant.ID, userUUID, idpUUID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

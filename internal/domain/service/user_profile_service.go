@@ -30,7 +30,24 @@ func (s *UserProfileService) GetUserIdentities(ctx context.Context, userProfileI
 	return s.storage.GetUserIdentities(ctx, userProfileID)
 }
 
-func (s *UserProfileService) DecoupleIdentity(ctx context.Context, userProfileID uuid.UUID, identityProviderID uuid.UUID) error {
+func (s *UserProfileService) DecoupleIdentity(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID, identityProviderID uuid.UUID) error {
+	providers, err := s.storage.GetIdentityProviders(ctx, tenantID)
+	if err != nil {
+		return fmt.Errorf("failed to load identity providers: %w", err)
+	}
+
+	var provider *model.IdentityProvider
+	for _, p := range providers {
+		if p.ID == identityProviderID {
+			provider = &p
+			break
+		}
+	}
+
+	if provider != nil && provider.IDPType == model.UsernamePasswordIDPType && !provider.Config.AllowDecoupling {
+		return fmt.Errorf("decoupling is not allowed for this identity provider")
+	}
+
 	return s.storage.DecoupleIdentity(ctx, userProfileID, identityProviderID)
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -19,6 +20,34 @@ type IdentityProviderService struct {
 
 func NewIdentityProviderService(storage port.Storage, cl port.Clock) *IdentityProviderService {
 	return &IdentityProviderService{storage: storage, clock: cl}
+}
+
+func (s *IdentityProviderService) getOrCreateIdentity(ctx context.Context, userID uuid.UUID, providerID uuid.UUID, now time.Time) (*model.UserIdentity, error) {
+	identity, err := s.storage.GetIdentityByProfileAndProvider(ctx, userID, providerID)
+	if err != nil {
+		if errors.Is(err, port.ErrIdentityNotFound) {
+			return &model.UserIdentity{
+				ID:                 uuid.New(),
+				UserProfileID:      userID,
+				IdentityProviderID: providerID,
+				ExternalIdentityID: userID.String(),
+				CoupledAt:          now,
+			}, nil
+		}
+		return nil, err
+	}
+	return identity, nil
+}
+
+func (s *IdentityProviderService) checkPasswordCredential(ctx context.Context, userID uuid.UUID, providerID uuid.UUID, password string) (bool, error) {
+	passwordRecord, err := s.storage.GetPasswordCredential(ctx, userID, providerID)
+	if err != nil {
+		if errors.Is(err, port.ErrPasswordCredentialNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return verifyArgon2idPassword(password, passwordRecord.Argon2Hash), nil
 }
 
 func (s *IdentityProviderService) AuthenticateUsernamePassword(ctx context.Context, tenantID uuid.UUID, username string, password string) (*model.LoginResult, error) {
@@ -43,34 +72,24 @@ func (s *IdentityProviderService) AuthenticateUsernamePassword(ctx context.Conte
 
 	profile, err := s.storage.GetUserProfileByIdentifier(ctx, tenantID, provider.ID, username)
 	if err != nil {
-		return nil, fmt.Errorf("lookup user profile: %w", err)
+		return nil, errors.New("invalid username or password")
 	}
-	passwordRecord, err := s.storage.GetPasswordCredential(ctx, profile.ID, provider.ID)
+
+	ok, err := s.VerifyPassword(ctx, tenantID, profile.ID, password)
 	if err != nil {
-		return nil, fmt.Errorf("lookup password credential: %w", err)
+		return nil, err
 	}
-	if !verifyArgon2idPassword(password, passwordRecord.Argon2Hash) {
-		return nil, errors.New("invalid credentials")
+	if !ok {
+		return nil, errors.New("invalid username or password")
 	}
 
 	now := s.clock.Now()
 	identity, err := s.storage.GetIdentityByProfileAndProvider(ctx, profile.ID, provider.ID)
 	if err != nil {
-		identity = &model.UserIdentity{
-			ID:                 uuid.New(),
-			UserProfileID:      profile.ID,
-			IdentityProviderID: provider.ID,
-			ExternalIdentityID: profile.ID.String(),
-			CoupledAt:          now,
-			LoginCount:         0,
-		}
+		return nil, fmt.Errorf("lookup identity record: %w", err)
 	}
 	identity.LastLoginAt = now
 	identity.LoginCount++
-	identity.Blocked = false
-	if identity.CoupledAt.IsZero() {
-		identity.CoupledAt = now
-	}
 	if err := s.storage.UpsertIdentity(ctx, *identity); err != nil {
 		return nil, fmt.Errorf("upsert identity record: %w", err)
 	}
@@ -93,15 +112,39 @@ func (s *IdentityProviderService) VerifyPassword(ctx context.Context, tenantID u
 		return false, fmt.Errorf("username-password provider not found: %w", err)
 	}
 
-	passwordRecord, err := s.storage.GetPasswordCredential(ctx, userID, provider.ID)
+	now := s.clock.Now()
+	identity, err := s.getOrCreateIdentity(ctx, userID, provider.ID, now)
 	if err != nil {
-		if errors.Is(err, port.ErrPasswordCredentialNotFound) {
-			return false, nil
-		}
-		return false, fmt.Errorf("lookup password credential: %w", err)
+		return false, fmt.Errorf("get or create identity: %w", err)
 	}
 
-	return verifyArgon2idPassword(password, passwordRecord.Argon2Hash), nil
+	if identity.Blocked {
+		blockedDuration := time.Duration(provider.Config.PasswordBlockedTime) * time.Second
+		if now.Sub(identity.LastVerificationAttemptAt) <= blockedDuration {
+			identity.LastVerificationAttemptAt = now
+			_ = s.storage.UpsertIdentity(ctx, *identity)
+			return false, nil
+		}
+	}
+
+	correct, err := s.checkPasswordCredential(ctx, userID, provider.ID, password)
+	if err != nil {
+		return false, fmt.Errorf("check password credential: %w", err)
+	}
+
+	identity.LastVerificationAttemptAt = now
+	if correct {
+		identity.Blocked = false
+		identity.FailedVerificationCount = 0
+	} else if !identity.Blocked {
+		identity.FailedVerificationCount++
+		if identity.FailedVerificationCount >= provider.Config.MaxFailedVerificationCount {
+			identity.Blocked = true
+		}
+	}
+
+	_ = s.storage.UpsertIdentity(ctx, *identity)
+	return correct, nil
 }
 
 func (s *IdentityProviderService) ChangePassword(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID, currentPassword string, newPassword string) error {
@@ -110,13 +153,17 @@ func (s *IdentityProviderService) ChangePassword(ctx context.Context, tenantID u
 		return fmt.Errorf("username-password provider not found: %w", err)
 	}
 
+	valid, err := s.VerifyPassword(ctx, tenantID, userID, currentPassword)
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return errors.New("invalid username or password")
+	}
+
 	passwordRecord, err := s.storage.GetPasswordCredential(ctx, userID, provider.ID)
 	if err != nil {
 		return fmt.Errorf("lookup password credential: %w", err)
-	}
-
-	if !verifyArgon2idPassword(currentPassword, passwordRecord.Argon2Hash) {
-		return errors.New("invalid current password")
 	}
 
 	newHash, err := argon2id.CreateHash(newPassword, argon2id.DefaultParams)

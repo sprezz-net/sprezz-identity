@@ -189,14 +189,18 @@ templ UserDetails(props UserDetailsProps) {
 								</p>
 								<p class="text-xs text-gray-400 mt-1">Coupled at: { ident.CoupledAt.Format("2006-01-02 15:04:05") }</p>
 							</div>
-							<button
-								hx-delete={ fmt.Sprintf("/admin/users/%s/identities/%s", props.User.ID.String(), ident.IdentityProviderID.String()) }
-								hx-confirm="Are you sure you want to decouple this identity from the user's profile?"
-								hx-target="#modal-body"
-								class="px-2.5 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs font-semibold transition"
-							>
-								Decouple
-							</button>
+							for _, p := range props.Providers {
+								if p.ID == ident.IdentityProviderID && (p.IDPType != model.UsernamePasswordIDPType || p.Config.AllowDecoupling) {
+									<button
+										hx-delete={ fmt.Sprintf("/admin/users/%s/identities/%s", props.User.ID.String(), ident.IdentityProviderID.String()) }
+										hx-confirm="Are you sure you want to decouple this identity from the user's profile?"
+										hx-target="#modal-body"
+										class="px-2.5 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs font-semibold transition"
+									>
+										Decouple
+									</button>
+								}
+							}
 						</div>
 					}
 				</div>

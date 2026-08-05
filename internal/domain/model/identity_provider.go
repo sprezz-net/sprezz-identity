@@ -22,21 +22,25 @@ type IdentityProvider struct {
 }
 
 type IdentityProviderConfig struct {
-	UsernameField string `json:"username_field"`
-	IAL           int    `json:"ial"`
-	AAL           int    `json:"aal"`
+	UsernameField              string `json:"username_field"`
+	IAL                        int    `json:"ial"`
+	AAL                        int    `json:"aal"`
+	AllowDecoupling            bool   `json:"allow_decoupling"`
+	MaxFailedVerificationCount int    `json:"max_failed_verification_count"`
+	PasswordBlockedTime        int    `json:"password_blocked_time"` // In seconds
 }
 
 type UserIdentity struct {
-	ID                 uuid.UUID
-	UserProfileID      uuid.UUID
-	IdentityProviderID uuid.UUID
-	ExternalIdentityID string
-	LoginCount         int
-	LastLoginAt        time.Time
-	LastLoginAttemptAt time.Time
-	Blocked            bool
-	CoupledAt          time.Time
+	ID                        uuid.UUID
+	UserProfileID             uuid.UUID
+	IdentityProviderID        uuid.UUID
+	ExternalIdentityID        string
+	LoginCount                int
+	LastLoginAt               time.Time
+	LastVerificationAttemptAt time.Time
+	FailedVerificationCount   int
+	Blocked                   bool
+	CoupledAt                 time.Time
 }
 
 type PasswordCredential struct {
@@ -71,6 +75,12 @@ func (c *IdentityProviderConfig) UnmarshalJSON(data []byte) error {
 	}
 	if c.UsernameField == "" {
 		c.UsernameField = "preferredUsername"
+	}
+	if c.MaxFailedVerificationCount == 0 {
+		c.MaxFailedVerificationCount = 5
+	}
+	if c.PasswordBlockedTime == 0 {
+		c.PasswordBlockedTime = 900 // Default 15 minutes
 	}
 	return nil
 }

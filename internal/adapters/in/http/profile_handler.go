@@ -265,7 +265,7 @@ func (h *HttpAdapter) changeEmailSubmit(w http.ResponseWriter, r *http.Request) 
 
 	valid, err := h.idpService.VerifyPassword(r.Context(), tenant.ID, user.ID, currentPassword)
 	if err != nil || !valid {
-		http.Redirect(w, r, redirectProfileEmailErr+url.QueryEscape("Invalid current password"), http.StatusFound)
+		http.Redirect(w, r, redirectProfileEmailErr+url.QueryEscape("Invalid username or password"), http.StatusFound)
 		return
 	}
 
@@ -364,8 +364,8 @@ func (h *HttpAdapter) decoupleIdentitySubmit(w http.ResponseWriter, r *http.Requ
 	}
 
 	// We must prevent decoupling the last username-password credential if they have no other way to sign in, but let's decouple as requested
-	if err := h.userProfileService.DecoupleIdentity(r.Context(), user.ID, idpUUID); err != nil {
-		w.Header().Set(hxRedirectHeader, "/profile?err="+err.Error())
+	if err := h.userProfileService.DecoupleIdentity(r.Context(), tenant.ID, user.ID, idpUUID); err != nil {
+		w.Header().Set(hxRedirectHeader, "/profile?err="+url.QueryEscape(err.Error()))
 		w.WriteHeader(http.StatusOK)
 		return
 	}

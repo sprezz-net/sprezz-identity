@@ -312,7 +312,17 @@ Sprezz Identity features a built-in user profile dashboard at `/profile` alongsi
 * **Coupling Enforcement**: The user forms for name, email, and password changes are accessible *only* if the user's profile has an active, coupled identity linked to the `"username-password"` identity provider type.
 * **Email Verification & Reset**: When a user changes their email address through the secure `/profile/email` subpage, the profile's `email_verified` status is instantly reset to `false` in transactional storage, invalidating previous verifications.
 * **Credentials Hashing & Current Password Verification**: Password updates and email address changes mandate the submission and verification of the user's `current_password`. These checks are computed strictly inside the domain's `IdentityProviderService` using the Argon2id hashing algorithms before allowing any modifications.
-* **Identity Decoupling**: Users can decouple connected identities. Decoupling invokes the `UserProfileService.DecoupleIdentity` domain method, safely removing the linked external identity from the tenant partition.
+* **Identity Decoupling**: Users can decouple connected identities. Decoupling invokes the `UserProfileService.DecoupleIdentity` domain method, safely removing the linked external identity from the tenant partition. This behavior is restricted by the `allow_decoupling` configuration field on the identity provider. When disabled (default for `username-password` credentials), decoupling is strictly prohibited, and the corresponding user interface options are hidden.
+
+### 9.12 Password Blocking and Lockout Safeguards
+
+Sprezz Identity implements standard password blocking and lockout controls to safeguard user credentials against brute-force attacks.
+
+* **Failed Attempts Logging**: The `VerifyPassword` service (utilised dynamically across login, email updates, and credential updates) logs every verification attempt. It updates the `last_verification_attempt` timestamp and increments `failed_verification_count` in the database upon failure.
+* **Identity Blocking**: When `failed_verification_count` reaches a configured threshold (`max_failed_verification_count`, defaulting to `5` for local databases), the system marks the identity status as blocked (`blocked = true`). All subsequent verification attempts are rejected instantly while the block remains active.
+* **Audited Successful Logins**: Upon a successful login, the authentication server updates the timestamp in `last_login_at` and increments the total verified login counts (`login_count`) in the database.
+* **Temporal Lock Release (Cool-off window)**: To restore user access without administrator intervention, a temporary block automatically expires after the cool-off interval (`password_blocked_time`, defaulting to `900` seconds / 15 minutes). If the correct credentials are submitted after this cool-off window has elapsed, the identity is automatically unblocked, resetting `failed_verification_count` to `0`.
+* **Strict Leak Prevention**: To prevent user enumeration or state leaks, all password verification and authentication failures consistently render the generic message `"Invalid username or password"` on the user interface. The server strictly suppresses any specific details indicating whether a password was wrong, the username was not found, or the account has been blocked.
 
 ## 10. Audience Governance and Token Minting
 

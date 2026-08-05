@@ -66,15 +66,16 @@ type DpopProof struct {
 }
 
 type Identity struct {
-	ID                 pgtype.UUID        `json:"id"`
-	UserProfileID      pgtype.UUID        `json:"user_profile_id"`
-	IdentityProviderID pgtype.UUID        `json:"identity_provider_id"`
-	ExternalIdentityID string             `json:"external_identity_id"`
-	LoginCount         int32              `json:"login_count"`
-	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
-	LastLoginAttempt   pgtype.Timestamptz `json:"last_login_attempt"`
-	Blocked            bool               `json:"blocked"`
-	CoupledAt          pgtype.Timestamptz `json:"coupled_at"`
+	ID                      pgtype.UUID        `json:"id"`
+	UserProfileID           pgtype.UUID        `json:"user_profile_id"`
+	IdentityProviderID      pgtype.UUID        `json:"identity_provider_id"`
+	ExternalIdentityID      string             `json:"external_identity_id"`
+	LoginCount              int32              `json:"login_count"`
+	LastLoginAt             pgtype.Timestamptz `json:"last_login_at"`
+	LastVerificationAttempt pgtype.Timestamptz `json:"last_verification_attempt"`
+	Blocked                 bool               `json:"blocked"`
+	CoupledAt               pgtype.Timestamptz `json:"coupled_at"`
+	FailedVerificationCount int32              `json:"failed_verification_count"`
 }
 
 type IdentityProvider struct {

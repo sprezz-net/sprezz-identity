@@ -206,7 +206,11 @@ func (h *HttpAdapter) login(w http.ResponseWriter, r *http.Request) {
 	result, err := h.idpService.AuthenticateUsernamePassword(r.Context(), tenant.ID, username, password)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = fmt.Fprintf(w, `<div style="color:red;margin-bottom:1rem;">%s</div>`, err.Error())
+		errMsg := err.Error()
+		if errMsg == "invalid username or password" {
+			errMsg = "Invalid username or password"
+		}
+		_, _ = fmt.Fprintf(w, `<div style="color:red;margin-bottom:1rem;">%s</div>`, errMsg)
 		return
 	}
 

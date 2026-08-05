@@ -76,12 +76,23 @@ func TestUserProfileService_DecoupleIdentity(t *testing.T) {
 	storage := portmock.NewStorageMock(ctrl)
 	svc := NewUserProfileService(storage)
 
+	tenantID := uuid.New()
 	userID := uuid.New()
 	idpID := uuid.New()
 
+	storage.GetIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{
+		{
+			ID:      idpID,
+			IDPType: model.UsernamePasswordIDPType,
+			Config: model.IdentityProviderConfig{
+				AllowDecoupling: true,
+			},
+		},
+	}, nil)
+
 	storage.DecoupleIdentityMock.Expect(context.Background(), userID, idpID).Return(nil)
 
-	err := svc.DecoupleIdentity(context.Background(), userID, idpID)
+	err := svc.DecoupleIdentity(context.Background(), tenantID, userID, idpID)
 	if err != nil {
 		t.Fatal(err)
 	}
