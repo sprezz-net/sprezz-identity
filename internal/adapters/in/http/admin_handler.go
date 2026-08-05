@@ -19,12 +19,13 @@ import (
 )
 
 const (
-	adminTenantName    = "Administrative Tenant"
-	hxTriggerHeader    = "HX-Trigger"
-	hxRedirectHeader   = "HX-Redirect"
-	hxRequestHeader    = "HX-Request"
-	errInvalidIDPUUID  = "invalid IDP UUID"
-	errInvalidUserUUID = "invalid User UUID"
+	adminTenantName     = "Administrative Tenant"
+	hxTriggerHeader     = "HX-Trigger"
+	hxRedirectHeader    = "HX-Redirect"
+	hxRequestHeader     = "HX-Request"
+	errInvalidIDPUUID   = "invalid IDP UUID"
+	errInvalidUserUUID  = "invalid User UUID"
+	errInvalidURLFormat = "Invalid URL format (must include protocol like http:// or https://)"
 )
 
 func generateRandomVerifier() (string, string, error) {
@@ -335,21 +336,6 @@ func (h *HttpAdapter) adminTenantsPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func parseCommaSeparated(s string) []string {
-	if s == "" {
-		return []string{}
-	}
-	parts := strings.Split(s, ",")
-	res := make([]string, 0, len(parts))
-	for _, p := range parts {
-		trimmed := strings.TrimSpace(p)
-		if trimmed != "" {
-			res = append(res, trimmed)
-		}
-	}
-	return res
-}
-
 func (h *HttpAdapter) adminSaveTenantSettings(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
 	if err := r.ParseForm(); err != nil {
@@ -378,6 +364,12 @@ func (h *HttpAdapter) adminSaveTenantSettings(w http.ResponseWriter, r *http.Req
 	}
 	if domain == "" {
 		errs["domain"] = "canonical domain is required"
+	}
+	if defaultRedirectURI != "" {
+		u, err := url.Parse(defaultRedirectURI)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			errs["default_redirect_uri"] = errInvalidURLFormat
+		}
 	}
 
 	config := tenant.Config
@@ -449,10 +441,10 @@ func (h *HttpAdapter) adminNewClientForm(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	component := views.ClientForm(views.ClientFormProps{
-		Client:    model.ClientApplication{
-			AccessTokenLifetime:  time.Hour,
-			IDTokenLifetime:      10 * time.Minute,
-			RefreshTokenLifetime: 30 * 24 * time.Hour,
+		Client: model.ClientApplication{
+			AccessTokenLifetime:  900 * time.Second,
+			IDTokenLifetime:      900 * time.Second,
+			RefreshTokenLifetime: 1209600 * time.Second,
 		},
 		Errors:    make(map[string]string),
 		Providers: providers,
@@ -549,12 +541,66 @@ func (h *HttpAdapter) adminResetClientSecret(w http.ResponseWriter, r *http.Requ
 	}
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
-	_, _ = w.Write([]byte(fmt.Sprintf(`
+	_, _ = w.Write(fmt.Appendf(nil, `
 		<div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm font-mono text-slate-800 break-all mb-4">
 			<strong>New Client Secret:</strong> %s
 			<p class="text-xs text-slate-500 mt-1">Copy this secret now. It will not be shown again.</p>
 		</div>
-	`, newSecret)))
+	`, newSecret))
+}
+
+func parseFormStringSlice(form url.Values, key string) []string {
+	vals := form[key]
+	if vals == nil {
+		return []string{}
+	}
+	return vals
+}
+
+func parseClientLifetimes(r *http.Request) (time.Duration, time.Duration, time.Duration) {
+	var accessSec, idSec, refreshSec int64
+	_, _ = fmt.Sscanf(r.FormValue("access_token_lifetime"), "%d", &accessSec)
+	_, _ = fmt.Sscanf(r.FormValue("id_token_lifetime"), "%d", &idSec)
+	_, _ = fmt.Sscanf(r.FormValue("refresh_token_lifetime"), "%d", &refreshSec)
+
+	return time.Duration(accessSec) * time.Second,
+		time.Duration(idSec) * time.Second,
+		time.Duration(refreshSec) * time.Second
+}
+
+func validateClientFormURLs(redirectURI, frontChannel, backChannel string) map[string]string {
+	errs := make(map[string]string)
+	if redirectURI != "" {
+		if u, err := url.Parse(redirectURI); err != nil || u.Scheme == "" || u.Host == "" {
+			errs["redirect_uri"] = errInvalidURLFormat
+		}
+	}
+	if frontChannel != "" {
+		if u, err := url.Parse(frontChannel); err != nil || u.Scheme == "" || u.Host == "" {
+			errs["front_channel_logout_uri"] = errInvalidURLFormat
+		}
+	}
+	if backChannel != "" {
+		if u, err := url.Parse(backChannel); err != nil || u.Scheme == "" || u.Host == "" {
+			errs["back_channel_logout_uri"] = errInvalidURLFormat
+		}
+	}
+	return errs
+}
+
+func validateClientFormInputs(clientID, clientName, redirectURI, frontChannel, backChannel string) map[string]string {
+	errs := make(map[string]string)
+	if clientID == "" {
+		errs["client_id"] = "client ID is required"
+	}
+	if clientName == "" {
+		errs["client_name"] = "client name is required"
+	}
+	urlErrs := validateClientFormURLs(redirectURI, frontChannel, backChannel)
+	for k, v := range urlErrs {
+		errs[k] = v
+	}
+	return errs
 }
 
 func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
@@ -569,52 +615,24 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 	clientType := r.FormValue("client_type")
 
 	redirectURI := r.FormValue("redirect_uri")
-	redirectURIs := r.Form["redirect_uris"]
-	if redirectURIs == nil {
-		redirectURIs = []string{}
-	}
-	postLogoutURIs := r.Form["post_logout_redirect_uris"]
-	if postLogoutURIs == nil {
-		postLogoutURIs = []string{}
-	}
+	redirectURIs := parseFormStringSlice(r.Form, "redirect_uris")
+	postLogoutURIs := parseFormStringSlice(r.Form, "post_logout_redirect_uris")
 
 	frontChannelLogoutURI := r.FormValue("front_channel_logout_uri")
 	backChannelLogoutURI := r.FormValue("back_channel_logout_uri")
 
 	// Parse custom lifetimes
-	var accessSec, idSec, refreshSec int64
-	_, _ = fmt.Sscanf(r.FormValue("access_token_lifetime"), "%d", &accessSec)
-	_, _ = fmt.Sscanf(r.FormValue("id_token_lifetime"), "%d", &idSec)
-	_, _ = fmt.Sscanf(r.FormValue("refresh_token_lifetime"), "%d", &refreshSec)
-
-	accessTokenLifetime := time.Duration(accessSec) * time.Second
-	idTokenLifetime := time.Duration(idSec) * time.Second
-	refreshTokenLifetime := time.Duration(refreshSec) * time.Second
+	accessTokenLifetime, idTokenLifetime, refreshTokenLifetime := parseClientLifetimes(r)
 
 	// Parse IDPs
-	allowedIDPs := r.Form["allowed_idps"]
-	if allowedIDPs == nil {
-		allowedIDPs = []string{}
-	}
+	allowedIDPs := parseFormStringSlice(r.Form, "allowed_idps")
 	defaultIDP := r.FormValue("default_idp_id")
 
 	// Parse Scopes & Audiences
-	scopes := r.Form["scopes"]
-	if scopes == nil {
-		scopes = []string{}
-	}
-	audiences := r.Form["audiences"]
-	if audiences == nil {
-		audiences = []string{}
-	}
+	scopes := parseFormStringSlice(r.Form, "scopes")
+	audiences := parseFormStringSlice(r.Form, "audiences")
 
-	errs := make(map[string]string)
-	if clientID == "" {
-		errs["client_id"] = "client ID is required"
-	}
-	if clientName == "" {
-		errs["client_name"] = "client name is required"
-	}
+	errs := validateClientFormInputs(clientID, clientName, redirectURI, frontChannelLogoutURI, backChannelLogoutURI)
 
 	isEdit := id != ""
 
@@ -663,45 +681,30 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var err error
+	clientApp := model.ClientApplication{
+		ClientID:               clientID,
+		ClientName:             clientName,
+		ClientType:             clientType,
+		RedirectURI:            redirectURI,
+		RedirectURIs:           redirectURIs,
+		PostLogoutRedirectURIs: postLogoutURIs,
+		FrontChannelLogoutURI:  frontChannelLogoutURI,
+		BackChannelLogoutURI:   backChannelLogoutURI,
+		AccessTokenLifetime:    accessTokenLifetime,
+		IDTokenLifetime:        idTokenLifetime,
+		RefreshTokenLifetime:   refreshTokenLifetime,
+		AllowedIDPs:            allowedIDPs,
+		DefaultIDP:             defaultIDP,
+		AllowedScopes:          scopes,
+		DefaultScopes:          scopes,
+		AllowedAudiences:       audiences,
+	}
+
 	if isEdit {
-		_, err = h.clientService.UpdateClient(r.Context(), tenant.ID, model.ClientApplication{
-			ClientID:               clientID,
-			ClientName:             clientName,
-			ClientType:             clientType,
-			RedirectURI:            redirectURI,
-			RedirectURIs:           redirectURIs,
-			PostLogoutRedirectURIs: postLogoutURIs,
-			FrontChannelLogoutURI:  frontChannelLogoutURI,
-			BackChannelLogoutURI:   backChannelLogoutURI,
-			AccessTokenLifetime:    accessTokenLifetime,
-			IDTokenLifetime:        idTokenLifetime,
-			RefreshTokenLifetime:   refreshTokenLifetime,
-			AllowedIDPs:            allowedIDPs,
-			DefaultIDP:             defaultIDP,
-			AllowedScopes:          scopes,
-			DefaultScopes:          scopes,
-			AllowedAudiences:       audiences,
-		})
+		_, err = h.clientService.UpdateClient(r.Context(), tenant.ID, clientApp)
 	} else {
-		_, err = h.clientService.CreateClient(r.Context(), tenant.ID, model.ClientApplication{
-			ClientID:               clientID,
-			ClientName:             clientName,
-			ClientType:             clientType,
-			ClientSecret:           clientSecret,
-			RedirectURI:            redirectURI,
-			RedirectURIs:           redirectURIs,
-			PostLogoutRedirectURIs: postLogoutURIs,
-			FrontChannelLogoutURI:  frontChannelLogoutURI,
-			BackChannelLogoutURI:   backChannelLogoutURI,
-			AccessTokenLifetime:    accessTokenLifetime,
-			IDTokenLifetime:        idTokenLifetime,
-			RefreshTokenLifetime:   refreshTokenLifetime,
-			AllowedIDPs:            allowedIDPs,
-			DefaultIDP:             defaultIDP,
-			AllowedScopes:          scopes,
-			DefaultScopes:          scopes,
-			AllowedAudiences:       audiences,
-		})
+		clientApp.ClientSecret = clientSecret
+		_, err = h.clientService.CreateClient(r.Context(), tenant.ID, clientApp)
 	}
 
 	if err != nil {
@@ -1144,4 +1147,15 @@ func (h *HttpAdapter) validateClientWhitelists(tenant *model.Tenant, redirectURI
 		warnings = append(warnings, fmt.Sprintf("Back-Channel Logout URI '%s' is not in the Whitelist", backChannelLogoutURI))
 	}
 	return warnings
+}
+
+func (h *HttpAdapter) adminGenerateSecret(w http.ResponseWriter, r *http.Request) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		http.Error(w, "Failed to generate secure random bytes", http.StatusInternalServerError)
+		return
+	}
+	secret := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(bytes)
+	w.Header().Set("Content-Type", "text/plain")
+	_, _ = w.Write([]byte(secret))
 }

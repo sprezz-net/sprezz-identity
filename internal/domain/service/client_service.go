@@ -76,12 +76,12 @@ func (s *ClientService) DeleteClient(ctx context.Context, tenantID uuid.UUID, cl
 	return s.storage.DeleteClient(ctx, tenantID, clientID)
 }
 
-func (s *ClientService) UpdateClient(ctx context.Context, tenantID uuid.UUID, client model.ClientApplication) (*model.ClientApplication, error) {
-	existing, err := s.storage.GetClient(ctx, tenantID, client.ClientID)
-	if err != nil {
-		return nil, err
-	}
+func applyClientUpdates(existing *model.ClientApplication, client model.ClientApplication) {
+	applyClientMetadata(existing, client)
+	applyClientSecurityAndLifetimes(existing, client)
+}
 
+func applyClientMetadata(existing *model.ClientApplication, client model.ClientApplication) {
 	if client.ClientName != "" {
 		existing.ClientName = client.ClientName
 	}
@@ -103,6 +103,9 @@ func (s *ClientService) UpdateClient(ctx context.Context, tenantID uuid.UUID, cl
 	if client.BackChannelLogoutURI != "" {
 		existing.BackChannelLogoutURI = client.BackChannelLogoutURI
 	}
+}
+
+func applyClientSecurityAndLifetimes(existing *model.ClientApplication, client model.ClientApplication) {
 	if client.GrantTypes != nil {
 		existing.GrantTypes = client.GrantTypes
 	}
@@ -133,8 +136,9 @@ func (s *ClientService) UpdateClient(ctx context.Context, tenantID uuid.UUID, cl
 	if client.IDTokenLifetime > 0 {
 		existing.IDTokenLifetime = client.IDTokenLifetime
 	}
+}
 
-	// Double check schema NOT NULL constraints on nested slice fields before save
+func ensureNonNullClientFields(existing *model.ClientApplication) {
 	if existing.RedirectURIs == nil {
 		existing.RedirectURIs = []string{}
 	}
@@ -159,6 +163,16 @@ func (s *ClientService) UpdateClient(ctx context.Context, tenantID uuid.UUID, cl
 	if existing.AllowedAudiences == nil {
 		existing.AllowedAudiences = []string{}
 	}
+}
+
+func (s *ClientService) UpdateClient(ctx context.Context, tenantID uuid.UUID, client model.ClientApplication) (*model.ClientApplication, error) {
+	existing, err := s.storage.GetClient(ctx, tenantID, client.ClientID)
+	if err != nil {
+		return nil, err
+	}
+
+	applyClientUpdates(existing, client)
+	ensureNonNullClientFields(existing)
 
 	if err := s.storage.SaveClient(ctx, *existing); err != nil {
 		return nil, err

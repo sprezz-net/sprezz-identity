@@ -12,14 +12,43 @@ func marshalProviders(providers []model.IdentityProvider) string {
         ID    string `json:"id"`
         Alias string `json:"alias"`
     }
-    list := []IDPInfo{{ID: "local", Alias: "Local Accounts"}}
+    list := []IDPInfo{{ID: "username-password", Alias: "Local Accounts"}}
     for _, p := range providers {
-        list = append(list, IDPInfo{ID: p.ID.String(), Alias: p.Alias})
+        if p.IDPType != "username-password" {
+            list = append(list, IDPInfo{ID: p.ID.String(), Alias: p.Alias})
+        }
     }
     bytes, err := json.Marshal(list)
     if err != nil {
         return "[]"
     }
+    return string(bytes)
+}
+
+func getInitialClientType(clientType string) string {
+    if clientType == "" {
+        return "confidential"
+    }
+    return clientType
+}
+
+func hasGrantType(grantTypes []string, target string, def bool) bool {
+    if len(grantTypes) == 0 {
+        return def
+    }
+    for _, gt := range grantTypes {
+        if gt == target {
+            return true
+        }
+    }
+    return false
+}
+
+func marshalStringSlice(slice []string) string {
+    if len(slice) == 0 {
+        return "[]"
+    }
+    bytes, _ := json.Marshal(slice)
     return string(bytes)
 }
 
@@ -61,6 +90,19 @@ templ AdminLayout(props AdminLayoutProps) {
                 el.dispatchEvent(new CustomEvent('modal-close', { bubbles: true }));
                 el.remove();
             }
+            document.addEventListener('DOMContentLoaded', () => {
+                // 1. HTMX Component Discovery Bridge
+                document.body.addEventListener('htmx:afterSwap', (event) => {
+                    if (window.Alpine && event.detail.target) {
+                        if (typeof window.Alpine.initTree === 'function') {
+                            window.Alpine.initTree(event.detail.target);
+                        } else if (typeof window.Alpine.processTree === 'function') {
+                            window.Alpine.processTree(event.detail.target);
+                        }
+                    }
+                });
+            });
+
             document.addEventListener('alpine:init', () => {
                 Alpine.data('urlManager', (initialUrls) => ({
                     urls: initialUrls || [],
@@ -85,15 +127,24 @@ templ AdminLayout(props AdminLayoutProps) {
                     }
                 }));
 
-                Alpine.data('scopesManager', (initialScopes, inputName) => ({
+                // 2. CSP-Compliant Scopes Component Manager
+                Alpine.data('scopesManager', () => ({
                     builtIn: ['openid', 'profile', 'email', 'offline_access'],
                     selectedBuiltIn: [],
                     customTags: [],
                     newTag: '',
                     error: '',
-                    inputName: inputName || 'scopes',
+                    inputName: 'scopes',
+
                     init() {
-                        const initList = initialScopes || [];
+                        this.inputName = this.$el.dataset.inputName || 'scopes';
+                        let initList = [];
+                        try {
+                            initList = JSON.parse(this.$el.dataset.initialScopes) || [];
+                        } catch(e) {
+                            initList = [];
+                        }
+
                         initList.forEach(s => {
                             if (this.builtIn.includes(s)) {
                                 this.selectedBuiltIn.push(s);
@@ -125,11 +176,21 @@ templ AdminLayout(props AdminLayoutProps) {
                     }
                 }));
 
-                Alpine.data('audiencesManager', (initialAudiences, inputName) => ({
-                    audiences: initialAudiences || [],
+                // 3. CSP-Compliant Audiences Component Manager
+                Alpine.data('audiencesManager', () => ({
+                    audiences: [],
                     newAudience: '',
                     error: '',
-                    inputName: inputName || 'audiences',
+                    inputName: 'audiences',
+
+                    init() {
+                        this.inputName = this.$el.dataset.inputName || 'audiences';
+                        try {
+                            this.audiences = JSON.parse(this.$el.dataset.initialAudiences) || [];
+                        } catch(e) {
+                            this.audiences = [];
+                        }
+                    },
                     addAudience() {
                         this.error = '';
                         const trimmed = this.newAudience.trim();
@@ -177,6 +238,11 @@ templ AdminLayout(props AdminLayoutProps) {
                         else if (this.unit === 'hours') multiplier = 3600;
                         else if (this.unit === 'days') multiplier = 86400;
                         this.seconds = Math.round(val * multiplier);
+                    },
+                    snapToPublicDefault() {
+                        this.value = 1;
+                        this.unit = 'days';
+                        this.updateSeconds();
                     }
                 }));
 
@@ -201,6 +267,139 @@ templ AdminLayout(props AdminLayoutProps) {
                             .replace(/\+/g, '-')
                             .replace(/\//g, '_')
                             .replace(/=/g, '');
+                    }
+                }));
+
+                Alpine.data('clientFormManager', (initialType, initialAuthCode, initialClientCredentials, initialIdpCount) => ({
+                    clientType: initialType || 'confidential',
+                    authCode: !!initialAuthCode,
+                    clientCredentials: !!initialClientCredentials,
+                    idpCount: parseInt(initialIdpCount) || 0,
+                    isSubmitDisabled: false,
+
+                    init() {
+                        this.checkSubmit();
+                        this.$watch('clientType', (val) => {
+                            if (val === 'public') {
+                                this.clientCredentials = false;
+                                this.authCode = true;
+                                this.$dispatch('client-type-public');
+                            }
+                            this.checkSubmit();
+                        });
+                        this.$watch('authCode', (val) => { this.checkSubmit(); });
+                        this.$watch('clientCredentials', (val) => { this.checkSubmit(); });
+                    },
+
+                    checkSubmit() {
+                        if (this.clientType === 'public' || this.authCode) {
+                            this.isSubmitDisabled = (this.idpCount === 0);
+                        } else {
+                            this.isSubmitDisabled = false;
+                        }
+                    },
+
+                    handleClientType(type) {
+                        this.clientType = type;
+                    },
+
+                    handleAuthCodeChange(checked) {
+                        this.authCode = checked;
+                        this.checkSubmit();
+                        this.$dispatch('grant-type-change', { authCode: checked });
+                    },
+
+                    handleClientCredentialsChange(checked) {
+                        this.clientCredentials = checked;
+                        this.checkSubmit();
+                    },
+
+                    handleIdpChange(count) {
+                        this.idpCount = count;
+                    }
+                }));
+
+                Alpine.data('idpRouter', (initialAllowed, availablePool, initialDefaultIdp) => ({
+                    allowedIds: initialAllowed || [],
+                    defaultId: initialDefaultIdp || '',
+                    available: availablePool || [],
+                    allowedList: [],
+                    isInvalidState: false,
+
+                    init() {
+                        this.updateAllowedList();
+                    },
+
+                    toggleIdp(id) {
+                        if (this.allowedIds.includes(id)) {
+                            this.allowedIds = this.allowedIds.filter(x => x !== id);
+                            if (this.defaultId === id) this.defaultId = '';
+                        } else {
+                            this.allowedIds.push(id);
+                        }
+                        this.updateAllowedList();
+                    },
+
+                    updateAllowedList() {
+                        let list = [];
+                        if (this.allowedIds.includes('username-password')) {
+                            list.push({ id: 'username-password', name: 'Local Accounts' });
+                        }
+                        this.available.forEach(p => {
+                            if (this.allowedIds.includes(p.id)) {
+                                list.push({ id: p.id, name: p.name });
+                            }
+                        });
+                        this.allowedList = list;
+                        this.isInvalidState = (this.allowedIds.length === 0);
+
+                        this.$dispatch('idp-count-update', { count: this.allowedIds.length });
+                    }
+                }));
+
+                // 4. CSP-Compliant Single URI Input Validator
+                Alpine.data('uriValidator', (initialValue) => ({
+                    value: initialValue || '',
+                    error: '',
+                    validate() {
+                        const trimmed = this.value.trim();
+                        if (!trimmed) {
+                            this.error = '';
+                            return;
+                        }
+                        if (!trimmed.includes('://')) {
+                            this.error = 'Invalid URL format (must include protocol like http:// or https://)';
+                        } else {
+                            this.error = '';
+                        }
+                    }
+                }));
+
+                // 5. CSP-Compliant Modal Controller
+                Alpine.data('modalController', () => ({
+                    isOpen: true,
+                    init() {
+                        this.$dispatch('modal-open');
+                    },
+                    close() {
+                        this.isOpen = false;
+                        window.setTimeout(purgeModal, 200, this.$el);
+                    }
+                }));
+
+                // 6. CSP-Compliant Async ID & Secret Generator
+                Alpine.data('idSecretGenerator', (initialVal) => ({
+                    value: initialVal || '',
+                    showSecret: false,
+                    generate() {
+                        window.fetch('/admin/clients/generate-secret')
+                            .then(response => response.text())
+                            .then(text => {
+                                this.value = text;
+                            });
+                    },
+                    toggleShow() {
+                        this.showSecret = !this.showSecret;
                     }
                 }));
             });
@@ -268,6 +467,24 @@ templ InputField(label, name, typeValue, value, errorStr string) {
     </div>
 }
 
+templ URIInputField(label, name, value, errorStr string) {
+    <div x-data={ fmt.Sprintf("uriValidator('%s')", value) } class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1">{ label }</label>
+        <input
+            type="text"
+            name={ name }
+            x-model="value"
+            @input="validate()"
+            class={ "w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500", templ.KV("border-red-500 focus:ring-red-500 focus:border-red-500", errorStr != ""), templ.KV("border-slate-300", errorStr == "") }
+            :class="error ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : ''"
+        />
+        <p x-show="error" class="text-xs text-red-500 mt-1" x-text="error" style="display: none;"></p>
+        if errorStr != "" {
+            <p x-show="!error" class="text-xs text-red-500 mt-1">{ errorStr }</p>
+        }
+    </div>
+}
+
 templ StatusBadge(isActive bool) {
     if isActive {
         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
@@ -306,8 +523,7 @@ templ VerifiedBadge(isVerified bool) {
 
 templ Modal(title, fetchUrl string) {
     <div
-        x-data="{ isOpen: true }"
-        x-init="$dispatch('modal-open')"
+        x-data="modalController"
         x-show="isOpen"
         x-transition:enter="transition ease-out duration-200"
         x-transition:enter-start="opacity-0"
@@ -316,7 +532,7 @@ templ Modal(title, fetchUrl string) {
         x-transition:leave-start="opacity-100"
         x-transition:leave-end="opacity-0"
         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
-        @keydown.escape.window="isOpen = false; setTimeout(purgeModal, 200, $el)"
+        @keydown.escape.window="close()"
     >
         <div
             class="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col transform transition-all"
@@ -326,14 +542,14 @@ templ Modal(title, fetchUrl string) {
             x-transition:leave="transition ease-in duration-200"
             x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
             x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-            @click.outside="isOpen = false; setTimeout(purgeModal, 200, $root)"
+            @click.outside="close()"
         >
             <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
                 <h3 class="text-lg font-bold text-slate-800">{ title }</h3>
                 <button
                     type="button"
                     class="text-slate-400 hover:text-slate-600 transition"
-                    @click="isOpen = false; setTimeout(purgeModal, 200, $root)"
+                    @click="close()"
                 >
                     ✕
                 </button>
@@ -462,14 +678,14 @@ templ TenantsContent(props TenantsPageProps) {
                     <form hx-post="/admin/tenants/settings" hx-indicator="#global-spinner" class="space-y-4">
                         @InputField("Tenant Name", "name", "text", props.ActiveTenant.Name, props.Errors["name"])
                         @InputField("Canonical Domain", "domain", "text", props.ActiveTenant.Domain, props.Errors["domain"])
-                        @InputField("Default Redirect URI", "default_redirect_uri", "text", props.ActiveTenant.Config.DefaultRedirectURI, props.Errors["default_redirect_uri"])
+                        @URIInputField("Default Redirect URI", "default_redirect_uri", props.ActiveTenant.Config.DefaultRedirectURI, props.Errors["default_redirect_uri"])
                         @URLManager("Redirect Whitelist", "redirect_whitelist", props.ActiveTenant.Config.RedirectWhitelist, props.Errors["redirect_whitelist"])
 
                         <!-- Tenant Predefined Scopes & Audiences visual configs -->
                         <div class="border-t border-gray-200 pt-4 mt-4">
                             <h4 class="text-sm font-semibold text-slate-800 mb-3 font-medium">Tenant Scopes & Audiences</h4>
 
-                            <div x-data={ fmt.Sprintf("scopesManager(%s, 'predefined_scopes')", marshalURLs(props.ActiveTenant.Config.PredefinedScopes)) } class="mb-4">
+                            <div x-data="scopesManager" data-input-name="predefined_scopes" data-initial-scopes={ marshalURLs(props.ActiveTenant.Config.PredefinedScopes) } class="mb-4">
                                 <label class="block text-sm font-medium text-slate-700 mb-1.5">Predefined Scopes</label>
 
                                 <template x-for="tag in customTags" :key="tag">
@@ -525,7 +741,7 @@ templ TenantsContent(props TenantsPageProps) {
                                 <div x-show="error" class="text-xs text-red-500 mt-1" x-text="error" style="display: none;"></div>
                             </div>
 
-                            <div x-data={ fmt.Sprintf("audiencesManager(%s, 'predefined_audiences')", marshalURLs(props.ActiveTenant.Config.PredefinedAudiences)) } class="mb-4">
+                            <div x-data="audiencesManager" data-input-name="predefined_audiences" data-initial-audiences={ marshalURLs(props.ActiveTenant.Config.PredefinedAudiences) } class="mb-4">
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Predefined Token Audiences</label>
 
                                 <template x-for="aud in audiences" :key="aud">
@@ -600,14 +816,14 @@ templ TenantsContent(props TenantsPageProps) {
                 <form hx-post="/admin/tenants/settings" hx-indicator="#global-spinner" class="space-y-4">
                     @InputField("Tenant Name", "name", "text", props.ActiveTenant.Name, props.Errors["name"])
                     @InputField("Canonical Domain", "domain", "text", props.ActiveTenant.Domain, props.Errors["domain"])
-                    @InputField("Default Redirect URI", "default_redirect_uri", "text", props.ActiveTenant.Config.DefaultRedirectURI, props.Errors["default_redirect_uri"])
+                    @URIInputField("Default Redirect URI", "default_redirect_uri", props.ActiveTenant.Config.DefaultRedirectURI, props.Errors["default_redirect_uri"])
                     @URLManager("Redirect Whitelist", "redirect_whitelist", props.ActiveTenant.Config.RedirectWhitelist, props.Errors["redirect_whitelist"])
 
                     <!-- Tenant Predefined Scopes & Audiences visual configs -->
                     <div class="border-t border-gray-200 pt-4 mt-4">
                         <h4 class="text-sm font-semibold text-slate-800 mb-3 font-medium">Tenant Scopes & Audiences</h4>
 
-                        <div x-data={ fmt.Sprintf("scopesManager(%s, 'predefined_scopes')", marshalURLs(props.ActiveTenant.Config.PredefinedScopes)) } class="mb-4">
+                        <div x-data="scopesManager" data-input-name="predefined_scopes" data-initial-scopes={ marshalURLs(props.ActiveTenant.Config.PredefinedScopes) } class="mb-4">
                             <label class="block text-sm font-medium text-slate-700 mb-1.5">Predefined Scopes</label>
 
                             <template x-for="tag in customTags" :key="tag">
@@ -663,7 +879,7 @@ templ TenantsContent(props TenantsPageProps) {
                             <div x-show="error" class="text-xs text-red-500 mt-1" x-text="error" style="display: none;"></div>
                         </div>
 
-                        <div x-data={ fmt.Sprintf("audiencesManager(%s, 'predefined_audiences')", marshalURLs(props.ActiveTenant.Config.PredefinedAudiences)) } class="mb-4">
+                        <div x-data="audiencesManager" data-input-name="predefined_audiences" data-initial-audiences={ marshalURLs(props.ActiveTenant.Config.PredefinedAudiences) } class="mb-4">
                             <label class="block text-sm font-medium text-slate-700 mb-1">Predefined Token Audiences</label>
 
                             <template x-for="aud in audiences" :key="aud">
@@ -688,9 +904,9 @@ templ TenantsContent(props TenantsPageProps) {
                             <div class="flex space-x-2">
                                 <input
                                     type="text"
-                                    x-model="newTag"
-                                    @keydown.enter.prevent="addTag()"
-                                    placeholder="Custom scope (e.g. read:orders)"
+                                    x-model="newAudience"
+                                    @keydown.enter.prevent="addAudience()"
+                                    placeholder="Audience identifier (e.g. https://api.example.com)"
                                     class="flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                                 />
                                 <button
@@ -851,309 +1067,24 @@ type ClientFormProps struct {
 }
 
 templ ClientForm(props ClientFormProps) {
-    <form hx-post="/admin/clients" hx-target="#modal-body" class="space-y-4">
-        @InputField("Application Name", "client_name", "text", props.Client.ClientName, props.Errors["client_name"])
-
-        if props.IsEdit {
-            <input type="hidden" name="id" value={ props.Client.ID }/>
-            <input type="hidden" name="client_id" value={ props.Client.ClientID }/>
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-slate-500 mb-1">Client ID</label>
-                <div class="font-mono text-gray-800 bg-gray-50 px-3 py-2 border border-slate-300 rounded-lg">{ props.Client.ClientID }</div>
-            </div>
-        } else {
-            @InputField("Client ID", "client_id", "text", props.Client.ClientID, props.Errors["client_id"])
-        }
-
-        <div class="mb-4">
-            <label class="block text-sm font-medium text-slate-700 mb-1">Client Type</label>
-            <select name="client_type" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                <option value="confidential" selected?={ props.Client.ClientType == "confidential" }>Confidential</option>
-                <option value="public" selected?={ props.Client.ClientType == "public" }>Public</option>
-            </select>
-        </div>
-
-        if props.IsEdit && props.Client.ClientType == "confidential" {
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-slate-700 mb-1">Client Secret</label>
-                <div id="client-secret-container">
-                    <div class="flex items-center space-x-2">
-                        <div class="font-mono text-gray-400 bg-gray-50 px-3 py-2 border border-slate-300 rounded-lg flex-1">••••••••••••••••</div>
-                        if !props.ReadOnly {
-                            <button
-                                type="button"
-                                hx-post={ fmt.Sprintf("/admin/clients/%s/reset-secret", props.Client.ClientID) }
-                                hx-target="#client-secret-container"
-                                hx-confirm="Are you sure you want to reset the Client Secret? The existing secret will be invalidated immediately."
-                                class="px-4 py-2 bg-yellow-600 text-white rounded-lg text-sm font-semibold hover:bg-yellow-700 transition"
-                            >
-                                Reset Secret
-                            </button>
-                        }
-                    </div>
-                </div>
-            </div>
-        } else if !props.IsEdit {
-            <div x-data="secretGenerator" class="mb-4">
-                <label class="block text-sm font-medium text-slate-700 mb-1">Initial Client Secret</label>
-                <div class="flex space-x-2">
-                    <input
-                        type="text"
-                        name="client_secret"
-                        x-model="secret"
-                        placeholder="Enter custom secret or generate one"
-                        class="flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                    <button
-                        type="button"
-                        @click="generate()"
-                        class="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-semibold hover:bg-slate-700 transition"
-                    >
-                        Prefill Random
-                    </button>
-                </div>
-                <p class="text-xs text-slate-500 mt-1">For confidential clients only. Safe URL-safe Base64 random bytes will be generated.</p>
-            </div>
-        }
-
-        @InputField("Redirect URI", "redirect_uri", "text", props.Client.RedirectURI, props.Errors["redirect_uri"])
-        @URLManager("Additional Redirect URIs", "redirect_uris", props.Client.RedirectURIs, props.Errors["redirect_uris"])
-        @URLManager("Post-Logout Redirect URIs", "post_logout_redirect_uris", props.Client.PostLogoutRedirectURIs, props.Errors["post_logout_redirect_uris"])
-        @InputField("Front-Channel Logout URI", "front_channel_logout_uri", "text", props.Client.FrontChannelLogoutURI, props.Errors["front_channel_logout_uri"])
-        @InputField("Back-Channel Logout URI", "back_channel_logout_uri", "text", props.Client.BackChannelLogoutURI, props.Errors["back_channel_logout_uri"])
-
-        <!-- Interactive Scopes and Audiences Config -->
-        <div class="border-t border-slate-200 pt-4 mt-4">
-            <h4 class="text-sm font-semibold text-slate-800 mb-3 font-medium">Security & Scope Configuration</h4>
-
-            <div x-data={ fmt.Sprintf("scopesManager(%s)", marshalURLs(props.Client.AllowedScopes)) } class="mb-4">
-                <label class="block text-sm font-medium text-slate-700 mb-1.5">OAuth Scopes</label>
-
-                <template x-for="tag in customTags" :key="tag">
-                    <input type="hidden" name="scopes" :value="tag" />
-                </template>
-
-                <div class="grid grid-cols-2 gap-2 mb-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                    <template x-for="s in builtIn" :key="s">
-                        <label class="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer select-none">
-                            <input
-                                type="checkbox"
-                                name="scopes"
-                                :value="s"
-                                x-model="selectedBuiltIn"
-                                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                            />
-                            <span x-text="s" class="font-mono text-xs"></span>
-                        </label>
-                    </template>
-                </div>
-
-                <div class="flex flex-wrap gap-1.5 mb-2" x-show="customTags.length > 0">
-                    <template x-for="(tag, index) in customTags" :key="tag">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200 font-mono">
-                            <span x-text="tag"></span>
-                            <button
-                                type="button"
-                                @click="removeTag(index)"
-                                class="ml-1.5 text-blue-500 hover:text-blue-700 font-bold focus:outline-none"
-                            >
-                                ✕
-                            </button>
-                        </span>
-                    </template>
-                </div>
-
-                <div class="flex space-x-2">
-                    <input
-                        type="text"
-                        x-model="newTag"
-                        @keydown.enter.prevent="addTag()"
-                        placeholder="Custom scope (e.g. read:orders)"
-                        class="flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                    <button
-                        type="button"
-                        @click="addTag()"
-                        class="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-semibold hover:bg-slate-700 transition"
-                    >
-                        Add Scope
-                    </button>
-                </div>
-                <div x-show="error" class="text-xs text-red-500 mt-1" x-text="error" style="display: none;"></div>
-            </div>
-
-            <div x-data={ fmt.Sprintf("audiencesManager(%s)", marshalURLs(props.Client.AllowedAudiences)) } class="mb-4">
-                <label class="block text-sm font-medium text-slate-700 mb-1">Token Audiences</label>
-
-                <template x-for="aud in audiences" :key="aud">
-                    <input type="hidden" name="audiences" :value="aud" />
-                </template>
-
-                <div class="flex flex-wrap gap-1.5 mb-2" x-show="audiences.length > 0">
-                    <template x-for="(aud, index) in audiences" :key="aud">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-200 font-mono">
-                            <span x-text="aud"></span>
-                            <button
-                                type="button"
-                                @click="removeAudience(index)"
-                                class="ml-1.5 text-purple-500 hover:text-purple-700 font-bold focus:outline-none"
-                            >
-                                ✕
-                            </button>
-                        </span>
-                    </template>
-                </div>
-
-                <div class="flex space-x-2">
-                    <input
-                        type="text"
-                        x-model="newAudience"
-                        @keydown.enter.prevent="addAudience()"
-                        placeholder="Audience identifier (e.g. https://api.example.com)"
-                        class="flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                    <button
-                        type="button"
-                        @click="addAudience()"
-                        class="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-semibold hover:bg-slate-700 transition"
-                    >
-                        Add Audience
-                    </button>
-                </div>
-                <div x-show="error" class="text-xs text-red-500 mt-1" x-text="error" style="display: none;"></div>
-            </div>
-        </div>
-
-        <!-- Token Lifetime Settings -->
-        <div class="border-t border-slate-200 pt-4 mt-4">
-            <h4 class="text-sm font-semibold text-slate-800 mb-3 font-medium">Token Lifetime Settings</h4>
-
-            <div x-data={ fmt.Sprintf("lifetimeCalculator(%d)", int64(props.Client.AccessTokenLifetime / time.Second)) } class="mb-4">
-                <label class="block text-sm font-medium text-slate-700 mb-1">Access Token Lifetime</label>
-                <input type="hidden" name="access_token_lifetime" :value="seconds" />
-                <div class="flex space-x-2">
-                    <input
-                        type="number"
-                        min="1"
-                        x-model="value"
-                        @input="updateSeconds()"
-                        class="w-32 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                    <select
-                        x-model="unit"
-                        @change="updateSeconds()"
-                        class="px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    >
-                        <option value="minutes">Minutes</option>
-                        <option value="hours">Hours</option>
-                        <option value="days">Days</option>
-                    </select>
-                </div>
-            </div>
-
-            <div x-data={ fmt.Sprintf("lifetimeCalculator(%d)", int64(props.Client.IDTokenLifetime / time.Second)) } class="mb-4">
-                <label class="block text-sm font-medium text-slate-700 mb-1">ID Token Lifetime</label>
-                <input type="hidden" name="id_token_lifetime" :value="seconds" />
-                <div class="flex space-x-2">
-                    <input
-                        type="number"
-                        min="1"
-                        x-model="value"
-                        @input="updateSeconds()"
-                        class="w-32 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                    <select
-                        x-model="unit"
-                        @change="updateSeconds()"
-                        class="px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    >
-                        <option value="minutes">Minutes</option>
-                        <option value="hours">Hours</option>
-                        <option value="days">Days</option>
-                    </select>
-                </div>
-            </div>
-
-            <div x-data={ fmt.Sprintf("lifetimeCalculator(%d)", int64(props.Client.RefreshTokenLifetime / time.Second)) } class="mb-4">
-                <label class="block text-sm font-medium text-slate-700 mb-1">Refresh Token Lifetime</label>
-                <input type="hidden" name="refresh_token_lifetime" :value="seconds" />
-                <div class="flex space-x-2">
-                    <input
-                        type="number"
-                        min="1"
-                        x-model="value"
-                        @input="updateSeconds()"
-                        class="w-32 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                    <select
-                        x-model="unit"
-                        @change="updateSeconds()"
-                        class="px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    >
-                        <option value="minutes">Minutes</option>
-                        <option value="hours">Hours</option>
-                        <option value="days">Days</option>
-                    </select>
-                </div>
-            </div>
-        </div>
-
-        <!-- Identity Provider Routing -->
-        <div class="border-t border-slate-200 pt-4 mt-4">
-            <h4 class="text-sm font-semibold text-slate-800 mb-3 font-medium">Identity Provider Routing</h4>
-
-            <div x-data={ fmt.Sprintf("idpRouter(%s, %s)", marshalURLs(props.Client.AllowedIDPs), marshalProviders(props.Providers)) } class="mb-4">
-                <label class="block text-sm font-medium text-slate-700 mb-2">Allowed Identity Providers</label>
-                <div class="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200 mb-3">
-                    <label class="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer select-none">
-                        <input
-                            type="checkbox"
-                            name="allowed_idps"
-                            value="local"
-                            x-model="allowed"
-                            class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                        />
-                        <span>Local Accounts</span>
-                    </label>
-
-                    <template x-for="p in allProviders" :key="p.id">
-                        <template x-if="p.id !== 'local'">
-                            <label class="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer select-none">
-                                <input
-                                    type="checkbox"
-                                    name="allowed_idps"
-                                    :value="p.id"
-                                    x-model="allowed"
-                                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                />
-                                <span x-text="p.alias"></span>
-                            </label>
-                        </template>
-                    </template>
-                </div>
-
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Default Identity Provider</label>
-                    <select
-                        name="default_idp_id"
-                        class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    >
-                        <option value="">-- No Default Bypass --</option>
-                        <template x-for="p in allProviders" :key="p.id">
-                            <template x-if="allowed.includes(p.id)">
-                                <option :value="p.id" x-text="p.alias" :selected="p.id === '{ props.Client.DefaultIDP }'"></option>
-                            </template>
-                        </template>
-                    </select>
-                    <p class="text-xs text-slate-500 mt-1">If set, the login screen will automatically redirect to this IdP bypass screen.</p>
-                </div>
-            </div>
-        </div>
+    <form
+        hx-post="/admin/clients"
+        hx-target="#modal-body"
+        class="space-y-6"
+        x-data={ fmt.Sprintf("clientFormManager('%s', %t, %t, %d)", getInitialClientType(props.Client.ClientType), hasGrantType(props.Client.GrantTypes, "authorization_code", true), hasGrantType(props.Client.GrantTypes, "client_credentials", false), len(props.Client.AllowedIDPs)) }
+        @idp-count-update.window="handleIdpChange($event.detail.count)"
+    >
+        @ClientIdentitySection(props)
+        @ClientGrantTypesSection()
+        @ClientSecuritySection(props)
+        @ClientUrisSection(props)
+        @ClientLifetimesSection(props)
+        @ClientIdpRoutingSection(props)
 
         <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
             <button
                 type="button"
-                class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition"
+                class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition cursor-pointer"
                 @click="isOpen = false"
             >
                 Close
@@ -1161,7 +1092,8 @@ templ ClientForm(props ClientFormProps) {
             if !props.ReadOnly {
                 <button
                     type="submit"
-                    class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
+                    :disabled="isSubmitDisabled"
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     if props.IsEdit {
                         Save Changes
@@ -1526,6 +1458,322 @@ templ UserDetails(props UserDetailsProps) {
             >
                 Close
             </button>
+        </div>
+    </div>
+}
+
+templ ClientIdentitySection(props ClientFormProps) {
+    <div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4">
+        <h3 class="text-base font-semibold text-gray-900">Application Identity</h3>
+
+        @InputField("Application Name", "client_name", "text", props.Client.ClientName, props.Errors["client_name"])
+
+        if props.IsEdit {
+            <input type="hidden" name="id" value={ props.Client.ID }/>
+            <input type="hidden" name="client_id" value={ props.Client.ClientID }/>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Client ID</label>
+                <div class="font-mono text-gray-800 bg-gray-50 px-3 py-2 border border-slate-300 rounded-lg select-all">{ props.Client.ClientID }</div>
+            </div>
+        } else {
+            <div x-data="idSecretGenerator('')">
+                <label class="block text-sm font-medium text-slate-700 mb-1">Client ID</label>
+                <div class="flex space-x-2">
+                    <input
+                        type="text"
+                        name="client_id"
+                        x-model="value"
+                        placeholder="Enter custom Client ID or generate one"
+                        pattern="^[a-zA-Z0-9\-_\.~]+$"
+                        title="Only RFC 3986 unreserved characters allowed (A-Z, a-z, 0-9, -, _, ., ~)"
+                        class="flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono"
+                        required
+                    />
+                    <button
+                        type="button"
+                        @click="generate()"
+                        class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm font-semibold transition cursor-pointer"
+                    >
+                        Generate ID
+                    </button>
+                </div>
+                <p class="text-xs text-slate-500 mt-1">Unique identifier. Restricted to unreserved characters (RFC 3986 Section 2.3).</p>
+            </div>
+        }
+
+        <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Client Type</label>
+            <select name="client_type" x-model="clientType" @change="handleClientType($el.value)" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="confidential">Confidential (Web Apps / Servers)</option>
+                <option value="public">Public (Native / Single Page Apps)</option>
+            </select>
+        </div>
+
+        <!-- Client Secret (Only visible for Confidential) -->
+        <div x-show="clientType === 'confidential'" x-transition class="pt-2">
+            if props.IsEdit {
+                <label class="block text-sm font-medium text-slate-700 mb-1">Client Secret</label>
+                <div id="client-secret-container" class="flex items-center space-x-2">
+                    <div class="font-mono text-gray-400 bg-gray-50 px-3 py-2 border border-slate-300 rounded-lg flex-1">••••••••••••••••</div>
+                    if !props.ReadOnly {
+                        <button type="button" hx-post={ fmt.Sprintf("/admin/clients/%s/reset-secret", props.Client.ClientID) } hx-target="#client-secret-container" hx-confirm="Are you sure you want to reset the Client Secret?" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-semibold transition cursor-pointer">Reset Secret</button>
+                    }
+                </div>
+            } else {
+                <div x-data="idSecretGenerator('')">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Initial Client Secret</label>
+                    <div class="flex space-x-2">
+                        <div class="relative flex-1">
+                            <input
+                                :type="showSecret ? 'text' : 'password'"
+                                name="client_secret"
+                                x-model="value"
+                                placeholder="Enter custom secret or generate one"
+                                pattern="^[a-zA-Z0-9\-_\.~]+$"
+                                title="Only RFC 3986 unreserved characters allowed (A-Z, a-z, 0-9, -, _, ., ~)"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono"
+                            />
+                            <button
+                                type="button"
+                                @click="toggleShow()"
+                                class="absolute right-2 top-2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                            >
+                                <span x-text="showSecret ? '🙈' : '👁️'"></span>
+                            </button>
+                        </div>
+                        <button
+                            type="button"
+                            @click="generate()"
+                            class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm font-semibold transition cursor-pointer"
+                        >
+                            Generate
+                        </button>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-1">Restricted to unreserved characters (RFC 3986 Section 2.3).</p>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+templ ClientGrantTypesSection() {
+    <div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4">
+        <h3 class="text-base font-semibold text-gray-900">Allowed Grant Types</h3>
+        <div class="flex flex-col space-y-2">
+            <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer select-none">
+                <input
+                    type="checkbox"
+                    name="grant_types"
+                    value="authorization_code"
+                    :checked="authCode"
+                    :disabled="clientType === 'public'"
+                    @change="handleAuthCodeChange($el.checked)"
+                    class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span>Authorization Code Flow (Requires User Login)</span>
+            </label>
+            <label x-show="clientType === 'confidential'" x-transition class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer select-none">
+                <input
+                    type="checkbox"
+                    name="grant_types"
+                    value="client_credentials"
+                    :checked="clientCredentials"
+                    @change="handleClientCredentialsChange($el.checked)"
+                    class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span>Client Credentials Flow (Machine-to-Machine / No User)</span>
+            </label>
+        </div>
+    </div>
+}
+
+templ ClientSecuritySection(props ClientFormProps) {
+    <div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-6">
+        <!-- 3. Scopes Configuration -->
+        <div x-data="scopesManager" data-input-name="scopes" data-initial-scopes={ marshalURLs(props.Client.AllowedScopes) } class="mb-4">
+            <label class="block text-sm font-medium text-slate-700 mb-2">OAuth Scopes</label>
+            <template x-for="tag in customTags"><input type="hidden" name="scopes" :value="tag"/></template>
+            <div class="grid grid-cols-2 gap-2 mb-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <template x-for="s in builtIn">
+                    <label class="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer select-none">
+                        <input type="checkbox" name="scopes" :value="s" x-model="selectedBuiltIn" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"/>
+                        <span x-text="s" class="font-mono text-xs"></span>
+                    </label>
+                </template>
+            </div>
+            <div class="flex flex-wrap gap-1.5 mb-2">
+                <template x-for="(tag, index) in customTags" :key="tag">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-100 text-blue-800 font-mono">
+                        <span x-text="tag"></span>
+                        <button type="button" @click="removeTag(index)" class="ml-1.5 text-blue-500 hover:text-blue-700">✕</button>
+                    </span>
+                </template>
+            </div>
+            <div class="flex space-x-2">
+                <input type="text" x-model="newTag" @keydown.enter.prevent="addTag()" placeholder="e.g. read:orders" class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                <button type="button" @click="addTag()" class="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-semibold hover:bg-slate-700 cursor-pointer">Add</button>
+            </div>
+        </div>
+
+        <!-- Token Audiences (aud) -->
+        <div x-data="audiencesManager" data-input-name="audiences" data-initial-audiences={ marshalURLs(props.Client.AllowedAudiences) } class="mb-4 pt-4 border-t border-gray-100">
+            <label class="block text-sm font-medium text-slate-700 mb-2">Token Audiences (aud)</label>
+            <template x-for="aud in audiences"><input type="hidden" name="audiences" :value="aud"/></template>
+            <div class="flex flex-wrap gap-1.5 mb-2">
+                <template x-for="(aud, index) in audiences" :key="aud">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-purple-100 text-purple-800 font-mono">
+                        <span x-text="aud"></span>
+                        <button type="button" @click="removeAudience(index)" class="ml-1.5 text-purple-500 hover:text-purple-700">✕</button>
+                    </span>
+                </template>
+            </div>
+            <div class="flex space-x-2">
+                <input type="text" x-model="newAudience" @keydown.enter.prevent="addAudience()" placeholder="e.g. https://example.com" class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                <button type="button" @click="addAudience()" class="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-semibold hover:bg-slate-700 cursor-pointer">Add</button>
+            </div>
+        </div>
+    </div>
+}
+
+templ ClientUrisSection(props ClientFormProps) {
+    <!-- 4. Authorized URIs Matrix -->
+    <div x-show="clientType === 'public' || authCode" x-transition class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4">
+        <h3 class="text-base font-semibold text-gray-900">Redirect & Logout URIs</h3>
+        @URIInputField("Default Redirect URI", "redirect_uri", props.Client.RedirectURI, props.Errors["redirect_uri"])
+        @URLManager("Additional Redirect URIs", "redirect_uris", props.Client.RedirectURIs, props.Errors["redirect_uris"])
+        @URLManager("Post-Logout Redirect URIs", "post_logout_redirect_uris", props.Client.PostLogoutRedirectURIs, props.Errors["post_logout_redirect_uris"])
+        @URIInputField("Front-Channel Logout URI", "front_channel_logout_uri", props.Client.FrontChannelLogoutURI, props.Errors["front_channel_logout_uri"])
+        @URIInputField("Back-Channel Logout URI", "back_channel_logout_uri", props.Client.BackChannelLogoutURI, props.Errors["back_channel_logout_uri"])
+    </div>
+}
+
+templ ClientLifetimesSection(props ClientFormProps) {
+    <!-- 5. Token Lifetimes Policy -->
+    <div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4">
+        <h3 class="text-base font-semibold text-gray-900">Token Lifetimes</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div x-data={ fmt.Sprintf("lifetimeCalculator(%d)", int64(props.Client.AccessTokenLifetime / time.Second)) }>
+                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Access Token</label>
+                <input type="hidden" name="access_token_lifetime" :value="seconds" />
+                <div class="flex space-x-2">
+                    <input type="number" min="1" x-model="value" @input="updateSeconds()" class="w-24 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                    <select x-model="unit" @change="updateSeconds()" class="w-20 px-2 py-2 border border-slate-300 rounded-lg text-sm bg-gray-50"><option value="minutes">Min</option><option value="hours">Hrs</option><option value="days">Days</option></select>
+                </div>
+            </div>
+            <div x-data={ fmt.Sprintf("lifetimeCalculator(%d)", int64(props.Client.IDTokenLifetime / time.Second)) }>
+                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">ID Token</label>
+                <input type="hidden" name="id_token_lifetime" :value="seconds" />
+                <div class="flex space-x-2">
+                    <input type="number" min="1" x-model="value" @input="updateSeconds()" class="w-24 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                    <select x-model="unit" @change="updateSeconds()" class="w-20 px-2 py-2 border border-slate-300 rounded-lg text-sm bg-gray-50"><option value="minutes">Min</option><option value="hours">Hrs</option><option value="days">Days</option></select>
+                </div>
+            </div>
+            <div x-data={ fmt.Sprintf("lifetimeCalculator(%d)", int64(props.Client.RefreshTokenLifetime / time.Second)) } @client-type-public.window="snapToPublicDefault()">
+                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Refresh Token</label>
+                <input type="hidden" name="refresh_token_lifetime" :value="seconds" />
+                <div class="flex space-x-2">
+                    <input type="number" min="1" x-model="value" @input="updateSeconds()" class="w-24 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                    <select x-model="unit" @change="updateSeconds()" class="w-20 px-2 py-2 border border-slate-300 rounded-lg text-sm bg-gray-50"><option value="minutes">Min</option><option value="hours">Hrs</option><option value="days">Days</option></select>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+func initIdpRoutingData(props ClientFormProps) string {
+    allowedBytes, _ := json.Marshal(props.Client.AllowedIDPs)
+    if len(props.Client.AllowedIDPs) == 0 {
+        allowedBytes = []byte("[]")
+    }
+
+    type IDPInfo struct {
+        ID    string `json:"id"`
+        Alias string `json:"alias"`
+    }
+    availablePool := []IDPInfo{}
+    for _, p := range props.Providers {
+        if p.IDPType != "username-password" {
+            availablePool = append(availablePool, IDPInfo{ID: p.ID.String(), Alias: p.Alias})
+        }
+    }
+    availableBytes, _ := json.Marshal(availablePool)
+
+    return fmt.Sprintf("idpRouter(%s, %s, '%s')", string(allowedBytes), string(availableBytes), props.Client.DefaultIDP)
+}
+
+templ ClientIdpRoutingSection(props ClientFormProps) {
+    <div
+        class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-6 animate-fade-in"
+        x-show="authCode"
+        x-data={ initIdpRoutingData(props) }
+    >
+        <div>
+            <h3 class="text-base font-semibold text-gray-900">Identity Providers Routing</h3>
+            <p class="text-xs text-gray-400 mt-1">Select which identity connections are allowed for this client application.</p>
+        </div>
+
+        <!-- Checkbox Grid Matrix -->
+        <div class="space-y-3">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide text-gray-400">Allowed Providers</label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                <!-- Static Card: Local Accounts -->
+                <label class="relative flex items-center p-4 rounded-xl border border-gray-200 cursor-pointer bg-white hover:bg-gray-50/50 transition shadow-sm select-none">
+                    <input
+                        type="checkbox"
+                        name="allowed_idps"
+                        value="username-password"
+                        @change="toggleIdp($el.value)"
+                        :checked="allowedIds.includes('username-password')"
+                        class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <div class="ml-3 text-sm">
+                        <span class="font-medium text-gray-900 block">Local Accounts</span>
+                        <span class="text-xs text-gray-400">Built-in credentials database</span>
+                    </div>
+                </label>
+
+                <!-- Dynamic Upstream External Providers -->
+                for _, idp := range props.Providers {
+                    if idp.IDPType != "username-password" {
+                        <label class="relative flex items-center p-4 rounded-xl border border-gray-200 cursor-pointer bg-white hover:bg-gray-50/50 transition shadow-sm select-none">
+                            <input
+                                type="checkbox"
+                                name="allowed_idps"
+                                value={ idp.ID.String() }
+                                @change="toggleIdp($el.value)"
+                                :checked={ "allowedIds.includes('" + idp.ID.String() + "')" }
+                                class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <div class="ml-3 text-sm">
+                                <span class="font-medium text-gray-900 block">{ idp.Alias }</span>
+                                <span class="text-xs text-gray-400 uppercase font-mono">{ idp.IDPType } Connection</span>
+                            </div>
+                        </label>
+                    }
+                }
+            </div>
+        </div>
+
+        <!-- Dynamic Dropdown Filter -->
+        <div class="space-y-2 max-w-md pt-4 border-t border-gray-100">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide text-gray-400">Default Login Routing</label>
+            <select
+                name="default_idp_id"
+                x-model="defaultId"
+                :disabled="isInvalidState"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+                <option value="">None (Display Core Selection Layout)</option>
+                <template x-for="item in allowedList" :key="item.id">
+                    <option :value="item.id" x-text="item.name" :selected="item.id === defaultId"></option>
+                </template>
+            </select>
+        </div>
+
+        <!-- Guard Warning -->
+        <div x-show="isInvalidState" x-transition class="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg font-medium">
+            ⚠️ Attention: You must select at least one Identity Provider (or Local Accounts) to save changes.
         </div>
     </div>
 }

@@ -192,6 +192,7 @@ func (h *HttpAdapter) registerRoutes() {
 		r.Patch("/tenants/{id}/toggle-signup", h.adminToggleSignup)
 
 		r.Get("/clients", h.adminClientsPage)
+		r.Get("/clients/generate-secret", h.adminGenerateSecret)
 		r.Get("/clients/new", h.adminNewClientForm)
 		r.Get("/clients/edit", h.adminEditClientForm)
 		r.Get("/clients/view", h.adminViewClient)
@@ -380,9 +381,9 @@ func (h *HttpAdapter) register(w http.ResponseWriter, r *http.Request) {
 		GrantTypes:             payload.GrantTypes,
 		ResponseTypes:          payload.ResponseTypes,
 		Algorithm:              model.AlgRS256,
-		AccessTokenLifetime:    time.Hour,
-		RefreshTokenLifetime:   30 * 24 * time.Hour,
-		IDTokenLifetime:        10 * time.Minute,
+		AccessTokenLifetime:    900 * time.Second,
+		IDTokenLifetime:        900 * time.Second,
+		RefreshTokenLifetime:   1209600 * time.Second,
 		AllowedScopes:          payload.AllowedScopes,
 		DefaultScopes:          payload.DefaultScopes,
 		AllowedAudiences:       payload.AllowedAudiences,
