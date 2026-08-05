@@ -1,0 +1,268 @@
+package admin
+
+import (
+	"fmt"
+	"sprezz-identity/internal/domain/model"
+)
+
+type AdminDashboardProps struct {
+	ActiveTenant  model.Tenant
+	IsAdminTenant bool
+	Msg           string
+}
+
+templ AdminDashboard(props AdminDashboardProps) {
+	@AdminLayout(AdminLayoutProps{Title: "Dashboard", CurrentTab: "dashboard", TenantName: props.ActiveTenant.Name}) {
+		<div class="space-y-6">
+			if props.Msg != "" {
+				<div class="p-4 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm font-medium">
+					{ props.Msg }
+				</div>
+			}
+
+			if props.IsAdminTenant {
+				<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden p-6 space-y-4">
+					<div class="flex items-center justify-between border-b border-gray-200 pb-3">
+						<h3 class="font-bold text-gray-800">Administrative Lockdown Panel</h3>
+						if props.ActiveTenant.Config.AllowSignup {
+							@Badge("Active", "active")
+						} else {
+							@Badge("Locked", "locked")
+						}
+					</div>
+					<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+						<div>
+							<p class="text-sm font-semibold text-slate-800">Public Registration State</p>
+							<p class="text-sm text-slate-500 mt-1">
+								When public registration is Active, new administrative user profiles can self-register. Turn this Off to secure your admin partition permanently.
+							</p>
+						</div>
+						<div>
+							<button
+								hx-patch={ fmt.Sprintf("/admin/tenants/%s/toggle-signup", props.ActiveTenant.ID.String()) }
+								class={ "px-4 py-2 rounded-lg font-semibold text-sm transition shadow-sm", templ.KV("bg-red-600 text-white hover:bg-red-700", props.ActiveTenant.Config.AllowSignup), templ.KV("bg-green-600 text-white hover:bg-green-700", !props.ActiveTenant.Config.AllowSignup) }
+							>
+								if props.ActiveTenant.Config.AllowSignup {
+									Turn Off Registration
+								} else {
+									Turn On Registration
+								}
+							</button>
+						</div>
+					</div>
+				</div>
+			} else {
+				<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden p-6 text-center space-y-2">
+					<h3 class="text-xl font-bold text-gray-800">Welcome to Sprezz Identity</h3>
+					<p class="text-gray-500">You are logged into the administration console for tenant <span class="font-semibold text-gray-700">{ props.ActiveTenant.Name }</span>.</p>
+				</div>
+			}
+		</div>
+	}
+}
+
+type TenantsPageProps struct {
+	ActiveTenant  model.Tenant
+	IsAdminTenant bool
+	Tenants       []model.Tenant
+	Errors        map[string]string
+	Msg           string
+}
+
+templ TenantsContent(props TenantsPageProps) {
+	<div class="space-y-6">
+		if props.Msg != "" {
+			<div class="p-4 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm font-medium">
+				{ props.Msg }
+			</div>
+		}
+
+		if props.IsAdminTenant {
+			<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+				<!-- Left: Tenant list -->
+				<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+					<div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+						<h3 class="font-bold text-gray-800">System Tenants</h3>
+						<button
+							hx-get="/admin/tenants/new?modal=true"
+							hx-target="#modal-container"
+							class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm"
+						>
+							+ Create Tenant
+						</button>
+					</div>
+					<div class="overflow-x-auto">
+						<table class="min-w-full divide-y divide-gray-200 text-sm">
+							<thead>
+								<tr class="bg-gray-50 text-gray-500 font-semibold border-b border-gray-200">
+									<th class="px-6 py-3 text-left">Name</th>
+									<th class="px-6 py-3 text-left">Domain</th>
+									<th class="px-6 py-3 text-left">Status</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-gray-200">
+								for _, t := range props.Tenants {
+									<tr class="hover:bg-gray-50 transition">
+										<td class="px-6 py-4 font-medium text-gray-900">{ t.Name }</td>
+										<td class="px-6 py-4 text-gray-500">{ t.Domain }</td>
+										<td class="px-6 py-4">
+											if t.IsActive {
+												@Badge("Active", "active")
+											} else {
+												@Badge("Locked", "locked")
+											}
+										</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					</div>
+				</div>
+
+				<!-- Right: Admin Tenant Settings -->
+				<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden p-6 space-y-4">
+					<h3 class="font-bold text-gray-800 border-b border-gray-200 pb-3">Administrative Tenant Settings</h3>
+					<form hx-post="/admin/tenants/settings" hx-indicator="#global-spinner" class="space-y-4">
+						@InputField("Tenant Name", "name", "text", props.ActiveTenant.Name, props.Errors["name"])
+						@InputField("Canonical Domain", "domain", "text", props.ActiveTenant.Domain, props.Errors["domain"])
+						@URIInputField("Default Redirect URI", "default_redirect_uri", props.ActiveTenant.Config.DefaultRedirectURI, props.Errors["default_redirect_uri"])
+						@URLManager("Redirect Whitelist", "redirect_whitelist", props.ActiveTenant.Config.RedirectWhitelist, props.Errors["redirect_whitelist"])
+
+						<!-- Tenant Predefined Scopes & Audiences visual configs -->
+						<div class="border-t border-gray-200 pt-4 mt-4">
+							<h4 class="text-sm font-semibold text-slate-800 mb-3 font-medium">Tenant Scopes & Audiences</h4>
+
+							@TagListManager(TagManagerProps{
+								Label:       "Predefined Scopes",
+								InputName:   "predefined_scopes",
+								InitialTags: props.ActiveTenant.Config.PredefinedScopes,
+								Placeholder: "Custom scope (e.g. read:orders)",
+								ErrorStr:    props.Errors["predefined_scopes"],
+								BuiltIn:     []string{"openid", "profile", "email", "offline_access"},
+							})
+
+							@TagListManager(TagManagerProps{
+								Label:       "Predefined Token Audiences",
+								InputName:   "predefined_audiences",
+								InitialTags: props.ActiveTenant.Config.PredefinedAudiences,
+								Placeholder: "Audience identifier (e.g. https://api.example.com)",
+								ErrorStr:    props.Errors["predefined_audiences"],
+								IsAudience:  true,
+							})
+						</div>
+
+						<div class="flex items-center justify-between pt-4 border-t border-gray-200">
+							<div>
+								<p class="text-sm font-semibold text-gray-800">Public Registration State</p>
+								<p class="text-xs text-gray-500">Allow self-registration for global administrators.</p>
+							</div>
+							<button
+								type="button"
+								hx-patch={ fmt.Sprintf("/admin/tenants/%s/toggle-signup", props.ActiveTenant.ID.String()) }
+								class={ "px-3 py-1.5 rounded-lg text-sm font-semibold transition", templ.KV("bg-red-600 text-white hover:bg-red-700", props.ActiveTenant.Config.AllowSignup), templ.KV("bg-green-600 text-white hover:bg-green-700", !props.ActiveTenant.Config.AllowSignup) }
+							>
+								if props.ActiveTenant.Config.AllowSignup {
+									Disable Signup
+								} else {
+									Enable Signup
+								}
+							</button>
+						</div>
+
+						<div class="flex justify-end pt-4">
+							<button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm">
+								Save Settings
+							</button>
+						</div>
+					</form>
+				</div>
+			</div>
+		} else {
+			<!-- Normal Tenant Settings Only -->
+			<div class="max-w-2xl mx-auto bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden p-6 space-y-4">
+				<h3 class="font-bold text-gray-800 border-b border-gray-200 pb-3">Tenant Configuration Settings</h3>
+				<form hx-post="/admin/tenants/settings" hx-indicator="#global-spinner" class="space-y-4">
+					@InputField("Tenant Name", "name", "text", props.ActiveTenant.Name, props.Errors["name"])
+					@InputField("Canonical Domain", "domain", "text", props.ActiveTenant.Domain, props.Errors["domain"])
+					@URIInputField("Default Redirect URI", "default_redirect_uri", props.ActiveTenant.Config.DefaultRedirectURI, props.Errors["default_redirect_uri"])
+					@URLManager("Redirect Whitelist", "redirect_whitelist", props.ActiveTenant.Config.RedirectWhitelist, props.Errors["redirect_whitelist"])
+
+					<!-- Tenant Predefined Scopes & Audiences visual configs -->
+					<div class="border-t border-gray-200 pt-4 mt-4">
+						<h4 class="text-sm font-semibold text-slate-800 mb-3 font-medium">Tenant Scopes & Audiences</h4>
+
+						@TagListManager(TagManagerProps{
+							Label:       "Predefined Scopes",
+							InputName:   "predefined_scopes",
+							InitialTags: props.ActiveTenant.Config.PredefinedScopes,
+							Placeholder: "Custom scope (e.g. read:orders)",
+							ErrorStr:    props.Errors["predefined_scopes"],
+							BuiltIn:     []string{"openid", "profile", "email", "offline_access"},
+						})
+
+						@TagListManager(TagManagerProps{
+							Label:       "Predefined Token Audiences",
+							InputName:   "predefined_audiences",
+							InitialTags: props.ActiveTenant.Config.PredefinedAudiences,
+							Placeholder: "Audience identifier (e.g. https://api.example.com)",
+							ErrorStr:    props.Errors["predefined_audiences"],
+							IsAudience:  true,
+						})
+					</div>
+
+					<div class="flex items-center justify-between pt-4 border-t border-gray-200">
+						<div>
+							<p class="text-sm font-semibold text-gray-800">Public Registration State</p>
+							<p class="text-xs text-gray-500">Allow self-registration for users in this tenant partition.</p>
+						</div>
+						<button
+							type="button"
+							hx-patch={ fmt.Sprintf("/admin/tenants/%s/toggle-signup", props.ActiveTenant.ID.String()) }
+							class={ "px-3 py-1.5 rounded-lg text-sm font-semibold transition", templ.KV("bg-red-600 text-white hover:bg-red-700", props.ActiveTenant.Config.AllowSignup), templ.KV("bg-green-600 text-white hover:bg-green-700", !props.ActiveTenant.Config.AllowSignup) }
+						>
+							if props.ActiveTenant.Config.AllowSignup {
+								Disable Signup
+							} else {
+								Enable Signup
+							}
+						</button>
+					</div>
+
+					<div class="flex justify-end pt-4">
+						<button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm">
+							Save Configuration
+						</button>
+					</div>
+				</form>
+			</div>
+		}
+	</div>
+}
+
+templ TenantsPage(props TenantsPageProps) {
+	@AdminLayout(AdminLayoutProps{Title: "Tenants", CurrentTab: "tenants", TenantName: props.ActiveTenant.Name}) {
+		@TenantsContent(props)
+	}
+}
+
+templ CreateTenantForm(errors map[string]string) {
+	<form hx-post="/admin/tenants" hx-target="#modal-body" class="space-y-4">
+		@InputField("Tenant Name", "name", "text", "", errors["name"])
+		@InputField("Canonical Domain", "domain", "text", "", errors["domain"])
+		<div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+			<button
+				type="button"
+				class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition"
+				@click="isOpen = false"
+			>
+				Cancel
+			</button>
+			<button
+				type="submit"
+				class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
+			>
+				Create Tenant
+			</button>
+		</div>
+	</form>
+}

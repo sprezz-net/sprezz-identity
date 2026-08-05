@@ -15,7 +15,7 @@ import (
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
 	"sprezz-identity/internal/domain/service"
-	"sprezz-identity/internal/views"
+	"sprezz-identity/internal/views/public"
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
@@ -122,7 +122,7 @@ func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock, a
 func (h *HttpAdapter) renderError(w http.ResponseWriter, r *http.Request, status int, errorMessage string) {
 	w.Header().Set(contentTypeHeader, "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	component := views.Error(errorMessage)
+	component := public.Error(errorMessage)
 	_ = component.Render(r.Context(), w)
 }
 

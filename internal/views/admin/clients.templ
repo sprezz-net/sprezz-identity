@@ -1,0 +1,418 @@
+package admin
+
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+	"sprezz-identity/internal/domain/model"
+)
+
+type ClientsPageProps struct {
+	ActiveTenant model.Tenant
+	Clients      []model.ClientApplication
+	Msg          string
+}
+
+templ ClientsContent(props ClientsPageProps) {
+	<div class="space-y-6">
+		if props.Msg != "" {
+			<div class="p-4 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm font-medium">
+				{ props.Msg }
+			</div>
+		}
+
+		<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+			<div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+				<h3 class="font-bold text-gray-800">OIDC Applications</h3>
+				<button
+					hx-get="/admin/clients/new?modal=true"
+					hx-target="#modal-container"
+					class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm"
+				>
+					+ New Application
+				</button>
+			</div>
+			<div class="overflow-x-auto">
+				<table class="min-w-full divide-y divide-gray-200 text-sm">
+					<thead>
+						<tr class="bg-gray-50 text-gray-500 font-semibold border-b border-gray-200">
+							<th class="px-6 py-3 text-left">Client ID</th>
+							<th class="px-6 py-3 text-left">Application Name</th>
+							<th class="px-6 py-3 text-left">Type</th>
+							<th class="px-6 py-3 text-right">Actions</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-gray-200">
+						for _, c := range props.Clients {
+							<tr class="hover:bg-gray-50 transition">
+								<td class="px-6 py-4 font-mono font-medium text-gray-900">{ c.ClientID }</td>
+								<td class="px-6 py-4 text-gray-500">{ c.ClientName }</td>
+								<td class="px-6 py-4 text-gray-500 capitalize">{ string(c.ClientType) }</td>
+								<td class="px-6 py-4 text-right space-x-2">
+									<button
+										hx-get={ fmt.Sprintf("/admin/clients/view?id=%s&modal=true", c.ClientID) }
+										hx-target="#modal-container"
+										class="text-blue-600 hover:text-blue-800 font-medium"
+									>
+										View
+									</button>
+									<button
+										hx-get={ fmt.Sprintf("/admin/clients/edit?id=%s&modal=true", c.ClientID) }
+										hx-target="#modal-container"
+										class="text-green-600 hover:text-green-800 font-medium"
+									>
+										Edit
+									</button>
+									<button
+										hx-delete={ fmt.Sprintf("/admin/clients/%s", c.ClientID) }
+										hx-confirm={ fmt.Sprintf("Are you sure you want to delete application '%s'?", c.ClientName) }
+										hx-target="body"
+										class="text-red-600 hover:text-red-800 font-medium"
+									>
+										Delete
+									</button>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</div>
+}
+
+templ ClientsPage(props ClientsPageProps) {
+	@AdminLayout(AdminLayoutProps{Title: "Applications", CurrentTab: "clients", TenantName: props.ActiveTenant.Name}) {
+		@ClientsContent(props)
+	}
+}
+
+type ClientFormProps struct {
+	Client    model.ClientApplication
+	Errors    map[string]string
+	IsEdit    bool
+	ReadOnly  bool
+	Providers []model.IdentityProvider
+}
+
+templ ClientForm(props ClientFormProps) {
+	<form
+		hx-post="/admin/clients"
+		hx-target="#modal-body"
+		class="space-y-6"
+		x-data={ fmt.Sprintf("clientFormManager('%s', %t, %t, %d)", getInitialClientType(props.Client.ClientType), hasGrantType(props.Client.GrantTypes, "authorization_code", true), hasGrantType(props.Client.GrantTypes, "client_credentials", false), len(props.Client.AllowedIDPs)) }
+		@idp-count-update.window="handleIdpChange($event.detail.count)"
+	>
+		@ClientIdentitySection(props)
+		@ClientGrantTypesSection()
+		@ClientSecuritySection(props)
+		@ClientUrisSection(props)
+		@ClientLifetimesSection(props)
+		@ClientIdpRoutingSection(props)
+
+		<div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+			<button
+				type="button"
+				class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition cursor-pointer"
+				@click="isOpen = false"
+			>
+				Close
+			</button>
+			if !props.ReadOnly {
+				<button
+					type="submit"
+					:disabled="isSubmitDisabled"
+					class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+				>
+					if props.IsEdit {
+						Save Changes
+					} else {
+						Create Application
+					}
+				</button>
+			}
+		</div>
+	</form>
+}
+
+templ ClientIdentitySection(props ClientFormProps) {
+	<div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4">
+		<h3 class="text-base font-semibold text-gray-900">Application Identity</h3>
+
+		@InputField("Application Name", "client_name", "text", props.Client.ClientName, props.Errors["client_name"])
+
+		if props.IsEdit {
+			<input type="hidden" name="id" value={ props.Client.ID }/>
+			<input type="hidden" name="client_id" value={ props.Client.ClientID }/>
+			<div>
+				<label class="block text-sm font-medium text-slate-700 mb-1">Client ID</label>
+				<div class="font-mono text-gray-800 bg-gray-50 px-3 py-2 border border-slate-300 rounded-lg select-all">{ props.Client.ClientID }</div>
+			</div>
+		} else {
+			<div x-data="idSecretGenerator('')">
+				<label class="block text-sm font-medium text-slate-700 mb-1">Client ID</label>
+				<div class="flex space-x-2">
+					<input
+						type="text"
+						name="client_id"
+						x-model="value"
+						placeholder="Enter custom Client ID or generate one"
+						pattern="^[a-zA-Z0-9\-_\.~]+$"
+						title="Only RFC 3986 unreserved characters allowed (A-Z, a-z, 0-9, -, _, ., ~)"
+						class="flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono"
+						required
+					/>
+					<button
+						type="button"
+						@click="generate()"
+						class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm font-semibold transition cursor-pointer"
+					>
+						Generate ID
+					</button>
+				</div>
+				<p class="text-xs text-slate-500 mt-1">Unique identifier. Restricted to unreserved characters (RFC 3986 Section 2.3).</p>
+			</div>
+		}
+
+		<div>
+			<label class="block text-sm font-medium text-slate-700 mb-1">Client Type</label>
+			<select name="client_type" x-model="clientType" @change="handleClientType($el.value)" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+				<option value="confidential">Confidential (Web Apps / Servers)</option>
+				<option value="public">Public (Native / Single Page Apps)</option>
+			</select>
+		</div>
+
+		<!-- Client Secret (Only visible for Confidential) -->
+		<div x-show="clientType === 'confidential'" x-transition class="pt-2">
+			if props.IsEdit {
+				<label class="block text-sm font-medium text-slate-700 mb-1">Client Secret</label>
+				<div id="client-secret-container" class="flex items-center space-x-2">
+					<div class="font-mono text-gray-400 bg-gray-50 px-3 py-2 border border-slate-300 rounded-lg flex-1">••••••••••••••••</div>
+					if !props.ReadOnly {
+						<button type="button" hx-post={ fmt.Sprintf("/admin/clients/%s/reset-secret", props.Client.ClientID) } hx-target="#client-secret-container" hx-confirm="Are you sure you want to reset the Client Secret?" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-semibold transition cursor-pointer">Reset Secret</button>
+					}
+				</div>
+			} else {
+				<div x-data="idSecretGenerator('')">
+					<label class="block text-sm font-medium text-slate-700 mb-1">Initial Client Secret</label>
+					<div class="flex space-x-2">
+						<div class="relative flex-1">
+							<input
+								:type="showSecret ? 'text' : 'password'"
+								name="client_secret"
+								x-model="value"
+								placeholder="Enter custom secret or generate one"
+								pattern="^[a-zA-Z0-9\-_\.~]+$"
+								title="Only RFC 3986 unreserved characters allowed (A-Z, a-z, 0-9, -, _, ., ~)"
+								class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono"
+							/>
+							<button
+								type="button"
+								@click="toggleShow()"
+								class="absolute right-2 top-2 text-gray-400 hover:text-gray-600 focus:outline-none"
+							>
+								<span x-text="showSecret ? '🙈' : '👁️'"></span>
+							</button>
+						</div>
+						<button
+							type="button"
+							@click="generate()"
+							class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm font-semibold transition cursor-pointer"
+						>
+							Generate
+						</button>
+					</div>
+					<p class="text-xs text-slate-500 mt-1">Restricted to unreserved characters (RFC 3986 Section 2.3).</p>
+				</div>
+			}
+		</div>
+	</div>
+}
+
+templ ClientGrantTypesSection() {
+	<div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4">
+		<h3 class="text-base font-semibold text-gray-900">Allowed Grant Types</h3>
+		<div class="flex flex-col space-y-2">
+			<label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer select-none">
+				<input
+					type="checkbox"
+					name="grant_types"
+					value="authorization_code"
+					:checked="authCode"
+					:disabled="clientType === 'public'"
+					@change="handleAuthCodeChange($el.checked)"
+					class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+				/>
+				<span>Authorization Code Flow (Requires User Login)</span>
+			</label>
+			<label x-show="clientType === 'confidential'" x-transition class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer select-none">
+				<input
+					type="checkbox"
+					name="grant_types"
+					value="client_credentials"
+					:checked="clientCredentials"
+					@change="handleClientCredentialsChange($el.checked)"
+					class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+				/>
+				<span>Client Credentials Flow (Machine-to-Machine / No User)</span>
+			</label>
+		</div>
+	</div>
+}
+
+templ ClientSecuritySection(props ClientFormProps) {
+	<div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-6">
+		@TagListManager(TagManagerProps{
+			Label:       "OAuth Scopes",
+			InputName:   "scopes",
+			InitialTags: props.Client.AllowedScopes,
+			Placeholder: "e.g. read:orders",
+			ErrorStr:    "",
+			BuiltIn:     []string{"openid", "profile", "email", "offline_access"},
+		})
+
+		@TagListManager(TagManagerProps{
+			Label:       "Token Audiences (aud)",
+			InputName:   "audiences",
+			InitialTags: props.Client.AllowedAudiences,
+			Placeholder: "e.g. https://example.com",
+			ErrorStr:    "",
+			IsAudience:  true,
+		})
+	</div>
+}
+
+templ ClientUrisSection(props ClientFormProps) {
+	<!-- Authorized URIs Matrix -->
+	<div x-show="clientType === 'public' || authCode" x-transition class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4">
+		<h3 class="text-base font-semibold text-gray-900">Redirect & Logout URIs</h3>
+		@URIInputField("Default Redirect URI", "redirect_uri", props.Client.RedirectURI, props.Errors["redirect_uri"])
+		@URLManager("Additional Redirect URIs", "redirect_uris", props.Client.RedirectURIs, props.Errors["redirect_uris"])
+		@URLManager("Post-Logout Redirect URIs", "post_logout_redirect_uris", props.Client.PostLogoutRedirectURIs, props.Errors["post_logout_redirect_uris"])
+		@URIInputField("Front-Channel Logout URI", "front_channel_logout_uri", props.Client.FrontChannelLogoutURI, props.Errors["front_channel_logout_uri"])
+		@URIInputField("Back-Channel Logout URI", "back_channel_logout_uri", props.Client.BackChannelLogoutURI, props.Errors["back_channel_logout_uri"])
+	</div>
+}
+
+templ ClientLifetimesSection(props ClientFormProps) {
+	<!-- Token Lifetimes Policy -->
+	<div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4">
+		<h3 class="text-base font-semibold text-gray-900">Token Lifetimes</h3>
+		<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+			@TokenLifetimeInput(TokenLifetimeFieldProps{
+				Label: "Access Token",
+				Name:  "access_token_lifetime",
+				Value: int64(props.Client.AccessTokenLifetime / time.Second),
+			})
+			@TokenLifetimeInput(TokenLifetimeFieldProps{
+				Label: "ID Token",
+				Name:  "id_token_lifetime",
+				Value: int64(props.Client.IDTokenLifetime / time.Second),
+			})
+			@TokenLifetimeInput(TokenLifetimeFieldProps{
+				Label:         "Refresh Token",
+				Name:          "refresh_token_lifetime",
+				Value:         int64(props.Client.RefreshTokenLifetime / time.Second),
+				PublicDefault: true,
+			})
+		</div>
+	</div>
+}
+
+func initIdpRoutingData(props ClientFormProps) string {
+	allowedBytes, _ := json.Marshal(props.Client.AllowedIDPs)
+	if len(props.Client.AllowedIDPs) == 0 {
+		allowedBytes = []byte("[]")
+	}
+
+	type IDPInfo struct {
+		ID    string `json:"id"`
+		Alias string `json:"alias"`
+	}
+	availablePool := []IDPInfo{}
+	for _, p := range props.Providers {
+		if p.IDPType != "username-password" {
+			availablePool = append(availablePool, IDPInfo{ID: p.ID.String(), Alias: p.Alias})
+		}
+	}
+	availableBytes, _ := json.Marshal(availablePool)
+
+	return fmt.Sprintf("idpRouter(%s, %s, '%s')", string(allowedBytes), string(availableBytes), props.Client.DefaultIDP)
+}
+
+templ ClientIdpRoutingSection(props ClientFormProps) {
+	<div
+		class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-6 animate-fade-in"
+		x-show="authCode"
+		x-data={ initIdpRoutingData(props) }
+	>
+		<div>
+			<h3 class="text-base font-semibold text-gray-900">Identity Providers Routing</h3>
+			<p class="text-xs text-gray-400 mt-1">Select which identity connections are allowed for this client application.</p>
+		</div>
+
+		<!-- Checkbox Grid Matrix -->
+		<div class="space-y-3">
+			<label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide text-gray-400">Allowed Providers</label>
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+				<!-- Static Card: Local Accounts -->
+				<label class="relative flex items-center p-4 rounded-xl border border-gray-200 cursor-pointer bg-white hover:bg-gray-50/50 transition shadow-sm select-none">
+					<input
+						type="checkbox"
+						name="allowed_idps"
+						value="username-password"
+						@change="toggleIdp($el.value)"
+						:checked="allowedIds.includes('username-password')"
+						class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+					/>
+					<div class="ml-3 text-sm">
+						<span class="font-medium text-gray-900 block">Local Accounts</span>
+						<span class="text-xs text-gray-400">Built-in credentials database</span>
+					</div>
+				</label>
+
+				<!-- Dynamic Upstream External Providers -->
+				for _, idp := range props.Providers {
+					if idp.IDPType != "username-password" {
+						<label class="relative flex items-center p-4 rounded-xl border border-gray-200 cursor-pointer bg-white hover:bg-gray-50/50 transition shadow-sm select-none">
+							<input
+								type="checkbox"
+								name="allowed_idps"
+								value={ idp.ID.String() }
+								@change="toggleIdp($el.value)"
+								:checked={ "allowedIds.includes('" + idp.ID.String() + "')" }
+								class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+							/>
+							<div class="ml-3 text-sm">
+								<span class="font-medium text-gray-900 block">{ idp.Alias }</span>
+								<span class="text-xs text-gray-400 uppercase font-mono">{ idp.IDPType } Connection</span>
+							</div>
+						</label>
+					}
+				}
+			</div>
+		</div>
+
+		<!-- Dynamic Dropdown Filter -->
+		<div class="space-y-2 max-w-md pt-4 border-t border-gray-100">
+			<label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide text-gray-400">Default Login Routing</label>
+			<select
+				name="default_idp_id"
+				x-model="defaultId"
+				:disabled="isInvalidState"
+				class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+			>
+				<option value="">None (Display Core Selection Layout)</option>
+				<template x-for="item in allowedList" :key="item.id">
+					<option :value="item.id" x-text="item.name" :selected="item.id === defaultId"></option>
+				</template>
+			</select>
+		</div>
+
+		<!-- Guard Warning -->
+		<div x-show="isInvalidState" x-transition class="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg font-medium">
+			⚠️ Attention: You must select at least one Identity Provider (or Local Accounts) to save changes.
+		</div>
+	</div>
+}

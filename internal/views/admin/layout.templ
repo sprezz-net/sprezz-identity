@@ -1,0 +1,725 @@
+package admin
+
+import (
+	"encoding/json"
+	"fmt"
+	"sprezz-identity/internal/domain/model"
+)
+
+func marshalProviders(providers []model.IdentityProvider) string {
+	type IDPInfo struct {
+		ID    string `json:"id"`
+		Alias string `json:"alias"`
+	}
+	list := []IDPInfo{{ID: "username-password", Alias: "Local Accounts"}}
+	for _, p := range providers {
+		if p.IDPType != "username-password" {
+			list = append(list, IDPInfo{ID: p.ID.String(), Alias: p.Alias})
+		}
+	}
+	bytes, err := json.Marshal(list)
+	if err != nil {
+		return "[]"
+	}
+	return string(bytes)
+}
+
+func getInitialClientType(clientType string) string {
+	if clientType == "" {
+		return "confidential"
+	}
+	return clientType
+}
+
+func hasGrantType(grantTypes []string, target string, def bool) bool {
+	if len(grantTypes) == 0 {
+		return def
+	}
+	for _, gt := range grantTypes {
+		if gt == target {
+			return true
+		}
+	}
+	return false
+}
+
+func marshalStringSlice(slice []string) string {
+	if len(slice) == 0 {
+		return "[]"
+	}
+	bytes, _ := json.Marshal(slice)
+	return string(bytes)
+}
+
+func marshalURLs(urls []string) string {
+	if len(urls) == 0 {
+		return "[]"
+	}
+	bytes, err := json.Marshal(urls)
+	if err != nil {
+		return "[]"
+	}
+	return string(bytes)
+}
+
+type AdminLayoutProps struct {
+	Title      string
+	CurrentTab string
+	TenantName string
+}
+
+type NavItem struct {
+	Label string
+	URL   string
+	Key   string
+}
+
+var navItems = []NavItem{
+	{Label: "Tenants", URL: "/admin/tenants", Key: "tenants"},
+	{Label: "Applications", URL: "/admin/clients", Key: "clients"},
+	{Label: "Identity Providers", URL: "/admin/idps", Key: "idps"},
+	{Label: "Users", URL: "/admin/users", Key: "users"},
+}
+
+templ AdminLayout(props AdminLayoutProps) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>{ props.Title } | Sprezz Identity Admin</title>
+		<!-- Tailwind CSS -->
+		<script src="https://cdn.tailwindcss.com" nonce={ templ.GetNonce(ctx) }></script>
+		<!-- HTMX -->
+		<script src="https://unpkg.com/htmx.org@1.9.12" nonce={ templ.GetNonce(ctx) }></script>
+		<!-- Alpine.js (deferred) -->
+		<script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/csp@3.x.x/dist/cdn.min.js" nonce={ templ.GetNonce(ctx) }></script>
+		<!-- Nonced Alpine CSP Helpers -->
+		<script nonce={ templ.GetNonce(ctx) }>
+			function purgeModal(el) {
+				el.dispatchEvent(new CustomEvent('modal-close', { bubbles: true }));
+				el.remove();
+			}
+			document.addEventListener('DOMContentLoaded', () => {
+				// 1. HTMX Component Discovery Bridge
+				document.body.addEventListener('htmx:afterSwap', (event) => {
+					if (window.Alpine && event.detail.target) {
+						if (typeof window.Alpine.initTree === 'function') {
+							window.Alpine.initTree(event.detail.target);
+						} else if (typeof window.Alpine.processTree === 'function') {
+							window.Alpine.processTree(event.detail.target);
+						}
+					}
+				});
+			});
+
+			document.addEventListener('alpine:init', () => {
+				Alpine.data('urlManager', (initialUrls) => ({
+					urls: initialUrls || [],
+					newUrl: '',
+					error: '',
+					addUrl() {
+						this.error = '';
+						const trimmed = this.newUrl.trim();
+						if (!trimmed) return;
+						try {
+							new URL(trimmed);
+							if (!this.urls.includes(trimmed)) {
+								this.urls.push(trimmed);
+							}
+							this.newUrl = '';
+						} catch (e) {
+							this.error = 'Invalid URL format (must include protocol like http:// or https://)';
+						}
+					},
+					removeUrl(index) {
+						this.urls.splice(index, 1);
+					}
+				}));
+
+				// Consolidated tagListManager
+				Alpine.data('tagListManager', () => ({
+					tags: [],
+					builtIn: [],
+					selectedBuiltIn: [],
+					newTag: '',
+					error: '',
+					inputName: '',
+					isAudience: false,
+
+					init() {
+						this.inputName = this.$el.dataset.inputName || 'tags';
+						this.isAudience = this.$el.dataset.isAudience === 'true';
+						try {
+							this.builtIn = JSON.parse(this.$el.dataset.builtIn) || [];
+						} catch(e) {
+							this.builtIn = [];
+						}
+						let initList = [];
+						try {
+							initList = JSON.parse(this.$el.dataset.initialTags) || [];
+						} catch(e) {
+							initList = [];
+						}
+
+						initList.forEach(t => {
+							if (this.builtIn.includes(t)) {
+								this.selectedBuiltIn.push(t);
+							} else if (t.trim() !== '') {
+								this.tags.push(t.trim());
+							}
+						});
+					},
+					addTag() {
+						this.error = '';
+						const trimmed = this.newTag.trim();
+						if (!trimmed) return;
+
+						if (this.isAudience) {
+							if (trimmed.includes(' ') || (!trimmed.includes('://') && !/^[a-zA-Z0-9_:-]+$/.test(trimmed))) {
+								this.error = 'Must be an absolute URI or valid system identifier';
+								return;
+							}
+						}
+
+						if (this.builtIn.includes(trimmed)) {
+							if (!this.selectedBuiltIn.includes(trimmed)) {
+								this.selectedBuiltIn.push(trimmed);
+							}
+							this.newTag = '';
+							return;
+						}
+
+						if (this.tags.includes(trimmed)) {
+							this.error = 'Value already exists';
+							return;
+						}
+						this.tags.push(trimmed);
+						this.newTag = '';
+					},
+					removeTag(index) {
+						this.tags.splice(index, 1);
+					}
+				}));
+
+				Alpine.data('lifetimeCalculator', (initialSeconds) => ({
+					seconds: initialSeconds || 3600,
+					value: 1,
+					unit: 'hours',
+					init() {
+						const totalSec = parseInt(this.seconds) || 0;
+						if (totalSec % 86400 === 0 && totalSec > 0) {
+							this.value = totalSec / 86400;
+							this.unit = 'days';
+						} else if (totalSec % 3600 === 0 && totalSec > 0) {
+							this.value = totalSec / 3600;
+							this.unit = 'hours';
+						} else if (totalSec % 60 === 0 && totalSec > 0) {
+							this.value = totalSec / 60;
+							this.unit = 'minutes';
+						} else {
+							this.value = totalSec;
+							this.unit = 'seconds';
+						}
+					},
+					updateSeconds() {
+						const val = parseFloat(this.value) || 0;
+						let multiplier = 1;
+						if (this.unit === 'minutes') multiplier = 60;
+						else if (this.unit === 'hours') multiplier = 3600;
+						else if (this.unit === 'days') multiplier = 86400;
+						this.seconds = Math.round(val * multiplier);
+					},
+					snapToPublicDefault() {
+						this.value = 1;
+						this.unit = 'days';
+						this.updateSeconds();
+					}
+				}));
+
+				Alpine.data('idpRouter', (initialAllowed, allProviders) => ({
+					allProviders: allProviders || [],
+					allowed: initialAllowed || [],
+					init() {
+						// Keep initial selection
+					}
+				}));
+
+				Alpine.data('secretGenerator', (initialSecret) => ({
+					secret: initialSecret || '',
+					generate() {
+						const bytes = new Uint8Array(32);
+						window.crypto.getRandomValues(bytes);
+						let binary = '';
+						for (let i = 0; i < 32; i++) {
+							binary += String.fromCharCode(bytes[i]);
+						}
+						this.secret = btoa(binary)
+							.replace(/\+/g, '-')
+							.replace(/\//g, '_')
+							.replace(/=/g, '');
+					}
+				}));
+
+				Alpine.data('clientFormManager', (initialType, initialAuthCode, initialClientCredentials, initialIdpCount) => ({
+					clientType: initialType || 'confidential',
+					authCode: !!initialAuthCode,
+					clientCredentials: !!initialClientCredentials,
+					idpCount: parseInt(initialIdpCount) || 0,
+					isSubmitDisabled: false,
+
+					init() {
+						this.checkSubmit();
+						this.$watch('clientType', (val) => {
+							if (val === 'public') {
+								this.clientCredentials = false;
+								this.authCode = true;
+								this.$dispatch('client-type-public');
+							}
+							this.checkSubmit();
+						});
+						this.$watch('authCode', (val) => { this.checkSubmit(); });
+						this.$watch('clientCredentials', (val) => { this.checkSubmit(); });
+					},
+
+					checkSubmit() {
+						if (this.clientType === 'public' || this.authCode) {
+							this.isSubmitDisabled = (this.idpCount === 0);
+						} else {
+							this.isSubmitDisabled = false;
+						}
+					},
+
+					handleClientType(type) {
+						this.clientType = type;
+					},
+
+					handleAuthCodeChange(checked) {
+						this.authCode = checked;
+						this.checkSubmit();
+						this.$dispatch('grant-type-change', { authCode: checked });
+					},
+
+					handleClientCredentialsChange(checked) {
+						this.clientCredentials = checked;
+						this.checkSubmit();
+					},
+
+					handleIdpChange(count) {
+						this.idpCount = count;
+					}
+				}));
+
+				Alpine.data('idpRouter', (initialAllowed, availablePool, initialDefaultIdp) => ({
+					allowedIds: initialAllowed || [],
+					defaultId: initialDefaultIdp || '',
+					available: availablePool || [],
+					allowedList: [],
+					isInvalidState: false,
+
+					init() {
+						this.updateAllowedList();
+					},
+
+					toggleIdp(id) {
+						if (this.allowedIds.includes(id)) {
+							this.allowedIds = this.allowedIds.filter(x => x !== id);
+							if (this.defaultId === id) this.defaultId = '';
+						} else {
+							this.allowedIds.push(id);
+						}
+						this.updateAllowedList();
+					},
+
+					updateAllowedList() {
+						let list = [];
+						if (this.allowedIds.includes('username-password')) {
+							list.push({ id: 'username-password', name: 'Local Accounts' });
+						}
+						this.available.forEach(p => {
+							if (this.allowedIds.includes(p.id)) {
+								list.push({ id: p.id, name: p.name });
+							}
+						});
+						this.allowedList = list;
+						this.isInvalidState = (this.allowedIds.length === 0);
+
+						this.$dispatch('idp-count-update', { count: this.allowedIds.length });
+					}
+				}));
+
+				// 4. CSP-Compliant Single URI Input Validator
+				Alpine.data('uriValidator', (initialValue) => ({
+					value: initialValue || '',
+					error: '',
+					validate() {
+						const trimmed = this.value.trim();
+						if (!trimmed) {
+							this.error = '';
+							return;
+						}
+						if (!trimmed.includes('://')) {
+							this.error = 'Invalid URL format (must include protocol like http:// or https://)';
+						} else {
+							this.error = '';
+						}
+					}
+				}));
+
+				// 5. CSP-Compliant Modal Controller
+				Alpine.data('modalController', () => ({
+					isOpen: true,
+					init() {
+						this.$dispatch('modal-open');
+					},
+					close() {
+						this.isOpen = false;
+						window.setTimeout(purgeModal, 200, this.$el);
+					}
+				}));
+
+				// 6. CSP-Compliant Async ID & Secret Generator
+				Alpine.data('idSecretGenerator', (initialVal) => ({
+					value: initialVal || '',
+					showSecret: false,
+					generate() {
+						window.fetch('/admin/clients/generate-secret')
+							.then(response => response.text())
+							.then(text => {
+								this.value = text;
+							});
+					},
+					toggleShow() {
+						this.showSecret = !this.showSecret;
+					}
+				}));
+			});
+		</script>
+	</head>
+	<body class="bg-slate-50 font-sans antialiased text-gray-900" :class="modalOpen ? 'overflow-hidden h-screen' : ''" x-data={ fmt.Sprintf("{ mobileMenu: false, modalOpen: false, currentTab: '%s' }", props.CurrentTab) } @modal-open.window="modalOpen = true" @modal-close.window="modalOpen = false">
+		<div class="flex min-h-screen">
+			<!-- Sidebar Layout -->
+			<aside class="w-64 bg-slate-900 text-slate-300 fixed h-full flex flex-col justify-between z-40">
+				<div class="p-6">
+					<h1 class="text-xl font-bold text-white tracking-wide">Sprezz Identity</h1>
+					<p class="text-xs text-slate-500 mt-1">{ props.TenantName }</p>
+
+					<nav class="mt-8 space-y-2">
+						for _, item := range navItems {
+							<a
+								href={ item.URL }
+								hx-get={ item.URL }
+								hx-target="main"
+								hx-swap="innerHTML"
+								hx-push-url="true"
+								@click={ fmt.Sprintf("currentTab = '%s'", item.Key) }
+								class="block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+								:class={ fmt.Sprintf("currentTab == '%s' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'", item.Key) }
+							>
+								{ item.Label }
+							</a>
+						}
+					</nav>
+				</div>
+			</aside>
+
+			<!-- Main Layout Window Wrapper -->
+			<div class="flex-1 pl-64 flex flex-col">
+				<header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 sticky top-0 z-30">
+					<h2 class="text-lg font-semibold text-gray-800">{ props.Title }</h2>
+					<div id="global-spinner" class="htmx-indicator animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+				</header>
+
+				<main class="p-8 flex-1">
+					<!-- Dynamic view child template inject placeholder -->
+					{ children... }
+				</main>
+			</div>
+		</div>
+
+		<!-- Target Container for Modals -->
+		<div id="modal-container"></div>
+	</body>
+	</html>
+}
+
+templ InputField(label, name, typeValue, value, errorStr string) {
+	<div class="mb-4">
+		<label class="block text-sm font-medium text-slate-700 mb-1">{ label }</label>
+		<input
+			type={ typeValue }
+			name={ name }
+			value={ value }
+			class={ "w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500", templ.KV("border-red-500 focus:ring-red-500 focus:border-red-500", errorStr != ""), templ.KV("border-slate-300", errorStr == "") }
+		/>
+		if errorStr != "" {
+			<p class="text-xs text-red-500 mt-1">{ errorStr }</p>
+		}
+	</div>
+}
+
+templ URIInputField(label, name, value, errorStr string) {
+	<div x-data={ fmt.Sprintf("uriValidator('%s')", value) } class="mb-4">
+		<label class="block text-sm font-medium text-slate-700 mb-1">{ label }</label>
+		<input
+			type="text"
+			name={ name }
+			x-model="value"
+			@input="validate()"
+			class={ "w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500", templ.KV("border-red-500 focus:ring-red-500 focus:border-red-500", errorStr != ""), templ.KV("border-slate-300", errorStr == "") }
+			:class="error ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : ''"
+		/>
+		<p x-show="error" class="text-xs text-red-500 mt-1" x-text="error" style="display: none;"></p>
+		if errorStr != "" {
+			<p x-show="!error" class="text-xs text-red-500 mt-1">{ errorStr }</p>
+		}
+	</div>
+}
+
+templ Badge(label, severity string) {
+	<span
+		class={
+			"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border",
+			templ.KV("bg-green-100 text-green-800 border-green-200", severity == "success" || severity == "active" || severity == "verified"),
+			templ.KV("bg-red-100 text-red-800 border-red-200", severity == "danger" || severity == "error" || severity == "locked"),
+			templ.KV("bg-gray-100 text-gray-800 border-gray-200", severity == "neutral" || severity == "inactive" || severity == "unverified"),
+		}
+	>
+		{ label }
+	</span>
+}
+
+type TagManagerProps struct {
+	Label       string
+	InputName   string
+	InitialTags []string
+	Placeholder string
+	ErrorStr    string
+	BuiltIn     []string
+	IsAudience  bool
+}
+
+templ TagListManager(props TagManagerProps) {
+	<div
+		x-data="tagListManager"
+		data-input-name={ props.InputName }
+		data-is-audience={ fmt.Sprintf("%t", props.IsAudience) }
+		data-built-in={ marshalStringSlice(props.BuiltIn) }
+		data-initial-tags={ marshalStringSlice(props.InitialTags) }
+		class="mb-4"
+	>
+		<label class="block text-sm font-medium text-slate-700 mb-1.5">{ props.Label }</label>
+
+		<!-- Render hidden inputs for each tag so form submission captures them naturally as []string -->
+		<template x-for="tag in tags" :key="tag">
+			<input type="hidden" name={ props.InputName } :value="tag" />
+		</template>
+
+		<!-- Built-in checkboxes (if any) -->
+		if len(props.BuiltIn) > 0 {
+			<!-- Hidden inputs for built-in tags that are checked -->
+			<template x-for="s in selectedBuiltIn" :key="s">
+				<input type="hidden" name={ props.InputName } :value="s" />
+			</template>
+
+			<div class="grid grid-cols-2 gap-2 mb-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+				<template x-for="s in builtIn" :key="s">
+					<label class="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer select-none">
+						<input
+							type="checkbox"
+							:value="s"
+							x-model="selectedBuiltIn"
+							class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+						/>
+						<span x-text="s" class="font-mono text-xs"></span>
+					</label>
+				</template>
+			</div>
+		}
+
+		<!-- Active pill container -->
+		<div class="flex flex-wrap gap-1.5 mb-2" x-show="tags.length > 0">
+			<template x-for="(tag, index) in tags" :key="tag">
+				<span class={
+					"inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border font-mono",
+					templ.KV("bg-blue-100 text-blue-800 border-blue-200", !props.IsAudience),
+					templ.KV("bg-purple-100 text-purple-800 border-purple-200", props.IsAudience),
+				}>
+					<span x-text="tag"></span>
+					<button
+						type="button"
+						@click="removeTag(index)"
+						class={
+							"ml-1.5 font-bold focus:outline-none",
+							templ.KV("text-blue-500 hover:text-blue-700", !props.IsAudience),
+							templ.KV("text-purple-500 hover:text-purple-700", props.IsAudience),
+						}
+					>
+						✕
+					</button>
+				</span>
+			</template>
+		</div>
+
+		<!-- Input field and Add button -->
+		<div class="flex space-x-2">
+			<input
+				type="text"
+				x-model="newTag"
+				@keydown.enter.prevent="addTag()"
+				placeholder={ props.Placeholder }
+				class="flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+			/>
+			<button
+				type="button"
+				@click="addTag()"
+				class="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-semibold hover:bg-slate-700 transition"
+			>
+				Add
+			</button>
+		</div>
+		<div x-show="error" class="text-xs text-red-500 mt-1" x-text="error" style="display: none;"></div>
+		if props.ErrorStr != "" {
+			<p x-show="!error" class="text-xs text-red-500 mt-1">{ props.ErrorStr }</p>
+		}
+	</div>
+}
+
+type TokenLifetimeFieldProps struct {
+	Label         string
+	Name          string
+	Value         int64 // duration in seconds
+	PublicDefault bool  // whether to register client-type-public window listener to snap to public default
+}
+
+templ TokenLifetimeInput(props TokenLifetimeFieldProps) {
+	<div
+		x-data={ fmt.Sprintf("lifetimeCalculator(%d)", props.Value) }
+		if props.PublicDefault {
+			@client-type-public.window="snapToPublicDefault()"
+		}
+	>
+		<label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{ props.Label }</label>
+		<input type="hidden" name={ props.Name } :value="seconds" />
+		<div class="flex space-x-2">
+			<input
+				type="number"
+				min="1"
+				x-model="value"
+				@input="updateSeconds()"
+				class="w-24 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+			/>
+			<select
+				x-model="unit"
+				@change="updateSeconds()"
+				class="w-20 px-2 py-2 border border-slate-300 rounded-lg text-sm bg-gray-50"
+			>
+				<option value="minutes">Min</option>
+				<option value="hours">Hrs</option>
+				<option value="days">Days</option>
+			</select>
+		</div>
+	</div>
+}
+
+templ URLManager(label string, name string, urls []string, errorStr string) {
+	<div
+		x-data={ fmt.Sprintf("urlManager(%s)", marshalURLs(urls)) }
+		class="mb-4"
+	>
+		<label class="block text-sm font-medium text-slate-700 mb-1">{ label }</label>
+
+		<!-- Render hidden inputs for each URL so form submission captures them naturally as []string -->
+		<template x-for="url in urls" :key="url">
+			<input type="hidden" name={ name } :value="url" />
+		</template>
+
+		<!-- Active URL List items -->
+		<div class="space-y-2 mb-2" x-show="urls.length > 0">
+			<template x-for="(url, index) in urls" :key="url">
+				<div class="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-mono text-slate-700">
+					<span x-text="url" class="truncate"></span>
+					<button
+						type="button"
+						@click="removeUrl(index)"
+						class="text-red-500 hover:text-red-700 font-bold ml-2 focus:outline-none"
+						title="Remove URL"
+					>
+						✕
+					</button>
+				</div>
+			</template>
+		</div>
+
+		<!-- Input field and Add button -->
+		<div class="flex space-x-2">
+			<input
+				type="url"
+				x-model="newUrl"
+				@keydown.enter.prevent="addUrl()"
+				placeholder="https://example.com/callback"
+				class="flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+			/>
+			<button
+				type="button"
+				@click="addUrl()"
+				class="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-semibold hover:bg-slate-700 transition"
+			>
+				Add
+			</button>
+		</div>
+
+		<!-- Display local errors -->
+		<div x-show="error" class="text-xs text-red-500 mt-1" x-text="error" style="display: none;"></div>
+
+		<!-- Display server-side errors if any -->
+		if errorStr != "" {
+			<p class="text-xs text-red-500 mt-1">{ errorStr }</p>
+		}
+	</div>
+}
+
+templ Modal(title, fetchUrl string) {
+	<div
+		x-data="modalController"
+		x-show="isOpen"
+		x-transition:enter="transition ease-out duration-200"
+		x-transition:enter-start="opacity-0"
+		x-transition:enter-end="opacity-100"
+		x-transition:leave="transition ease-in duration-200"
+		x-transition:leave-start="opacity-100"
+		x-transition:leave-end="opacity-0"
+		class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+		@keydown.escape.window="close()"
+	>
+		<div
+			class="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col transform transition-all"
+			x-transition:enter="transition ease-out duration-200"
+			x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+			x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+			x-transition:leave="transition ease-in duration-200"
+			x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+			x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+			@click.outside="close()"
+		>
+			<div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+				<h3 class="text-lg font-bold text-slate-800">{ title }</h3>
+				<button
+					type="button"
+					class="text-slate-400 hover:text-slate-600 transition"
+					@click="close()"
+				>
+					✕
+				</button>
+			</div>
+			<div id="modal-body" class="p-6 overflow-y-auto max-h-[70vh]" hx-get={ fetchUrl } hx-trigger="load">
+				<div class="flex justify-center py-8">
+					<svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
+						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+					</svg>
+				</div>
+			</div>
+		</div>
+	</div>
+}

@@ -10,7 +10,7 @@ import (
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/service"
-	"sprezz-identity/internal/views"
+	"sprezz-identity/internal/views/public"
 
 	"github.com/google/uuid"
 )
@@ -67,7 +67,7 @@ func (h *HttpAdapter) loginRoot(w http.ResponseWriter, r *http.Request) {
 		allowSignup = tenant.Config.AllowSignup
 	}
 
-	component := views.Login("", allowSignup)
+	component := public.Login("", allowSignup)
 	_ = component.Render(r.Context(), w)
 }
 

@@ -1,0 +1,201 @@
+package admin
+
+import (
+	"fmt"
+	"sprezz-identity/internal/domain/model"
+)
+
+type UsersPageProps struct {
+	ActiveTenant model.Tenant
+	Users        []model.UserProfile
+	Msg          string
+}
+
+templ UsersContent(props UsersPageProps) {
+	<div class="space-y-6">
+		if props.Msg != "" {
+			<div class="p-4 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm font-medium">
+				{ props.Msg }
+			</div>
+		}
+
+		<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+			<div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+				<h3 class="font-bold text-gray-800">User Profiles</h3>
+			</div>
+			<div class="overflow-x-auto">
+				<table class="min-w-full divide-y divide-gray-200 text-sm">
+					<thead>
+						<tr class="bg-gray-50 text-gray-500 font-semibold border-b border-gray-200">
+							<th class="px-6 py-3 text-left">Username</th>
+							<th class="px-6 py-3 text-left">Name</th>
+							<th class="px-6 py-3 text-left">Email</th>
+							<th class="px-6 py-3 text-right">Actions</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-gray-200">
+						for _, u := range props.Users {
+							<tr class="hover:bg-gray-50 transition">
+								<td class="px-6 py-4 font-mono font-medium text-gray-900">{ u.PreferredUsername }</td>
+								<td class="px-6 py-4 text-gray-500">{ u.Name }</td>
+								<td class="px-6 py-4 text-gray-500">{ u.Email }</td>
+								<td class="px-6 py-4 text-right space-x-2">
+									<button
+										hx-get={ fmt.Sprintf("/admin/users/view?id=%s&modal=true", u.ID.String()) }
+										hx-target="#modal-container"
+										class="text-blue-600 hover:text-blue-800 font-medium"
+									>
+										View
+									</button>
+									<button
+										hx-get={ fmt.Sprintf("/admin/users/edit?id=%s&modal=true", u.ID.String()) }
+										hx-target="#modal-container"
+										class="text-green-600 hover:text-green-800 font-medium"
+									>
+										Edit
+									</button>
+									<button
+										hx-delete={ fmt.Sprintf("/admin/users/%s", u.ID.String()) }
+										hx-confirm={ fmt.Sprintf("Are you sure you want to delete user '%s'?", u.PreferredUsername) }
+										hx-target="body"
+										class="text-red-600 hover:text-red-800 font-medium"
+									>
+										Delete
+									</button>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</div>
+}
+
+templ UsersPage(props UsersPageProps) {
+	@AdminLayout(AdminLayoutProps{Title: "Users", CurrentTab: "users", TenantName: props.ActiveTenant.Name}) {
+		@UsersContent(props)
+	}
+}
+
+type UserFormProps struct {
+	User   model.UserProfile
+	Errors map[string]string
+}
+
+templ UserForm(props UserFormProps) {
+	<form hx-post="/admin/users" hx-target="#modal-body" class="space-y-4">
+		<input type="hidden" name="id" value={ props.User.ID.String() }/>
+
+		@InputField("Username", "preferred_username", "text", props.User.PreferredUsername, props.Errors["preferred_username"])
+		@InputField("Full Name", "name", "text", props.User.Name, props.Errors["name"])
+		@InputField("Email", "email", "email", props.User.Email, props.Errors["email"])
+
+		<div class="flex items-center space-x-3 mb-4">
+			<input
+				type="checkbox"
+				id="email_verified"
+				name="email_verified"
+				value="true"
+				checked?={ props.User.EmailVerified }
+				class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+			/>
+			<label for="email_verified" class="text-sm font-medium text-slate-700">Email Verified</label>
+		</div>
+
+		<div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+			<button
+				type="button"
+				class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition"
+				@click="isOpen = false"
+			>
+				Cancel
+			</button>
+			<button
+				type="submit"
+				class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
+			>
+				Save Changes
+			</button>
+		</div>
+	</form>
+}
+
+type UserDetailsProps struct {
+	User       model.UserProfile
+	Identities []model.UserIdentity
+	Providers  []model.IdentityProvider
+}
+
+templ UserDetails(props UserDetailsProps) {
+	<div class="space-y-6">
+		<!-- Profile info summary -->
+		<div class="bg-gray-50 rounded-xl p-4 border border-gray-100 grid grid-cols-2 gap-4 text-sm">
+			<div>
+				<p class="text-xs text-slate-500 font-semibold uppercase">Preferred Username</p>
+				<p class="font-mono text-gray-800 font-medium">{ props.User.PreferredUsername }</p>
+			</div>
+			<div>
+				<p class="text-xs text-slate-500 font-semibold uppercase">Full Name</p>
+				<p class="text-gray-800 font-medium">{ props.User.Name }</p>
+			</div>
+			<div>
+				<p class="text-xs text-slate-500 font-semibold uppercase">Email</p>
+				<p class="text-gray-800 font-medium">{ props.User.Email }</p>
+			</div>
+			<div>
+				<p class="text-xs text-slate-500 font-semibold uppercase">Email Verified</p>
+				if props.User.EmailVerified {
+					@Badge("Verified", "verified")
+				} else {
+					@Badge("Unverified", "unverified")
+				}
+			</div>
+		</div>
+
+		<!-- Coupled identities section -->
+		<div class="space-y-3">
+			<h4 class="font-bold text-gray-800 text-sm border-b border-gray-200 pb-2">Coupled Identities</h4>
+			if len(props.Identities) == 0 {
+				<p class="text-sm text-gray-500">No identities coupled to this profile yet.</p>
+			} else {
+				<div class="space-y-3">
+					for _, ident := range props.Identities {
+						<div class="flex items-center justify-between p-3 border border-gray-200 rounded-lg text-sm">
+							<div>
+								<p class="font-semibold text-gray-800">
+									for _, p := range props.Providers {
+										if p.ID == ident.IdentityProviderID {
+											{ p.Alias } <span class="text-xs text-gray-400 capitalize">({ p.IDPType })</span>
+										}
+									}
+								</p>
+								<p class="font-mono text-xs text-gray-500 mt-1">External Sub/ID: { ident.ExternalIdentityID }</p>
+								<p class="text-xs text-gray-500">Login Count: { fmt.Sprintf("%d", ident.LoginCount) } | Blocked: { fmt.Sprintf("%t", ident.Blocked) }</p>
+								<p class="text-xs text-gray-400 mt-0.5">Coupled at: { ident.CoupledAt.Format("2006-01-02 15:04:05") }</p>
+							</div>
+							<button
+								hx-delete={ fmt.Sprintf("/admin/users/%s/identities/%s", props.User.ID.String(), ident.IdentityProviderID.String()) }
+								hx-confirm="Are you sure you want to decouple this identity from the user's profile?"
+								hx-target="#modal-body"
+								class="px-2.5 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs font-semibold transition"
+							>
+								Decouple
+							</button>
+						</div>
+					}
+				</div>
+			}
+		</div>
+
+		<div class="flex justify-end pt-4 border-t border-slate-200">
+			<button
+				type="button"
+				class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition"
+				@click="isOpen = false"
+			>
+				Close
+			</button>
+		</div>
+	</div>
+}

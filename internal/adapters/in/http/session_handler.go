@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"sprezz-identity/internal/domain/model"
-	"sprezz-identity/internal/views"
+	"sprezz-identity/internal/views/public"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -136,7 +136,7 @@ func (h *HttpAdapter) logout(w http.ResponseWriter, r *http.Request) {
 
 	if len(frontChannelURIs) > 0 {
 		w.Header().Set(contentTypeHeader, "text/html; charset=utf-8")
-		component := views.Logout(frontChannelURIs, redirectURI)
+		component := public.Logout(frontChannelURIs, redirectURI)
 		_ = component.Render(r.Context(), w)
 		return
 	}

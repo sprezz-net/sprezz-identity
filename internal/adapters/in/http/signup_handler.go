@@ -7,7 +7,7 @@ import (
 	"net/url"
 
 	"sprezz-identity/internal/domain/model"
-	"sprezz-identity/internal/views"
+	"sprezz-identity/internal/views/public"
 
 	"github.com/google/uuid"
 )
@@ -27,7 +27,7 @@ func (h *HttpAdapter) signUpForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
-	component := views.SignUp("", provider, "", "", "")
+	component := public.SignUp("", provider, "", "", "")
 	_ = component.Render(r.Context(), w)
 }
 
@@ -128,7 +128,7 @@ func (h *HttpAdapter) signUpSubmit(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
 		w.WriteHeader(http.StatusOK) // Return HTML back to HTMX or browser with the error message rendered
-		component := views.SignUp(err.Error(), provider, r.FormValue("email"), r.FormValue("username"), r.FormValue("name"))
+		component := public.SignUp(err.Error(), provider, r.FormValue("email"), r.FormValue("username"), r.FormValue("name"))
 		_ = component.Render(r.Context(), w)
 		return
 	}

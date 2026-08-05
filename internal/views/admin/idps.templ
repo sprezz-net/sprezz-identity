@@ -1,0 +1,175 @@
+package admin
+
+import (
+	"fmt"
+	"sprezz-identity/internal/domain/model"
+)
+
+type IDPsPageProps struct {
+	ActiveTenant model.Tenant
+	Providers    []model.IdentityProvider
+	Msg          string
+}
+
+templ IDPsContent(props IDPsPageProps) {
+	<div class="space-y-6">
+		if props.Msg != "" {
+			<div class="p-4 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm font-medium">
+				{ props.Msg }
+			</div>
+		}
+
+		<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+			<div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+				<h3 class="font-bold text-gray-800">Identity Providers</h3>
+				<button
+					hx-get="/admin/idps/new?modal=true"
+					hx-target="#modal-container"
+					class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm"
+				>
+					+ Add Provider
+				</button>
+			</div>
+			<div class="overflow-x-auto">
+				<table class="min-w-full divide-y divide-gray-200 text-sm">
+					<thead>
+						<tr class="bg-gray-50 text-gray-500 font-semibold border-b border-gray-200">
+							<th class="px-6 py-3 text-left">Alias</th>
+							<th class="px-6 py-3 text-left">Type</th>
+							<th class="px-6 py-3 text-left">Status</th>
+							<th class="px-6 py-3 text-right">Actions</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-gray-200">
+						for _, p := range props.Providers {
+							<tr class="hover:bg-gray-50 transition">
+								<td class="px-6 py-4 font-medium text-gray-900">{ p.Alias }</td>
+								<td class="px-6 py-4 text-gray-500 capitalize">{ p.IDPType }</td>
+								<td class="px-6 py-4">
+									if p.Enabled {
+										@Badge("Active", "active")
+									} else {
+										@Badge("Inactive", "inactive")
+									}
+								</td>
+								<td class="px-6 py-4 text-right space-x-2">
+									<button
+										hx-get={ fmt.Sprintf("/admin/idps/edit?id=%s&modal=true", p.ID.String()) }
+										hx-target="#modal-container"
+										class="text-green-600 hover:text-green-800 font-medium"
+									>
+										Edit
+									</button>
+									<button
+										hx-delete={ fmt.Sprintf("/admin/idps/%s", p.ID.String()) }
+										hx-confirm={ fmt.Sprintf("Are you sure you want to delete identity provider '%s'?", p.Alias) }
+										hx-target="body"
+										class="text-red-600 hover:text-red-800 font-medium"
+									>
+										Delete
+									</button>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</div>
+}
+
+templ IDPsPage(props IDPsPageProps) {
+	@AdminLayout(AdminLayoutProps{Title: "Identity Providers", CurrentTab: "idps", TenantName: props.ActiveTenant.Name}) {
+		@IDPsContent(props)
+	}
+}
+
+type IDPFormProps struct {
+	Provider model.IdentityProvider
+	Errors   map[string]string
+	IsEdit   bool
+}
+
+templ IDPForm(props IDPFormProps) {
+	<form hx-post="/admin/idps" hx-target="#modal-body" class="space-y-4">
+		if props.IsEdit {
+			<input type="hidden" name="id" value={ props.Provider.ID.String() }/>
+			<input type="hidden" name="idp_type" value={ props.Provider.IDPType }/>
+			<div class="mb-4">
+				<label class="block text-sm font-medium text-slate-500 mb-1">Provider Type</label>
+				<div class="font-semibold text-gray-800 bg-gray-50 px-3 py-2 border border-slate-300 rounded-lg capitalize">{ props.Provider.IDPType }</div>
+			</div>
+		} else {
+			<div class="mb-4">
+				<label class="block text-sm font-medium text-slate-700 mb-1">Provider Type</label>
+				<select name="idp_type" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+					<option value="username-password">Username Password</option>
+					<option value="oidc">OpenID Connect</option>
+					<option value="saml">SAML 2.0</option>
+				</select>
+			</div>
+		}
+
+		@InputField("Alias", "alias", "text", props.Provider.Alias, props.Errors["alias"])
+
+		<div class="flex items-center space-x-3 mb-4">
+			<input
+				type="checkbox"
+				id="enabled"
+				name="enabled"
+				value="true"
+				checked?={ props.Provider.Enabled }
+				class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+			/>
+			<label for="enabled" class="text-sm font-medium text-slate-700">Enabled</label>
+		</div>
+
+		<div class="mb-4">
+			<label class="block text-sm font-medium text-slate-700 mb-1">Username Field Mapping</label>
+			<select name="username_field" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+				<option value="preferredUsername" selected?={ props.Provider.Config.UsernameField == "preferredUsername" }>Username (preferredUsername)</option>
+				<option value="email" selected?={ props.Provider.Config.UsernameField == "email" }>Email</option>
+			</select>
+		</div>
+
+		<div class="mb-4">
+			<label class="block text-sm font-medium text-slate-700 mb-1">Identity Assurance Level (IAL)</label>
+			<select name="ial" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+				<option value="0" selected?={ props.Provider.Config.IAL == 0 }>IAL 0</option>
+				<option value="1" selected?={ props.Provider.Config.IAL == 1 }>IAL 1</option>
+				<option value="2" selected?={ props.Provider.Config.IAL == 2 }>IAL 2</option>
+				<option value="3" selected?={ props.Provider.Config.IAL == 3 }>IAL 3</option>
+			</select>
+		</div>
+
+		<div class="mb-4">
+			<label class="block text-sm font-medium text-slate-700 mb-1">Authenticator Assurance Level (AAL)</label>
+			<select name="aal" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+				<option value="0" selected?={ props.Provider.Config.AAL == 0 }>AAL 0</option>
+				<option value="1" selected?={ props.Provider.Config.AAL == 1 }>AAL 1</option>
+				<option value="2" selected?={ props.Provider.Config.AAL == 2 }>AAL 2</option>
+				<option value="3" selected?={ props.Provider.Config.AAL == 3 }>AAL 3</option>
+			</select>
+		</div>
+
+		<div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+			<button
+				type="button"
+				class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition"
+				@click="isOpen = false"
+			>
+				Cancel
+			</button>
+			<button
+				type="submit"
+				class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
+			>
+				if props.IsEdit {
+					Save Changes
+				} else {
+					Create Provider
+				}
+			</button>
+		</div>
+	</form>
+}

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"sprezz-identity/internal/domain/model"
-	"sprezz-identity/internal/views"
+	"sprezz-identity/internal/views/admin"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -60,7 +60,7 @@ func (h *HttpAdapter) adminDashboardView(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	msg := r.URL.Query().Get("msg")
-	component := views.AdminDashboard(views.AdminDashboardProps{
+	component := admin.AdminDashboard(admin.AdminDashboardProps{
 		ActiveTenant:  *tenant,
 		IsAdminTenant: tenant.Name == adminTenantName,
 		Msg:           msg,
@@ -202,11 +202,11 @@ func (h *HttpAdapter) adminCallback(w http.ResponseWriter, r *http.Request) {
 func (h *HttpAdapter) adminNewTenantForm(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	if r.URL.Query().Get("modal") == "true" {
-		component := views.Modal("Create Tenant", "/admin/tenants/new")
+		component := admin.Modal("Create Tenant", "/admin/tenants/new")
 		_ = component.Render(r.Context(), w)
 		return
 	}
-	component := views.CreateTenantForm(nil)
+	component := admin.CreateTenantForm(nil)
 	_ = component.Render(r.Context(), w)
 }
 
@@ -224,7 +224,7 @@ func (h *HttpAdapter) adminCreateTenant(w http.ResponseWriter, r *http.Request) 
 
 	if len(errs) > 0 {
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
-		component := views.CreateTenantForm(errs)
+		component := admin.CreateTenantForm(errs)
 		_ = component.Render(r.Context(), w)
 		return
 	}
@@ -252,7 +252,7 @@ func (h *HttpAdapter) adminCreateTenant(w http.ResponseWriter, r *http.Request) 
 	if err := h.storagePort.CreateTenant(r.Context(), newTenant); err != nil {
 		errs["name"] = err.Error()
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
-		component := views.CreateTenantForm(errs)
+		component := admin.CreateTenantForm(errs)
 		_ = component.Render(r.Context(), w)
 		return
 	}
@@ -299,7 +299,13 @@ func (h *HttpAdapter) adminToggleSignup(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
-	component := views.StatusBadge(tenant.Config.AllowSignup)
+	var label, severity string
+	if tenant.Config.AllowSignup {
+		label, severity = "Active", "active"
+	} else {
+		label, severity = "Locked", "locked"
+	}
+	component := admin.Badge(label, severity)
 	_ = component.Render(r.Context(), w)
 
 	// We use HX-Redirect to natively trigger a full page refresh with the success message
@@ -322,7 +328,7 @@ func (h *HttpAdapter) adminTenantsPage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	msg := r.URL.Query().Get("msg")
-	props := views.TenantsPageProps{
+	props := admin.TenantsPageProps{
 		ActiveTenant:  *tenant,
 		IsAdminTenant: isAdminTenant,
 		Tenants:       allTenants,
@@ -330,9 +336,9 @@ func (h *HttpAdapter) adminTenantsPage(w http.ResponseWriter, r *http.Request) {
 		Errors:        make(map[string]string),
 	}
 	if r.Header.Get(hxRequestHeader) == "true" {
-		_ = views.TenantsContent(props).Render(r.Context(), w)
+		_ = admin.TenantsContent(props).Render(r.Context(), w)
 	} else {
-		_ = views.TenantsPage(props).Render(r.Context(), w)
+		_ = admin.TenantsPage(props).Render(r.Context(), w)
 	}
 }
 
@@ -385,7 +391,7 @@ func (h *HttpAdapter) adminSaveTenantSettings(w http.ResponseWriter, r *http.Req
 		if isAdminTenant {
 			allTenants, _ = h.tenantService.GetAllTenants(r.Context())
 		}
-		component := views.TenantsPage(views.TenantsPageProps{
+		component := admin.TenantsPage(admin.TenantsPageProps{
 			ActiveTenant:  *tenant,
 			IsAdminTenant: isAdminTenant,
 			Tenants:       allTenants,
@@ -414,15 +420,15 @@ func (h *HttpAdapter) adminClientsPage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	msg := r.URL.Query().Get("msg")
-	props := views.ClientsPageProps{
+	props := admin.ClientsPageProps{
 		ActiveTenant: *tenant,
 		Clients:      clients,
 		Msg:          msg,
 	}
 	if r.Header.Get(hxRequestHeader) == "true" {
-		_ = views.ClientsContent(props).Render(r.Context(), w)
+		_ = admin.ClientsContent(props).Render(r.Context(), w)
 	} else {
-		_ = views.ClientsPage(props).Render(r.Context(), w)
+		_ = admin.ClientsPage(props).Render(r.Context(), w)
 	}
 }
 
@@ -436,11 +442,11 @@ func (h *HttpAdapter) adminNewClientForm(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	if r.URL.Query().Get("modal") == "true" {
-		component := views.Modal("Add Client", "/admin/clients/new")
+		component := admin.Modal("Add Client", "/admin/clients/new")
 		_ = component.Render(r.Context(), w)
 		return
 	}
-	component := views.ClientForm(views.ClientFormProps{
+	component := admin.ClientForm(admin.ClientFormProps{
 		Client: model.ClientApplication{
 			AccessTokenLifetime:  900 * time.Second,
 			IDTokenLifetime:      900 * time.Second,
@@ -470,11 +476,11 @@ func (h *HttpAdapter) adminEditClientForm(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	if r.URL.Query().Get("modal") == "true" {
-		component := views.Modal("Edit Client", "/admin/clients/edit?id="+clientID)
+		component := admin.Modal("Edit Client", "/admin/clients/edit?id="+clientID)
 		_ = component.Render(r.Context(), w)
 		return
 	}
-	component := views.ClientForm(views.ClientFormProps{
+	component := admin.ClientForm(admin.ClientFormProps{
 		Client:    *client,
 		Errors:    make(map[string]string),
 		IsEdit:    true,
@@ -501,11 +507,11 @@ func (h *HttpAdapter) adminViewClient(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	if r.URL.Query().Get("modal") == "true" {
-		component := views.Modal("Client Details", "/admin/clients/view?id="+clientID)
+		component := admin.Modal("Client Details", "/admin/clients/view?id="+clientID)
 		_ = component.Render(r.Context(), w)
 		return
 	}
-	component := views.ClientForm(views.ClientFormProps{
+	component := admin.ClientForm(admin.ClientFormProps{
 		Client:    *client,
 		Errors:    make(map[string]string),
 		IsEdit:    true,
@@ -639,7 +645,7 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 	if len(errs) > 0 {
 		providers, _ := h.idpService.GetIdentityProviders(r.Context(), tenant.ID)
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
-		component := views.ClientForm(views.ClientFormProps{
+		component := admin.ClientForm(admin.ClientFormProps{
 			Client: model.ClientApplication{
 				ID:                     id,
 				ClientID:               clientID,
@@ -747,26 +753,26 @@ func (h *HttpAdapter) adminIDPsPage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	msg := r.URL.Query().Get("msg")
-	props := views.IDPsPageProps{
+	props := admin.IDPsPageProps{
 		ActiveTenant: *tenant,
 		Providers:    idps,
 		Msg:          msg,
 	}
 	if r.Header.Get(hxRequestHeader) == "true" {
-		_ = views.IDPsContent(props).Render(r.Context(), w)
+		_ = admin.IDPsContent(props).Render(r.Context(), w)
 	} else {
-		_ = views.IDPsPage(props).Render(r.Context(), w)
+		_ = admin.IDPsPage(props).Render(r.Context(), w)
 	}
 }
 
 func (h *HttpAdapter) adminNewIDPForm(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	if r.URL.Query().Get("modal") == "true" {
-		component := views.Modal("Add Identity Provider", "/admin/idps/new")
+		component := admin.Modal("Add Identity Provider", "/admin/idps/new")
 		_ = component.Render(r.Context(), w)
 		return
 	}
-	component := views.IDPForm(views.IDPFormProps{
+	component := admin.IDPForm(admin.IDPFormProps{
 		Provider: model.IdentityProvider{},
 		Errors:   make(map[string]string),
 	})
@@ -803,11 +809,11 @@ func (h *HttpAdapter) adminEditIDPForm(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	if r.URL.Query().Get("modal") == "true" {
-		component := views.Modal("Edit Identity Provider", "/admin/idps/edit?id="+idpIDStr)
+		component := admin.Modal("Edit Identity Provider", "/admin/idps/edit?id="+idpIDStr)
 		_ = component.Render(r.Context(), w)
 		return
 	}
-	component := views.IDPForm(views.IDPFormProps{
+	component := admin.IDPForm(admin.IDPFormProps{
 		Provider: *provider,
 		Errors:   make(map[string]string),
 		IsEdit:   true,
@@ -861,7 +867,7 @@ func (h *HttpAdapter) adminSaveIDP(w http.ResponseWriter, r *http.Request) {
 
 	if len(errs) > 0 {
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
-		component := views.IDPForm(views.IDPFormProps{
+		component := admin.IDPForm(admin.IDPFormProps{
 			Provider: provider,
 			Errors:   errs,
 			IsEdit:   isEdit,
@@ -916,15 +922,15 @@ func (h *HttpAdapter) adminUsersPage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	msg := r.URL.Query().Get("msg")
-	props := views.UsersPageProps{
+	props := admin.UsersPageProps{
 		ActiveTenant: *tenant,
 		Users:        users,
 		Msg:          msg,
 	}
 	if r.Header.Get(hxRequestHeader) == "true" {
-		_ = views.UsersContent(props).Render(r.Context(), w)
+		_ = admin.UsersContent(props).Render(r.Context(), w)
 	} else {
-		_ = views.UsersPage(props).Render(r.Context(), w)
+		_ = admin.UsersPage(props).Render(r.Context(), w)
 	}
 }
 
@@ -957,11 +963,11 @@ func (h *HttpAdapter) adminViewUser(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	if r.URL.Query().Get("modal") == "true" {
-		component := views.Modal("User Details & Identities", "/admin/users/view?id="+userIDStr)
+		component := admin.Modal("User Details & Identities", "/admin/users/view?id="+userIDStr)
 		_ = component.Render(r.Context(), w)
 		return
 	}
-	component := views.UserDetails(views.UserDetailsProps{
+	component := admin.UserDetails(admin.UserDetailsProps{
 		User:       *user,
 		Identities: identities,
 		Providers:  providers,
@@ -986,11 +992,11 @@ func (h *HttpAdapter) adminEditUserForm(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	if r.URL.Query().Get("modal") == "true" {
-		component := views.Modal("Edit User Profile", "/admin/users/edit?id="+userIDStr)
+		component := admin.Modal("Edit User Profile", "/admin/users/edit?id="+userIDStr)
 		_ = component.Render(r.Context(), w)
 		return
 	}
-	component := views.UserForm(views.UserFormProps{
+	component := admin.UserForm(admin.UserFormProps{
 		User:   *user,
 		Errors: make(map[string]string),
 	})
@@ -1024,7 +1030,7 @@ func (h *HttpAdapter) adminSaveUser(w http.ResponseWriter, r *http.Request) {
 
 	if len(errs) > 0 {
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
-		component := views.UserForm(views.UserFormProps{
+		component := admin.UserForm(admin.UserFormProps{
 			User:   model.UserProfile{ID: userUUID, PreferredUsername: username, Name: name, Email: email, EmailVerified: emailVerified},
 			Errors: errs,
 		})
@@ -1107,7 +1113,7 @@ func (h *HttpAdapter) adminDecoupleIdentity(w http.ResponseWriter, r *http.Reque
 	}
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
-	component := views.UserDetails(views.UserDetailsProps{
+	component := admin.UserDetails(admin.UserDetailsProps{
 		User:       *user,
 		Identities: identities,
 		Providers:  providers,
