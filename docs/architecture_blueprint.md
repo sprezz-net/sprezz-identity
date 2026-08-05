@@ -352,3 +352,54 @@ When a client requests a token exchange using `grant_type=refresh_token`, the se
 * **Unused Token**: If the token is valid and has `is_used = false`, the server marks the token as used, generates a brand-new cryptographically secure Refresh Token inheriting the same `token_family_id`, and returns the newly rotated token pair.
 * **Used Token (Replay Attack Detected!)**: If the incoming refresh token's `is_used` property is already `true`, a replay attack is detected! The OIDC engine triggers an atomic transaction that revokes and completely invalidates all active tokens sharing that same `token_family_id`. It immediately returns a strict `invalid_grant` error response, instantly evicting both the attacker and the legitimate user.
 
+## 14. Security Hardening & Horizontal Scaling Edge Cases
+
+To transition Sprezz Identity from a secure single-instance architecture to an enterprise-ready, horizontally scalable solution, the following operational and cryptographic guardrails must be strictly enforced across the domain and infrastructure layers.
+
+### 14.1 Horizontal Scaling & Distributed Clusters (State Resilience)
+
+The default `internal_ephemeral` startup routine derives a transient secret string strictly within the Go process RAM allocation. While optimal for single-instance deployments, this introduces split-brain authentication states during rolling software updates or across multiple load-balanced application instances.
+
+* **Database-Centric Cluster Architecture**: Sprezz Identity coordinates all active runtime states—including active OAuth2 authorization codes, user login sessions, and token validations—strictly through the centralized PostgreSQL database layer. This eliminates the need for distributed memory cache synchronization infrastructure (such as Redis or Ristretto sync pools).
+* **Stateless Execution Workers**: Each auto-scaled application replica node operates as a stateless execution worker. Upon system boot or container launch, every node queries the single shared source of truth (PostgreSQL) to read the administrative tenant configuration parameters.
+* **Master Secret Encryption (Deterministic Derivation)**: To ensure all cluster nodes validate the Admin UI tokens using the identical cryptographic envelope without storing plaintext credentials on disk, the system enforces a secure key derivation pipeline:
+  1. The production environment configuration must share a single, identical `SPREZZ_MASTER_KEY` environment variable (32-byte AES key) across all running instances.
+  2. During the data bootstrapping transaction, the initial node generates a secure random 32-byte admin client secret, encrypts it using **AES-256-GCM** with the `SPREZZ_MASTER_KEY`, and saves the ciphertext to the `tenants` metadata block in PostgreSQL.
+  3. On every subsequent server restart or horizontal scale-out event, each node reads the ciphertext from the database, decrypts it using its local `SPREZZ_MASTER_KEY` environment variable, and safely loads the identical operational plaintext secret directly into its local process token endpoint validation memory workspace.
+
+### 14.2 Session Revocation on Administrative Lockdown
+
+Modifying the `allow_signup` flag to `false` prevents future rogue registration queries but fails to immediately intercept malicious administrative profile token payloads that were generated immediately prior to the system lockdown.
+
+* **Active Session Purge Rule**: The HTTP handler processing `PATCH /admin/tenants/{id}/toggle-signup` must verify the parameter transition state. If `allow_signup` transitions from `true` to `false`, the database context service layer must trigger an atomic transaction that blacklists, revokes, and invalidates all active OIDC Session cookies, Access Tokens, and Refresh Tokens issued to the administrative tenant partition. This forces a clean, global re-authentication check across all admin entry portals instantly.
+
+### 14.3 Watertight Cookie Session Defenses
+
+To prevent Session Hijacking, Cross-Site Scripting (XSS) extraction, and Cross-Site Request Forgery (CSRF) token subversions, the session cookie handler must explicitly enforce strict cryptographic and transport storage parameters on the unified, single first-party cookie (`spz_session`) established in Section 9.7:
+
+* **`HttpOnly = true`**: Restricts access to the cookie parameter block strictly to the network layer, preventing execution readouts by client-side JavaScript fragments (essential defense-in-depth against malicious XSS vectors).
+* **`Secure = true`**: Forces transmission of the authentication session context strictly over TLS-encrypted HTTPS transport layers.
+* **`SameSite = SameSiteLaxMode`**: Mitigates malicious cross-origin parameter forging attempts while maintaining fast, smooth OIDC cross-app hypermedia navigation loops.
+* **Prefix Enforcement**: In all non-development environments, the cookie identifier must be explicitly declared with the `__Host-` structural prefix (i.e., `__Host-spz_session`). This guarantees the token pool is bound exclusively to the exact hostname domain grid, prevents cross-contamination across broader organizational sub-domains, and mandates a strict root path definition.
+* **Local Development Exception Loop**: To support local unencrypted debugging workflows on `http://localhost` (as detailed in Section 5.C), the cookie generation factory incorporates a dual-gated environmental and network runtime validation fence:
+  1. **The Global Flag Gate**: The engine asserts that the centralized operational configuration parameter `APP_ENV` is explicitly set to `"local"`.
+  2. **The Request Network Gate**: The inbound HTTP handler verifies that the inbound `r.Host` parameter targets `localhost` or `127.0.0.1`.
+  3. **The Execution Rule**: If and only if *both* criteria are simultaneously satisfied, the engine is permitted to dynamically strip the `__Host-` prefix wrapper (falling back to plain `spz_session`) and flip `Secure = false` to enable cookie persistence over unencrypted channels. If `APP_ENV` is set to anything else (e.g., `staging`, `production`), any request hitting the engine with a local host header is treated with zero-trust defaults, strictly enforcing prefix wrappers and encryption.
+
+### 14.4 Hypermedia Semantic Error Status Compliance
+
+When returning field-level validation errors inside components via HTMX (e.g., returning input fragments featuring red validation highlights), standard REST endpoints often issue a `200 OK` response payload simply to allow the HTMX library to execute its inner HTML swap routine. This distorts edge diagnostics and log trace analysis tools.
+
+* **Semantic Error Delivery**: Backend input verification failures processing structural mutations must return an HTTP Status Code of **`422 Unprocessable Entity`**.
+* **HTMX Error Integration**: The master global layout shell must incorporate an explicit configuration snippet handling errors gracefully:
+
+  ```javascript
+  document.body.addEventListener('htmx:beforeOnLoad', function (evt) {
+      if (evt.detail.xhr.status === 422) {
+          evt.detail.shouldSwap = true;
+          evt.detail.isError = false;
+      }
+  });
+  ```
+
+  This guarantees full semantic logging compliance across cloud firewalls while preserving lightning-fast HTML element hot-swaps inside the administrative management views.

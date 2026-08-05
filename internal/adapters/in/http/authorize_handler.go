@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -21,21 +22,55 @@ type ssoSession struct {
 	SessionID  string
 }
 
-func (h *HttpAdapter) setSSOSessionCookie(w http.ResponseWriter, session ssoSession) {
+func (h *HttpAdapter) resolveSessionCookieConfig(r *http.Request) (string, bool) {
+	name := model.CookieSessionNameProd
+	secure := true
+
+	appEnv := os.Getenv("APP_ENV")
+	if appEnv == "" {
+		appEnv = "local"
+	}
+
+	host := r.Host
+	if strings.Contains(host, ":") {
+		host = strings.Split(host, ":")[0]
+	}
+
+	isLocalHost := host == "localhost" || host == "127.0.0.1"
+
+	if appEnv == "local" && isLocalHost {
+		name = model.CookieSessionNameDev
+		secure = false
+	}
+
+	return name, secure
+}
+
+func (h *HttpAdapter) setSSOSessionCookie(w http.ResponseWriter, r *http.Request, session ssoSession) {
 	val := fmt.Sprintf("%s:%s:%s", session.SubjectID, session.ProviderID, session.SessionID)
+	name, secure := h.resolveSessionCookieConfig(r)
 	http.SetCookie(w, &http.Cookie{
-		Name:     "spz_session",
+		Name:     name,
 		Value:    val,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 	})
 }
 
 func (h *HttpAdapter) getSSOSessionCookie(r *http.Request) *ssoSession {
-	cookie, err := r.Cookie("spz_session")
+	name, _ := h.resolveSessionCookieConfig(r)
+	cookie, err := r.Cookie(name)
 	if err != nil || cookie.Value == "" {
-		return nil
+		altName := model.CookieSessionNameDev
+		if name == model.CookieSessionNameDev {
+			altName = model.CookieSessionNameProd
+		}
+		cookie, err = r.Cookie(altName)
+		if err != nil || cookie.Value == "" {
+			return nil
+		}
 	}
 	parts := strings.Split(cookie.Value, ":")
 	if len(parts) != 3 {
@@ -48,13 +83,28 @@ func (h *HttpAdapter) getSSOSessionCookie(r *http.Request) *ssoSession {
 	}
 }
 
-func (h *HttpAdapter) clearSSOSessionCookie(w http.ResponseWriter) {
+func (h *HttpAdapter) clearSSOSessionCookie(w http.ResponseWriter, r *http.Request) {
+	name, secure := h.resolveSessionCookieConfig(r)
 	http.SetCookie(w, &http.Cookie{
-		Name:     "spz_session",
+		Name:     name,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+	altName := model.CookieSessionNameDev
+	if name == model.CookieSessionNameDev {
+		altName = model.CookieSessionNameProd
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     altName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -106,7 +156,7 @@ func (h *HttpAdapter) processInteractionRedirect(w http.ResponseWriter, r *http.
 	}
 
 	if _, err := h.oauthValidator.ValidateACR(r.Context(), tenant, provider, acrValues, claimsJSON); err != nil {
-		h.clearSSOSessionCookie(w)
+		h.clearSSOSessionCookie(w, r)
 		h.renderError(w, r, http.StatusForbidden, err.Error())
 		return true
 	}
@@ -167,7 +217,7 @@ func (h *HttpAdapter) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.setSSOSessionCookie(w, ssoSession{
+	h.setSSOSessionCookie(w, r, ssoSession{
 		SubjectID:  result.UserProfile.ID.String(),
 		ProviderID: provider.ID.String(),
 		SessionID:  uuid.NewString(),

@@ -175,14 +175,14 @@ func AdminLayout(props AdminLayoutProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\">\n\t\t\tfunction purgeModal(el) {\n\t\t\t\tel.dispatchEvent(new CustomEvent('modal-close', { bubbles: true }));\n\t\t\t\tel.remove();\n\t\t\t}\n\t\t\tdocument.addEventListener('DOMContentLoaded', () => {\n\t\t\t\t// 1. HTMX Component Discovery Bridge\n\t\t\t\tdocument.body.addEventListener('htmx:afterSwap', (event) => {\n\t\t\t\t\tif (window.Alpine && event.detail.target) {\n\t\t\t\t\t\tif (typeof window.Alpine.initTree === 'function') {\n\t\t\t\t\t\t\twindow.Alpine.initTree(event.detail.target);\n\t\t\t\t\t\t} else if (typeof window.Alpine.processTree === 'function') {\n\t\t\t\t\t\t\twindow.Alpine.processTree(event.detail.target);\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t});\n\n\t\t\tdocument.addEventListener('alpine:init', () => {\n\t\t\t\tAlpine.data('urlManager', (initialUrls) => ({\n\t\t\t\t\turls: initialUrls || [],\n\t\t\t\t\tnewUrl: '',\n\t\t\t\t\terror: '',\n\t\t\t\t\taddUrl() {\n\t\t\t\t\t\tthis.error = '';\n\t\t\t\t\t\tconst trimmed = this.newUrl.trim();\n\t\t\t\t\t\tif (!trimmed) return;\n\t\t\t\t\t\ttry {\n\t\t\t\t\t\t\tnew URL(trimmed);\n\t\t\t\t\t\t\tif (!this.urls.includes(trimmed)) {\n\t\t\t\t\t\t\t\tthis.urls.push(trimmed);\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tthis.newUrl = '';\n\t\t\t\t\t\t} catch (e) {\n\t\t\t\t\t\t\tthis.error = 'Invalid URL format (must include protocol like http:// or https://)';\n\t\t\t\t\t\t}\n\t\t\t\t\t},\n\t\t\t\t\tremoveUrl(index) {\n\t\t\t\t\t\tthis.urls.splice(index, 1);\n\t\t\t\t\t}\n\t\t\t\t}));\n\n\t\t\t\t// Consolidated tagListManager\n\t\t\t\tAlpine.data('tagListManager', () => ({\n\t\t\t\t\ttags: [],\n\t\t\t\t\tbuiltIn: [],\n\t\t\t\t\tselectedBuiltIn: [],\n\t\t\t\t\tnewTag: '',\n\t\t\t\t\terror: '',\n\t\t\t\t\tinputName: '',\n\t\t\t\t\tisAudience: false,\n\n\t\t\t\t\tinit() {\n\t\t\t\t\t\tthis.inputName = this.$el.dataset.inputName || 'tags';\n\t\t\t\t\t\tthis.isAudience = this.$el.dataset.isAudience === 'true';\n\t\t\t\t\t\ttry {\n\t\t\t\t\t\t\tthis.builtIn = JSON.parse(this.$el.dataset.builtIn) || [];\n\t\t\t\t\t\t} catch(e) {\n\t\t\t\t\t\t\tthis.builtIn = [];\n\t\t\t\t\t\t}\n\t\t\t\t\t\tlet initList = [];\n\t\t\t\t\t\ttry {\n\t\t\t\t\t\t\tinitList = JSON.parse(this.$el.dataset.initialTags) || [];\n\t\t\t\t\t\t} catch(e) {\n\t\t\t\t\t\t\tinitList = [];\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tinitList.forEach(t => {\n\t\t\t\t\t\t\tif (this.builtIn.includes(t)) {\n\t\t\t\t\t\t\t\tthis.selectedBuiltIn.push(t);\n\t\t\t\t\t\t\t} else if (t.trim() !== '') {\n\t\t\t\t\t\t\t\tthis.tags.push(t.trim());\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t});\n\t\t\t\t\t},\n\t\t\t\t\taddTag() {\n\t\t\t\t\t\tthis.error = '';\n\t\t\t\t\t\tconst trimmed = this.newTag.trim();\n\t\t\t\t\t\tif (!trimmed) return;\n\n\t\t\t\t\t\tif (this.isAudience) {\n\t\t\t\t\t\t\tif (trimmed.includes(' ') || (!trimmed.includes('://') && !/^[a-zA-Z0-9_:-]+$/.test(trimmed))) {\n\t\t\t\t\t\t\t\tthis.error = 'Must be an absolute URI or valid system identifier';\n\t\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tif (this.builtIn.includes(trimmed)) {\n\t\t\t\t\t\t\tif (!this.selectedBuiltIn.includes(trimmed)) {\n\t\t\t\t\t\t\t\tthis.selectedBuiltIn.push(trimmed);\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tthis.newTag = '';\n\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tif (this.tags.includes(trimmed)) {\n\t\t\t\t\t\t\tthis.error = 'Value already exists';\n\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t}\n\t\t\t\t\t\tthis.tags.push(trimmed);\n\t\t\t\t\t\tthis.newTag = '';\n\t\t\t\t\t},\n\t\t\t\t\tremoveTag(index) {\n\t\t\t\t\t\tthis.tags.splice(index, 1);\n\t\t\t\t\t}\n\t\t\t\t}));\n\n\t\t\t\tAlpine.data('lifetimeCalculator', (initialSeconds) => ({\n\t\t\t\t\tseconds: initialSeconds || 3600,\n\t\t\t\t\tvalue: 1,\n\t\t\t\t\tunit: 'hours',\n\t\t\t\t\tinit() {\n\t\t\t\t\t\tconst totalSec = parseInt(this.seconds) || 0;\n\t\t\t\t\t\tif (totalSec % 86400 === 0 && totalSec > 0) {\n\t\t\t\t\t\t\tthis.value = totalSec / 86400;\n\t\t\t\t\t\t\tthis.unit = 'days';\n\t\t\t\t\t\t} else if (totalSec % 3600 === 0 && totalSec > 0) {\n\t\t\t\t\t\t\tthis.value = totalSec / 3600;\n\t\t\t\t\t\t\tthis.unit = 'hours';\n\t\t\t\t\t\t} else if (totalSec % 60 === 0 && totalSec > 0) {\n\t\t\t\t\t\t\tthis.value = totalSec / 60;\n\t\t\t\t\t\t\tthis.unit = 'minutes';\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\tthis.value = totalSec;\n\t\t\t\t\t\t\tthis.unit = 'seconds';\n\t\t\t\t\t\t}\n\t\t\t\t\t},\n\t\t\t\t\tupdateSeconds() {\n\t\t\t\t\t\tconst val = parseFloat(this.value) || 0;\n\t\t\t\t\t\tlet multiplier = 1;\n\t\t\t\t\t\tif (this.unit === 'minutes') multiplier = 60;\n\t\t\t\t\t\telse if (this.unit === 'hours') multiplier = 3600;\n\t\t\t\t\t\telse if (this.unit === 'days') multiplier = 86400;\n\t\t\t\t\t\tthis.seconds = Math.round(val * multiplier);\n\t\t\t\t\t},\n\t\t\t\t\tsnapToPublicDefault() {\n\t\t\t\t\t\tthis.value = 1;\n\t\t\t\t\t\tthis.unit = 'days';\n\t\t\t\t\t\tthis.updateSeconds();\n\t\t\t\t\t}\n\t\t\t\t}));\n\n\t\t\t\tAlpine.data('idpRouter', (initialAllowed, allProviders) => ({\n\t\t\t\t\tallProviders: allProviders || [],\n\t\t\t\t\tallowed: initialAllowed || [],\n\t\t\t\t\tinit() {\n\t\t\t\t\t\t// Keep initial selection\n\t\t\t\t\t}\n\t\t\t\t}));\n\n\t\t\t\tAlpine.data('secretGenerator', (initialSecret) => ({\n\t\t\t\t\tsecret: initialSecret || '',\n\t\t\t\t\tgenerate() {\n\t\t\t\t\t\tconst bytes = new Uint8Array(32);\n\t\t\t\t\t\twindow.crypto.getRandomValues(bytes);\n\t\t\t\t\t\tlet binary = '';\n\t\t\t\t\t\tfor (let i = 0; i < 32; i++) {\n\t\t\t\t\t\t\tbinary += String.fromCharCode(bytes[i]);\n\t\t\t\t\t\t}\n\t\t\t\t\t\tthis.secret = btoa(binary)\n\t\t\t\t\t\t\t.replace(/\\+/g, '-')\n\t\t\t\t\t\t\t.replace(/\\//g, '_')\n\t\t\t\t\t\t\t.replace(/=/g, '');\n\t\t\t\t\t}\n\t\t\t\t}));\n\n\t\t\t\tAlpine.data('clientFormManager', (initialType, initialAuthCode, initialClientCredentials, initialRtr, initialIdpCount) => ({\n\t\t\t\t\tclientType: initialType || 'confidential',\n\t\t\t\t\tauthCode: !!initialAuthCode,\n\t\t\t\t\tclientCredentials: !!initialClientCredentials,\n\t\t\t\t\tenforceRtr: !!initialRtr,\n\t\t\t\t\tidpCount: parseInt(initialIdpCount) || 0,\n\t\t\t\t\tisSubmitDisabled: false,\n\n\t\t\t\t\tinit() {\n\t\t\t\t\t\tthis.syncComputedStates();\n\t\t\t\t\t\tthis.$watch('clientType', (val) => {\n\t\t\t\t\t\t\tif (val === 'public') {\n\t\t\t\t\t\t\t\tthis.clientCredentials = false;\n\t\t\t\t\t\t\t\tthis.authCode = true;\n\t\t\t\t\t\t\t\tthis.enforceRtr = true; // Public applications strictly mandate RTR\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tthis.syncComputedStates();\n\t\t\t\t\t\t});\n\t\t\t\t\t\tthis.$watch('authCode', (val) => { this.syncComputedStates(); });\n\t\t\t\t\t\tthis.$watch('clientCredentials', (val) => { this.syncComputedStates(); });\n\t\t\t\t\t\tthis.$watch('enforceRtr', (val) => { this.syncComputedStates(); });\n\t\t\t\t\t},\n\n\t\t\t\t\tsyncComputedStates() {\n\t\t\t\t\t\tthis.isConfidential = (this.clientType === 'confidential');\n\t\t\t\t\t\tthis.isPublic = (this.clientType === 'public');\n\t\t\t\t\t\tthis.showUrisAndIdps = (this.isPublic || this.authCode);\n\t\t\t\t\t\tthis.isSubmitDisabled = (this.isPublic || this.authCode) ? (this.idpCount === 0) : false;\n\t\t\t\t\t},\n\n\t\t\t\t\thandleClientType(type) { this.clientType = type; },\n\t\t\t\t\thandleAuthCodeChange(checked) { this.authCode = checked; },\n\t\t\t\t\thandleClientCredentialsChange(checked) { this.clientCredentials = checked; },\n\t\t\t\t\thandleIdpChange(count) { this.idpCount = count; },\n\t\t\t\t\thandleRtrChange(checked) { this.enforceRtr = checked; }\n\t\t\t\t}));\n\n\t\t\t\tAlpine.data('idpRouter', (initialAllowed, availablePool, initialDefaultIdp) => ({\n\t\t\t\t\tallowedIds: initialAllowed || [],\n\t\t\t\t\tdefaultId: initialDefaultIdp || '',\n\t\t\t\t\tavailable: availablePool || [],\n\t\t\t\t\tallowedList: [],\n\t\t\t\t\tisInvalidState: false,\n\n\t\t\t\t\tinit() {\n\t\t\t\t\t\tthis.updateAllowedList();\n\t\t\t\t\t},\n\n\t\t\t\t\ttoggleIdp(id) {\n\t\t\t\t\t\tif (this.allowedIds.includes(id)) {\n\t\t\t\t\t\t\tthis.allowedIds = this.allowedIds.filter(x => x !== id);\n\t\t\t\t\t\t\tif (this.defaultId === id) this.defaultId = '';\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\tthis.allowedIds.push(id);\n\t\t\t\t\t\t}\n\t\t\t\t\t\tthis.updateAllowedList();\n\t\t\t\t\t},\n\n\t\t\t\t\tupdateAllowedList() {\n\t\t\t\t\t\tlet list = [];\n\t\t\t\t\t\tif (this.allowedIds.includes('username-password')) {\n\t\t\t\t\t\t\tlist.push({ id: 'username-password', name: 'Local Accounts' });\n\t\t\t\t\t\t}\n\t\t\t\t\t\tthis.available.forEach(p => {\n\t\t\t\t\t\t\tif (this.allowedIds.includes(p.id)) {\n\t\t\t\t\t\t\t\tlist.push({ id: p.id, name: p.name });\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t});\n\t\t\t\t\t\tthis.allowedList = list;\n\t\t\t\t\t\tthis.isInvalidState = (this.allowedIds.length === 0);\n\n\t\t\t\t\t\tthis.$dispatch('idp-count-update', { count: this.allowedIds.length });\n\t\t\t\t\t}\n\t\t\t\t}));\n\n\t\t\t\t// 4. CSP-Compliant Single URI Input Validator\n\t\t\t\tAlpine.data('uriValidator', (initialValue) => ({\n\t\t\t\t\tvalue: initialValue || '',\n\t\t\t\t\terror: '',\n\t\t\t\t\tvalidate() {\n\t\t\t\t\t\tconst trimmed = this.value.trim();\n\t\t\t\t\t\tif (!trimmed) {\n\t\t\t\t\t\t\tthis.error = '';\n\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t}\n\t\t\t\t\t\tif (!trimmed.includes('://')) {\n\t\t\t\t\t\t\tthis.error = 'Invalid URL format (must include protocol like http:// or https://)';\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\tthis.error = '';\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t}));\n\n\t\t\t\t// 5. CSP-Compliant Modal Controller\n\t\t\t\tAlpine.data('modalController', () => ({\n\t\t\t\t\tisOpen: true,\n\t\t\t\t\tinit() {\n\t\t\t\t\t\tthis.$dispatch('modal-open');\n\t\t\t\t\t},\n\t\t\t\t\tclose() {\n\t\t\t\t\t\tthis.isOpen = false;\n\t\t\t\t\t\twindow.setTimeout(purgeModal, 200, this.$el);\n\t\t\t\t\t}\n\t\t\t\t}));\n\n\t\t\t\t// 6. CSP-Compliant Async ID & Secret Generator\n\t\t\t\tAlpine.data('idSecretGenerator', (initialVal) => ({\n\t\t\t\t\tvalue: initialVal || '',\n\t\t\t\t\tshowSecret: false,\n\t\t\t\t\tgenerate() {\n\t\t\t\t\t\twindow.fetch('/admin/clients/generate-secret')\n\t\t\t\t\t\t\t.then(response => response.text())\n\t\t\t\t\t\t\t.then(text => {\n\t\t\t\t\t\t\t\tthis.value = text;\n\t\t\t\t\t\t\t});\n\t\t\t\t\t},\n\t\t\t\t\ttoggleShow() {\n\t\t\t\t\t\tthis.showSecret = !this.showSecret;\n\t\t\t\t\t}\n\t\t\t\t}));\n\t\t\t});\n\t\t</script></head><body class=\"bg-slate-50 font-sans antialiased text-gray-900\" :class=\"modalOpen ? 'overflow-hidden h-screen' : ''\" x-data=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\">\n\t\t\tfunction purgeModal(el) {\n\t\t\t\tel.dispatchEvent(new CustomEvent('modal-close', { bubbles: true }));\n\t\t\t\tel.remove();\n\t\t\t}\n\t\t\tdocument.addEventListener('DOMContentLoaded', () => {\n\t\t\t\t// 1. HTMX Component Discovery Bridge\n\t\t\t\tdocument.body.addEventListener('htmx:afterSwap', (event) => {\n\t\t\t\t\tif (window.Alpine && event.detail.target) {\n\t\t\t\t\t\tif (typeof window.Alpine.initTree === 'function') {\n\t\t\t\t\t\t\twindow.Alpine.initTree(event.detail.target);\n\t\t\t\t\t\t} else if (typeof window.Alpine.processTree === 'function') {\n\t\t\t\t\t\t\twindow.Alpine.processTree(event.detail.target);\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t});\n\n\t\t\t\t// Hypermedia Semantic Error Status Compliance (§14.4 / §9.4)\n\t\t\t\tdocument.body.addEventListener('htmx:beforeOnLoad', function (evt) {\n\t\t\t\t\tif (evt.detail.xhr.status === 422) {\n\t\t\t\t\t\tevt.detail.shouldSwap = true;\n\t\t\t\t\t\tevt.detail.isError = false;\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t});\n\n\t\t\tdocument.addEventListener('alpine:init', () => {\n\t\t\t\tAlpine.data('urlManager', (initialUrls) => ({\n\t\t\t\t\turls: initialUrls || [],\n\t\t\t\t\tnewUrl: '',\n\t\t\t\t\terror: '',\n\t\t\t\t\taddUrl() {\n\t\t\t\t\t\tthis.error = '';\n\t\t\t\t\t\tconst trimmed = this.newUrl.trim();\n\t\t\t\t\t\tif (!trimmed) return;\n\t\t\t\t\t\ttry {\n\t\t\t\t\t\t\tnew URL(trimmed);\n\t\t\t\t\t\t\tif (!this.urls.includes(trimmed)) {\n\t\t\t\t\t\t\t\tthis.urls.push(trimmed);\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tthis.newUrl = '';\n\t\t\t\t\t\t} catch (e) {\n\t\t\t\t\t\t\tthis.error = 'Invalid URL format (must include protocol like http:// or https://)';\n\t\t\t\t\t\t}\n\t\t\t\t\t},\n\t\t\t\t\tremoveUrl(index) {\n\t\t\t\t\t\tthis.urls.splice(index, 1);\n\t\t\t\t\t}\n\t\t\t\t}));\n\n\t\t\t\t// Consolidated tagListManager\n\t\t\t\tAlpine.data('tagListManager', () => ({\n\t\t\t\t\ttags: [],\n\t\t\t\t\tbuiltIn: [],\n\t\t\t\t\tselectedBuiltIn: [],\n\t\t\t\t\tnewTag: '',\n\t\t\t\t\terror: '',\n\t\t\t\t\tinputName: '',\n\t\t\t\t\tisAudience: false,\n\n\t\t\t\t\tinit() {\n\t\t\t\t\t\tthis.inputName = this.$el.dataset.inputName || 'tags';\n\t\t\t\t\t\tthis.isAudience = this.$el.dataset.isAudience === 'true';\n\t\t\t\t\t\ttry {\n\t\t\t\t\t\t\tthis.builtIn = JSON.parse(this.$el.dataset.builtIn) || [];\n\t\t\t\t\t\t} catch(e) {\n\t\t\t\t\t\t\tthis.builtIn = [];\n\t\t\t\t\t\t}\n\t\t\t\t\t\tlet initList = [];\n\t\t\t\t\t\ttry {\n\t\t\t\t\t\t\tinitList = JSON.parse(this.$el.dataset.initialTags) || [];\n\t\t\t\t\t\t} catch(e) {\n\t\t\t\t\t\t\tinitList = [];\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tinitList.forEach(t => {\n\t\t\t\t\t\t\tif (this.builtIn.includes(t)) {\n\t\t\t\t\t\t\t\tthis.selectedBuiltIn.push(t);\n\t\t\t\t\t\t\t} else if (t.trim() !== '') {\n\t\t\t\t\t\t\t\tthis.tags.push(t.trim());\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t});\n\t\t\t\t\t},\n\t\t\t\t\taddTag() {\n\t\t\t\t\t\tthis.error = '';\n\t\t\t\t\t\tconst trimmed = this.newTag.trim();\n\t\t\t\t\t\tif (!trimmed) return;\n\n\t\t\t\t\t\tif (this.isAudience) {\n\t\t\t\t\t\t\tif (trimmed.includes(' ') || (!trimmed.includes('://') && !/^[a-zA-Z0-9_:-]+$/.test(trimmed))) {\n\t\t\t\t\t\t\t\tthis.error = 'Must be an absolute URI or valid system identifier';\n\t\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tif (this.builtIn.includes(trimmed)) {\n\t\t\t\t\t\t\tif (!this.selectedBuiltIn.includes(trimmed)) {\n\t\t\t\t\t\t\t\tthis.selectedBuiltIn.push(trimmed);\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tthis.newTag = '';\n\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tif (this.tags.includes(trimmed)) {\n\t\t\t\t\t\t\tthis.error = 'Value already exists';\n\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t}\n\t\t\t\t\t\tthis.tags.push(trimmed);\n\t\t\t\t\t\tthis.newTag = '';\n\t\t\t\t\t},\n\t\t\t\t\tremoveTag(index) {\n\t\t\t\t\t\tthis.tags.splice(index, 1);\n\t\t\t\t\t}\n\t\t\t\t}));\n\n\t\t\t\tAlpine.data('lifetimeCalculator', (initialSeconds) => ({\n\t\t\t\t\tseconds: initialSeconds || 3600,\n\t\t\t\t\tvalue: 1,\n\t\t\t\t\tunit: 'hours',\n\t\t\t\t\tinit() {\n\t\t\t\t\t\tconst totalSec = parseInt(this.seconds) || 0;\n\t\t\t\t\t\tif (totalSec % 86400 === 0 && totalSec > 0) {\n\t\t\t\t\t\t\tthis.value = totalSec / 86400;\n\t\t\t\t\t\t\tthis.unit = 'days';\n\t\t\t\t\t\t} else if (totalSec % 3600 === 0 && totalSec > 0) {\n\t\t\t\t\t\t\tthis.value = totalSec / 3600;\n\t\t\t\t\t\t\tthis.unit = 'hours';\n\t\t\t\t\t\t} else if (totalSec % 60 === 0 && totalSec > 0) {\n\t\t\t\t\t\t\tthis.value = totalSec / 60;\n\t\t\t\t\t\t\tthis.unit = 'minutes';\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\tthis.value = totalSec;\n\t\t\t\t\t\t\tthis.unit = 'seconds';\n\t\t\t\t\t\t}\n\t\t\t\t\t},\n\t\t\t\t\tupdateSeconds() {\n\t\t\t\t\t\tconst val = parseFloat(this.value) || 0;\n\t\t\t\t\t\tlet multiplier = 1;\n\t\t\t\t\t\tif (this.unit === 'minutes') multiplier = 60;\n\t\t\t\t\t\telse if (this.unit === 'hours') multiplier = 3600;\n\t\t\t\t\t\telse if (this.unit === 'days') multiplier = 86400;\n\t\t\t\t\t\tthis.seconds = Math.round(val * multiplier);\n\t\t\t\t\t},\n\t\t\t\t\tsnapToPublicDefault() {\n\t\t\t\t\t\tthis.value = 1;\n\t\t\t\t\t\tthis.unit = 'days';\n\t\t\t\t\t\tthis.updateSeconds();\n\t\t\t\t\t}\n\t\t\t\t}));\n\n\t\t\t\tAlpine.data('idpRouter', (initialAllowed, allProviders) => ({\n\t\t\t\t\tallProviders: allProviders || [],\n\t\t\t\t\tallowed: initialAllowed || [],\n\t\t\t\t\tinit() {\n\t\t\t\t\t\t// Keep initial selection\n\t\t\t\t\t}\n\t\t\t\t}));\n\n\t\t\t\tAlpine.data('secretGenerator', (initialSecret) => ({\n\t\t\t\t\tsecret: initialSecret || '',\n\t\t\t\t\tgenerate() {\n\t\t\t\t\t\tconst bytes = new Uint8Array(32);\n\t\t\t\t\t\twindow.crypto.getRandomValues(bytes);\n\t\t\t\t\t\tlet binary = '';\n\t\t\t\t\t\tfor (let i = 0; i < 32; i++) {\n\t\t\t\t\t\t\tbinary += String.fromCharCode(bytes[i]);\n\t\t\t\t\t\t}\n\t\t\t\t\t\tthis.secret = btoa(binary)\n\t\t\t\t\t\t\t.replace(/\\+/g, '-')\n\t\t\t\t\t\t\t.replace(/\\//g, '_')\n\t\t\t\t\t\t\t.replace(/=/g, '');\n\t\t\t\t\t}\n\t\t\t\t}));\n\n\t\t\t\tAlpine.data('clientFormManager', (initialType, initialAuthCode, initialClientCredentials, initialRtr, initialIdpCount) => ({\n\t\t\t\t\tclientType: initialType || 'confidential',\n\t\t\t\t\tauthCode: !!initialAuthCode,\n\t\t\t\t\tclientCredentials: !!initialClientCredentials,\n\t\t\t\t\tenforceRtr: !!initialRtr,\n\t\t\t\t\tidpCount: parseInt(initialIdpCount) || 0,\n\t\t\t\t\tisSubmitDisabled: false,\n\n\t\t\t\t\tinit() {\n\t\t\t\t\t\tthis.syncComputedStates();\n\t\t\t\t\t\tthis.$watch('clientType', (val) => {\n\t\t\t\t\t\t\tif (val === 'public') {\n\t\t\t\t\t\t\t\tthis.clientCredentials = false;\n\t\t\t\t\t\t\t\tthis.authCode = true;\n\t\t\t\t\t\t\t\tthis.enforceRtr = true; // Public applications strictly mandate RTR\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tthis.syncComputedStates();\n\t\t\t\t\t\t});\n\t\t\t\t\t\tthis.$watch('authCode', (val) => { this.syncComputedStates(); });\n\t\t\t\t\t\tthis.$watch('clientCredentials', (val) => { this.syncComputedStates(); });\n\t\t\t\t\t\tthis.$watch('enforceRtr', (val) => { this.syncComputedStates(); });\n\t\t\t\t\t},\n\n\t\t\t\t\tsyncComputedStates() {\n\t\t\t\t\t\tthis.isConfidential = (this.clientType === 'confidential');\n\t\t\t\t\t\tthis.isPublic = (this.clientType === 'public');\n\t\t\t\t\t\tthis.showUrisAndIdps = (this.isPublic || this.authCode);\n\t\t\t\t\t\tthis.isSubmitDisabled = (this.isPublic || this.authCode) ? (this.idpCount === 0) : false;\n\t\t\t\t\t},\n\n\t\t\t\t\thandleClientType(type) { this.clientType = type; },\n\t\t\t\t\thandleAuthCodeChange(checked) { this.authCode = checked; },\n\t\t\t\t\thandleClientCredentialsChange(checked) { this.clientCredentials = checked; },\n\t\t\t\t\thandleIdpChange(count) { this.idpCount = count; },\n\t\t\t\t\thandleRtrChange(checked) { this.enforceRtr = checked; }\n\t\t\t\t}));\n\n\t\t\t\tAlpine.data('idpRouter', (initialAllowed, availablePool, initialDefaultIdp) => ({\n\t\t\t\t\tallowedIds: initialAllowed || [],\n\t\t\t\t\tdefaultId: initialDefaultIdp || '',\n\t\t\t\t\tavailable: availablePool || [],\n\t\t\t\t\tallowedList: [],\n\t\t\t\t\tisInvalidState: false,\n\n\t\t\t\t\tinit() {\n\t\t\t\t\t\tthis.updateAllowedList();\n\t\t\t\t\t},\n\n\t\t\t\t\ttoggleIdp(id) {\n\t\t\t\t\t\tif (this.allowedIds.includes(id)) {\n\t\t\t\t\t\t\tthis.allowedIds = this.allowedIds.filter(x => x !== id);\n\t\t\t\t\t\t\tif (this.defaultId === id) this.defaultId = '';\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\tthis.allowedIds.push(id);\n\t\t\t\t\t\t}\n\t\t\t\t\t\tthis.updateAllowedList();\n\t\t\t\t\t},\n\n\t\t\t\t\tupdateAllowedList() {\n\t\t\t\t\t\tlet list = [];\n\t\t\t\t\t\tif (this.allowedIds.includes('username-password')) {\n\t\t\t\t\t\t\tlist.push({ id: 'username-password', name: 'Local Accounts' });\n\t\t\t\t\t\t}\n\t\t\t\t\t\tthis.available.forEach(p => {\n\t\t\t\t\t\t\tif (this.allowedIds.includes(p.id)) {\n\t\t\t\t\t\t\t\tlist.push({ id: p.id, name: p.name });\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t});\n\t\t\t\t\t\tthis.allowedList = list;\n\t\t\t\t\t\tthis.isInvalidState = (this.allowedIds.length === 0);\n\n\t\t\t\t\t\tthis.$dispatch('idp-count-update', { count: this.allowedIds.length });\n\t\t\t\t\t}\n\t\t\t\t}));\n\n\t\t\t\t// 4. CSP-Compliant Single URI Input Validator\n\t\t\t\tAlpine.data('uriValidator', (initialValue) => ({\n\t\t\t\t\tvalue: initialValue || '',\n\t\t\t\t\terror: '',\n\t\t\t\t\tvalidate() {\n\t\t\t\t\t\tconst trimmed = this.value.trim();\n\t\t\t\t\t\tif (!trimmed) {\n\t\t\t\t\t\t\tthis.error = '';\n\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t}\n\t\t\t\t\t\tif (!trimmed.includes('://')) {\n\t\t\t\t\t\t\tthis.error = 'Invalid URL format (must include protocol like http:// or https://)';\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\tthis.error = '';\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t}));\n\n\t\t\t\t// 5. CSP-Compliant Modal Controller\n\t\t\t\tAlpine.data('modalController', () => ({\n\t\t\t\t\tisOpen: true,\n\t\t\t\t\tinit() {\n\t\t\t\t\t\tthis.$dispatch('modal-open');\n\t\t\t\t\t},\n\t\t\t\t\tclose() {\n\t\t\t\t\t\tthis.isOpen = false;\n\t\t\t\t\t\twindow.setTimeout(purgeModal, 200, this.$el);\n\t\t\t\t\t}\n\t\t\t\t}));\n\n\t\t\t\t// 6. CSP-Compliant Async ID & Secret Generator\n\t\t\t\tAlpine.data('idSecretGenerator', (initialVal) => ({\n\t\t\t\t\tvalue: initialVal || '',\n\t\t\t\t\tshowSecret: false,\n\t\t\t\t\tgenerate() {\n\t\t\t\t\t\twindow.fetch('/admin/clients/generate-secret')\n\t\t\t\t\t\t\t.then(response => response.text())\n\t\t\t\t\t\t\t.then(text => {\n\t\t\t\t\t\t\t\tthis.value = text;\n\t\t\t\t\t\t\t});\n\t\t\t\t\t},\n\t\t\t\t\ttoggleShow() {\n\t\t\t\t\t\tthis.showSecret = !this.showSecret;\n\t\t\t\t\t}\n\t\t\t\t}));\n\t\t\t});\n\t\t</script></head><body class=\"bg-slate-50 font-sans antialiased text-gray-900\" :class=\"modalOpen ? 'overflow-hidden h-screen' : ''\" x-data=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("{ mobileMenu: false, modalOpen: false, currentTab: '%s' }", props.CurrentTab))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 387, Col: 215}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 395, Col: 215}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 		if templ_7745c5c3_Err != nil {
@@ -195,7 +195,7 @@ func AdminLayout(props AdminLayoutProps) templ.Component {
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(props.TenantName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 393, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 401, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
@@ -213,7 +213,7 @@ func AdminLayout(props AdminLayoutProps) templ.Component {
 			var templ_7745c5c3_Var9 templ.SafeURL
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinURLErrs(item.URL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 398, Col: 23}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 406, Col: 23}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 			if templ_7745c5c3_Err != nil {
@@ -226,7 +226,7 @@ func AdminLayout(props AdminLayoutProps) templ.Component {
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(item.URL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 399, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 407, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 			if templ_7745c5c3_Err != nil {
@@ -239,7 +239,7 @@ func AdminLayout(props AdminLayoutProps) templ.Component {
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("currentTab = '%s'", item.Key))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 403, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 411, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 			if templ_7745c5c3_Err != nil {
@@ -252,7 +252,7 @@ func AdminLayout(props AdminLayoutProps) templ.Component {
 			var templ_7745c5c3_Var12 string
 			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("currentTab == '%s' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'", item.Key))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 405, Col: 143}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 413, Col: 143}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 			if templ_7745c5c3_Err != nil {
@@ -265,7 +265,7 @@ func AdminLayout(props AdminLayoutProps) templ.Component {
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(item.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 407, Col: 20}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 415, Col: 20}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
@@ -283,7 +283,7 @@ func AdminLayout(props AdminLayoutProps) templ.Component {
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(props.Title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 417, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 425, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
@@ -333,7 +333,7 @@ func InputField(label, name, typeValue, value, errorStr string) templ.Component 
 		var templ_7745c5c3_Var16 string
 		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 436, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 444, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {
@@ -355,7 +355,7 @@ func InputField(label, name, typeValue, value, errorStr string) templ.Component 
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(typeValue)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 438, Col: 19}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 446, Col: 19}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 		if templ_7745c5c3_Err != nil {
@@ -368,7 +368,7 @@ func InputField(label, name, typeValue, value, errorStr string) templ.Component 
 		var templ_7745c5c3_Var19 string
 		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 439, Col: 14}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 447, Col: 14}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 		if templ_7745c5c3_Err != nil {
@@ -381,7 +381,7 @@ func InputField(label, name, typeValue, value, errorStr string) templ.Component 
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 440, Col: 16}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 448, Col: 16}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 		if templ_7745c5c3_Err != nil {
@@ -412,7 +412,7 @@ func InputField(label, name, typeValue, value, errorStr string) templ.Component 
 			var templ_7745c5c3_Var22 string
 			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(errorStr)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 444, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 452, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 			if templ_7745c5c3_Err != nil {
@@ -459,7 +459,7 @@ func URIInputField(label, name, value, errorStr string) templ.Component {
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("uriValidator('%s')", value))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 450, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 458, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 		if templ_7745c5c3_Err != nil {
@@ -472,7 +472,7 @@ func URIInputField(label, name, value, errorStr string) templ.Component {
 		var templ_7745c5c3_Var25 string
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 451, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 459, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 		if templ_7745c5c3_Err != nil {
@@ -494,7 +494,7 @@ func URIInputField(label, name, value, errorStr string) templ.Component {
 		var templ_7745c5c3_Var27 string
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 454, Col: 14}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 462, Col: 14}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 		if templ_7745c5c3_Err != nil {
@@ -525,7 +525,7 @@ func URIInputField(label, name, value, errorStr string) templ.Component {
 			var templ_7745c5c3_Var29 string
 			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(errorStr)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 462, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 470, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 			if templ_7745c5c3_Err != nil {
@@ -594,7 +594,7 @@ func Badge(label, severity string) templ.Component {
 		var templ_7745c5c3_Var33 string
 		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 476, Col: 9}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 484, Col: 9}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 		if templ_7745c5c3_Err != nil {
@@ -646,7 +646,7 @@ func TagListManager(props TagManagerProps) templ.Component {
 		var templ_7745c5c3_Var35 string
 		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(props.InputName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 493, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 501, Col: 35}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 		if templ_7745c5c3_Err != nil {
@@ -659,7 +659,7 @@ func TagListManager(props TagManagerProps) templ.Component {
 		var templ_7745c5c3_Var36 string
 		templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%t", props.IsAudience))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 494, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 502, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
 		if templ_7745c5c3_Err != nil {
@@ -672,7 +672,7 @@ func TagListManager(props TagManagerProps) templ.Component {
 		var templ_7745c5c3_Var37 string
 		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(marshalStringSlice(props.BuiltIn))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 495, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 503, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 		if templ_7745c5c3_Err != nil {
@@ -685,7 +685,7 @@ func TagListManager(props TagManagerProps) templ.Component {
 		var templ_7745c5c3_Var38 string
 		templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(marshalStringSlice(props.InitialTags))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 496, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 504, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 		if templ_7745c5c3_Err != nil {
@@ -698,7 +698,7 @@ func TagListManager(props TagManagerProps) templ.Component {
 		var templ_7745c5c3_Var39 string
 		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(props.Label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 499, Col: 78}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 507, Col: 78}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 		if templ_7745c5c3_Err != nil {
@@ -711,7 +711,7 @@ func TagListManager(props TagManagerProps) templ.Component {
 		var templ_7745c5c3_Var40 string
 		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.ResolveAttributeValue(props.InputName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 503, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 511, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 		if templ_7745c5c3_Err != nil {
@@ -729,7 +729,7 @@ func TagListManager(props TagManagerProps) templ.Component {
 			var templ_7745c5c3_Var41 string
 			templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(props.InputName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 510, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 518, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 			if templ_7745c5c3_Err != nil {
@@ -797,7 +797,7 @@ func TagListManager(props TagManagerProps) templ.Component {
 		var templ_7745c5c3_Var46 string
 		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.ResolveAttributeValue(props.Placeholder)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 558, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 566, Col: 35}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var46)
 		if templ_7745c5c3_Err != nil {
@@ -815,7 +815,7 @@ func TagListManager(props TagManagerProps) templ.Component {
 			var templ_7745c5c3_Var47 string
 			templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(props.ErrorStr)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 571, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 579, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 			if templ_7745c5c3_Err != nil {
@@ -869,7 +869,7 @@ func TokenLifetimeInput(props TokenLifetimeFieldProps) templ.Component {
 		var templ_7745c5c3_Var49 string
 		templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("lifetimeCalculator(%d)", props.Value))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 585, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 593, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
 		if templ_7745c5c3_Err != nil {
@@ -892,7 +892,7 @@ func TokenLifetimeInput(props TokenLifetimeFieldProps) templ.Component {
 		var templ_7745c5c3_Var50 string
 		templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(props.Label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 590, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 598, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 		if templ_7745c5c3_Err != nil {
@@ -905,7 +905,7 @@ func TokenLifetimeInput(props TokenLifetimeFieldProps) templ.Component {
 		var templ_7745c5c3_Var51 string
 		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.ResolveAttributeValue(props.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 591, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 599, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var51)
 		if templ_7745c5c3_Err != nil {
@@ -947,7 +947,7 @@ func URLManager(label string, name string, urls []string, errorStr string) templ
 		var templ_7745c5c3_Var53 string
 		templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("urlManager(%s)", marshalURLs(urls)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 615, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 623, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var53)
 		if templ_7745c5c3_Err != nil {
@@ -960,7 +960,7 @@ func URLManager(label string, name string, urls []string, errorStr string) templ
 		var templ_7745c5c3_Var54 string
 		templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 618, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 626, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 		if templ_7745c5c3_Err != nil {
@@ -973,7 +973,7 @@ func URLManager(label string, name string, urls []string, errorStr string) templ
 		var templ_7745c5c3_Var55 string
 		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.ResolveAttributeValue(name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 622, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 630, Col: 35}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var55)
 		if templ_7745c5c3_Err != nil {
@@ -991,7 +991,7 @@ func URLManager(label string, name string, urls []string, errorStr string) templ
 			var templ_7745c5c3_Var56 string
 			templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(errorStr)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 665, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 673, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 			if templ_7745c5c3_Err != nil {
@@ -1038,7 +1038,7 @@ func Modal(title, fetchUrl string) templ.Component {
 		var templ_7745c5c3_Var58 string
 		templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 694, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 702, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 		if templ_7745c5c3_Err != nil {
@@ -1051,7 +1051,7 @@ func Modal(title, fetchUrl string) templ.Component {
 		var templ_7745c5c3_Var59 string
 		templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.ResolveAttributeValue(fetchUrl)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 703, Col: 82}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/layout.templ`, Line: 711, Col: 82}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var59)
 		if templ_7745c5c3_Err != nil {

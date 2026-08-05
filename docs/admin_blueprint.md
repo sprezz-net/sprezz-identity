@@ -181,3 +181,27 @@ Sprezz Identity Admin UI provides interactive management toggles to control the 
 - **Conditional Configuration**: For **Confidential** applications, the input checkbox remains unlocked, allowing administrators to optionally enable or disable Refresh Token Rotation as required.
 - **Form Preservation**: When saving or validation errors occur, the backend parses `enforce_rtr` from the form payload and correctly repopulates the UI toggle state on subsequent renders.
 
+## 9. Operational Hardening & Horizontal Scaling (UI Integration)
+
+This section maps out how the Inbound HTTP Adapter and the frontend views interface with the core cluster and security guardrails established in **Section 13 of the Sprezz Identity Server Architecture Blueprint**.
+
+### 9.1 Horizontally Scaled Session Resiliency
+
+- **Backend Alignment**: Complies with Section 13.1 by eliminating local memory caching in favor of the shared PostgreSQL single source of truth.
+- **UI Behavior**: Because state is centralized in the database, view components automatically reflect real-time updates (such as newly created applications or active tenant status changes) across all replica nodes seamlessly without local cache clearing latency.
+
+### 9.2 Lockdown Interactivity & Session Purge
+
+- **UI Action**: Toggling the "Allow Signup" switch in the lockdown panel shoots a `PATCH /admin/tenants/{id}/toggle-signup` request to the backend.
+- **Security Purge**: As specified in Section 13.2, transitioning this state to `false` triggers an atomic backend transaction that blacklists all active tokens for the admin tenant partition.
+- **UX Outcome**: The browser executing the toggle, along with any other concurrent administrative sessions, will immediately have their session cookies rejected on the very next HTMX request, forcing an instantaneous redirect back to the OIDC login portal for security re-authentication.
+
+### 9.3 Environment-Aware Cookie Defenses
+
+- **Production Mode**: To enforce Section 13.3, administrative cookies default to the absolute secure envelope: name `__Host-spz_session`, `HttpOnly = true`, `Secure = true`, and `SameSite = Lax`.
+- **Local Development Loop**: To maintain local debugging fluidity on `http://localhost` without forcing local SSL configurations, the cookie-setting handler applies the environmental guard clause: if and only if the global setting `APP_ENV` is set to `"local"` AND the request host is `localhost` or `127.0.0.1`, the handler strips the `__Host-` prefix wrapper (falling back to plain `spz_session`) and flips `Secure = false`.
+
+### 9.4 Hypermedia Semantic Validation Error Swapping
+
+- **Semantic Error Delivery**: In compliance with Section 13.4, any form validation failure on the backend (e.g., an invalid URI or scope entry) rejects the transaction with an HTTP Status Code of `422 Unprocessable Entity`.
+- **HTMX Listener Binding**: To ensure HTMX does not drop the 4xx error block and safely swaps the validation component highlights into the view layout, the master global layout shell (`@AdminLayout`) embeds the strict, nonced event listener established in Section 13.4.

@@ -224,6 +224,7 @@ func (h *HttpAdapter) adminCreateTenant(w http.ResponseWriter, r *http.Request) 
 
 	if len(errs) > 0 {
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
+		w.WriteHeader(http.StatusUnprocessableEntity)
 		component := admin.CreateTenantForm(errs)
 		_ = component.Render(r.Context(), w)
 		return
@@ -290,6 +291,10 @@ func (h *HttpAdapter) adminToggleSignup(w http.ResponseWriter, r *http.Request) 
 
 	// Toggle state
 	tenant.Config.AllowSignup = !tenant.Config.AllowSignup
+
+	if !tenant.Config.AllowSignup {
+		_ = h.storagePort.PurgeTenantSessionsAndTokens(r.Context(), tenant.ID)
+	}
 
 	// Save Tenant configuration (we overwrite by creating on conflict update or resolving then saving)
 	// We can update tenant by calling CreateTenant since ON CONFLICT (tenant_uuid) DO UPDATE is used
@@ -386,6 +391,7 @@ func (h *HttpAdapter) adminSaveTenantSettings(w http.ResponseWriter, r *http.Req
 
 	if len(errs) > 0 {
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
+		w.WriteHeader(http.StatusUnprocessableEntity)
 		isAdminTenant := tenant.Name == adminTenantName
 		allTenants := []model.Tenant{}
 		if isAdminTenant {
@@ -650,6 +656,7 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 	if len(errs) > 0 {
 		providers, _ := h.idpService.GetIdentityProviders(r.Context(), tenant.ID)
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
+		w.WriteHeader(http.StatusUnprocessableEntity)
 		component := admin.ClientForm(admin.ClientFormProps{
 			Client: model.ClientApplication{
 				ID:                     id,
@@ -874,6 +881,7 @@ func (h *HttpAdapter) adminSaveIDP(w http.ResponseWriter, r *http.Request) {
 
 	if len(errs) > 0 {
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
+		w.WriteHeader(http.StatusUnprocessableEntity)
 		component := admin.IDPForm(admin.IDPFormProps{
 			Provider: provider,
 			Errors:   errs,
@@ -1037,6 +1045,7 @@ func (h *HttpAdapter) adminSaveUser(w http.ResponseWriter, r *http.Request) {
 
 	if len(errs) > 0 {
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
+		w.WriteHeader(http.StatusUnprocessableEntity)
 		component := admin.UserForm(admin.UserFormProps{
 			User:   model.UserProfile{ID: userUUID, PreferredUsername: username, Name: name, Email: email, EmailVerified: emailVerified},
 			Errors: errs,

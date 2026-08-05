@@ -203,6 +203,13 @@ type StorageMock struct {
 	beforePruneExpiredTokensCounter uint64
 	PruneExpiredTokensMock          mStorageMockPruneExpiredTokens
 
+	funcPurgeTenantSessionsAndTokens          func(ctx context.Context, tenantID uuid.UUID) (err error)
+	funcPurgeTenantSessionsAndTokensOrigin    string
+	inspectFuncPurgeTenantSessionsAndTokens   func(ctx context.Context, tenantID uuid.UUID)
+	afterPurgeTenantSessionsAndTokensCounter  uint64
+	beforePurgeTenantSessionsAndTokensCounter uint64
+	PurgeTenantSessionsAndTokensMock          mStorageMockPurgeTenantSessionsAndTokens
+
 	funcResolveTenantByDomain          func(ctx context.Context, domain string) (tp1 *model.Tenant, err error)
 	funcResolveTenantByDomainOrigin    string
 	inspectFuncResolveTenantByDomain   func(ctx context.Context, domain string)
@@ -394,6 +401,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 
 	m.PruneExpiredTokensMock = mStorageMockPruneExpiredTokens{mock: m}
 	m.PruneExpiredTokensMock.callArgs = []*StorageMockPruneExpiredTokensParams{}
+
+	m.PurgeTenantSessionsAndTokensMock = mStorageMockPurgeTenantSessionsAndTokens{mock: m}
+	m.PurgeTenantSessionsAndTokensMock.callArgs = []*StorageMockPurgeTenantSessionsAndTokensParams{}
 
 	m.ResolveTenantByDomainMock = mStorageMockResolveTenantByDomain{mock: m}
 	m.ResolveTenantByDomainMock.callArgs = []*StorageMockResolveTenantByDomainParams{}
@@ -9758,6 +9768,348 @@ func (m *StorageMock) MinimockPruneExpiredTokensInspect() {
 	}
 }
 
+type mStorageMockPurgeTenantSessionsAndTokens struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockPurgeTenantSessionsAndTokensExpectation
+	expectations       []*StorageMockPurgeTenantSessionsAndTokensExpectation
+
+	callArgs []*StorageMockPurgeTenantSessionsAndTokensParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockPurgeTenantSessionsAndTokensExpectation specifies expectation struct of the Storage.PurgeTenantSessionsAndTokens
+type StorageMockPurgeTenantSessionsAndTokensExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockPurgeTenantSessionsAndTokensParams
+	paramPtrs          *StorageMockPurgeTenantSessionsAndTokensParamPtrs
+	expectationOrigins StorageMockPurgeTenantSessionsAndTokensExpectationOrigins
+	results            *StorageMockPurgeTenantSessionsAndTokensResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockPurgeTenantSessionsAndTokensParams contains parameters of the Storage.PurgeTenantSessionsAndTokens
+type StorageMockPurgeTenantSessionsAndTokensParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+}
+
+// StorageMockPurgeTenantSessionsAndTokensParamPtrs contains pointers to parameters of the Storage.PurgeTenantSessionsAndTokens
+type StorageMockPurgeTenantSessionsAndTokensParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+}
+
+// StorageMockPurgeTenantSessionsAndTokensResults contains results of the Storage.PurgeTenantSessionsAndTokens
+type StorageMockPurgeTenantSessionsAndTokensResults struct {
+	err error
+}
+
+// StorageMockPurgeTenantSessionsAndTokensOrigins contains origins of expectations of the Storage.PurgeTenantSessionsAndTokens
+type StorageMockPurgeTenantSessionsAndTokensExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmPurgeTenantSessionsAndTokens *mStorageMockPurgeTenantSessionsAndTokens) Optional() *mStorageMockPurgeTenantSessionsAndTokens {
+	mmPurgeTenantSessionsAndTokens.optional = true
+	return mmPurgeTenantSessionsAndTokens
+}
+
+// Expect sets up expected params for Storage.PurgeTenantSessionsAndTokens
+func (mmPurgeTenantSessionsAndTokens *mStorageMockPurgeTenantSessionsAndTokens) Expect(ctx context.Context, tenantID uuid.UUID) *mStorageMockPurgeTenantSessionsAndTokens {
+	if mmPurgeTenantSessionsAndTokens.mock.funcPurgeTenantSessionsAndTokens != nil {
+		mmPurgeTenantSessionsAndTokens.mock.t.Fatalf("StorageMock.PurgeTenantSessionsAndTokens mock is already set by Set")
+	}
+
+	if mmPurgeTenantSessionsAndTokens.defaultExpectation == nil {
+		mmPurgeTenantSessionsAndTokens.defaultExpectation = &StorageMockPurgeTenantSessionsAndTokensExpectation{}
+	}
+
+	if mmPurgeTenantSessionsAndTokens.defaultExpectation.paramPtrs != nil {
+		mmPurgeTenantSessionsAndTokens.mock.t.Fatalf("StorageMock.PurgeTenantSessionsAndTokens mock is already set by ExpectParams functions")
+	}
+
+	mmPurgeTenantSessionsAndTokens.defaultExpectation.params = &StorageMockPurgeTenantSessionsAndTokensParams{ctx, tenantID}
+	mmPurgeTenantSessionsAndTokens.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmPurgeTenantSessionsAndTokens.expectations {
+		if minimock.Equal(e.params, mmPurgeTenantSessionsAndTokens.defaultExpectation.params) {
+			mmPurgeTenantSessionsAndTokens.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmPurgeTenantSessionsAndTokens.defaultExpectation.params)
+		}
+	}
+
+	return mmPurgeTenantSessionsAndTokens
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.PurgeTenantSessionsAndTokens
+func (mmPurgeTenantSessionsAndTokens *mStorageMockPurgeTenantSessionsAndTokens) ExpectCtxParam1(ctx context.Context) *mStorageMockPurgeTenantSessionsAndTokens {
+	if mmPurgeTenantSessionsAndTokens.mock.funcPurgeTenantSessionsAndTokens != nil {
+		mmPurgeTenantSessionsAndTokens.mock.t.Fatalf("StorageMock.PurgeTenantSessionsAndTokens mock is already set by Set")
+	}
+
+	if mmPurgeTenantSessionsAndTokens.defaultExpectation == nil {
+		mmPurgeTenantSessionsAndTokens.defaultExpectation = &StorageMockPurgeTenantSessionsAndTokensExpectation{}
+	}
+
+	if mmPurgeTenantSessionsAndTokens.defaultExpectation.params != nil {
+		mmPurgeTenantSessionsAndTokens.mock.t.Fatalf("StorageMock.PurgeTenantSessionsAndTokens mock is already set by Expect")
+	}
+
+	if mmPurgeTenantSessionsAndTokens.defaultExpectation.paramPtrs == nil {
+		mmPurgeTenantSessionsAndTokens.defaultExpectation.paramPtrs = &StorageMockPurgeTenantSessionsAndTokensParamPtrs{}
+	}
+	mmPurgeTenantSessionsAndTokens.defaultExpectation.paramPtrs.ctx = &ctx
+	mmPurgeTenantSessionsAndTokens.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmPurgeTenantSessionsAndTokens
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.PurgeTenantSessionsAndTokens
+func (mmPurgeTenantSessionsAndTokens *mStorageMockPurgeTenantSessionsAndTokens) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockPurgeTenantSessionsAndTokens {
+	if mmPurgeTenantSessionsAndTokens.mock.funcPurgeTenantSessionsAndTokens != nil {
+		mmPurgeTenantSessionsAndTokens.mock.t.Fatalf("StorageMock.PurgeTenantSessionsAndTokens mock is already set by Set")
+	}
+
+	if mmPurgeTenantSessionsAndTokens.defaultExpectation == nil {
+		mmPurgeTenantSessionsAndTokens.defaultExpectation = &StorageMockPurgeTenantSessionsAndTokensExpectation{}
+	}
+
+	if mmPurgeTenantSessionsAndTokens.defaultExpectation.params != nil {
+		mmPurgeTenantSessionsAndTokens.mock.t.Fatalf("StorageMock.PurgeTenantSessionsAndTokens mock is already set by Expect")
+	}
+
+	if mmPurgeTenantSessionsAndTokens.defaultExpectation.paramPtrs == nil {
+		mmPurgeTenantSessionsAndTokens.defaultExpectation.paramPtrs = &StorageMockPurgeTenantSessionsAndTokensParamPtrs{}
+	}
+	mmPurgeTenantSessionsAndTokens.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmPurgeTenantSessionsAndTokens.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmPurgeTenantSessionsAndTokens
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.PurgeTenantSessionsAndTokens
+func (mmPurgeTenantSessionsAndTokens *mStorageMockPurgeTenantSessionsAndTokens) Inspect(f func(ctx context.Context, tenantID uuid.UUID)) *mStorageMockPurgeTenantSessionsAndTokens {
+	if mmPurgeTenantSessionsAndTokens.mock.inspectFuncPurgeTenantSessionsAndTokens != nil {
+		mmPurgeTenantSessionsAndTokens.mock.t.Fatalf("Inspect function is already set for StorageMock.PurgeTenantSessionsAndTokens")
+	}
+
+	mmPurgeTenantSessionsAndTokens.mock.inspectFuncPurgeTenantSessionsAndTokens = f
+
+	return mmPurgeTenantSessionsAndTokens
+}
+
+// Return sets up results that will be returned by Storage.PurgeTenantSessionsAndTokens
+func (mmPurgeTenantSessionsAndTokens *mStorageMockPurgeTenantSessionsAndTokens) Return(err error) *StorageMock {
+	if mmPurgeTenantSessionsAndTokens.mock.funcPurgeTenantSessionsAndTokens != nil {
+		mmPurgeTenantSessionsAndTokens.mock.t.Fatalf("StorageMock.PurgeTenantSessionsAndTokens mock is already set by Set")
+	}
+
+	if mmPurgeTenantSessionsAndTokens.defaultExpectation == nil {
+		mmPurgeTenantSessionsAndTokens.defaultExpectation = &StorageMockPurgeTenantSessionsAndTokensExpectation{mock: mmPurgeTenantSessionsAndTokens.mock}
+	}
+	mmPurgeTenantSessionsAndTokens.defaultExpectation.results = &StorageMockPurgeTenantSessionsAndTokensResults{err}
+	mmPurgeTenantSessionsAndTokens.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmPurgeTenantSessionsAndTokens.mock
+}
+
+// Set uses given function f to mock the Storage.PurgeTenantSessionsAndTokens method
+func (mmPurgeTenantSessionsAndTokens *mStorageMockPurgeTenantSessionsAndTokens) Set(f func(ctx context.Context, tenantID uuid.UUID) (err error)) *StorageMock {
+	if mmPurgeTenantSessionsAndTokens.defaultExpectation != nil {
+		mmPurgeTenantSessionsAndTokens.mock.t.Fatalf("Default expectation is already set for the Storage.PurgeTenantSessionsAndTokens method")
+	}
+
+	if len(mmPurgeTenantSessionsAndTokens.expectations) > 0 {
+		mmPurgeTenantSessionsAndTokens.mock.t.Fatalf("Some expectations are already set for the Storage.PurgeTenantSessionsAndTokens method")
+	}
+
+	mmPurgeTenantSessionsAndTokens.mock.funcPurgeTenantSessionsAndTokens = f
+	mmPurgeTenantSessionsAndTokens.mock.funcPurgeTenantSessionsAndTokensOrigin = minimock.CallerInfo(1)
+	return mmPurgeTenantSessionsAndTokens.mock
+}
+
+// When sets expectation for the Storage.PurgeTenantSessionsAndTokens which will trigger the result defined by the following
+// Then helper
+func (mmPurgeTenantSessionsAndTokens *mStorageMockPurgeTenantSessionsAndTokens) When(ctx context.Context, tenantID uuid.UUID) *StorageMockPurgeTenantSessionsAndTokensExpectation {
+	if mmPurgeTenantSessionsAndTokens.mock.funcPurgeTenantSessionsAndTokens != nil {
+		mmPurgeTenantSessionsAndTokens.mock.t.Fatalf("StorageMock.PurgeTenantSessionsAndTokens mock is already set by Set")
+	}
+
+	expectation := &StorageMockPurgeTenantSessionsAndTokensExpectation{
+		mock:               mmPurgeTenantSessionsAndTokens.mock,
+		params:             &StorageMockPurgeTenantSessionsAndTokensParams{ctx, tenantID},
+		expectationOrigins: StorageMockPurgeTenantSessionsAndTokensExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmPurgeTenantSessionsAndTokens.expectations = append(mmPurgeTenantSessionsAndTokens.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.PurgeTenantSessionsAndTokens return parameters for the expectation previously defined by the When method
+func (e *StorageMockPurgeTenantSessionsAndTokensExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockPurgeTenantSessionsAndTokensResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.PurgeTenantSessionsAndTokens should be invoked
+func (mmPurgeTenantSessionsAndTokens *mStorageMockPurgeTenantSessionsAndTokens) Times(n uint64) *mStorageMockPurgeTenantSessionsAndTokens {
+	if n == 0 {
+		mmPurgeTenantSessionsAndTokens.mock.t.Fatalf("Times of StorageMock.PurgeTenantSessionsAndTokens mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmPurgeTenantSessionsAndTokens.expectedInvocations, n)
+	mmPurgeTenantSessionsAndTokens.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmPurgeTenantSessionsAndTokens
+}
+
+func (mmPurgeTenantSessionsAndTokens *mStorageMockPurgeTenantSessionsAndTokens) invocationsDone() bool {
+	if len(mmPurgeTenantSessionsAndTokens.expectations) == 0 && mmPurgeTenantSessionsAndTokens.defaultExpectation == nil && mmPurgeTenantSessionsAndTokens.mock.funcPurgeTenantSessionsAndTokens == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmPurgeTenantSessionsAndTokens.mock.afterPurgeTenantSessionsAndTokensCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmPurgeTenantSessionsAndTokens.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// PurgeTenantSessionsAndTokens implements mm_port.Storage
+func (mmPurgeTenantSessionsAndTokens *StorageMock) PurgeTenantSessionsAndTokens(ctx context.Context, tenantID uuid.UUID) (err error) {
+	mm_atomic.AddUint64(&mmPurgeTenantSessionsAndTokens.beforePurgeTenantSessionsAndTokensCounter, 1)
+	defer mm_atomic.AddUint64(&mmPurgeTenantSessionsAndTokens.afterPurgeTenantSessionsAndTokensCounter, 1)
+
+	mmPurgeTenantSessionsAndTokens.t.Helper()
+
+	if mmPurgeTenantSessionsAndTokens.inspectFuncPurgeTenantSessionsAndTokens != nil {
+		mmPurgeTenantSessionsAndTokens.inspectFuncPurgeTenantSessionsAndTokens(ctx, tenantID)
+	}
+
+	mm_params := StorageMockPurgeTenantSessionsAndTokensParams{ctx, tenantID}
+
+	// Record call args
+	mmPurgeTenantSessionsAndTokens.PurgeTenantSessionsAndTokensMock.mutex.Lock()
+	mmPurgeTenantSessionsAndTokens.PurgeTenantSessionsAndTokensMock.callArgs = append(mmPurgeTenantSessionsAndTokens.PurgeTenantSessionsAndTokensMock.callArgs, &mm_params)
+	mmPurgeTenantSessionsAndTokens.PurgeTenantSessionsAndTokensMock.mutex.Unlock()
+
+	for _, e := range mmPurgeTenantSessionsAndTokens.PurgeTenantSessionsAndTokensMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmPurgeTenantSessionsAndTokens.PurgeTenantSessionsAndTokensMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmPurgeTenantSessionsAndTokens.PurgeTenantSessionsAndTokensMock.defaultExpectation.Counter, 1)
+		mm_want := mmPurgeTenantSessionsAndTokens.PurgeTenantSessionsAndTokensMock.defaultExpectation.params
+		mm_want_ptrs := mmPurgeTenantSessionsAndTokens.PurgeTenantSessionsAndTokensMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockPurgeTenantSessionsAndTokensParams{ctx, tenantID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmPurgeTenantSessionsAndTokens.t.Errorf("StorageMock.PurgeTenantSessionsAndTokens got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmPurgeTenantSessionsAndTokens.PurgeTenantSessionsAndTokensMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmPurgeTenantSessionsAndTokens.t.Errorf("StorageMock.PurgeTenantSessionsAndTokens got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmPurgeTenantSessionsAndTokens.PurgeTenantSessionsAndTokensMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmPurgeTenantSessionsAndTokens.t.Errorf("StorageMock.PurgeTenantSessionsAndTokens got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmPurgeTenantSessionsAndTokens.PurgeTenantSessionsAndTokensMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmPurgeTenantSessionsAndTokens.PurgeTenantSessionsAndTokensMock.defaultExpectation.results
+		if mm_results == nil {
+			mmPurgeTenantSessionsAndTokens.t.Fatal("No results are set for the StorageMock.PurgeTenantSessionsAndTokens")
+		}
+		return (*mm_results).err
+	}
+	if mmPurgeTenantSessionsAndTokens.funcPurgeTenantSessionsAndTokens != nil {
+		return mmPurgeTenantSessionsAndTokens.funcPurgeTenantSessionsAndTokens(ctx, tenantID)
+	}
+	mmPurgeTenantSessionsAndTokens.t.Fatalf("Unexpected call to StorageMock.PurgeTenantSessionsAndTokens. %v %v", ctx, tenantID)
+	return
+}
+
+// PurgeTenantSessionsAndTokensAfterCounter returns a count of finished StorageMock.PurgeTenantSessionsAndTokens invocations
+func (mmPurgeTenantSessionsAndTokens *StorageMock) PurgeTenantSessionsAndTokensAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmPurgeTenantSessionsAndTokens.afterPurgeTenantSessionsAndTokensCounter)
+}
+
+// PurgeTenantSessionsAndTokensBeforeCounter returns a count of StorageMock.PurgeTenantSessionsAndTokens invocations
+func (mmPurgeTenantSessionsAndTokens *StorageMock) PurgeTenantSessionsAndTokensBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmPurgeTenantSessionsAndTokens.beforePurgeTenantSessionsAndTokensCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.PurgeTenantSessionsAndTokens.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmPurgeTenantSessionsAndTokens *mStorageMockPurgeTenantSessionsAndTokens) Calls() []*StorageMockPurgeTenantSessionsAndTokensParams {
+	mmPurgeTenantSessionsAndTokens.mutex.RLock()
+
+	argCopy := make([]*StorageMockPurgeTenantSessionsAndTokensParams, len(mmPurgeTenantSessionsAndTokens.callArgs))
+	copy(argCopy, mmPurgeTenantSessionsAndTokens.callArgs)
+
+	mmPurgeTenantSessionsAndTokens.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockPurgeTenantSessionsAndTokensDone returns true if the count of the PurgeTenantSessionsAndTokens invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockPurgeTenantSessionsAndTokensDone() bool {
+	if m.PurgeTenantSessionsAndTokensMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.PurgeTenantSessionsAndTokensMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.PurgeTenantSessionsAndTokensMock.invocationsDone()
+}
+
+// MinimockPurgeTenantSessionsAndTokensInspect logs each unmet expectation
+func (m *StorageMock) MinimockPurgeTenantSessionsAndTokensInspect() {
+	for _, e := range m.PurgeTenantSessionsAndTokensMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.PurgeTenantSessionsAndTokens at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterPurgeTenantSessionsAndTokensCounter := mm_atomic.LoadUint64(&m.afterPurgeTenantSessionsAndTokensCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.PurgeTenantSessionsAndTokensMock.defaultExpectation != nil && afterPurgeTenantSessionsAndTokensCounter < 1 {
+		if m.PurgeTenantSessionsAndTokensMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.PurgeTenantSessionsAndTokens at\n%s", m.PurgeTenantSessionsAndTokensMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.PurgeTenantSessionsAndTokens at\n%s with params: %#v", m.PurgeTenantSessionsAndTokensMock.defaultExpectation.expectationOrigins.origin, *m.PurgeTenantSessionsAndTokensMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcPurgeTenantSessionsAndTokens != nil && afterPurgeTenantSessionsAndTokensCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.PurgeTenantSessionsAndTokens at\n%s", m.funcPurgeTenantSessionsAndTokensOrigin)
+	}
+
+	if !m.PurgeTenantSessionsAndTokensMock.invocationsDone() && afterPurgeTenantSessionsAndTokensCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.PurgeTenantSessionsAndTokens at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.PurgeTenantSessionsAndTokensMock.expectedInvocations), m.PurgeTenantSessionsAndTokensMock.expectedInvocationsOrigin, afterPurgeTenantSessionsAndTokensCounter)
+	}
+}
+
 type mStorageMockResolveTenantByDomain struct {
 	optional           bool
 	mock               *StorageMock
@@ -15132,6 +15484,8 @@ func (m *StorageMock) MinimockFinish() {
 
 			m.MinimockPruneExpiredTokensInspect()
 
+			m.MinimockPurgeTenantSessionsAndTokensInspect()
+
 			m.MinimockResolveTenantByDomainInspect()
 
 			m.MinimockResolveTenantByIDInspect()
@@ -15210,6 +15564,7 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockIsTokenRevokedDone() &&
 		m.MinimockMarkRefreshTokenUsedDone() &&
 		m.MinimockPruneExpiredTokensDone() &&
+		m.MinimockPurgeTenantSessionsAndTokensDone() &&
 		m.MinimockResolveTenantByDomainDone() &&
 		m.MinimockResolveTenantByIDDone() &&
 		m.MinimockRevokeRefreshTokenFamilyDone() &&

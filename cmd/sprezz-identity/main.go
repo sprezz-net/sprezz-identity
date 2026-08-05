@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	httpadapter "sprezz-identity/internal/adapters/in/http"
@@ -14,6 +17,7 @@ import (
 	"sprezz-identity/internal/adapters/out/postgres"
 	"sprezz-identity/internal/adapters/out/state"
 	"sprezz-identity/internal/config"
+	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/service"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -31,7 +35,8 @@ func main() {
 	sysClock := clock.NewSystemClock()
 
 	bootstrap := service.NewTenantBootstrapService(deps.storage, sysClock)
-	if _, err := bootstrap.BootstrapAdminTenant(context.Background(), deps.cfg.IdentityServer.AdminTenantDomain); err != nil {
+	adminTenant, err := bootstrap.BootstrapAdminTenant(context.Background(), deps.cfg.IdentityServer.AdminTenantDomain)
+	if err != nil {
 		log.Fatalf("Admin tenant bootstrap failed: %v", err)
 	}
 
@@ -43,9 +48,17 @@ func main() {
 	startTokenPruningWorker(ctx, deps.storage, deps.cfg.IdentityServer.TokenPruningInterval)
 	startKeyRotationWorker(ctx, signer, deps.cfg.IdentityServer.AdminTenantDomain, deps.cfg.IdentityServer.KeyRotationInterval)
 
-	ephemeralStore, err := state.NewEphemeralStore()
-	if err != nil {
-		log.Fatalf("Failed to generate ephemeral secret store: %v", err)
+	masterKey := os.Getenv("SPREZZ_MASTER_KEY")
+	decryptedSecret := loadOrInitializeAdminSecret(deps, adminTenant, masterKey)
+
+	var ephemeralStore *state.EphemeralStore
+	if decryptedSecret != "" {
+		ephemeralStore = state.NewEphemeralStoreWithSecret(decryptedSecret)
+	} else {
+		ephemeralStore, err = state.NewEphemeralStore()
+		if err != nil {
+			log.Fatalf("Failed to generate ephemeral secret store: %v", err)
+		}
 	}
 
 	notifier := logout.NewLogoutHttpClient()
@@ -59,6 +72,33 @@ func main() {
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Token server terminated: %v", err)
 	}
+}
+
+func loadOrInitializeAdminSecret(deps *dependencies, adminTenant *model.Tenant, masterKey string) string {
+	secret := adminTenant.Config.EncryptedAdminSecret
+	if masterKey != "" && secret != "" {
+		decVal, err := state.DecryptAESGCM(secret, masterKey)
+		if err != nil {
+			log.Fatalf("Failed to decrypt administrative secret with SPREZZ_MASTER_KEY: %v", err)
+		}
+		return decVal
+	} else if masterKey != "" && secret == "" {
+		bytes := make([]byte, 32)
+		if _, err := rand.Read(bytes); err != nil {
+			log.Fatalf("Failed to generate random secret: %v", err)
+		}
+		plaintextSecret := hex.EncodeToString(bytes)
+		encVal, err := state.EncryptAESGCM(plaintextSecret, masterKey)
+		if err != nil {
+			log.Fatalf("Failed to encrypt administrative secret: %v", err)
+		}
+		adminTenant.Config.EncryptedAdminSecret = encVal
+		if err := deps.storage.CreateTenant(context.Background(), *adminTenant); err != nil {
+			log.Fatalf("Failed to save encrypted admin secret to tenant: %v", err)
+		}
+		return plaintextSecret
+	}
+	return ""
 }
 
 func startTokenPruningWorker(ctx context.Context, storage *postgres.PostgresStorage, interval time.Duration) {

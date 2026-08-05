@@ -134,7 +134,7 @@ func (h *HttpAdapter) signUpSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Auto-login after successful registration!
-	h.setSSOSessionCookie(w, ssoSession{
+	h.setSSOSessionCookie(w, r, ssoSession{
 		SubjectID:  profile.ID.String(),
 		ProviderID: provider.ID.String(),
 		SessionID:  uuid.NewString(),

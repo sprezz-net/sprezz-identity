@@ -128,7 +128,7 @@ func (h *HttpAdapter) logout(w http.ResponseWriter, r *http.Request) {
 		clientID = sso.ProviderID
 	}
 
-	h.clearSSOSessionCookie(w)
+	h.clearSSOSessionCookie(w, r)
 
 	frontChannelURIs, _ := h.authPort.ProcessLogout(r.Context(), tenant.ID, subject, clientID)
 
@@ -156,7 +156,7 @@ func (h *HttpAdapter) webLogout(w http.ResponseWriter, r *http.Request) {
 		_, _ = h.authPort.ProcessLogout(r.Context(), tenant.ID, sso.SubjectID, sso.ProviderID)
 	}
 
-	h.clearSSOSessionCookie(w)
+	h.clearSSOSessionCookie(w, r)
 	http.Redirect(w, r, routeRoot, http.StatusFound)
 }
 

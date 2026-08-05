@@ -1326,3 +1326,29 @@ func (s *PostgresStorage) RevokeRefreshTokenFamily(ctx context.Context, tokenFam
 	}
 	return nil
 }
+
+func (s *PostgresStorage) PurgeTenantSessionsAndTokens(ctx context.Context, tenantID uuid.UUID) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	_, err = tx.Exec(ctx, `
+		DELETE FROM auth_sessions
+		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
+	`, toPGUUID(tenantID))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx, `
+		DELETE FROM refresh_tokens
+		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
+	`, toPGUUID(tenantID))
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}

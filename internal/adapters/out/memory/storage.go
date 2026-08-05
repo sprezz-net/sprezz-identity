@@ -462,3 +462,22 @@ func (s *Storage) RevokeRefreshTokenFamily(ctx context.Context, tokenFamilyID st
 	}
 	return nil
 }
+
+func (s *Storage) PurgeTenantSessionsAndTokens(ctx context.Context, tenantID uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for k, v := range s.sessions {
+		if v.TenantID == tenantID.String() {
+			delete(s.sessions, k)
+		}
+	}
+
+	for k, v := range s.refreshTokens {
+		if v.TenantID == tenantID {
+			delete(s.refreshTokens, k)
+		}
+	}
+
+	return nil
+}

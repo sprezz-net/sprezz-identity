@@ -64,6 +64,7 @@ type Storage interface {
 	GetRefreshToken(ctx context.Context, tokenID string) (*model.RefreshToken, error)
 	MarkRefreshTokenUsed(ctx context.Context, tokenID string) error
 	RevokeRefreshTokenFamily(ctx context.Context, tokenFamilyID string) error
+	PurgeTenantSessionsAndTokens(ctx context.Context, tenantID uuid.UUID) error
 }
 
 // Errors returned by the StoragePort.

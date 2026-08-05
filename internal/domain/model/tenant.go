@@ -21,11 +21,12 @@ type Levels struct {
 }
 
 type TenantConfig struct {
-	PredefinedScopes    []string          `json:"predefined_scopes"`
-	PredefinedAudiences []string          `json:"predefined_audiences"`
-	DefaultRedirectURI  string            `json:"default_redirect_uri"`
-	RedirectWhitelist   []string          `json:"redirect_whitelist"`
-	ACRToLevels         map[string]Levels `json:"acr_to_levels"`
-	ACREssential        bool              `json:"acr_essential"`
-	AllowSignup         bool              `json:"allow_signup"`
+	PredefinedScopes     []string          `json:"predefined_scopes"`
+	PredefinedAudiences  []string          `json:"predefined_audiences"`
+	DefaultRedirectURI   string            `json:"default_redirect_uri"`
+	RedirectWhitelist    []string          `json:"redirect_whitelist"`
+	ACRToLevels          map[string]Levels `json:"acr_to_levels"`
+	ACREssential         bool              `json:"acr_essential"`
+	AllowSignup          bool              `json:"allow_signup"`
+	EncryptedAdminSecret string            `json:"encrypted_admin_secret,omitempty"`
 }
