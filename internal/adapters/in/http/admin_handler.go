@@ -486,12 +486,24 @@ func (h *HttpAdapter) adminViewClient(w http.ResponseWriter, r *http.Request) {
 
 func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
+	if err := r.ParseForm(); err != nil {
+		h.renderError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
 	id := r.FormValue("id")
 	clientID := r.FormValue("client_id")
 	clientName := r.FormValue("client_name")
 	clientType := r.FormValue("client_type")
-	redirectURIs := parseCommaSeparated(r.FormValue("redirect_uris"))
-	postLogoutURIs := parseCommaSeparated(r.FormValue("post_logout_redirect_uris"))
+
+	redirectURIs := r.Form["redirect_uris"]
+	if redirectURIs == nil {
+		redirectURIs = []string{}
+	}
+	postLogoutURIs := r.Form["post_logout_redirect_uris"]
+	if postLogoutURIs == nil {
+		postLogoutURIs = []string{}
+	}
+
 	frontChannelLogoutURI := r.FormValue("front_channel_logout_uri")
 	backChannelLogoutURI := r.FormValue("back_channel_logout_uri")
 

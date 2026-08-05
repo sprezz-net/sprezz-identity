@@ -44,6 +44,30 @@ templ AdminLayout(props AdminLayoutProps) {
                 el.dispatchEvent(new CustomEvent('modal-close', { bubbles: true }));
                 el.remove();
             }
+            document.addEventListener('alpine:init', () => {
+                Alpine.data('urlManager', (initialUrls) => ({
+                    urls: initialUrls || [],
+                    newUrl: '',
+                    error: '',
+                    addUrl() {
+                        this.error = '';
+                        const trimmed = this.newUrl.trim();
+                        if (!trimmed) return;
+                        try {
+                            new URL(trimmed);
+                            if (!this.urls.includes(trimmed)) {
+                                this.urls.push(trimmed);
+                            }
+                            this.newUrl = '';
+                        } catch (e) {
+                            this.error = 'Invalid URL format (must include protocol like http:// or https://)';
+                        }
+                    },
+                    removeUrl(index) {
+                        this.urls.splice(index, 1);
+                    }
+                }));
+            });
         </script>
     </head>
     <body class="bg-slate-50 font-sans antialiased text-gray-900" :class="modalOpen ? 'overflow-hidden h-screen' : ''" x-data={ fmt.Sprintf("{ mobileMenu: false, modalOpen: false, currentTab: '%s' }", props.CurrentTab) } @modal-open.window="modalOpen = true" @modal-close.window="modalOpen = false">
@@ -116,6 +140,18 @@ templ StatusBadge(isActive bool) {
     } else {
         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">
             Locked
+        </span>
+    }
+}
+
+templ IDPStatusBadge(isEnabled bool) {
+    if isEnabled {
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+            Active
+        </span>
+    } else {
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+            Inactive
         </span>
     }
 }
@@ -500,8 +536,8 @@ templ ClientForm(props ClientFormProps) {
             </select>
         </div>
 
-        @InputField("OIDC Redirect URIs (comma-separated)", "redirect_uris", "text", strings.Join(props.Client.RedirectURIs, ", "), props.Errors["redirect_uris"])
-        @InputField("Post-Logout Redirect URIs (comma-separated)", "post_logout_redirect_uris", "text", strings.Join(props.Client.PostLogoutRedirectURIs, ", "), props.Errors["post_logout_redirect_uris"])
+        @URLManager("OIDC Redirect URIs", "redirect_uris", props.Client.RedirectURIs, props.Errors["redirect_uris"])
+        @URLManager("Post-Logout Redirect URIs", "post_logout_redirect_uris", props.Client.PostLogoutRedirectURIs, props.Errors["post_logout_redirect_uris"])
         @InputField("Front-Channel Logout URI", "front_channel_logout_uri", "text", props.Client.FrontChannelLogoutURI, props.Errors["front_channel_logout_uri"])
         @InputField("Back-Channel Logout URI", "back_channel_logout_uri", "text", props.Client.BackChannelLogoutURI, props.Errors["back_channel_logout_uri"])
 
@@ -570,7 +606,7 @@ templ IDPsContent(props IDPsPageProps) {
                                 <td class="px-6 py-4 font-medium text-gray-900">{ p.Alias }</td>
                                 <td class="px-6 py-4 text-gray-500 capitalize">{ p.IDPType }</td>
                                 <td class="px-6 py-4">
-                                    @StatusBadge(p.Enabled)
+                                    @IDPStatusBadge(p.Enabled)
                                 </td>
                                 <td class="px-6 py-4 text-right space-x-2">
                                     <button
