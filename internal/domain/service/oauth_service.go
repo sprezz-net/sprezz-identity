@@ -189,16 +189,16 @@ func (s *OAuthService) ExchangeRefreshTokenForTokens(ctx context.Context, tenant
 
 	token, err := s.storage.GetRefreshToken(ctx, refreshTokenStr)
 	if err != nil {
-		return nil, errors.New("invalid_grant")
+		return nil, errors.New(model.ErrInvalidGrant)
 	}
 
 	if token.ExpiresAt.Before(s.clock.Now()) {
-		return nil, errors.New("invalid_grant")
+		return nil, errors.New(model.ErrInvalidGrant)
 	}
 
 	if token.IsUsed {
 		_ = s.storage.RevokeRefreshTokenFamily(ctx, token.TokenFamilyID)
-		return nil, errors.New("invalid_grant")
+		return nil, errors.New(model.ErrInvalidGrant)
 	}
 
 	if err := s.storage.MarkRefreshTokenUsed(ctx, token.TokenID); err != nil {

@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	schemeHttp               = "http://"
-	schemeHttps              = "https://"
+	schemeHttp               = model.SchemeHttp
+	schemeHttps              = model.SchemeHttps
 	routeAdmin               = "/admin"
 	routeCallback            = "/admin/callback"
 	usernamePasswordIDPAlias = "username-password"

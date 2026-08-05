@@ -36,8 +36,8 @@ const (
 	contentTypeHeader   = "Content-Type"
 	contentTypeJSON     = "application/json"
 	contentTypeHtml     = "text/html; charset=utf-8"
-	schemeHttps         = "https://"
-	schemeHttp          = "http://"
+	schemeHttps         = model.SchemeHttps
+	schemeHttp          = model.SchemeHttp
 	errInvalidDPoP      = "invalid DPoP proof: "
 	errClientAuthFailed = "client authentication failed"
 	xForwardedProto     = "X-Forwarded-Proto"
