@@ -352,12 +352,25 @@ func parseCommaSeparated(s string) []string {
 
 func (h *HttpAdapter) adminSaveTenantSettings(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
+	if err := r.ParseForm(); err != nil {
+		h.renderError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
 	name := r.FormValue("name")
 	domain := r.FormValue("domain")
 	defaultRedirectURI := r.FormValue("default_redirect_uri")
-	redirectWhitelistStr := r.FormValue("redirect_whitelist")
-	predefinedScopesStr := r.FormValue("predefined_scopes")
-	predefinedAudiencesStr := r.FormValue("predefined_audiences")
+	redirectWhitelist := r.Form["redirect_whitelist"]
+	if redirectWhitelist == nil {
+		redirectWhitelist = []string{}
+	}
+	predefinedScopes := r.Form["predefined_scopes"]
+	if predefinedScopes == nil {
+		predefinedScopes = []string{}
+	}
+	predefinedAudiences := r.Form["predefined_audiences"]
+	if predefinedAudiences == nil {
+		predefinedAudiences = []string{}
+	}
 
 	errs := make(map[string]string)
 	if name == "" {
@@ -369,9 +382,9 @@ func (h *HttpAdapter) adminSaveTenantSettings(w http.ResponseWriter, r *http.Req
 
 	config := tenant.Config
 	config.DefaultRedirectURI = defaultRedirectURI
-	config.RedirectWhitelist = parseCommaSeparated(redirectWhitelistStr)
-	config.PredefinedScopes = parseCommaSeparated(predefinedScopesStr)
-	config.PredefinedAudiences = parseCommaSeparated(predefinedAudiencesStr)
+	config.RedirectWhitelist = redirectWhitelist
+	config.PredefinedScopes = predefinedScopes
+	config.PredefinedAudiences = predefinedAudiences
 
 	if len(errs) > 0 {
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
@@ -422,6 +435,13 @@ func (h *HttpAdapter) adminClientsPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HttpAdapter) adminNewClientForm(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := TenantFromContext(r.Context())
+	providers, err := h.idpService.GetIdentityProviders(r.Context(), tenant.ID)
+	if err != nil {
+		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	if r.URL.Query().Get("modal") == "true" {
 		component := views.Modal("Add Client", "/admin/clients/new")
@@ -429,8 +449,13 @@ func (h *HttpAdapter) adminNewClientForm(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	component := views.ClientForm(views.ClientFormProps{
-		Client: model.ClientApplication{},
-		Errors: make(map[string]string),
+		Client:    model.ClientApplication{
+			AccessTokenLifetime:  time.Hour,
+			IDTokenLifetime:      10 * time.Minute,
+			RefreshTokenLifetime: 30 * 24 * time.Hour,
+		},
+		Errors:    make(map[string]string),
+		Providers: providers,
 	})
 	_ = component.Render(r.Context(), w)
 }
@@ -445,6 +470,12 @@ func (h *HttpAdapter) adminEditClientForm(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	providers, err := h.idpService.GetIdentityProviders(r.Context(), tenant.ID)
+	if err != nil {
+		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	if r.URL.Query().Get("modal") == "true" {
 		component := views.Modal("Edit Client", "/admin/clients/edit?id="+clientID)
@@ -452,9 +483,10 @@ func (h *HttpAdapter) adminEditClientForm(w http.ResponseWriter, r *http.Request
 		return
 	}
 	component := views.ClientForm(views.ClientFormProps{
-		Client: *client,
-		Errors: make(map[string]string),
-		IsEdit: true,
+		Client:    *client,
+		Errors:    make(map[string]string),
+		IsEdit:    true,
+		Providers: providers,
 	})
 	_ = component.Render(r.Context(), w)
 }
@@ -469,6 +501,12 @@ func (h *HttpAdapter) adminViewClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	providers, err := h.idpService.GetIdentityProviders(r.Context(), tenant.ID)
+	if err != nil {
+		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	if r.URL.Query().Get("modal") == "true" {
 		component := views.Modal("Client Details", "/admin/clients/view?id="+clientID)
@@ -476,12 +514,47 @@ func (h *HttpAdapter) adminViewClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	component := views.ClientForm(views.ClientFormProps{
-		Client:   *client,
-		Errors:   make(map[string]string),
-		IsEdit:   true,
-		ReadOnly: true,
+		Client:    *client,
+		Errors:    make(map[string]string),
+		IsEdit:    true,
+		ReadOnly:  true,
+		Providers: providers,
 	})
 	_ = component.Render(r.Context(), w)
+}
+
+func (h *HttpAdapter) adminResetClientSecret(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := TenantFromContext(r.Context())
+	clientID := chi.URLParam(r, "id")
+
+	client, err := h.storagePort.GetClient(r.Context(), tenant.ID, clientID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	if client.ClientType != model.ClientTypeConfidential {
+		http.Error(w, "Cannot reset secret of a non-confidential client", http.StatusBadRequest)
+		return
+	}
+
+	bytes := make([]byte, 32)
+	_, _ = rand.Read(bytes)
+	newSecret := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(bytes)
+	client.ClientSecret = &newSecret
+
+	if err := h.storagePort.SaveClient(r.Context(), *client); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set(contentTypeHeader, contentTypeHtml)
+	_, _ = w.Write([]byte(fmt.Sprintf(`
+		<div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm font-mono text-slate-800 break-all mb-4">
+			<strong>New Client Secret:</strong> %s
+			<p class="text-xs text-slate-500 mt-1">Copy this secret now. It will not be shown again.</p>
+		</div>
+	`, newSecret)))
 }
 
 func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
@@ -495,6 +568,7 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 	clientName := r.FormValue("client_name")
 	clientType := r.FormValue("client_type")
 
+	redirectURI := r.FormValue("redirect_uri")
 	redirectURIs := r.Form["redirect_uris"]
 	if redirectURIs == nil {
 		redirectURIs = []string{}
@@ -507,6 +581,33 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 	frontChannelLogoutURI := r.FormValue("front_channel_logout_uri")
 	backChannelLogoutURI := r.FormValue("back_channel_logout_uri")
 
+	// Parse custom lifetimes
+	var accessSec, idSec, refreshSec int64
+	_, _ = fmt.Sscanf(r.FormValue("access_token_lifetime"), "%d", &accessSec)
+	_, _ = fmt.Sscanf(r.FormValue("id_token_lifetime"), "%d", &idSec)
+	_, _ = fmt.Sscanf(r.FormValue("refresh_token_lifetime"), "%d", &refreshSec)
+
+	accessTokenLifetime := time.Duration(accessSec) * time.Second
+	idTokenLifetime := time.Duration(idSec) * time.Second
+	refreshTokenLifetime := time.Duration(refreshSec) * time.Second
+
+	// Parse IDPs
+	allowedIDPs := r.Form["allowed_idps"]
+	if allowedIDPs == nil {
+		allowedIDPs = []string{}
+	}
+	defaultIDP := r.FormValue("default_idp_id")
+
+	// Parse Scopes & Audiences
+	scopes := r.Form["scopes"]
+	if scopes == nil {
+		scopes = []string{}
+	}
+	audiences := r.Form["audiences"]
+	if audiences == nil {
+		audiences = []string{}
+	}
+
 	errs := make(map[string]string)
 	if clientID == "" {
 		errs["client_id"] = "client ID is required"
@@ -518,11 +619,30 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 	isEdit := id != ""
 
 	if len(errs) > 0 {
+		providers, _ := h.idpService.GetIdentityProviders(r.Context(), tenant.ID)
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
 		component := views.ClientForm(views.ClientFormProps{
-			Client: model.ClientApplication{ID: id, ClientID: clientID, ClientName: clientName},
-			Errors: errs,
-			IsEdit: isEdit,
+			Client: model.ClientApplication{
+				ID:                     id,
+				ClientID:               clientID,
+				ClientName:             clientName,
+				ClientType:             clientType,
+				RedirectURI:            redirectURI,
+				RedirectURIs:           redirectURIs,
+				PostLogoutRedirectURIs: postLogoutURIs,
+				FrontChannelLogoutURI:  frontChannelLogoutURI,
+				BackChannelLogoutURI:   backChannelLogoutURI,
+				AccessTokenLifetime:    accessTokenLifetime,
+				IDTokenLifetime:        idTokenLifetime,
+				RefreshTokenLifetime:   refreshTokenLifetime,
+				AllowedIDPs:            allowedIDPs,
+				DefaultIDP:             defaultIDP,
+				AllowedScopes:          scopes,
+				AllowedAudiences:       audiences,
+			},
+			Errors:    errs,
+			IsEdit:    isEdit,
+			Providers: providers,
 		})
 		_ = component.Render(r.Context(), w)
 		return
@@ -530,26 +650,57 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 
 	warnings := h.validateClientWhitelists(tenant, redirectURIs, postLogoutURIs, frontChannelLogoutURI, backChannelLogoutURI)
 
+	// Combine or handle Client Secret logic
+	var clientSecret *string
+	if !isEdit && clientType == model.ClientTypeConfidential {
+		sec := r.FormValue("client_secret")
+		if sec == "" {
+			bytes := make([]byte, 32)
+			_, _ = rand.Read(bytes)
+			sec = base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(bytes)
+		}
+		clientSecret = &sec
+	}
+
 	var err error
 	if isEdit {
 		_, err = h.clientService.UpdateClient(r.Context(), tenant.ID, model.ClientApplication{
 			ClientID:               clientID,
 			ClientName:             clientName,
 			ClientType:             clientType,
+			RedirectURI:            redirectURI,
 			RedirectURIs:           redirectURIs,
 			PostLogoutRedirectURIs: postLogoutURIs,
 			FrontChannelLogoutURI:  frontChannelLogoutURI,
 			BackChannelLogoutURI:   backChannelLogoutURI,
+			AccessTokenLifetime:    accessTokenLifetime,
+			IDTokenLifetime:        idTokenLifetime,
+			RefreshTokenLifetime:   refreshTokenLifetime,
+			AllowedIDPs:            allowedIDPs,
+			DefaultIDP:             defaultIDP,
+			AllowedScopes:          scopes,
+			DefaultScopes:          scopes,
+			AllowedAudiences:       audiences,
 		})
 	} else {
 		_, err = h.clientService.CreateClient(r.Context(), tenant.ID, model.ClientApplication{
 			ClientID:               clientID,
 			ClientName:             clientName,
 			ClientType:             clientType,
+			ClientSecret:           clientSecret,
+			RedirectURI:            redirectURI,
 			RedirectURIs:           redirectURIs,
 			PostLogoutRedirectURIs: postLogoutURIs,
 			FrontChannelLogoutURI:  frontChannelLogoutURI,
 			BackChannelLogoutURI:   backChannelLogoutURI,
+			AccessTokenLifetime:    accessTokenLifetime,
+			IDTokenLifetime:        idTokenLifetime,
+			RefreshTokenLifetime:   refreshTokenLifetime,
+			AllowedIDPs:            allowedIDPs,
+			DefaultIDP:             defaultIDP,
+			AllowedScopes:          scopes,
+			DefaultScopes:          scopes,
+			AllowedAudiences:       audiences,
 		})
 	}
 
@@ -559,6 +710,9 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 	}
 
 	msgStr := "Application saved successfully"
+	if !isEdit && clientSecret != nil {
+		msgStr += ". Initial Client Secret: " + *clientSecret + " (Please copy this now, as it will not be shown again!)"
+	}
 	if len(warnings) > 0 {
 		msgStr += ". Warning: some URIs are not in the tenant whitelist: " + strings.Join(warnings, "; ")
 	}

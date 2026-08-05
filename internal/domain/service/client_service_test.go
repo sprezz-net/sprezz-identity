@@ -84,25 +84,33 @@ func TestClientService_UpdateClient(t *testing.T) {
 	tenantID := uuid.New()
 
 	storage.GetClientMock.Expect(context.Background(), tenantID, "someclient").Return(&model.ClientApplication{
-		ClientID:   "someclient",
-		ClientName: "Original Name",
+		ClientID:    "someclient",
+		ClientName:  "Original Name",
+		RedirectURI: "https://old.com",
 	}, nil)
 
 	storage.SaveClientMock.Set(func(ctx context.Context, client model.ClientApplication) error {
 		if client.ClientName != "Updated Name" {
 			t.Errorf("expected updated name, got %s", client.ClientName)
 		}
+		if client.RedirectURI != "https://new.com" {
+			t.Errorf("expected updated redirect uri, got %s", client.RedirectURI)
+		}
 		return nil
 	})
 
 	client, err := svc.UpdateClient(context.Background(), tenantID, model.ClientApplication{
-		ClientID:   "someclient",
-		ClientName: "Updated Name",
+		ClientID:    "someclient",
+		ClientName:  "Updated Name",
+		RedirectURI: "https://new.com",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if client.ClientName != "Updated Name" {
 		t.Error("expected updated client name")
+	}
+	if client.RedirectURI != "https://new.com" {
+		t.Error("expected updated redirect uri")
 	}
 }

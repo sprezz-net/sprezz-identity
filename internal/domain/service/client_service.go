@@ -88,6 +88,9 @@ func (s *ClientService) UpdateClient(ctx context.Context, tenantID uuid.UUID, cl
 	if client.ClientType != "" {
 		existing.ClientType = client.ClientType
 	}
+	if client.RedirectURI != "" {
+		existing.RedirectURI = client.RedirectURI
+	}
 	if client.RedirectURIs != nil {
 		existing.RedirectURIs = client.RedirectURIs
 	}

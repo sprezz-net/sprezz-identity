@@ -46,6 +46,7 @@ func (s *PostgresStorage) SaveClient(ctx context.Context, client model.ClientApp
 		ClientID:               client.ClientID,
 		ClientSecretHash:       client.ClientSecret,
 		ClientName:             client.ClientName,
+		RedirectUri:            client.RedirectURI,
 		RedirectUris:           client.RedirectURIs,
 		PostLogoutRedirectUris: client.PostLogoutRedirectURIs,
 		FrontChannelLogoutUri:  stringPtr(client.FrontChannelLogoutURI),
@@ -107,6 +108,7 @@ func (s *PostgresStorage) GetClient(ctx context.Context, tenantID uuid.UUID, cli
 		ClientID:               row.ClientID,
 		ClientSecret:           row.ClientSecretHash,
 		ClientName:             row.ClientName,
+		RedirectURI:            row.RedirectUri,
 		RedirectURIs:           row.RedirectUris,
 		PostLogoutRedirectURIs: row.PostLogoutRedirectUris,
 		FrontChannelLogoutURI:  valueOrEmpty(row.FrontChannelLogoutUri),
@@ -133,6 +135,7 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 			a.client_id,
 			a.client_secret_hash,
 			a.client_name,
+			a.redirect_uri,
 			a.redirect_uris,
 			a.post_logout_redirect_uris,
 			a.front_channel_logout_uri,
@@ -164,6 +167,7 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 		var clientID string
 		var clientSecret *string
 		var clientName string
+		var redirectURI string
 		var redirectURIs []string
 		var postLogoutRedirectURIs []string
 		var frontChannelLogoutURI *string
@@ -186,6 +190,7 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 			&clientID,
 			&clientSecret,
 			&clientName,
+			&redirectURI,
 			&redirectURIs,
 			&postLogoutRedirectURIs,
 			&frontChannelLogoutURI,
@@ -230,6 +235,7 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 			ClientID:               clientID,
 			ClientSecret:           clientSecret,
 			ClientName:             clientName,
+			RedirectURI:            redirectURI,
 			RedirectURIs:           redirectURIs,
 			PostLogoutRedirectURIs: postLogoutRedirectURIs,
 			FrontChannelLogoutURI:  valueOrEmpty(frontChannelLogoutURI),

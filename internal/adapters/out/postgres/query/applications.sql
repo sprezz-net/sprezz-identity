@@ -16,6 +16,7 @@ INSERT INTO applications (
     client_id,
     client_secret_hash,
     client_name,
+    redirect_uri,
     redirect_uris,
     post_logout_redirect_uris,
     front_channel_logout_uri,
@@ -54,12 +55,14 @@ SELECT
     $18,
     $19,
     $20,
-    $21
+    $21,
+    $22
 FROM tenant
 ON CONFLICT (tenant_id, client_id)
 DO UPDATE SET
     client_secret_hash = EXCLUDED.client_secret_hash,
     client_name = EXCLUDED.client_name,
+    redirect_uri = EXCLUDED.redirect_uri,
     redirect_uris = EXCLUDED.redirect_uris,
     post_logout_redirect_uris = EXCLUDED.post_logout_redirect_uris,
     front_channel_logout_uri = EXCLUDED.front_channel_logout_uri,
@@ -84,6 +87,7 @@ SELECT
     a.client_id,
     a.client_secret_hash,
     a.client_name,
+    a.redirect_uri,
     a.redirect_uris,
     a.post_logout_redirect_uris,
     a.front_channel_logout_uri,

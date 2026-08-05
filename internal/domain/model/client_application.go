@@ -18,6 +18,7 @@ type ClientApplication struct {
 	ClientID               string
 	ClientSecret           *string
 	ClientName             string
+	RedirectURI            string
 	RedirectURIs           []string
 	PostLogoutRedirectURIs []string
 	FrontChannelLogoutURI  string

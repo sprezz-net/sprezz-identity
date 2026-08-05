@@ -196,6 +196,7 @@ func (h *HttpAdapter) registerRoutes() {
 		r.Get("/clients/edit", h.adminEditClientForm)
 		r.Get("/clients/view", h.adminViewClient)
 		r.Post("/clients", h.adminSaveClient)
+		r.Post("/clients/{id}/reset-secret", h.adminResetClientSecret)
 		r.Delete("/clients/{id}", h.adminDeleteClient)
 
 		r.Get("/idps", h.adminIDPsPage)

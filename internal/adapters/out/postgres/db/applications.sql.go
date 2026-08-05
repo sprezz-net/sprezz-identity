@@ -19,6 +19,7 @@ SELECT
     a.client_id,
     a.client_secret_hash,
     a.client_name,
+    a.redirect_uri,
     a.redirect_uris,
     a.post_logout_redirect_uris,
     a.front_channel_logout_uri,
@@ -47,15 +48,41 @@ type GetClientParams struct {
 	ClientID   string      `json:"client_id"`
 }
 
-func (q *Queries) GetClient(ctx context.Context, arg GetClientParams) (Application, error) {
+type GetClientRow struct {
+	ID                     pgtype.UUID     `json:"id"`
+	TenantID               int32           `json:"tenant_id"`
+	ClientID               string          `json:"client_id"`
+	ClientSecretHash       *string         `json:"client_secret_hash"`
+	ClientName             string          `json:"client_name"`
+	RedirectUri            string          `json:"redirect_uri"`
+	RedirectUris           []string        `json:"redirect_uris"`
+	PostLogoutRedirectUris []string        `json:"post_logout_redirect_uris"`
+	FrontChannelLogoutUri  *string         `json:"front_channel_logout_uri"`
+	BackChannelLogoutUri   *string         `json:"back_channel_logout_uri"`
+	GrantTypes             []string        `json:"grant_types"`
+	ResponseTypes          []string        `json:"response_types"`
+	IdpSigningAlgorithm    string          `json:"idp_signing_algorithm"`
+	AccessTokenLifetime    pgtype.Interval `json:"access_token_lifetime"`
+	RefreshTokenLifetime   pgtype.Interval `json:"refresh_token_lifetime"`
+	IDTokenLifetime        pgtype.Interval `json:"id_token_lifetime"`
+	AllowedScopes          []string        `json:"allowed_scopes"`
+	DefaultScopes          []string        `json:"default_scopes"`
+	AllowedIdps            []string        `json:"allowed_idps"`
+	DefaultIdp             *string         `json:"default_idp"`
+	AllowedAudiences       []string        `json:"allowed_audiences"`
+	ClientType             string          `json:"client_type"`
+}
+
+func (q *Queries) GetClient(ctx context.Context, arg GetClientParams) (GetClientRow, error) {
 	row := q.db.QueryRow(ctx, getClient, arg.TenantUuid, arg.ClientID)
-	var i Application
+	var i GetClientRow
 	err := row.Scan(
 		&i.ID,
 		&i.TenantID,
 		&i.ClientID,
 		&i.ClientSecretHash,
 		&i.ClientName,
+		&i.RedirectUri,
 		&i.RedirectUris,
 		&i.PostLogoutRedirectUris,
 		&i.FrontChannelLogoutUri,
@@ -102,6 +129,7 @@ INSERT INTO applications (
     client_id,
     client_secret_hash,
     client_name,
+    redirect_uri,
     redirect_uris,
     post_logout_redirect_uris,
     front_channel_logout_uri,
@@ -140,12 +168,14 @@ SELECT
     $18,
     $19,
     $20,
-    $21
+    $21,
+    $22
 FROM tenant
 ON CONFLICT (tenant_id, client_id)
 DO UPDATE SET
     client_secret_hash = EXCLUDED.client_secret_hash,
     client_name = EXCLUDED.client_name,
+    redirect_uri = EXCLUDED.redirect_uri,
     redirect_uris = EXCLUDED.redirect_uris,
     post_logout_redirect_uris = EXCLUDED.post_logout_redirect_uris,
     front_channel_logout_uri = EXCLUDED.front_channel_logout_uri,
@@ -170,6 +200,7 @@ type SaveClientParams struct {
 	ClientID               string          `json:"client_id"`
 	ClientSecretHash       *string         `json:"client_secret_hash"`
 	ClientName             string          `json:"client_name"`
+	RedirectUri            string          `json:"redirect_uri"`
 	RedirectUris           []string        `json:"redirect_uris"`
 	PostLogoutRedirectUris []string        `json:"post_logout_redirect_uris"`
 	FrontChannelLogoutUri  *string         `json:"front_channel_logout_uri"`
@@ -195,6 +226,7 @@ func (q *Queries) SaveClient(ctx context.Context, arg SaveClientParams) (pgconn.
 		arg.ClientID,
 		arg.ClientSecretHash,
 		arg.ClientName,
+		arg.RedirectUri,
 		arg.RedirectUris,
 		arg.PostLogoutRedirectUris,
 		arg.FrontChannelLogoutUri,
