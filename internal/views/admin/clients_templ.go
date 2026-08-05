@@ -70,103 +70,116 @@ func ClientsContent(props ClientsPageProps) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		for _, c := range props.Clients {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<tr class=\"hover:bg-gray-50 transition\"><td class=\"px-6 py-4 font-mono font-medium text-gray-900\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<tr class=\"hover:bg-gray-50 transition cursor-pointer\" hx-get=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
-			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(c.ClientID)
+			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/admin/clients/view?id=%s&modal=true", c.ClientID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 48, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 49, Col: 80}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</td><td class=\"px-6 py-4 text-gray-500\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" hx-target=\"#modal-container\"><td class=\"px-6 py-4 font-mono font-medium text-gray-900\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var4 string
-			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(c.ClientName)
+			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(c.ClientID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 49, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 52, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</td><td class=\"px-6 py-4 text-gray-500 capitalize\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</td><td class=\"px-6 py-4 text-gray-500\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var5 string
-			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(string(c.ClientType))
+			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(c.ClientName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 50, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 53, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</td><td class=\"px-6 py-4 text-right space-x-2\"><button hx-get=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</td><td class=\"px-6 py-4 text-gray-500 capitalize\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var6 string
-			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/admin/clients/view?id=%s&modal=true", c.ClientID))
+			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(string(c.ClientType))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 53, Col: 82}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 54, Col: 77}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" hx-target=\"#modal-container\" class=\"text-blue-600 hover:text-blue-800 font-medium\">View</button> <button hx-get=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</td><td class=\"px-6 py-4 text-right space-x-2\"><button hx-get=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var7 string
-			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/admin/clients/edit?id=%s&modal=true", c.ClientID))
+			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/admin/clients/view?id=%s&modal=true", c.ClientID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 60, Col: 82}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 57, Col: 82}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" hx-target=\"#modal-container\" class=\"text-green-600 hover:text-green-800 font-medium\">Edit</button> <button hx-delete=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" hx-target=\"#modal-container\" class=\"text-blue-600 hover:text-blue-800 font-medium\" @click.stop=\"\">View</button> <button hx-get=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var8 string
-			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/admin/clients/%s", c.ClientID))
+			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/admin/clients/edit?id=%s&modal=true", c.ClientID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 67, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 65, Col: 82}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\" hx-confirm=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\" hx-target=\"#modal-container\" class=\"text-green-600 hover:text-green-800 font-medium\" @click.stop=\"\">Edit</button> <button hx-delete=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var9 string
-			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("Are you sure you want to delete application '%s'?", c.ClientName))
+			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/admin/clients/%s", c.ClientID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 68, Col: 101}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 73, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\" hx-target=\"body\" class=\"text-red-600 hover:text-red-800 font-medium\">Delete</button></td></tr>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\" hx-confirm=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var10 string
+			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("Are you sure you want to delete application '%s'?", c.ClientName))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 74, Col: 101}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" hx-target=\"body\" class=\"text-red-600 hover:text-red-800 font-medium\" @click.stop=\"\">Delete</button></td></tr>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</tbody></table></div></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</tbody></table></div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -190,12 +203,12 @@ func ClientsPage(props ClientsPageProps) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var10 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var10 == nil {
-			templ_7745c5c3_Var10 = templ.NopComponent
+		templ_7745c5c3_Var11 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var11 == nil {
+			templ_7745c5c3_Var11 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var11 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var12 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -213,7 +226,7 @@ func ClientsPage(props ClientsPageProps) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = AdminLayout(AdminLayoutProps{Title: "Applications", CurrentTab: "clients", TenantName: props.ActiveTenant.Name}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = AdminLayout(AdminLayoutProps{Title: "Applications", CurrentTab: "clients", TenantName: props.ActiveTenant.Name}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -245,25 +258,25 @@ func ClientForm(props ClientFormProps) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var12 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var12 == nil {
-			templ_7745c5c3_Var12 = templ.NopComponent
+		templ_7745c5c3_Var13 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var13 == nil {
+			templ_7745c5c3_Var13 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<form hx-post=\"/admin/clients\" hx-target=\"#modal-body\" class=\"space-y-6\" x-data=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<form hx-post=\"/admin/clients\" hx-target=\"#modal-body\" class=\"space-y-6\" x-data=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var13 string
-		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("clientFormManager('%s', %t, %t, %t, %d)", getInitialClientType(props.Client.ClientType), hasGrantType(props.Client.GrantTypes, "authorization_code", true), hasGrantType(props.Client.GrantTypes, "client_credentials", false), props.Client.EnforceRTR, len(props.Client.AllowedIDPs)))
+		var templ_7745c5c3_Var14 string
+		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("clientFormManager('%s', %t, %t, %t, %d)", getInitialClientType(props.Client.ClientType), hasGrantType(props.Client.GrantTypes, "authorization_code", true), hasGrantType(props.Client.GrantTypes, "client_credentials", false), props.Client.EnforceRTR, len(props.Client.AllowedIDPs)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 103, Col: 303}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 110, Col: 303}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\" @idp-count-update.window=\"handleIdpChange($event.detail.count)\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\" @idp-count-update.window=\"handleIdpChange($event.detail.count)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -291,32 +304,32 @@ func ClientForm(props ClientFormProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<div class=\"flex justify-end space-x-3 pt-4 border-t border-slate-200\"><button type=\"button\" class=\"px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition cursor-pointer\" @click=\"isOpen = false\">Close</button> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<div class=\"flex justify-end space-x-3 pt-4 border-t border-slate-200\"><button type=\"button\" class=\"px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition cursor-pointer\" @click=\"isOpen = false\">Close</button> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if !props.ReadOnly {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<button type=\"submit\" :disabled=\"isSubmitDisabled\" class=\"px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<button type=\"submit\" :disabled=\"isSubmitDisabled\" class=\"px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if props.IsEdit {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "Save Changes")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "Save Changes")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "Create Application")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "Create Application")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</button>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</button>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</div></form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</div></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -340,12 +353,12 @@ func ClientIdentitySection(props ClientFormProps) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var14 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var14 == nil {
-			templ_7745c5c3_Var14 = templ.NopComponent
+		templ_7745c5c3_Var15 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var15 == nil {
+			templ_7745c5c3_Var15 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4\"><h3 class=\"text-base font-semibold text-gray-900\">Application Identity</h3>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4\"><h3 class=\"text-base font-semibold text-gray-900\">Application Identity</h3>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -354,94 +367,94 @@ func ClientIdentitySection(props ClientFormProps) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if props.IsEdit {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<input type=\"hidden\" name=\"id\" value=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var15 string
-			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(props.Client.ID)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 145, Col: 57}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\"> <input type=\"hidden\" name=\"client_id\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<input type=\"hidden\" name=\"id\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var16 string
-			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(props.Client.ClientID)
+			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(props.Client.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 146, Col: 70}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 152, Col: 57}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\"><div><label class=\"block text-sm font-medium text-slate-700 mb-1\">Client ID</label><div class=\"font-mono text-gray-800 bg-gray-50 px-3 py-2 border border-slate-300 rounded-lg select-all\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\"> <input type=\"hidden\" name=\"client_id\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var17 string
-			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(props.Client.ClientID)
+			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(props.Client.ClientID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 149, Col: 131}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 153, Col: 70}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\"><div><label class=\"block text-sm font-medium text-slate-700 mb-1\">Client ID</label><div class=\"font-mono text-gray-800 bg-gray-50 px-3 py-2 border border-slate-300 rounded-lg select-all\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var18 string
+			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(props.Client.ClientID)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 156, Col: 131}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<div x-data=\"idSecretGenerator('')\"><label class=\"block text-sm font-medium text-slate-700 mb-1\">Client ID</label><div class=\"flex space-x-2\"><input type=\"text\" name=\"client_id\" x-model=\"value\" placeholder=\"Enter custom Client ID or generate one\" pattern=\"^[a-zA-Z0-9\\-_\\.~]+$\" title=\"Only RFC 3986 unreserved characters allowed (A-Z, a-z, 0-9, -, _, ., ~)\" class=\"flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono\" required> <button type=\"button\" @click=\"generate()\" class=\"px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm font-semibold transition cursor-pointer\">Generate ID</button></div><p class=\"text-xs text-slate-500 mt-1\">Unique identifier. Restricted to unreserved characters (RFC 3986 Section 2.3).</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<div x-data=\"idSecretGenerator('')\"><label class=\"block text-sm font-medium text-slate-700 mb-1\">Client ID</label><div class=\"flex space-x-2\"><input type=\"text\" name=\"client_id\" x-model=\"value\" placeholder=\"Enter custom Client ID or generate one\" pattern=\"^[a-zA-Z0-9\\-_\\.~]+$\" title=\"Only RFC 3986 unreserved characters allowed (A-Z, a-z, 0-9, -, _, ., ~)\" class=\"flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono\" required> <button type=\"button\" @click=\"generate()\" class=\"px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm font-semibold transition cursor-pointer\">Generate ID</button></div><p class=\"text-xs text-slate-500 mt-1\">Unique identifier. Restricted to unreserved characters (RFC 3986 Section 2.3).</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<div><label class=\"block text-sm font-medium text-slate-700 mb-1\">Client Type</label> <select name=\"client_type\" x-model=\"clientType\" @change=\"handleClientType($el.value)\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500\"><option value=\"confidential\">Confidential (Web Apps / Servers)</option> <option value=\"public\">Public (Native / Single Page Apps)</option></select></div><!-- Client Secret (Only visible for Confidential) --><div x-show=\"clientType === 'confidential'\" x-transition class=\"pt-2\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<div><label class=\"block text-sm font-medium text-slate-700 mb-1\">Client Type</label> <select name=\"client_type\" x-model=\"clientType\" @change=\"handleClientType($el.value)\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500\"><option value=\"confidential\">Confidential (Web Apps / Servers)</option> <option value=\"public\">Public (Native / Single Page Apps)</option></select></div><!-- Client Secret (Only visible for Confidential) --><div x-show=\"clientType === 'confidential'\" x-transition class=\"pt-2\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if props.IsEdit {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<label class=\"block text-sm font-medium text-slate-700 mb-1\">Client Secret</label><div id=\"client-secret-container\" class=\"flex items-center space-x-2\"><div class=\"font-mono text-gray-400 bg-gray-50 px-3 py-2 border border-slate-300 rounded-lg flex-1\">••••••••••••••••</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<label class=\"block text-sm font-medium text-slate-700 mb-1\">Client Secret</label><div id=\"client-secret-container\" class=\"flex items-center space-x-2\"><div class=\"font-mono text-gray-400 bg-gray-50 px-3 py-2 border border-slate-300 rounded-lg flex-1\">••••••••••••••••</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if !props.ReadOnly {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<button type=\"button\" hx-post=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<button type=\"button\" hx-post=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var18 string
-				templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/admin/clients/%s/reset-secret", props.Client.ClientID))
+				var templ_7745c5c3_Var19 string
+				templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/admin/clients/%s/reset-secret", props.Client.ClientID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 192, Col: 106}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 199, Col: 106}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" hx-target=\"#client-secret-container\" hx-confirm=\"Are you sure you want to reset the Client Secret?\" class=\"px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-semibold transition cursor-pointer\">Reset Secret</button>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" hx-target=\"#client-secret-container\" hx-confirm=\"Are you sure you want to reset the Client Secret?\" class=\"px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-semibold transition cursor-pointer\">Reset Secret</button>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<div x-data=\"idSecretGenerator('')\"><label class=\"block text-sm font-medium text-slate-700 mb-1\">Initial Client Secret</label><div class=\"flex space-x-2\"><div class=\"relative flex-1\"><input :type=\"showSecret ? 'text' : 'password'\" name=\"client_secret\" x-model=\"value\" placeholder=\"Enter custom secret or generate one\" pattern=\"^[a-zA-Z0-9\\-_\\.~]+$\" title=\"Only RFC 3986 unreserved characters allowed (A-Z, a-z, 0-9, -, _, ., ~)\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono\"> <button type=\"button\" @click=\"toggleShow()\" class=\"absolute right-2 top-2 text-gray-400 hover:text-gray-600 focus:outline-none\"><span x-text=\"showSecret ? '🙈' : '👁️'\"></span></button></div><button type=\"button\" @click=\"generate()\" class=\"px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm font-semibold transition cursor-pointer\">Generate</button></div><p class=\"text-xs text-slate-500 mt-1\">Restricted to unreserved characters (RFC 3986 Section 2.3).</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<div x-data=\"idSecretGenerator('')\"><label class=\"block text-sm font-medium text-slate-700 mb-1\">Initial Client Secret</label><div class=\"flex space-x-2\"><div class=\"relative flex-1\"><input :type=\"showSecret ? 'text' : 'password'\" name=\"client_secret\" x-model=\"value\" placeholder=\"Enter custom secret or generate one\" pattern=\"^[a-zA-Z0-9\\-_\\.~]+$\" title=\"Only RFC 3986 unreserved characters allowed (A-Z, a-z, 0-9, -, _, ., ~)\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono\"> <button type=\"button\" @click=\"toggleShow()\" class=\"absolute right-2 top-2 text-gray-400 hover:text-gray-600 focus:outline-none\"><span x-text=\"showSecret ? '🙈' : '👁️'\"></span></button></div><button type=\"button\" @click=\"generate()\" class=\"px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm font-semibold transition cursor-pointer\">Generate</button></div><p class=\"text-xs text-slate-500 mt-1\">Restricted to unreserved characters (RFC 3986 Section 2.3).</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -465,12 +478,12 @@ func ClientGrantTypesSection() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var19 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var19 == nil {
-			templ_7745c5c3_Var19 = templ.NopComponent
+		templ_7745c5c3_Var20 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var20 == nil {
+			templ_7745c5c3_Var20 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4\"><h3 class=\"text-base font-semibold text-gray-900\">Allowed Grant Types</h3><div class=\"flex flex-col space-y-2\"><label class=\"flex items-center space-x-2 text-sm text-gray-700 cursor-pointer select-none\"><input type=\"checkbox\" name=\"grant_types\" value=\"authorization_code\" :checked=\"authCode\" :disabled=\"clientType === 'public'\" @change=\"handleAuthCodeChange($el.checked)\" class=\"h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500\"> <span>Authorization Code Flow (Requires User Login)</span></label> <label x-show=\"clientType === 'confidential'\" x-transition class=\"flex items-center space-x-2 text-sm text-gray-700 cursor-pointer select-none\"><input type=\"checkbox\" name=\"grant_types\" value=\"client_credentials\" :checked=\"clientCredentials\" @change=\"handleClientCredentialsChange($el.checked)\" class=\"h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500\"> <span>Client Credentials Flow (Machine-to-Machine / No User)</span></label></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4\"><h3 class=\"text-base font-semibold text-gray-900\">Allowed Grant Types</h3><div class=\"flex flex-col space-y-2\"><label class=\"flex items-center space-x-2 text-sm text-gray-700 cursor-pointer select-none\"><input type=\"checkbox\" name=\"grant_types\" value=\"authorization_code\" :checked=\"authCode\" :disabled=\"clientType === 'public'\" @change=\"handleAuthCodeChange($el.checked)\" class=\"h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500\"> <span>Authorization Code Flow (Requires User Login)</span></label> <label x-show=\"clientType === 'confidential'\" x-transition class=\"flex items-center space-x-2 text-sm text-gray-700 cursor-pointer select-none\"><input type=\"checkbox\" name=\"grant_types\" value=\"client_credentials\" :checked=\"clientCredentials\" @change=\"handleClientCredentialsChange($el.checked)\" class=\"h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500\"> <span>Client Credentials Flow (Machine-to-Machine / No User)</span></label></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -494,12 +507,12 @@ func ClientSecuritySection(props ClientFormProps) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var20 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var20 == nil {
-			templ_7745c5c3_Var20 = templ.NopComponent
+		templ_7745c5c3_Var21 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var21 == nil {
+			templ_7745c5c3_Var21 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-6\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-6\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -525,7 +538,7 @@ func ClientSecuritySection(props ClientFormProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -549,12 +562,12 @@ func ClientUrisSection(props ClientFormProps) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var21 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var21 == nil {
-			templ_7745c5c3_Var21 = templ.NopComponent
+		templ_7745c5c3_Var22 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var22 == nil {
+			templ_7745c5c3_Var22 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<!-- Authorized URIs Matrix --><div x-show=\"clientType === 'public' || authCode\" x-transition class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4\"><h3 class=\"text-base font-semibold text-gray-900\">Redirect & Logout URIs</h3>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<!-- Authorized URIs Matrix --><div x-show=\"clientType === 'public' || authCode\" x-transition class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4\"><h3 class=\"text-base font-semibold text-gray-900\">Redirect & Logout URIs</h3>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -578,7 +591,7 @@ func ClientUrisSection(props ClientFormProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -602,12 +615,12 @@ func ClientLifetimesSection(props ClientFormProps) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var22 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var22 == nil {
-			templ_7745c5c3_Var22 = templ.NopComponent
+		templ_7745c5c3_Var23 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var23 == nil {
+			templ_7745c5c3_Var23 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<!-- Token Lifetimes Policy --><div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4\"><h3 class=\"text-base font-semibold text-gray-900\">Token Lifetimes</h3><div class=\"grid grid-cols-1 md:grid-cols-3 gap-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<!-- Token Lifetimes Policy --><div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4\"><h3 class=\"text-base font-semibold text-gray-900\">Token Lifetimes</h3><div class=\"space-y-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -615,14 +628,6 @@ func ClientLifetimesSection(props ClientFormProps) templ.Component {
 			Label: "Access Token",
 			Name:  "access_token_lifetime",
 			Value: int64(props.Client.AccessTokenLifetime / time.Second),
-		}).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = TokenLifetimeInput(TokenLifetimeFieldProps{
-			Label: "ID Token",
-			Name:  "id_token_lifetime",
-			Value: int64(props.Client.IDTokenLifetime / time.Second),
 		}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -636,7 +641,15 @@ func ClientLifetimesSection(props ClientFormProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</div><div class=\"pt-4 border-t border-gray-100 space-y-2\"><label class=\"flex items-center space-x-3 text-sm text-gray-700 cursor-pointer select-none\"><input type=\"checkbox\" name=\"enforce_rtr\" value=\"true\" :checked=\"isPublic || enforceRtr\" :disabled=\"isPublic\" @change=\"handleRtrChange($el.checked)\" class=\"h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed\"><div class=\"flex flex-col\"><span class=\"font-medium text-gray-900\">Enforce Refresh Token Rotation (RTR)</span> <span class=\"text-xs text-gray-400\">Forces refresh tokens to rotate on every single exchange, providing absolute replay attack defense.</span></div></label><p x-show=\"isPublic\" x-transition class=\"text-[11px] text-amber-600 font-medium\">⚠️ Attention: Refresh Token Rotation is strictly mandatory for Public application categories to mitigate browser hijacking.</p></div></div>")
+		templ_7745c5c3_Err = TokenLifetimeInput(TokenLifetimeFieldProps{
+			Label: "ID Token",
+			Name:  "id_token_lifetime",
+			Value: int64(props.Client.IDTokenLifetime / time.Second),
+		}).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</div><div class=\"pt-4 border-t border-gray-100 space-y-2\"><label class=\"flex items-center space-x-3 text-sm text-gray-700 cursor-pointer select-none\"><input type=\"checkbox\" name=\"enforce_rtr\" value=\"true\" :checked=\"isPublic || enforceRtr\" :disabled=\"isPublic\" @change=\"handleRtrChange($el.checked)\" class=\"h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed\"><div class=\"flex flex-col\"><span class=\"font-medium text-gray-900\">Enforce Refresh Token Rotation (RTR)</span> <span class=\"text-xs text-gray-400\">Forces refresh tokens to rotate on every single exchange, providing absolute replay attack defense.</span></div></label><p x-show=\"isPublic\" x-transition class=\"text-[11px] text-amber-600 font-medium\">⚠️ Attention: Refresh Token Rotation is strictly mandatory for Public application categories to mitigate browser hijacking.</p></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -681,89 +694,89 @@ func ClientIdpRoutingSection(props ClientFormProps) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var23 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var23 == nil {
-			templ_7745c5c3_Var23 = templ.NopComponent
+		templ_7745c5c3_Var24 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var24 == nil {
+			templ_7745c5c3_Var24 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-6 animate-fade-in\" x-show=\"authCode\" x-data=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-6 animate-fade-in\" x-show=\"authCode\" x-data=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var24 string
-		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(initIdpRoutingData(props))
+		var templ_7745c5c3_Var25 string
+		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(initIdpRoutingData(props))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 367, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 374, Col: 36}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\"><div><h3 class=\"text-base font-semibold text-gray-900\">Identity Providers Routing</h3><p class=\"text-xs text-gray-400 mt-1\">Select which identity connections are allowed for this client application.</p></div><!-- Checkbox Grid Matrix --><div class=\"space-y-3\"><label class=\"block text-xs font-semibold text-gray-500 uppercase tracking-wide text-gray-400\">Allowed Providers</label><div class=\"grid grid-cols-1 sm:grid-cols-2 gap-3\"><!-- Static Card: Local Accounts --><label class=\"relative flex items-center p-4 rounded-xl border border-gray-200 cursor-pointer bg-white hover:bg-gray-50/50 transition shadow-sm select-none\"><input type=\"checkbox\" name=\"allowed_idps\" value=\"username-password\" @change=\"toggleIdp($el.value)\" :checked=\"allowedIds.includes('username-password')\" class=\"h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500\"><div class=\"ml-3 text-sm\"><span class=\"font-medium text-gray-900 block\">Local Accounts</span> <span class=\"text-xs text-gray-400\">Built-in credentials database</span></div></label><!-- Dynamic Upstream External Providers -->")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "\"><div><h3 class=\"text-base font-semibold text-gray-900\">Identity Providers Routing</h3><p class=\"text-xs text-gray-400 mt-1\">Select which identity connections are allowed for this client application.</p></div><!-- Checkbox Grid Matrix --><div class=\"space-y-3\"><label class=\"block text-xs font-semibold text-gray-500 uppercase tracking-wide text-gray-400\">Allowed Providers</label><div class=\"grid grid-cols-1 sm:grid-cols-2 gap-3\"><!-- Static Card: Local Accounts --><label class=\"relative flex items-center p-4 rounded-xl border border-gray-200 cursor-pointer bg-white hover:bg-gray-50/50 transition shadow-sm select-none\"><input type=\"checkbox\" name=\"allowed_idps\" value=\"username-password\" @change=\"toggleIdp($el.value)\" :checked=\"allowedIds.includes('username-password')\" class=\"h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500\"><div class=\"ml-3 text-sm\"><span class=\"font-medium text-gray-900 block\">Local Accounts</span> <span class=\"text-xs text-gray-400\">Built-in credentials database</span></div></label><!-- Dynamic Upstream External Providers -->")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, idp := range props.Providers {
 			if idp.IDPType != "username-password" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<label class=\"relative flex items-center p-4 rounded-xl border border-gray-200 cursor-pointer bg-white hover:bg-gray-50/50 transition shadow-sm select-none\"><input type=\"checkbox\" name=\"allowed_idps\" value=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var25 string
-				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(idp.ID.String())
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 402, Col: 31}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\" @change=\"toggleIdp($el.value)\" :checked=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<label class=\"relative flex items-center p-4 rounded-xl border border-gray-200 cursor-pointer bg-white hover:bg-gray-50/50 transition shadow-sm select-none\"><input type=\"checkbox\" name=\"allowed_idps\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var26 string
-				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue("allowedIds.includes('" + idp.ID.String() + "')")
+				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(idp.ID.String())
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 404, Col: 67}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 409, Col: 31}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "\" class=\"h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500\"><div class=\"ml-3 text-sm\"><span class=\"font-medium text-gray-900 block\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "\" @change=\"toggleIdp($el.value)\" :checked=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var27 string
-				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(idp.Alias)
+				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue("allowedIds.includes('" + idp.ID.String() + "')")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 408, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 411, Col: 67}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "</span> <span class=\"text-xs text-gray-400 uppercase font-mono\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\" class=\"h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500\"><div class=\"ml-3 text-sm\"><span class=\"font-medium text-gray-900 block\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var28 string
-				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(idp.IDPType)
+				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(idp.Alias)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 409, Col: 77}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 415, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, " Connection</span></div></label>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</span> <span class=\"text-xs text-gray-400 uppercase font-mono\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var29 string
+				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(idp.IDPType)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 416, Col: 77}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, " Connection</span></div></label>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "</div></div><!-- Dynamic Dropdown Filter --><div class=\"space-y-2 max-w-md pt-4 border-t border-gray-100\"><label class=\"block text-xs font-semibold text-gray-500 uppercase tracking-wide text-gray-400\">Default Login Routing</label> <select name=\"default_idp_id\" x-model=\"defaultId\" :disabled=\"isInvalidState\" class=\"w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed\"><option value=\"\">None (Display Core Selection Layout)</option><template x-for=\"item in allowedList\" :key=\"item.id\"><option :value=\"item.id\" x-text=\"item.name\" :selected=\"item.id === defaultId\"></option></template></select></div><!-- Guard Warning --><div x-show=\"isInvalidState\" x-transition class=\"p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg font-medium\">⚠️ Attention: You must select at least one Identity Provider (or Local Accounts) to save changes.</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "</div></div><!-- Dynamic Dropdown Filter --><div class=\"space-y-2 max-w-md pt-4 border-t border-gray-100\"><label class=\"block text-xs font-semibold text-gray-500 uppercase tracking-wide text-gray-400\">Default Login Routing</label> <select name=\"default_idp_id\" x-model=\"defaultId\" :disabled=\"isInvalidState\" class=\"w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed\"><option value=\"\">None (Display Core Selection Layout)</option><template x-for=\"item in allowedList\" :key=\"item.id\"><option :value=\"item.id\" x-text=\"item.name\" :selected=\"item.id === defaultId\"></option></template></select></div><!-- Guard Warning --><div x-show=\"isInvalidState\" x-transition class=\"p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg font-medium\">⚠️ Attention: You must select at least one Identity Provider (or Local Accounts) to save changes.</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

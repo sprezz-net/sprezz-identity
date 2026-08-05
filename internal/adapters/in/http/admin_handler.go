@@ -347,6 +347,34 @@ func (h *HttpAdapter) adminTenantsPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func validateTenantSettingsInputs(name, domain, defaultRedirectURI string, redirectWhitelist []string) map[string]string {
+	errs := make(map[string]string)
+	if name == "" {
+		errs["name"] = "tenant name is required"
+	}
+	if domain == "" {
+		errs["domain"] = "canonical domain is required"
+	}
+	if defaultRedirectURI != "" {
+		u, err := url.Parse(defaultRedirectURI)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			errs["default_redirect_uri"] = errInvalidURLFormat
+		} else {
+			found := false
+			for _, w := range redirectWhitelist {
+				if w == defaultRedirectURI {
+					found = true
+					break
+				}
+			}
+			if !found {
+				errs["default_redirect_uri"] = "Default Redirect URI must be present in the Redirect Whitelist"
+			}
+		}
+	}
+	return errs
+}
+
 func (h *HttpAdapter) adminSaveTenantSettings(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
 	if err := r.ParseForm(); err != nil {
@@ -369,19 +397,7 @@ func (h *HttpAdapter) adminSaveTenantSettings(w http.ResponseWriter, r *http.Req
 		predefinedAudiences = []string{}
 	}
 
-	errs := make(map[string]string)
-	if name == "" {
-		errs["name"] = "tenant name is required"
-	}
-	if domain == "" {
-		errs["domain"] = "canonical domain is required"
-	}
-	if defaultRedirectURI != "" {
-		u, err := url.Parse(defaultRedirectURI)
-		if err != nil || u.Scheme == "" || u.Host == "" {
-			errs["default_redirect_uri"] = errInvalidURLFormat
-		}
-	}
+	errs := validateTenantSettingsInputs(name, domain, defaultRedirectURI, redirectWhitelist)
 
 	config := tenant.Config
 	config.DefaultRedirectURI = defaultRedirectURI

@@ -44,7 +44,11 @@ templ ClientsContent(props ClientsPageProps) {
 					</thead>
 					<tbody class="divide-y divide-gray-200">
 						for _, c := range props.Clients {
-							<tr class="hover:bg-gray-50 transition">
+							<tr
+								class="hover:bg-gray-50 transition cursor-pointer"
+								hx-get={ fmt.Sprintf("/admin/clients/view?id=%s&modal=true", c.ClientID) }
+								hx-target="#modal-container"
+							>
 								<td class="px-6 py-4 font-mono font-medium text-gray-900">{ c.ClientID }</td>
 								<td class="px-6 py-4 text-gray-500">{ c.ClientName }</td>
 								<td class="px-6 py-4 text-gray-500 capitalize">{ string(c.ClientType) }</td>
@@ -53,6 +57,7 @@ templ ClientsContent(props ClientsPageProps) {
 										hx-get={ fmt.Sprintf("/admin/clients/view?id=%s&modal=true", c.ClientID) }
 										hx-target="#modal-container"
 										class="text-blue-600 hover:text-blue-800 font-medium"
+										@click.stop=""
 									>
 										View
 									</button>
@@ -60,6 +65,7 @@ templ ClientsContent(props ClientsPageProps) {
 										hx-get={ fmt.Sprintf("/admin/clients/edit?id=%s&modal=true", c.ClientID) }
 										hx-target="#modal-container"
 										class="text-green-600 hover:text-green-800 font-medium"
+										@click.stop=""
 									>
 										Edit
 									</button>
@@ -68,6 +74,7 @@ templ ClientsContent(props ClientsPageProps) {
 										hx-confirm={ fmt.Sprintf("Are you sure you want to delete application '%s'?", c.ClientName) }
 										hx-target="body"
 										class="text-red-600 hover:text-red-800 font-medium"
+										@click.stop=""
 									>
 										Delete
 									</button>
@@ -298,22 +305,22 @@ templ ClientLifetimesSection(props ClientFormProps) {
 	<!-- Token Lifetimes Policy -->
 	<div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4">
 		<h3 class="text-base font-semibold text-gray-900">Token Lifetimes</h3>
-		<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+		<div class="space-y-4">
 			@TokenLifetimeInput(TokenLifetimeFieldProps{
 				Label: "Access Token",
 				Name:  "access_token_lifetime",
 				Value: int64(props.Client.AccessTokenLifetime / time.Second),
 			})
 			@TokenLifetimeInput(TokenLifetimeFieldProps{
-				Label: "ID Token",
-				Name:  "id_token_lifetime",
-				Value: int64(props.Client.IDTokenLifetime / time.Second),
-			})
-			@TokenLifetimeInput(TokenLifetimeFieldProps{
 				Label:         "Refresh Token",
 				Name:          "refresh_token_lifetime",
 				Value:         int64(props.Client.RefreshTokenLifetime / time.Second),
 				PublicDefault: true,
+			})
+			@TokenLifetimeInput(TokenLifetimeFieldProps{
+				Label: "ID Token",
+				Name:  "id_token_lifetime",
+				Value: int64(props.Client.IDTokenLifetime / time.Second),
 			})
 		</div>
 		<div class="pt-4 border-t border-gray-100 space-y-2">

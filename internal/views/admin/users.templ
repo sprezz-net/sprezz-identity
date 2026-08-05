@@ -35,7 +35,11 @@ templ UsersContent(props UsersPageProps) {
 					</thead>
 					<tbody class="divide-y divide-gray-200">
 						for _, u := range props.Users {
-							<tr class="hover:bg-gray-50 transition">
+							<tr
+								class="hover:bg-gray-50 transition cursor-pointer"
+								hx-get={ fmt.Sprintf("/admin/users/view?id=%s&modal=true", u.ID.String()) }
+								hx-target="#modal-container"
+							>
 								<td class="px-6 py-4 font-mono font-medium text-gray-900">{ u.PreferredUsername }</td>
 								<td class="px-6 py-4 text-gray-500">{ u.Name }</td>
 								<td class="px-6 py-4 text-gray-500">{ u.Email }</td>
@@ -44,6 +48,7 @@ templ UsersContent(props UsersPageProps) {
 										hx-get={ fmt.Sprintf("/admin/users/view?id=%s&modal=true", u.ID.String()) }
 										hx-target="#modal-container"
 										class="text-blue-600 hover:text-blue-800 font-medium"
+										@click.stop=""
 									>
 										View
 									</button>
@@ -51,6 +56,7 @@ templ UsersContent(props UsersPageProps) {
 										hx-get={ fmt.Sprintf("/admin/users/edit?id=%s&modal=true", u.ID.String()) }
 										hx-target="#modal-container"
 										class="text-green-600 hover:text-green-800 font-medium"
+										@click.stop=""
 									>
 										Edit
 									</button>
@@ -59,6 +65,7 @@ templ UsersContent(props UsersPageProps) {
 										hx-confirm={ fmt.Sprintf("Are you sure you want to delete user '%s'?", u.PreferredUsername) }
 										hx-target="body"
 										class="text-red-600 hover:text-red-800 font-medium"
+										@click.stop=""
 									>
 										Delete
 									</button>
@@ -170,9 +177,17 @@ templ UserDetails(props UserDetailsProps) {
 										}
 									}
 								</p>
-								<p class="font-mono text-xs text-gray-500 mt-1">External Sub/ID: { ident.ExternalIdentityID }</p>
-								<p class="text-xs text-gray-500">Login Count: { fmt.Sprintf("%d", ident.LoginCount) } | Blocked: { fmt.Sprintf("%t", ident.Blocked) }</p>
-								<p class="text-xs text-gray-400 mt-0.5">Coupled at: { ident.CoupledAt.Format("2006-01-02 15:04:05") }</p>
+								<p class="text-xs text-gray-500 mt-1 flex items-center space-x-2">
+									<span>Login Count: { fmt.Sprintf("%d", ident.LoginCount) }</span>
+									<span>|</span>
+									<span>Status:</span>
+									if ident.Blocked {
+										@Badge("Blocked", "locked")
+									} else {
+										@Badge("Active", "active")
+									}
+								</p>
+								<p class="text-xs text-gray-400 mt-1">Coupled at: { ident.CoupledAt.Format("2006-01-02 15:04:05") }</p>
 							</div>
 							<button
 								hx-delete={ fmt.Sprintf("/admin/users/%s/identities/%s", props.User.ID.String(), ident.IdentityProviderID.String()) }

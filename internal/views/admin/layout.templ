@@ -276,6 +276,9 @@ templ AdminLayout(props AdminLayoutProps) {
 					enforceRtr: !!initialRtr,
 					idpCount: parseInt(initialIdpCount) || 0,
 					isSubmitDisabled: false,
+					isConfidential: false,
+					isPublic: false,
+					showUrisAndIdps: false,
 
 					init() {
 						this.syncComputedStates();
@@ -478,7 +481,8 @@ templ Badge(label, severity string) {
 			"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border",
 			templ.KV("bg-green-100 text-green-800 border-green-200", severity == "success" || severity == "active" || severity == "verified"),
 			templ.KV("bg-red-100 text-red-800 border-red-200", severity == "danger" || severity == "error" || severity == "locked"),
-			templ.KV("bg-gray-100 text-gray-800 border-gray-200", severity == "neutral" || severity == "inactive" || severity == "unverified"),
+			templ.KV("bg-amber-100 text-amber-800 border-amber-200", severity == "warning" || severity == "unverified"),
+			templ.KV("bg-gray-100 text-gray-800 border-gray-200", severity == "neutral" || severity == "inactive"),
 		}
 	>
 		{ label }
