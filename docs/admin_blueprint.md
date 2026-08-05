@@ -112,7 +112,24 @@ Using type-safe `templ` components, Tailwind CSS, and Alpine.js, we construct th
 - **`AdminLayout(title string)`**: Responsive side-nav layout in `slate-900`/`slate-300`, global profile actions, dynamic modals, and container slots. Refactored to utilize a declarative struct slice (`[]NavItem`) looping over uniform navigation definitions cleanly, and featuring HTMX targeted routing.
 - **`InputField(label, name, type, value, error string)`**: Form inputs styled with focus rings (`focus:ring-2 focus:ring-blue-500`) and standard error displays.
 - **`StatusBadge(isActive bool)`**: Dynamic visual indicators utilizing `templ.KV` Tailwind mapping to reflect active (green) and inactive (red) configurations.
-- **`Modal(title, fetchUrl string)`**: Alpine.js managed modal overlay (`x-data="{ isOpen: true }"`) incorporating HTMX lazy-loading (`hx-get`) to fetch administrative sub-forms dynamically into a `#modal-body` container. It resolves DOM accumulation / ID collisions by dispatching `modal-open`/`modal-close` events and automatically invoking `$el.remove()` 200ms after closing to completely purge stale HTML fragments from `#modal-container`.
+- **`Modal(title, fetchUrl string)`**: Alpine.js managed modal overlay (`x-data="{ isOpen: true }"`) incorporating HTMX lazy-loading (`hx-get`) to fetch administrative sub-forms dynamically into a `#modal-body` container. It resolves DOM accumulation and ID collisions by utilizing a CSP-compliant `setTimeout(purgeModal, 200, $root)` handler to cleanly remove the stale modal wrapper from `#modal-container` after transitions finish.
+
+## 5.2 Strict Content Security Policy & Global Nonced Helpers
+
+Because the server runs under a strict Content Security Policy (CSP), we utilize the CSP-friendly build of Alpine (`@alpinejs/csp`). This build uses a customized, lightweight parser that blocks closures (`() => {}`), watches, and arrow functions inside HTML attributes to prevent execution of unvalidated inline scripts.
+
+To support complex UI lifecycles (like modal transition fades followed by node removal) under these constraints, the system implements the **Global Nonced Helper Pattern**:
+
+1. **Secure Execution**: A secure helper script block is rendered in the `<head>` of `@AdminLayout`, locked to a cryptographically secure, per-request `nonce`:
+   ```html
+   <script nonce={ templ.GetNonce(ctx) }>
+       function purgeModal(el) {
+           el.dispatchEvent(new CustomEvent('modal-close', { bubbles: true }));
+           el.remove();
+       }
+   </script>
+   ```
+2. **Standard parameterization**: Inside elements, rather than utilizing arrow functions, standard function pointers are forwarded to the browser's native `setTimeout` utility (e.g., `setTimeout(purgeModal, 200, $root)`). The CSP parser permits this flat method execution, resulting in safe, zero-eval lifecycle management.
 
 ## 5.1 HTMX Partial Render Loop & SPA Architecture
 
