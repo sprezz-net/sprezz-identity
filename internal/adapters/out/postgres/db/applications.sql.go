@@ -35,7 +35,8 @@ SELECT
     a.allowed_idps,
     a.default_idp,
     a.allowed_audiences,
-    a.client_type
+    a.client_type,
+    a.enforce_rtr
 FROM applications AS a
 JOIN tenants AS t ON t.id = a.tenant_id
 WHERE t.tenant_uuid = $1
@@ -71,6 +72,7 @@ type GetClientRow struct {
 	DefaultIdp             *string         `json:"default_idp"`
 	AllowedAudiences       []string        `json:"allowed_audiences"`
 	ClientType             string          `json:"client_type"`
+	EnforceRtr             bool            `json:"enforce_rtr"`
 }
 
 func (q *Queries) GetClient(ctx context.Context, arg GetClientParams) (GetClientRow, error) {
@@ -99,6 +101,7 @@ func (q *Queries) GetClient(ctx context.Context, arg GetClientParams) (GetClient
 		&i.DefaultIdp,
 		&i.AllowedAudiences,
 		&i.ClientType,
+		&i.EnforceRtr,
 	)
 	return i, err
 }
@@ -145,7 +148,8 @@ INSERT INTO applications (
     allowed_idps,
     default_idp,
     allowed_audiences,
-    client_type
+    client_type,
+    enforce_rtr
 )
 SELECT
     $2,
@@ -169,7 +173,8 @@ SELECT
     $19,
     $20,
     $21,
-    $22
+    $22,
+    $23
 FROM tenant
 ON CONFLICT (tenant_id, client_id)
 DO UPDATE SET
@@ -191,7 +196,8 @@ DO UPDATE SET
     allowed_idps = EXCLUDED.allowed_idps,
     default_idp = EXCLUDED.default_idp,
     allowed_audiences = EXCLUDED.allowed_audiences,
-    client_type = EXCLUDED.client_type
+    client_type = EXCLUDED.client_type,
+    enforce_rtr = EXCLUDED.enforce_rtr
 `
 
 type SaveClientParams struct {
@@ -217,6 +223,7 @@ type SaveClientParams struct {
 	DefaultIdp             *string         `json:"default_idp"`
 	AllowedAudiences       []string        `json:"allowed_audiences"`
 	ClientType             string          `json:"client_type"`
+	EnforceRtr             bool            `json:"enforce_rtr"`
 }
 
 func (q *Queries) SaveClient(ctx context.Context, arg SaveClientParams) (pgconn.CommandTag, error) {
@@ -243,5 +250,6 @@ func (q *Queries) SaveClient(ctx context.Context, arg SaveClientParams) (pgconn.
 		arg.DefaultIdp,
 		arg.AllowedAudiences,
 		arg.ClientType,
+		arg.EnforceRtr,
 	)
 }

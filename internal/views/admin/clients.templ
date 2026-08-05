@@ -100,7 +100,7 @@ templ ClientForm(props ClientFormProps) {
 		hx-post="/admin/clients"
 		hx-target="#modal-body"
 		class="space-y-6"
-		x-data={ fmt.Sprintf("clientFormManager('%s', %t, %t, %d)", getInitialClientType(props.Client.ClientType), hasGrantType(props.Client.GrantTypes, "authorization_code", true), hasGrantType(props.Client.GrantTypes, "client_credentials", false), len(props.Client.AllowedIDPs)) }
+		x-data={ fmt.Sprintf("clientFormManager('%s', %t, %t, %t, %d)", getInitialClientType(props.Client.ClientType), hasGrantType(props.Client.GrantTypes, "authorization_code", true), hasGrantType(props.Client.GrantTypes, "client_credentials", false), props.Client.EnforceRTR, len(props.Client.AllowedIDPs)) }
 		@idp-count-update.window="handleIdpChange($event.detail.count)"
 	>
 		@ClientIdentitySection(props)
@@ -315,6 +315,26 @@ templ ClientLifetimesSection(props ClientFormProps) {
 				Value:         int64(props.Client.RefreshTokenLifetime / time.Second),
 				PublicDefault: true,
 			})
+		</div>
+		<div class="pt-4 border-t border-gray-100 space-y-2">
+			<label class="flex items-center space-x-3 text-sm text-gray-700 cursor-pointer select-none">
+				<input
+					type="checkbox"
+					name="enforce_rtr"
+					value="true"
+					:checked="isPublic || enforceRtr"
+					:disabled="isPublic"
+					@change="handleRtrChange($el.checked)"
+					class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+				/>
+				<div class="flex flex-col">
+					<span class="font-medium text-gray-900">Enforce Refresh Token Rotation (RTR)</span>
+					<span class="text-xs text-gray-400">Forces refresh tokens to rotate on every single exchange, providing absolute replay attack defense.</span>
+				</div>
+			</label>
+			<p x-show="isPublic" x-transition class="text-[11px] text-amber-600 font-medium">
+				⚠️ Attention: Refresh Token Rotation is strictly mandatory for Public application categories to mitigate browser hijacking.
+			</p>
 		</div>
 	</div>
 }

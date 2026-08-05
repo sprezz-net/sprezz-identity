@@ -642,6 +642,11 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 
 	isEdit := id != ""
 
+	enforceRtr := r.FormValue("enforce_rtr") == "true"
+	if clientType == "public" {
+		enforceRtr = true
+	}
+
 	if len(errs) > 0 {
 		providers, _ := h.idpService.GetIdentityProviders(r.Context(), tenant.ID)
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
@@ -663,6 +668,7 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 				DefaultIDP:             defaultIDP,
 				AllowedScopes:          scopes,
 				AllowedAudiences:       audiences,
+				EnforceRTR:             enforceRtr,
 			},
 			Errors:    errs,
 			IsEdit:    isEdit,
@@ -704,6 +710,7 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 		AllowedScopes:          scopes,
 		DefaultScopes:          scopes,
 		AllowedAudiences:       audiences,
+		EnforceRTR:             enforceRtr,
 	}
 
 	if isEdit {

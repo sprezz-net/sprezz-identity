@@ -25,6 +25,7 @@ type Storage struct {
 	revokedTokens       map[string]time.Time
 	parSessions         map[string]model.PushedAuthorizationRequest
 	dpopProofs          map[string]time.Time
+	refreshTokens       map[string]model.RefreshToken
 }
 
 func NewStorage() *Storage {
@@ -40,6 +41,7 @@ func NewStorage() *Storage {
 		revokedTokens:       make(map[string]time.Time),
 		parSessions:         make(map[string]model.PushedAuthorizationRequest),
 		dpopProofs:          make(map[string]time.Time),
+		refreshTokens:       make(map[string]model.RefreshToken),
 	}
 }
 
@@ -418,5 +420,45 @@ func (s *Storage) SaveDPoPProof(ctx context.Context, jti string, expiresAt time.
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.dpopProofs[jti] = expiresAt
+	return nil
+}
+
+func (s *Storage) SaveRefreshToken(ctx context.Context, token model.RefreshToken) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.refreshTokens[token.TokenID] = token
+	return nil
+}
+
+func (s *Storage) GetRefreshToken(ctx context.Context, tokenID string) (*model.RefreshToken, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	token, ok := s.refreshTokens[tokenID]
+	if !ok {
+		return nil, fmt.Errorf("refresh token %s: %w", tokenID, port.ErrSessionNotFound)
+	}
+	return &token, nil
+}
+
+func (s *Storage) MarkRefreshTokenUsed(ctx context.Context, tokenID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	token, ok := s.refreshTokens[tokenID]
+	if !ok {
+		return fmt.Errorf("refresh token not found")
+	}
+	token.IsUsed = true
+	s.refreshTokens[tokenID] = token
+	return nil
+}
+
+func (s *Storage) RevokeRefreshTokenFamily(ctx context.Context, tokenFamilyID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, v := range s.refreshTokens {
+		if v.TokenFamilyID == tokenFamilyID {
+			delete(s.refreshTokens, k)
+		}
+	}
 	return nil
 }

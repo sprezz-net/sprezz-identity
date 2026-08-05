@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
@@ -69,7 +70,7 @@ func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.
 		}
 	}
 
-	issuer := "https://" + tenant.Domain
+	issuer := schemeHttps + tenant.Domain
 	now := s.clock.Now()
 	accessToken, err := s.crypto.SignAccessToken(model.TokenClaims{
 		TokenID:   uuid.NewString(),
@@ -117,10 +118,140 @@ func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.
 		tokenType = "DPoP"
 	}
 
+	refreshTokenVal := uuid.NewString()
+	if client.EnforceRTR {
+		bytes := make([]byte, 32)
+		if _, err := rand.Read(bytes); err == nil {
+			refreshTokenVal = base64.RawURLEncoding.EncodeToString(bytes)
+		}
+		familyID := uuid.NewString()
+		_ = s.storage.SaveRefreshToken(ctx, model.RefreshToken{
+			TokenID:       refreshTokenVal,
+			TenantID:      tenantID,
+			ClientID:      clientID,
+			Subject:       authSession.Subject,
+			Scopes:        authSession.Scopes,
+			TokenFamilyID: familyID,
+			IsUsed:        false,
+			ExpiresAt:     now.Add(client.RefreshTokenLifetime),
+			CreatedAt:     now,
+		})
+	}
+
 	return &model.TokenSetResponse{
 		AccessToken:  accessToken,
 		IDToken:      idToken,
-		RefreshToken: uuid.NewString(),
+		RefreshToken: refreshTokenVal,
+		TokenType:    tokenType,
+		ExpiresIn:    int64(client.AccessTokenLifetime / time.Second),
+	}, nil
+}
+
+func (s *OAuthService) ExchangeRefreshTokenForTokens(ctx context.Context, tenantID uuid.UUID, clientID string, refreshTokenStr string, dpopJKT string) (*model.TokenSetResponse, error) {
+	client, err := s.storage.GetClient(ctx, tenantID, clientID)
+	if err != nil {
+		return nil, fmt.Errorf("get client: %w", err)
+	}
+
+	tenant, err := s.storage.ResolveTenantByID(ctx, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("resolve tenant: %w", err)
+	}
+
+	if !client.EnforceRTR {
+		now := s.clock.Now()
+		accessToken, err := s.crypto.SignAccessToken(model.TokenClaims{
+			TokenID:   uuid.NewString(),
+			Issuer:    schemeHttps + tenant.Domain,
+			TenantID:  tenantID.String(),
+			Subject:   client.ClientID,
+			ClientID:  clientID,
+			Scopes:    client.DefaultScopes,
+			IssuedAt:  now,
+			ExpiresAt: now.Add(client.AccessTokenLifetime),
+			Audiences: client.AllowedAudiences,
+			DPoPHash:  dpopJKT,
+		}, client.Algorithm)
+		if err != nil {
+			return nil, fmt.Errorf("sign access token: %w", err)
+		}
+		tokenType := "Bearer"
+		if dpopJKT != "" {
+			tokenType = "DPoP"
+		}
+		return &model.TokenSetResponse{
+			AccessToken:  accessToken,
+			RefreshToken: refreshTokenStr,
+			TokenType:    tokenType,
+			ExpiresIn:    int64(client.AccessTokenLifetime / time.Second),
+		}, nil
+	}
+
+	token, err := s.storage.GetRefreshToken(ctx, refreshTokenStr)
+	if err != nil {
+		return nil, errors.New("invalid_grant")
+	}
+
+	if token.ExpiresAt.Before(s.clock.Now()) {
+		return nil, errors.New("invalid_grant")
+	}
+
+	if token.IsUsed {
+		_ = s.storage.RevokeRefreshTokenFamily(ctx, token.TokenFamilyID)
+		return nil, errors.New("invalid_grant")
+	}
+
+	if err := s.storage.MarkRefreshTokenUsed(ctx, token.TokenID); err != nil {
+		return nil, fmt.Errorf("mark token used: %w", err)
+	}
+
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return nil, fmt.Errorf("generate secure random bytes: %w", err)
+	}
+	newRefreshTokenStr := base64.RawURLEncoding.EncodeToString(bytes)
+
+	now := s.clock.Now()
+	newRefreshToken := model.RefreshToken{
+		TokenID:       newRefreshTokenStr,
+		TenantID:      tenantID,
+		ClientID:      clientID,
+		Subject:       token.Subject,
+		Scopes:        token.Scopes,
+		TokenFamilyID: token.TokenFamilyID,
+		IsUsed:        false,
+		ExpiresAt:     now.Add(client.RefreshTokenLifetime),
+		CreatedAt:     now,
+	}
+
+	if err := s.storage.SaveRefreshToken(ctx, newRefreshToken); err != nil {
+		return nil, fmt.Errorf("save new refresh token: %w", err)
+	}
+
+	accessToken, err := s.crypto.SignAccessToken(model.TokenClaims{
+		TokenID:   uuid.NewString(),
+		Issuer:    schemeHttps + tenant.Domain,
+		TenantID:  tenantID.String(),
+		Subject:   token.Subject,
+		ClientID:  clientID,
+		Scopes:    token.Scopes,
+		IssuedAt:  now,
+		ExpiresAt: now.Add(client.AccessTokenLifetime),
+		Audiences: client.AllowedAudiences,
+		DPoPHash:  dpopJKT,
+	}, client.Algorithm)
+	if err != nil {
+		return nil, fmt.Errorf("sign access token: %w", err)
+	}
+
+	tokenType := "Bearer"
+	if dpopJKT != "" {
+		tokenType = "DPoP"
+	}
+
+	return &model.TokenSetResponse{
+		AccessToken:  accessToken,
+		RefreshToken: newRefreshTokenStr,
 		TokenType:    tokenType,
 		ExpiresIn:    int64(client.AccessTokenLifetime / time.Second),
 	}, nil
@@ -141,7 +272,7 @@ func (s *OAuthService) ProcessLogout(ctx context.Context, tenantID uuid.UUID, su
 		if client.BackChannelLogoutURI != "" {
 			logoutToken, err := s.crypto.SignLogoutToken(model.LogoutTokenClaims{
 				TokenID:  uuid.NewString(),
-				Issuer:   "https://" + client.TenantID.String(),
+				Issuer:   schemeHttps + client.TenantID.String(),
 				Subject:  subject,
 				Audience: client.ClientID,
 				IssuedAt: now,

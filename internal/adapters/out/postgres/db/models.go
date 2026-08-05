@@ -31,6 +31,7 @@ type Application struct {
 	AllowedAudiences       []string        `json:"allowed_audiences"`
 	ClientType             string          `json:"client_type"`
 	RedirectUri            string          `json:"redirect_uri"`
+	EnforceRtr             bool            `json:"enforce_rtr"`
 }
 
 type AuditEventLog struct {
@@ -120,6 +121,18 @@ type PushedAuthorizationRequest struct {
 	IdpHint             string             `json:"idp_hint"`
 	AcrValues           string             `json:"acr_values"`
 	ExpiresAt           pgtype.Timestamptz `json:"expires_at"`
+}
+
+type RefreshToken struct {
+	TokenID       string             `json:"token_id"`
+	TenantID      int32              `json:"tenant_id"`
+	ClientID      string             `json:"client_id"`
+	Subject       string             `json:"subject"`
+	Scopes        []string           `json:"scopes"`
+	TokenFamilyID string             `json:"token_family_id"`
+	IsUsed        bool               `json:"is_used"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
 type RevokedToken struct {

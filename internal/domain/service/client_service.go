@@ -136,6 +136,7 @@ func applyClientSecurityAndLifetimes(existing *model.ClientApplication, client m
 	if client.IDTokenLifetime > 0 {
 		existing.IDTokenLifetime = client.IDTokenLifetime
 	}
+	existing.EnforceRTR = client.EnforceRTR
 }
 
 func ensureNonNullClientFields(existing *model.ClientApplication) {

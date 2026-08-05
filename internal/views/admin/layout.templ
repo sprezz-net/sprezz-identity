@@ -261,53 +261,41 @@ templ AdminLayout(props AdminLayoutProps) {
 					}
 				}));
 
-				Alpine.data('clientFormManager', (initialType, initialAuthCode, initialClientCredentials, initialIdpCount) => ({
+				Alpine.data('clientFormManager', (initialType, initialAuthCode, initialClientCredentials, initialRtr, initialIdpCount) => ({
 					clientType: initialType || 'confidential',
 					authCode: !!initialAuthCode,
 					clientCredentials: !!initialClientCredentials,
+					enforceRtr: !!initialRtr,
 					idpCount: parseInt(initialIdpCount) || 0,
 					isSubmitDisabled: false,
 
 					init() {
-						this.checkSubmit();
+						this.syncComputedStates();
 						this.$watch('clientType', (val) => {
 							if (val === 'public') {
 								this.clientCredentials = false;
 								this.authCode = true;
-								this.$dispatch('client-type-public');
+								this.enforceRtr = true; // Public applications strictly mandate RTR
 							}
-							this.checkSubmit();
+							this.syncComputedStates();
 						});
-						this.$watch('authCode', (val) => { this.checkSubmit(); });
-						this.$watch('clientCredentials', (val) => { this.checkSubmit(); });
+						this.$watch('authCode', (val) => { this.syncComputedStates(); });
+						this.$watch('clientCredentials', (val) => { this.syncComputedStates(); });
+						this.$watch('enforceRtr', (val) => { this.syncComputedStates(); });
 					},
 
-					checkSubmit() {
-						if (this.clientType === 'public' || this.authCode) {
-							this.isSubmitDisabled = (this.idpCount === 0);
-						} else {
-							this.isSubmitDisabled = false;
-						}
+					syncComputedStates() {
+						this.isConfidential = (this.clientType === 'confidential');
+						this.isPublic = (this.clientType === 'public');
+						this.showUrisAndIdps = (this.isPublic || this.authCode);
+						this.isSubmitDisabled = (this.isPublic || this.authCode) ? (this.idpCount === 0) : false;
 					},
 
-					handleClientType(type) {
-						this.clientType = type;
-					},
-
-					handleAuthCodeChange(checked) {
-						this.authCode = checked;
-						this.checkSubmit();
-						this.$dispatch('grant-type-change', { authCode: checked });
-					},
-
-					handleClientCredentialsChange(checked) {
-						this.clientCredentials = checked;
-						this.checkSubmit();
-					},
-
-					handleIdpChange(count) {
-						this.idpCount = count;
-					}
+					handleClientType(type) { this.clientType = type; },
+					handleAuthCodeChange(checked) { this.authCode = checked; },
+					handleClientCredentialsChange(checked) { this.clientCredentials = checked; },
+					handleIdpChange(count) { this.idpCount = count; },
+					handleRtrChange(checked) { this.enforceRtr = checked; }
 				}));
 
 				Alpine.data('idpRouter', (initialAllowed, availablePool, initialDefaultIdp) => ({

@@ -27,6 +27,13 @@ type AuthMock struct {
 	beforeExchangeCodeForTokensCounter uint64
 	ExchangeCodeForTokensMock          mAuthMockExchangeCodeForTokens
 
+	funcExchangeRefreshTokenForTokens          func(ctx context.Context, tenantID uuid.UUID, clientID string, refreshTokenStr string, dpopJKT string) (tp1 *model.TokenSetResponse, err error)
+	funcExchangeRefreshTokenForTokensOrigin    string
+	inspectFuncExchangeRefreshTokenForTokens   func(ctx context.Context, tenantID uuid.UUID, clientID string, refreshTokenStr string, dpopJKT string)
+	afterExchangeRefreshTokenForTokensCounter  uint64
+	beforeExchangeRefreshTokenForTokensCounter uint64
+	ExchangeRefreshTokenForTokensMock          mAuthMockExchangeRefreshTokenForTokens
+
 	funcGetAndConsumePAR          func(ctx context.Context, tenantID uuid.UUID, requestURI string) (pp1 *model.PushedAuthorizationRequest, err error)
 	funcGetAndConsumePAROrigin    string
 	inspectFuncGetAndConsumePAR   func(ctx context.Context, tenantID uuid.UUID, requestURI string)
@@ -80,6 +87,9 @@ func NewAuthMock(t minimock.Tester) *AuthMock {
 
 	m.ExchangeCodeForTokensMock = mAuthMockExchangeCodeForTokens{mock: m}
 	m.ExchangeCodeForTokensMock.callArgs = []*AuthMockExchangeCodeForTokensParams{}
+
+	m.ExchangeRefreshTokenForTokensMock = mAuthMockExchangeRefreshTokenForTokens{mock: m}
+	m.ExchangeRefreshTokenForTokensMock.callArgs = []*AuthMockExchangeRefreshTokenForTokensParams{}
 
 	m.GetAndConsumePARMock = mAuthMockGetAndConsumePAR{mock: m}
 	m.GetAndConsumePARMock.callArgs = []*AuthMockGetAndConsumePARParams{}
@@ -568,6 +578,442 @@ func (m *AuthMock) MinimockExchangeCodeForTokensInspect() {
 	if !m.ExchangeCodeForTokensMock.invocationsDone() && afterExchangeCodeForTokensCounter > 0 {
 		m.t.Errorf("Expected %d calls to AuthMock.ExchangeCodeForTokens at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ExchangeCodeForTokensMock.expectedInvocations), m.ExchangeCodeForTokensMock.expectedInvocationsOrigin, afterExchangeCodeForTokensCounter)
+	}
+}
+
+type mAuthMockExchangeRefreshTokenForTokens struct {
+	optional           bool
+	mock               *AuthMock
+	defaultExpectation *AuthMockExchangeRefreshTokenForTokensExpectation
+	expectations       []*AuthMockExchangeRefreshTokenForTokensExpectation
+
+	callArgs []*AuthMockExchangeRefreshTokenForTokensParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AuthMockExchangeRefreshTokenForTokensExpectation specifies expectation struct of the Auth.ExchangeRefreshTokenForTokens
+type AuthMockExchangeRefreshTokenForTokensExpectation struct {
+	mock               *AuthMock
+	params             *AuthMockExchangeRefreshTokenForTokensParams
+	paramPtrs          *AuthMockExchangeRefreshTokenForTokensParamPtrs
+	expectationOrigins AuthMockExchangeRefreshTokenForTokensExpectationOrigins
+	results            *AuthMockExchangeRefreshTokenForTokensResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AuthMockExchangeRefreshTokenForTokensParams contains parameters of the Auth.ExchangeRefreshTokenForTokens
+type AuthMockExchangeRefreshTokenForTokensParams struct {
+	ctx             context.Context
+	tenantID        uuid.UUID
+	clientID        string
+	refreshTokenStr string
+	dpopJKT         string
+}
+
+// AuthMockExchangeRefreshTokenForTokensParamPtrs contains pointers to parameters of the Auth.ExchangeRefreshTokenForTokens
+type AuthMockExchangeRefreshTokenForTokensParamPtrs struct {
+	ctx             *context.Context
+	tenantID        *uuid.UUID
+	clientID        *string
+	refreshTokenStr *string
+	dpopJKT         *string
+}
+
+// AuthMockExchangeRefreshTokenForTokensResults contains results of the Auth.ExchangeRefreshTokenForTokens
+type AuthMockExchangeRefreshTokenForTokensResults struct {
+	tp1 *model.TokenSetResponse
+	err error
+}
+
+// AuthMockExchangeRefreshTokenForTokensOrigins contains origins of expectations of the Auth.ExchangeRefreshTokenForTokens
+type AuthMockExchangeRefreshTokenForTokensExpectationOrigins struct {
+	origin                string
+	originCtx             string
+	originTenantID        string
+	originClientID        string
+	originRefreshTokenStr string
+	originDpopJKT         string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmExchangeRefreshTokenForTokens *mAuthMockExchangeRefreshTokenForTokens) Optional() *mAuthMockExchangeRefreshTokenForTokens {
+	mmExchangeRefreshTokenForTokens.optional = true
+	return mmExchangeRefreshTokenForTokens
+}
+
+// Expect sets up expected params for Auth.ExchangeRefreshTokenForTokens
+func (mmExchangeRefreshTokenForTokens *mAuthMockExchangeRefreshTokenForTokens) Expect(ctx context.Context, tenantID uuid.UUID, clientID string, refreshTokenStr string, dpopJKT string) *mAuthMockExchangeRefreshTokenForTokens {
+	if mmExchangeRefreshTokenForTokens.mock.funcExchangeRefreshTokenForTokens != nil {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("AuthMock.ExchangeRefreshTokenForTokens mock is already set by Set")
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation == nil {
+		mmExchangeRefreshTokenForTokens.defaultExpectation = &AuthMockExchangeRefreshTokenForTokensExpectation{}
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation.paramPtrs != nil {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("AuthMock.ExchangeRefreshTokenForTokens mock is already set by ExpectParams functions")
+	}
+
+	mmExchangeRefreshTokenForTokens.defaultExpectation.params = &AuthMockExchangeRefreshTokenForTokensParams{ctx, tenantID, clientID, refreshTokenStr, dpopJKT}
+	mmExchangeRefreshTokenForTokens.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmExchangeRefreshTokenForTokens.expectations {
+		if minimock.Equal(e.params, mmExchangeRefreshTokenForTokens.defaultExpectation.params) {
+			mmExchangeRefreshTokenForTokens.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmExchangeRefreshTokenForTokens.defaultExpectation.params)
+		}
+	}
+
+	return mmExchangeRefreshTokenForTokens
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Auth.ExchangeRefreshTokenForTokens
+func (mmExchangeRefreshTokenForTokens *mAuthMockExchangeRefreshTokenForTokens) ExpectCtxParam1(ctx context.Context) *mAuthMockExchangeRefreshTokenForTokens {
+	if mmExchangeRefreshTokenForTokens.mock.funcExchangeRefreshTokenForTokens != nil {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("AuthMock.ExchangeRefreshTokenForTokens mock is already set by Set")
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation == nil {
+		mmExchangeRefreshTokenForTokens.defaultExpectation = &AuthMockExchangeRefreshTokenForTokensExpectation{}
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation.params != nil {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("AuthMock.ExchangeRefreshTokenForTokens mock is already set by Expect")
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation.paramPtrs == nil {
+		mmExchangeRefreshTokenForTokens.defaultExpectation.paramPtrs = &AuthMockExchangeRefreshTokenForTokensParamPtrs{}
+	}
+	mmExchangeRefreshTokenForTokens.defaultExpectation.paramPtrs.ctx = &ctx
+	mmExchangeRefreshTokenForTokens.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmExchangeRefreshTokenForTokens
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Auth.ExchangeRefreshTokenForTokens
+func (mmExchangeRefreshTokenForTokens *mAuthMockExchangeRefreshTokenForTokens) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthMockExchangeRefreshTokenForTokens {
+	if mmExchangeRefreshTokenForTokens.mock.funcExchangeRefreshTokenForTokens != nil {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("AuthMock.ExchangeRefreshTokenForTokens mock is already set by Set")
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation == nil {
+		mmExchangeRefreshTokenForTokens.defaultExpectation = &AuthMockExchangeRefreshTokenForTokensExpectation{}
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation.params != nil {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("AuthMock.ExchangeRefreshTokenForTokens mock is already set by Expect")
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation.paramPtrs == nil {
+		mmExchangeRefreshTokenForTokens.defaultExpectation.paramPtrs = &AuthMockExchangeRefreshTokenForTokensParamPtrs{}
+	}
+	mmExchangeRefreshTokenForTokens.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmExchangeRefreshTokenForTokens.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmExchangeRefreshTokenForTokens
+}
+
+// ExpectClientIDParam3 sets up expected param clientID for Auth.ExchangeRefreshTokenForTokens
+func (mmExchangeRefreshTokenForTokens *mAuthMockExchangeRefreshTokenForTokens) ExpectClientIDParam3(clientID string) *mAuthMockExchangeRefreshTokenForTokens {
+	if mmExchangeRefreshTokenForTokens.mock.funcExchangeRefreshTokenForTokens != nil {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("AuthMock.ExchangeRefreshTokenForTokens mock is already set by Set")
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation == nil {
+		mmExchangeRefreshTokenForTokens.defaultExpectation = &AuthMockExchangeRefreshTokenForTokensExpectation{}
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation.params != nil {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("AuthMock.ExchangeRefreshTokenForTokens mock is already set by Expect")
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation.paramPtrs == nil {
+		mmExchangeRefreshTokenForTokens.defaultExpectation.paramPtrs = &AuthMockExchangeRefreshTokenForTokensParamPtrs{}
+	}
+	mmExchangeRefreshTokenForTokens.defaultExpectation.paramPtrs.clientID = &clientID
+	mmExchangeRefreshTokenForTokens.defaultExpectation.expectationOrigins.originClientID = minimock.CallerInfo(1)
+
+	return mmExchangeRefreshTokenForTokens
+}
+
+// ExpectRefreshTokenStrParam4 sets up expected param refreshTokenStr for Auth.ExchangeRefreshTokenForTokens
+func (mmExchangeRefreshTokenForTokens *mAuthMockExchangeRefreshTokenForTokens) ExpectRefreshTokenStrParam4(refreshTokenStr string) *mAuthMockExchangeRefreshTokenForTokens {
+	if mmExchangeRefreshTokenForTokens.mock.funcExchangeRefreshTokenForTokens != nil {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("AuthMock.ExchangeRefreshTokenForTokens mock is already set by Set")
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation == nil {
+		mmExchangeRefreshTokenForTokens.defaultExpectation = &AuthMockExchangeRefreshTokenForTokensExpectation{}
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation.params != nil {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("AuthMock.ExchangeRefreshTokenForTokens mock is already set by Expect")
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation.paramPtrs == nil {
+		mmExchangeRefreshTokenForTokens.defaultExpectation.paramPtrs = &AuthMockExchangeRefreshTokenForTokensParamPtrs{}
+	}
+	mmExchangeRefreshTokenForTokens.defaultExpectation.paramPtrs.refreshTokenStr = &refreshTokenStr
+	mmExchangeRefreshTokenForTokens.defaultExpectation.expectationOrigins.originRefreshTokenStr = minimock.CallerInfo(1)
+
+	return mmExchangeRefreshTokenForTokens
+}
+
+// ExpectDpopJKTParam5 sets up expected param dpopJKT for Auth.ExchangeRefreshTokenForTokens
+func (mmExchangeRefreshTokenForTokens *mAuthMockExchangeRefreshTokenForTokens) ExpectDpopJKTParam5(dpopJKT string) *mAuthMockExchangeRefreshTokenForTokens {
+	if mmExchangeRefreshTokenForTokens.mock.funcExchangeRefreshTokenForTokens != nil {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("AuthMock.ExchangeRefreshTokenForTokens mock is already set by Set")
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation == nil {
+		mmExchangeRefreshTokenForTokens.defaultExpectation = &AuthMockExchangeRefreshTokenForTokensExpectation{}
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation.params != nil {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("AuthMock.ExchangeRefreshTokenForTokens mock is already set by Expect")
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation.paramPtrs == nil {
+		mmExchangeRefreshTokenForTokens.defaultExpectation.paramPtrs = &AuthMockExchangeRefreshTokenForTokensParamPtrs{}
+	}
+	mmExchangeRefreshTokenForTokens.defaultExpectation.paramPtrs.dpopJKT = &dpopJKT
+	mmExchangeRefreshTokenForTokens.defaultExpectation.expectationOrigins.originDpopJKT = minimock.CallerInfo(1)
+
+	return mmExchangeRefreshTokenForTokens
+}
+
+// Inspect accepts an inspector function that has same arguments as the Auth.ExchangeRefreshTokenForTokens
+func (mmExchangeRefreshTokenForTokens *mAuthMockExchangeRefreshTokenForTokens) Inspect(f func(ctx context.Context, tenantID uuid.UUID, clientID string, refreshTokenStr string, dpopJKT string)) *mAuthMockExchangeRefreshTokenForTokens {
+	if mmExchangeRefreshTokenForTokens.mock.inspectFuncExchangeRefreshTokenForTokens != nil {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("Inspect function is already set for AuthMock.ExchangeRefreshTokenForTokens")
+	}
+
+	mmExchangeRefreshTokenForTokens.mock.inspectFuncExchangeRefreshTokenForTokens = f
+
+	return mmExchangeRefreshTokenForTokens
+}
+
+// Return sets up results that will be returned by Auth.ExchangeRefreshTokenForTokens
+func (mmExchangeRefreshTokenForTokens *mAuthMockExchangeRefreshTokenForTokens) Return(tp1 *model.TokenSetResponse, err error) *AuthMock {
+	if mmExchangeRefreshTokenForTokens.mock.funcExchangeRefreshTokenForTokens != nil {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("AuthMock.ExchangeRefreshTokenForTokens mock is already set by Set")
+	}
+
+	if mmExchangeRefreshTokenForTokens.defaultExpectation == nil {
+		mmExchangeRefreshTokenForTokens.defaultExpectation = &AuthMockExchangeRefreshTokenForTokensExpectation{mock: mmExchangeRefreshTokenForTokens.mock}
+	}
+	mmExchangeRefreshTokenForTokens.defaultExpectation.results = &AuthMockExchangeRefreshTokenForTokensResults{tp1, err}
+	mmExchangeRefreshTokenForTokens.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmExchangeRefreshTokenForTokens.mock
+}
+
+// Set uses given function f to mock the Auth.ExchangeRefreshTokenForTokens method
+func (mmExchangeRefreshTokenForTokens *mAuthMockExchangeRefreshTokenForTokens) Set(f func(ctx context.Context, tenantID uuid.UUID, clientID string, refreshTokenStr string, dpopJKT string) (tp1 *model.TokenSetResponse, err error)) *AuthMock {
+	if mmExchangeRefreshTokenForTokens.defaultExpectation != nil {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("Default expectation is already set for the Auth.ExchangeRefreshTokenForTokens method")
+	}
+
+	if len(mmExchangeRefreshTokenForTokens.expectations) > 0 {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("Some expectations are already set for the Auth.ExchangeRefreshTokenForTokens method")
+	}
+
+	mmExchangeRefreshTokenForTokens.mock.funcExchangeRefreshTokenForTokens = f
+	mmExchangeRefreshTokenForTokens.mock.funcExchangeRefreshTokenForTokensOrigin = minimock.CallerInfo(1)
+	return mmExchangeRefreshTokenForTokens.mock
+}
+
+// When sets expectation for the Auth.ExchangeRefreshTokenForTokens which will trigger the result defined by the following
+// Then helper
+func (mmExchangeRefreshTokenForTokens *mAuthMockExchangeRefreshTokenForTokens) When(ctx context.Context, tenantID uuid.UUID, clientID string, refreshTokenStr string, dpopJKT string) *AuthMockExchangeRefreshTokenForTokensExpectation {
+	if mmExchangeRefreshTokenForTokens.mock.funcExchangeRefreshTokenForTokens != nil {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("AuthMock.ExchangeRefreshTokenForTokens mock is already set by Set")
+	}
+
+	expectation := &AuthMockExchangeRefreshTokenForTokensExpectation{
+		mock:               mmExchangeRefreshTokenForTokens.mock,
+		params:             &AuthMockExchangeRefreshTokenForTokensParams{ctx, tenantID, clientID, refreshTokenStr, dpopJKT},
+		expectationOrigins: AuthMockExchangeRefreshTokenForTokensExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmExchangeRefreshTokenForTokens.expectations = append(mmExchangeRefreshTokenForTokens.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Auth.ExchangeRefreshTokenForTokens return parameters for the expectation previously defined by the When method
+func (e *AuthMockExchangeRefreshTokenForTokensExpectation) Then(tp1 *model.TokenSetResponse, err error) *AuthMock {
+	e.results = &AuthMockExchangeRefreshTokenForTokensResults{tp1, err}
+	return e.mock
+}
+
+// Times sets number of times Auth.ExchangeRefreshTokenForTokens should be invoked
+func (mmExchangeRefreshTokenForTokens *mAuthMockExchangeRefreshTokenForTokens) Times(n uint64) *mAuthMockExchangeRefreshTokenForTokens {
+	if n == 0 {
+		mmExchangeRefreshTokenForTokens.mock.t.Fatalf("Times of AuthMock.ExchangeRefreshTokenForTokens mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmExchangeRefreshTokenForTokens.expectedInvocations, n)
+	mmExchangeRefreshTokenForTokens.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmExchangeRefreshTokenForTokens
+}
+
+func (mmExchangeRefreshTokenForTokens *mAuthMockExchangeRefreshTokenForTokens) invocationsDone() bool {
+	if len(mmExchangeRefreshTokenForTokens.expectations) == 0 && mmExchangeRefreshTokenForTokens.defaultExpectation == nil && mmExchangeRefreshTokenForTokens.mock.funcExchangeRefreshTokenForTokens == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmExchangeRefreshTokenForTokens.mock.afterExchangeRefreshTokenForTokensCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmExchangeRefreshTokenForTokens.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// ExchangeRefreshTokenForTokens implements mm_port.Auth
+func (mmExchangeRefreshTokenForTokens *AuthMock) ExchangeRefreshTokenForTokens(ctx context.Context, tenantID uuid.UUID, clientID string, refreshTokenStr string, dpopJKT string) (tp1 *model.TokenSetResponse, err error) {
+	mm_atomic.AddUint64(&mmExchangeRefreshTokenForTokens.beforeExchangeRefreshTokenForTokensCounter, 1)
+	defer mm_atomic.AddUint64(&mmExchangeRefreshTokenForTokens.afterExchangeRefreshTokenForTokensCounter, 1)
+
+	mmExchangeRefreshTokenForTokens.t.Helper()
+
+	if mmExchangeRefreshTokenForTokens.inspectFuncExchangeRefreshTokenForTokens != nil {
+		mmExchangeRefreshTokenForTokens.inspectFuncExchangeRefreshTokenForTokens(ctx, tenantID, clientID, refreshTokenStr, dpopJKT)
+	}
+
+	mm_params := AuthMockExchangeRefreshTokenForTokensParams{ctx, tenantID, clientID, refreshTokenStr, dpopJKT}
+
+	// Record call args
+	mmExchangeRefreshTokenForTokens.ExchangeRefreshTokenForTokensMock.mutex.Lock()
+	mmExchangeRefreshTokenForTokens.ExchangeRefreshTokenForTokensMock.callArgs = append(mmExchangeRefreshTokenForTokens.ExchangeRefreshTokenForTokensMock.callArgs, &mm_params)
+	mmExchangeRefreshTokenForTokens.ExchangeRefreshTokenForTokensMock.mutex.Unlock()
+
+	for _, e := range mmExchangeRefreshTokenForTokens.ExchangeRefreshTokenForTokensMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.tp1, e.results.err
+		}
+	}
+
+	if mmExchangeRefreshTokenForTokens.ExchangeRefreshTokenForTokensMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmExchangeRefreshTokenForTokens.ExchangeRefreshTokenForTokensMock.defaultExpectation.Counter, 1)
+		mm_want := mmExchangeRefreshTokenForTokens.ExchangeRefreshTokenForTokensMock.defaultExpectation.params
+		mm_want_ptrs := mmExchangeRefreshTokenForTokens.ExchangeRefreshTokenForTokensMock.defaultExpectation.paramPtrs
+
+		mm_got := AuthMockExchangeRefreshTokenForTokensParams{ctx, tenantID, clientID, refreshTokenStr, dpopJKT}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmExchangeRefreshTokenForTokens.t.Errorf("AuthMock.ExchangeRefreshTokenForTokens got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmExchangeRefreshTokenForTokens.ExchangeRefreshTokenForTokensMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmExchangeRefreshTokenForTokens.t.Errorf("AuthMock.ExchangeRefreshTokenForTokens got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmExchangeRefreshTokenForTokens.ExchangeRefreshTokenForTokensMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.clientID != nil && !minimock.Equal(*mm_want_ptrs.clientID, mm_got.clientID) {
+				mmExchangeRefreshTokenForTokens.t.Errorf("AuthMock.ExchangeRefreshTokenForTokens got unexpected parameter clientID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmExchangeRefreshTokenForTokens.ExchangeRefreshTokenForTokensMock.defaultExpectation.expectationOrigins.originClientID, *mm_want_ptrs.clientID, mm_got.clientID, minimock.Diff(*mm_want_ptrs.clientID, mm_got.clientID))
+			}
+
+			if mm_want_ptrs.refreshTokenStr != nil && !minimock.Equal(*mm_want_ptrs.refreshTokenStr, mm_got.refreshTokenStr) {
+				mmExchangeRefreshTokenForTokens.t.Errorf("AuthMock.ExchangeRefreshTokenForTokens got unexpected parameter refreshTokenStr, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmExchangeRefreshTokenForTokens.ExchangeRefreshTokenForTokensMock.defaultExpectation.expectationOrigins.originRefreshTokenStr, *mm_want_ptrs.refreshTokenStr, mm_got.refreshTokenStr, minimock.Diff(*mm_want_ptrs.refreshTokenStr, mm_got.refreshTokenStr))
+			}
+
+			if mm_want_ptrs.dpopJKT != nil && !minimock.Equal(*mm_want_ptrs.dpopJKT, mm_got.dpopJKT) {
+				mmExchangeRefreshTokenForTokens.t.Errorf("AuthMock.ExchangeRefreshTokenForTokens got unexpected parameter dpopJKT, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmExchangeRefreshTokenForTokens.ExchangeRefreshTokenForTokensMock.defaultExpectation.expectationOrigins.originDpopJKT, *mm_want_ptrs.dpopJKT, mm_got.dpopJKT, minimock.Diff(*mm_want_ptrs.dpopJKT, mm_got.dpopJKT))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmExchangeRefreshTokenForTokens.t.Errorf("AuthMock.ExchangeRefreshTokenForTokens got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmExchangeRefreshTokenForTokens.ExchangeRefreshTokenForTokensMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmExchangeRefreshTokenForTokens.ExchangeRefreshTokenForTokensMock.defaultExpectation.results
+		if mm_results == nil {
+			mmExchangeRefreshTokenForTokens.t.Fatal("No results are set for the AuthMock.ExchangeRefreshTokenForTokens")
+		}
+		return (*mm_results).tp1, (*mm_results).err
+	}
+	if mmExchangeRefreshTokenForTokens.funcExchangeRefreshTokenForTokens != nil {
+		return mmExchangeRefreshTokenForTokens.funcExchangeRefreshTokenForTokens(ctx, tenantID, clientID, refreshTokenStr, dpopJKT)
+	}
+	mmExchangeRefreshTokenForTokens.t.Fatalf("Unexpected call to AuthMock.ExchangeRefreshTokenForTokens. %v %v %v %v %v", ctx, tenantID, clientID, refreshTokenStr, dpopJKT)
+	return
+}
+
+// ExchangeRefreshTokenForTokensAfterCounter returns a count of finished AuthMock.ExchangeRefreshTokenForTokens invocations
+func (mmExchangeRefreshTokenForTokens *AuthMock) ExchangeRefreshTokenForTokensAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmExchangeRefreshTokenForTokens.afterExchangeRefreshTokenForTokensCounter)
+}
+
+// ExchangeRefreshTokenForTokensBeforeCounter returns a count of AuthMock.ExchangeRefreshTokenForTokens invocations
+func (mmExchangeRefreshTokenForTokens *AuthMock) ExchangeRefreshTokenForTokensBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmExchangeRefreshTokenForTokens.beforeExchangeRefreshTokenForTokensCounter)
+}
+
+// Calls returns a list of arguments used in each call to AuthMock.ExchangeRefreshTokenForTokens.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmExchangeRefreshTokenForTokens *mAuthMockExchangeRefreshTokenForTokens) Calls() []*AuthMockExchangeRefreshTokenForTokensParams {
+	mmExchangeRefreshTokenForTokens.mutex.RLock()
+
+	argCopy := make([]*AuthMockExchangeRefreshTokenForTokensParams, len(mmExchangeRefreshTokenForTokens.callArgs))
+	copy(argCopy, mmExchangeRefreshTokenForTokens.callArgs)
+
+	mmExchangeRefreshTokenForTokens.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockExchangeRefreshTokenForTokensDone returns true if the count of the ExchangeRefreshTokenForTokens invocations corresponds
+// the number of defined expectations
+func (m *AuthMock) MinimockExchangeRefreshTokenForTokensDone() bool {
+	if m.ExchangeRefreshTokenForTokensMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.ExchangeRefreshTokenForTokensMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.ExchangeRefreshTokenForTokensMock.invocationsDone()
+}
+
+// MinimockExchangeRefreshTokenForTokensInspect logs each unmet expectation
+func (m *AuthMock) MinimockExchangeRefreshTokenForTokensInspect() {
+	for _, e := range m.ExchangeRefreshTokenForTokensMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AuthMock.ExchangeRefreshTokenForTokens at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterExchangeRefreshTokenForTokensCounter := mm_atomic.LoadUint64(&m.afterExchangeRefreshTokenForTokensCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.ExchangeRefreshTokenForTokensMock.defaultExpectation != nil && afterExchangeRefreshTokenForTokensCounter < 1 {
+		if m.ExchangeRefreshTokenForTokensMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AuthMock.ExchangeRefreshTokenForTokens at\n%s", m.ExchangeRefreshTokenForTokensMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AuthMock.ExchangeRefreshTokenForTokens at\n%s with params: %#v", m.ExchangeRefreshTokenForTokensMock.defaultExpectation.expectationOrigins.origin, *m.ExchangeRefreshTokenForTokensMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcExchangeRefreshTokenForTokens != nil && afterExchangeRefreshTokenForTokensCounter < 1 {
+		m.t.Errorf("Expected call to AuthMock.ExchangeRefreshTokenForTokens at\n%s", m.funcExchangeRefreshTokenForTokensOrigin)
+	}
+
+	if !m.ExchangeRefreshTokenForTokensMock.invocationsDone() && afterExchangeRefreshTokenForTokensCounter > 0 {
+		m.t.Errorf("Expected %d calls to AuthMock.ExchangeRefreshTokenForTokens at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.ExchangeRefreshTokenForTokensMock.expectedInvocations), m.ExchangeRefreshTokenForTokensMock.expectedInvocationsOrigin, afterExchangeRefreshTokenForTokensCounter)
 	}
 }
 
@@ -2849,6 +3295,8 @@ func (m *AuthMock) MinimockFinish() {
 		if !m.minimockDone() {
 			m.MinimockExchangeCodeForTokensInspect()
 
+			m.MinimockExchangeRefreshTokenForTokensInspect()
+
 			m.MinimockGetAndConsumePARInspect()
 
 			m.MinimockInitiateAuthorizeInspect()
@@ -2884,6 +3332,7 @@ func (m *AuthMock) minimockDone() bool {
 	done := true
 	return done &&
 		m.MinimockExchangeCodeForTokensDone() &&
+		m.MinimockExchangeRefreshTokenForTokensDone() &&
 		m.MinimockGetAndConsumePARDone() &&
 		m.MinimockInitiateAuthorizeDone() &&
 		m.MinimockIntrospectTokenDone() &&

@@ -35,4 +35,5 @@ type ClientApplication struct {
 	DefaultIDP             string
 	AllowedAudiences       []string
 	ClientType             string
+	EnforceRTR             bool
 }

@@ -490,3 +490,112 @@ func TestOAuthService_ExchangeCodeForTokens_DPoP(t *testing.T) {
 		t.Errorf("expected AccessToken 'dpop-access-token', got %s", tokens.AccessToken)
 	}
 }
+
+func TestOAuthService_ExchangeRefreshTokenForTokens_Success(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+	service := NewOAuthService(storage, crypto, nil, nil, portmock.NewMockClock(time.Now()))
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "example.com"}
+	clientID := "client-id"
+	refreshTokenStr := "old-refresh-token"
+
+	client := &model.ClientApplication{
+		ID:                   uuid.NewString(),
+		TenantID:             tenantID,
+		ClientID:             clientID,
+		Algorithm:            model.AlgRS256,
+		AccessTokenLifetime:  time.Hour,
+		RefreshTokenLifetime: 24 * time.Hour,
+		EnforceRTR:           true,
+	}
+
+	storedToken := &model.RefreshToken{
+		TokenID:       refreshTokenStr,
+		TenantID:      tenantID,
+		ClientID:      clientID,
+		Subject:       "user-123",
+		Scopes:        []string{"openid", "profile"},
+		TokenFamilyID: "family-1",
+		IsUsed:        false,
+		ExpiresAt:     time.Now().Add(time.Hour),
+	}
+
+	storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(client, nil)
+	storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(tenant, nil)
+	storage.GetRefreshTokenMock.Expect(context.Background(), refreshTokenStr).Return(storedToken, nil)
+	storage.MarkRefreshTokenUsedMock.Expect(context.Background(), refreshTokenStr).Return(nil)
+	storage.SaveRefreshTokenMock.Set(func(ctx context.Context, token model.RefreshToken) error {
+		if token.TokenFamilyID != "family-1" {
+			t.Errorf("expected inherited TokenFamilyID 'family-1', got %s", token.TokenFamilyID)
+		}
+		if token.IsUsed {
+			t.Errorf("expected new token to be unused")
+		}
+		return nil
+	})
+
+	crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+		return "new-access-token", nil
+	})
+
+	tokens, err := service.ExchangeRefreshTokenForTokens(context.Background(), tenantID, clientID, refreshTokenStr, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if tokens.AccessToken != "new-access-token" {
+		t.Errorf("expected AccessToken 'new-access-token', got %s", tokens.AccessToken)
+	}
+	if tokens.RefreshToken == refreshTokenStr {
+		t.Errorf("expected refresh token to be rotated")
+	}
+}
+
+func TestOAuthService_ExchangeRefreshTokenForTokens_BreachDetection(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+	service := NewOAuthService(storage, crypto, nil, nil, portmock.NewMockClock(time.Now()))
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "example.com"}
+	clientID := "client-id"
+	refreshTokenStr := "used-refresh-token"
+
+	client := &model.ClientApplication{
+		ID:                   uuid.NewString(),
+		TenantID:             tenantID,
+		ClientID:             clientID,
+		Algorithm:            model.AlgRS256,
+		AccessTokenLifetime:  time.Hour,
+		RefreshTokenLifetime: 24 * time.Hour,
+		EnforceRTR:           true,
+	}
+
+	storedToken := &model.RefreshToken{
+		TokenID:       refreshTokenStr,
+		TenantID:      tenantID,
+		ClientID:      clientID,
+		Subject:       "user-123",
+		Scopes:        []string{"openid", "profile"},
+		TokenFamilyID: "family-1",
+		IsUsed:        true, // Already used! Trigger breach detection
+		ExpiresAt:     time.Now().Add(time.Hour),
+	}
+
+	storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(client, nil)
+	storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(tenant, nil)
+	storage.GetRefreshTokenMock.Expect(context.Background(), refreshTokenStr).Return(storedToken, nil)
+	storage.RevokeRefreshTokenFamilyMock.Expect(context.Background(), "family-1").Return(nil)
+
+	_, err := service.ExchangeRefreshTokenForTokens(context.Background(), tenantID, clientID, refreshTokenStr, "")
+	if err == nil {
+		t.Fatalf("expected error due to breach detection, got nil")
+	}
+	if err.Error() != "invalid_grant" {
+		t.Errorf("expected error 'invalid_grant', got %s", err.Error())
+	}
+}

@@ -69,6 +69,46 @@ func (h *HttpAdapter) authenticateClient(w http.ResponseWriter, r *http.Request,
 	return client, nil
 }
 
+func (h *HttpAdapter) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request, tenant *model.Tenant) {
+	clientID := r.FormValue("client_id")
+	refreshTokenStr := r.FormValue("refresh_token")
+	if clientID == "" || refreshTokenStr == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "client_id and refresh_token are required"})
+		return
+	}
+
+	client, err := h.storagePort.GetClient(r.Context(), tenant.ID, clientID)
+	if err != nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
+		return
+	}
+
+	if client.ClientType == model.ClientTypeConfidential {
+		clientSecret := r.FormValue("client_secret")
+		if client.ClientSecret == nil || *client.ClientSecret != clientSecret {
+			respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
+			return
+		}
+	}
+
+	dpopJKT, err := h.validateDPoPProof(r)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": errInvalidDPoP + err.Error()})
+		return
+	}
+
+	tokens, err := h.authPort.ExchangeRefreshTokenForTokens(r.Context(), tenant.ID, clientID, refreshTokenStr, dpopJKT)
+	if err != nil {
+		if err.Error() == "invalid_grant" {
+			respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant"})
+			return
+		}
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
+		return
+	}
+	respondJSON(w, http.StatusOK, tokens)
+}
+
 func (h *HttpAdapter) handleClientCredentialsGrant(w http.ResponseWriter, r *http.Request, tenant *model.Tenant) {
 	client, err := h.authenticateClient(w, r, tenant)
 	if err != nil {
@@ -124,6 +164,8 @@ func (h *HttpAdapter) token(w http.ResponseWriter, r *http.Request) {
 		h.handleAuthorizationCodeGrant(w, r, tenant)
 	case "client_credentials":
 		h.handleClientCredentialsGrant(w, r, tenant)
+	case "refresh_token":
+		h.handleRefreshTokenGrant(w, r, tenant)
 	default:
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported grant_type"})
 	}

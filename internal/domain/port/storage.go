@@ -59,6 +59,11 @@ type Storage interface {
 	GetAndConsumePAR(ctx context.Context, tenantID uuid.UUID, requestURI string) (*model.PushedAuthorizationRequest, error)
 	IsDPoPProofUsed(ctx context.Context, jti string) (bool, error)
 	SaveDPoPProof(ctx context.Context, jti string, expiresAt time.Time) error
+
+	SaveRefreshToken(ctx context.Context, token model.RefreshToken) error
+	GetRefreshToken(ctx context.Context, tokenID string) (*model.RefreshToken, error)
+	MarkRefreshTokenUsed(ctx context.Context, tokenID string) error
+	RevokeRefreshTokenFamily(ctx context.Context, tokenFamilyID string) error
 }
 
 // Errors returned by the StoragePort.

@@ -140,6 +140,13 @@ type StorageMock struct {
 	beforeGetPasswordCredentialCounter uint64
 	GetPasswordCredentialMock          mStorageMockGetPasswordCredential
 
+	funcGetRefreshToken          func(ctx context.Context, tokenID string) (rp1 *model.RefreshToken, err error)
+	funcGetRefreshTokenOrigin    string
+	inspectFuncGetRefreshToken   func(ctx context.Context, tokenID string)
+	afterGetRefreshTokenCounter  uint64
+	beforeGetRefreshTokenCounter uint64
+	GetRefreshTokenMock          mStorageMockGetRefreshToken
+
 	funcGetUserIdentities          func(ctx context.Context, userProfileID uuid.UUID) (ua1 []model.UserIdentity, err error)
 	funcGetUserIdentitiesOrigin    string
 	inspectFuncGetUserIdentities   func(ctx context.Context, userProfileID uuid.UUID)
@@ -182,6 +189,13 @@ type StorageMock struct {
 	beforeIsTokenRevokedCounter uint64
 	IsTokenRevokedMock          mStorageMockIsTokenRevoked
 
+	funcMarkRefreshTokenUsed          func(ctx context.Context, tokenID string) (err error)
+	funcMarkRefreshTokenUsedOrigin    string
+	inspectFuncMarkRefreshTokenUsed   func(ctx context.Context, tokenID string)
+	afterMarkRefreshTokenUsedCounter  uint64
+	beforeMarkRefreshTokenUsedCounter uint64
+	MarkRefreshTokenUsedMock          mStorageMockMarkRefreshTokenUsed
+
 	funcPruneExpiredTokens          func(ctx context.Context) (err error)
 	funcPruneExpiredTokensOrigin    string
 	inspectFuncPruneExpiredTokens   func(ctx context.Context)
@@ -202,6 +216,13 @@ type StorageMock struct {
 	afterResolveTenantByIDCounter  uint64
 	beforeResolveTenantByIDCounter uint64
 	ResolveTenantByIDMock          mStorageMockResolveTenantByID
+
+	funcRevokeRefreshTokenFamily          func(ctx context.Context, tokenFamilyID string) (err error)
+	funcRevokeRefreshTokenFamilyOrigin    string
+	inspectFuncRevokeRefreshTokenFamily   func(ctx context.Context, tokenFamilyID string)
+	afterRevokeRefreshTokenFamilyCounter  uint64
+	beforeRevokeRefreshTokenFamilyCounter uint64
+	RevokeRefreshTokenFamilyMock          mStorageMockRevokeRefreshTokenFamily
 
 	funcRevokeSession          func(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) (err error)
 	funcRevokeSessionOrigin    string
@@ -258,6 +279,13 @@ type StorageMock struct {
 	afterSavePasswordCredentialCounter  uint64
 	beforeSavePasswordCredentialCounter uint64
 	SavePasswordCredentialMock          mStorageMockSavePasswordCredential
+
+	funcSaveRefreshToken          func(ctx context.Context, token model.RefreshToken) (err error)
+	funcSaveRefreshTokenOrigin    string
+	inspectFuncSaveRefreshToken   func(ctx context.Context, token model.RefreshToken)
+	afterSaveRefreshTokenCounter  uint64
+	beforeSaveRefreshTokenCounter uint64
+	SaveRefreshTokenMock          mStorageMockSaveRefreshToken
 
 	funcSaveUserProfile          func(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) (err error)
 	funcSaveUserProfileOrigin    string
@@ -340,6 +368,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 	m.GetPasswordCredentialMock = mStorageMockGetPasswordCredential{mock: m}
 	m.GetPasswordCredentialMock.callArgs = []*StorageMockGetPasswordCredentialParams{}
 
+	m.GetRefreshTokenMock = mStorageMockGetRefreshToken{mock: m}
+	m.GetRefreshTokenMock.callArgs = []*StorageMockGetRefreshTokenParams{}
+
 	m.GetUserIdentitiesMock = mStorageMockGetUserIdentities{mock: m}
 	m.GetUserIdentitiesMock.callArgs = []*StorageMockGetUserIdentitiesParams{}
 
@@ -358,6 +389,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 	m.IsTokenRevokedMock = mStorageMockIsTokenRevoked{mock: m}
 	m.IsTokenRevokedMock.callArgs = []*StorageMockIsTokenRevokedParams{}
 
+	m.MarkRefreshTokenUsedMock = mStorageMockMarkRefreshTokenUsed{mock: m}
+	m.MarkRefreshTokenUsedMock.callArgs = []*StorageMockMarkRefreshTokenUsedParams{}
+
 	m.PruneExpiredTokensMock = mStorageMockPruneExpiredTokens{mock: m}
 	m.PruneExpiredTokensMock.callArgs = []*StorageMockPruneExpiredTokensParams{}
 
@@ -366,6 +400,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 
 	m.ResolveTenantByIDMock = mStorageMockResolveTenantByID{mock: m}
 	m.ResolveTenantByIDMock.callArgs = []*StorageMockResolveTenantByIDParams{}
+
+	m.RevokeRefreshTokenFamilyMock = mStorageMockRevokeRefreshTokenFamily{mock: m}
+	m.RevokeRefreshTokenFamilyMock.callArgs = []*StorageMockRevokeRefreshTokenFamilyParams{}
 
 	m.RevokeSessionMock = mStorageMockRevokeSession{mock: m}
 	m.RevokeSessionMock.callArgs = []*StorageMockRevokeSessionParams{}
@@ -390,6 +427,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 
 	m.SavePasswordCredentialMock = mStorageMockSavePasswordCredential{mock: m}
 	m.SavePasswordCredentialMock.callArgs = []*StorageMockSavePasswordCredentialParams{}
+
+	m.SaveRefreshTokenMock = mStorageMockSaveRefreshToken{mock: m}
+	m.SaveRefreshTokenMock.callArgs = []*StorageMockSaveRefreshTokenParams{}
 
 	m.SaveUserProfileMock = mStorageMockSaveUserProfile{mock: m}
 	m.SaveUserProfileMock.callArgs = []*StorageMockSaveUserProfileParams{}
@@ -6571,6 +6611,349 @@ func (m *StorageMock) MinimockGetPasswordCredentialInspect() {
 	}
 }
 
+type mStorageMockGetRefreshToken struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockGetRefreshTokenExpectation
+	expectations       []*StorageMockGetRefreshTokenExpectation
+
+	callArgs []*StorageMockGetRefreshTokenParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockGetRefreshTokenExpectation specifies expectation struct of the Storage.GetRefreshToken
+type StorageMockGetRefreshTokenExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockGetRefreshTokenParams
+	paramPtrs          *StorageMockGetRefreshTokenParamPtrs
+	expectationOrigins StorageMockGetRefreshTokenExpectationOrigins
+	results            *StorageMockGetRefreshTokenResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockGetRefreshTokenParams contains parameters of the Storage.GetRefreshToken
+type StorageMockGetRefreshTokenParams struct {
+	ctx     context.Context
+	tokenID string
+}
+
+// StorageMockGetRefreshTokenParamPtrs contains pointers to parameters of the Storage.GetRefreshToken
+type StorageMockGetRefreshTokenParamPtrs struct {
+	ctx     *context.Context
+	tokenID *string
+}
+
+// StorageMockGetRefreshTokenResults contains results of the Storage.GetRefreshToken
+type StorageMockGetRefreshTokenResults struct {
+	rp1 *model.RefreshToken
+	err error
+}
+
+// StorageMockGetRefreshTokenOrigins contains origins of expectations of the Storage.GetRefreshToken
+type StorageMockGetRefreshTokenExpectationOrigins struct {
+	origin        string
+	originCtx     string
+	originTokenID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetRefreshToken *mStorageMockGetRefreshToken) Optional() *mStorageMockGetRefreshToken {
+	mmGetRefreshToken.optional = true
+	return mmGetRefreshToken
+}
+
+// Expect sets up expected params for Storage.GetRefreshToken
+func (mmGetRefreshToken *mStorageMockGetRefreshToken) Expect(ctx context.Context, tokenID string) *mStorageMockGetRefreshToken {
+	if mmGetRefreshToken.mock.funcGetRefreshToken != nil {
+		mmGetRefreshToken.mock.t.Fatalf("StorageMock.GetRefreshToken mock is already set by Set")
+	}
+
+	if mmGetRefreshToken.defaultExpectation == nil {
+		mmGetRefreshToken.defaultExpectation = &StorageMockGetRefreshTokenExpectation{}
+	}
+
+	if mmGetRefreshToken.defaultExpectation.paramPtrs != nil {
+		mmGetRefreshToken.mock.t.Fatalf("StorageMock.GetRefreshToken mock is already set by ExpectParams functions")
+	}
+
+	mmGetRefreshToken.defaultExpectation.params = &StorageMockGetRefreshTokenParams{ctx, tokenID}
+	mmGetRefreshToken.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetRefreshToken.expectations {
+		if minimock.Equal(e.params, mmGetRefreshToken.defaultExpectation.params) {
+			mmGetRefreshToken.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetRefreshToken.defaultExpectation.params)
+		}
+	}
+
+	return mmGetRefreshToken
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.GetRefreshToken
+func (mmGetRefreshToken *mStorageMockGetRefreshToken) ExpectCtxParam1(ctx context.Context) *mStorageMockGetRefreshToken {
+	if mmGetRefreshToken.mock.funcGetRefreshToken != nil {
+		mmGetRefreshToken.mock.t.Fatalf("StorageMock.GetRefreshToken mock is already set by Set")
+	}
+
+	if mmGetRefreshToken.defaultExpectation == nil {
+		mmGetRefreshToken.defaultExpectation = &StorageMockGetRefreshTokenExpectation{}
+	}
+
+	if mmGetRefreshToken.defaultExpectation.params != nil {
+		mmGetRefreshToken.mock.t.Fatalf("StorageMock.GetRefreshToken mock is already set by Expect")
+	}
+
+	if mmGetRefreshToken.defaultExpectation.paramPtrs == nil {
+		mmGetRefreshToken.defaultExpectation.paramPtrs = &StorageMockGetRefreshTokenParamPtrs{}
+	}
+	mmGetRefreshToken.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetRefreshToken.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetRefreshToken
+}
+
+// ExpectTokenIDParam2 sets up expected param tokenID for Storage.GetRefreshToken
+func (mmGetRefreshToken *mStorageMockGetRefreshToken) ExpectTokenIDParam2(tokenID string) *mStorageMockGetRefreshToken {
+	if mmGetRefreshToken.mock.funcGetRefreshToken != nil {
+		mmGetRefreshToken.mock.t.Fatalf("StorageMock.GetRefreshToken mock is already set by Set")
+	}
+
+	if mmGetRefreshToken.defaultExpectation == nil {
+		mmGetRefreshToken.defaultExpectation = &StorageMockGetRefreshTokenExpectation{}
+	}
+
+	if mmGetRefreshToken.defaultExpectation.params != nil {
+		mmGetRefreshToken.mock.t.Fatalf("StorageMock.GetRefreshToken mock is already set by Expect")
+	}
+
+	if mmGetRefreshToken.defaultExpectation.paramPtrs == nil {
+		mmGetRefreshToken.defaultExpectation.paramPtrs = &StorageMockGetRefreshTokenParamPtrs{}
+	}
+	mmGetRefreshToken.defaultExpectation.paramPtrs.tokenID = &tokenID
+	mmGetRefreshToken.defaultExpectation.expectationOrigins.originTokenID = minimock.CallerInfo(1)
+
+	return mmGetRefreshToken
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.GetRefreshToken
+func (mmGetRefreshToken *mStorageMockGetRefreshToken) Inspect(f func(ctx context.Context, tokenID string)) *mStorageMockGetRefreshToken {
+	if mmGetRefreshToken.mock.inspectFuncGetRefreshToken != nil {
+		mmGetRefreshToken.mock.t.Fatalf("Inspect function is already set for StorageMock.GetRefreshToken")
+	}
+
+	mmGetRefreshToken.mock.inspectFuncGetRefreshToken = f
+
+	return mmGetRefreshToken
+}
+
+// Return sets up results that will be returned by Storage.GetRefreshToken
+func (mmGetRefreshToken *mStorageMockGetRefreshToken) Return(rp1 *model.RefreshToken, err error) *StorageMock {
+	if mmGetRefreshToken.mock.funcGetRefreshToken != nil {
+		mmGetRefreshToken.mock.t.Fatalf("StorageMock.GetRefreshToken mock is already set by Set")
+	}
+
+	if mmGetRefreshToken.defaultExpectation == nil {
+		mmGetRefreshToken.defaultExpectation = &StorageMockGetRefreshTokenExpectation{mock: mmGetRefreshToken.mock}
+	}
+	mmGetRefreshToken.defaultExpectation.results = &StorageMockGetRefreshTokenResults{rp1, err}
+	mmGetRefreshToken.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetRefreshToken.mock
+}
+
+// Set uses given function f to mock the Storage.GetRefreshToken method
+func (mmGetRefreshToken *mStorageMockGetRefreshToken) Set(f func(ctx context.Context, tokenID string) (rp1 *model.RefreshToken, err error)) *StorageMock {
+	if mmGetRefreshToken.defaultExpectation != nil {
+		mmGetRefreshToken.mock.t.Fatalf("Default expectation is already set for the Storage.GetRefreshToken method")
+	}
+
+	if len(mmGetRefreshToken.expectations) > 0 {
+		mmGetRefreshToken.mock.t.Fatalf("Some expectations are already set for the Storage.GetRefreshToken method")
+	}
+
+	mmGetRefreshToken.mock.funcGetRefreshToken = f
+	mmGetRefreshToken.mock.funcGetRefreshTokenOrigin = minimock.CallerInfo(1)
+	return mmGetRefreshToken.mock
+}
+
+// When sets expectation for the Storage.GetRefreshToken which will trigger the result defined by the following
+// Then helper
+func (mmGetRefreshToken *mStorageMockGetRefreshToken) When(ctx context.Context, tokenID string) *StorageMockGetRefreshTokenExpectation {
+	if mmGetRefreshToken.mock.funcGetRefreshToken != nil {
+		mmGetRefreshToken.mock.t.Fatalf("StorageMock.GetRefreshToken mock is already set by Set")
+	}
+
+	expectation := &StorageMockGetRefreshTokenExpectation{
+		mock:               mmGetRefreshToken.mock,
+		params:             &StorageMockGetRefreshTokenParams{ctx, tokenID},
+		expectationOrigins: StorageMockGetRefreshTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetRefreshToken.expectations = append(mmGetRefreshToken.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.GetRefreshToken return parameters for the expectation previously defined by the When method
+func (e *StorageMockGetRefreshTokenExpectation) Then(rp1 *model.RefreshToken, err error) *StorageMock {
+	e.results = &StorageMockGetRefreshTokenResults{rp1, err}
+	return e.mock
+}
+
+// Times sets number of times Storage.GetRefreshToken should be invoked
+func (mmGetRefreshToken *mStorageMockGetRefreshToken) Times(n uint64) *mStorageMockGetRefreshToken {
+	if n == 0 {
+		mmGetRefreshToken.mock.t.Fatalf("Times of StorageMock.GetRefreshToken mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetRefreshToken.expectedInvocations, n)
+	mmGetRefreshToken.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetRefreshToken
+}
+
+func (mmGetRefreshToken *mStorageMockGetRefreshToken) invocationsDone() bool {
+	if len(mmGetRefreshToken.expectations) == 0 && mmGetRefreshToken.defaultExpectation == nil && mmGetRefreshToken.mock.funcGetRefreshToken == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetRefreshToken.mock.afterGetRefreshTokenCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetRefreshToken.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetRefreshToken implements mm_port.Storage
+func (mmGetRefreshToken *StorageMock) GetRefreshToken(ctx context.Context, tokenID string) (rp1 *model.RefreshToken, err error) {
+	mm_atomic.AddUint64(&mmGetRefreshToken.beforeGetRefreshTokenCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetRefreshToken.afterGetRefreshTokenCounter, 1)
+
+	mmGetRefreshToken.t.Helper()
+
+	if mmGetRefreshToken.inspectFuncGetRefreshToken != nil {
+		mmGetRefreshToken.inspectFuncGetRefreshToken(ctx, tokenID)
+	}
+
+	mm_params := StorageMockGetRefreshTokenParams{ctx, tokenID}
+
+	// Record call args
+	mmGetRefreshToken.GetRefreshTokenMock.mutex.Lock()
+	mmGetRefreshToken.GetRefreshTokenMock.callArgs = append(mmGetRefreshToken.GetRefreshTokenMock.callArgs, &mm_params)
+	mmGetRefreshToken.GetRefreshTokenMock.mutex.Unlock()
+
+	for _, e := range mmGetRefreshToken.GetRefreshTokenMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.rp1, e.results.err
+		}
+	}
+
+	if mmGetRefreshToken.GetRefreshTokenMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetRefreshToken.GetRefreshTokenMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetRefreshToken.GetRefreshTokenMock.defaultExpectation.params
+		mm_want_ptrs := mmGetRefreshToken.GetRefreshTokenMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockGetRefreshTokenParams{ctx, tokenID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetRefreshToken.t.Errorf("StorageMock.GetRefreshToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetRefreshToken.GetRefreshTokenMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tokenID != nil && !minimock.Equal(*mm_want_ptrs.tokenID, mm_got.tokenID) {
+				mmGetRefreshToken.t.Errorf("StorageMock.GetRefreshToken got unexpected parameter tokenID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetRefreshToken.GetRefreshTokenMock.defaultExpectation.expectationOrigins.originTokenID, *mm_want_ptrs.tokenID, mm_got.tokenID, minimock.Diff(*mm_want_ptrs.tokenID, mm_got.tokenID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetRefreshToken.t.Errorf("StorageMock.GetRefreshToken got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetRefreshToken.GetRefreshTokenMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetRefreshToken.GetRefreshTokenMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetRefreshToken.t.Fatal("No results are set for the StorageMock.GetRefreshToken")
+		}
+		return (*mm_results).rp1, (*mm_results).err
+	}
+	if mmGetRefreshToken.funcGetRefreshToken != nil {
+		return mmGetRefreshToken.funcGetRefreshToken(ctx, tokenID)
+	}
+	mmGetRefreshToken.t.Fatalf("Unexpected call to StorageMock.GetRefreshToken. %v %v", ctx, tokenID)
+	return
+}
+
+// GetRefreshTokenAfterCounter returns a count of finished StorageMock.GetRefreshToken invocations
+func (mmGetRefreshToken *StorageMock) GetRefreshTokenAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetRefreshToken.afterGetRefreshTokenCounter)
+}
+
+// GetRefreshTokenBeforeCounter returns a count of StorageMock.GetRefreshToken invocations
+func (mmGetRefreshToken *StorageMock) GetRefreshTokenBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetRefreshToken.beforeGetRefreshTokenCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.GetRefreshToken.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetRefreshToken *mStorageMockGetRefreshToken) Calls() []*StorageMockGetRefreshTokenParams {
+	mmGetRefreshToken.mutex.RLock()
+
+	argCopy := make([]*StorageMockGetRefreshTokenParams, len(mmGetRefreshToken.callArgs))
+	copy(argCopy, mmGetRefreshToken.callArgs)
+
+	mmGetRefreshToken.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetRefreshTokenDone returns true if the count of the GetRefreshToken invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockGetRefreshTokenDone() bool {
+	if m.GetRefreshTokenMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetRefreshTokenMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetRefreshTokenMock.invocationsDone()
+}
+
+// MinimockGetRefreshTokenInspect logs each unmet expectation
+func (m *StorageMock) MinimockGetRefreshTokenInspect() {
+	for _, e := range m.GetRefreshTokenMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.GetRefreshToken at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetRefreshTokenCounter := mm_atomic.LoadUint64(&m.afterGetRefreshTokenCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetRefreshTokenMock.defaultExpectation != nil && afterGetRefreshTokenCounter < 1 {
+		if m.GetRefreshTokenMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.GetRefreshToken at\n%s", m.GetRefreshTokenMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.GetRefreshToken at\n%s with params: %#v", m.GetRefreshTokenMock.defaultExpectation.expectationOrigins.origin, *m.GetRefreshTokenMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetRefreshToken != nil && afterGetRefreshTokenCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.GetRefreshToken at\n%s", m.funcGetRefreshTokenOrigin)
+	}
+
+	if !m.GetRefreshTokenMock.invocationsDone() && afterGetRefreshTokenCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.GetRefreshToken at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetRefreshTokenMock.expectedInvocations), m.GetRefreshTokenMock.expectedInvocationsOrigin, afterGetRefreshTokenCounter)
+	}
+}
+
 type mStorageMockGetUserIdentities struct {
 	optional           bool
 	mock               *StorageMock
@@ -8722,6 +9105,348 @@ func (m *StorageMock) MinimockIsTokenRevokedInspect() {
 	}
 }
 
+type mStorageMockMarkRefreshTokenUsed struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockMarkRefreshTokenUsedExpectation
+	expectations       []*StorageMockMarkRefreshTokenUsedExpectation
+
+	callArgs []*StorageMockMarkRefreshTokenUsedParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockMarkRefreshTokenUsedExpectation specifies expectation struct of the Storage.MarkRefreshTokenUsed
+type StorageMockMarkRefreshTokenUsedExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockMarkRefreshTokenUsedParams
+	paramPtrs          *StorageMockMarkRefreshTokenUsedParamPtrs
+	expectationOrigins StorageMockMarkRefreshTokenUsedExpectationOrigins
+	results            *StorageMockMarkRefreshTokenUsedResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockMarkRefreshTokenUsedParams contains parameters of the Storage.MarkRefreshTokenUsed
+type StorageMockMarkRefreshTokenUsedParams struct {
+	ctx     context.Context
+	tokenID string
+}
+
+// StorageMockMarkRefreshTokenUsedParamPtrs contains pointers to parameters of the Storage.MarkRefreshTokenUsed
+type StorageMockMarkRefreshTokenUsedParamPtrs struct {
+	ctx     *context.Context
+	tokenID *string
+}
+
+// StorageMockMarkRefreshTokenUsedResults contains results of the Storage.MarkRefreshTokenUsed
+type StorageMockMarkRefreshTokenUsedResults struct {
+	err error
+}
+
+// StorageMockMarkRefreshTokenUsedOrigins contains origins of expectations of the Storage.MarkRefreshTokenUsed
+type StorageMockMarkRefreshTokenUsedExpectationOrigins struct {
+	origin        string
+	originCtx     string
+	originTokenID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmMarkRefreshTokenUsed *mStorageMockMarkRefreshTokenUsed) Optional() *mStorageMockMarkRefreshTokenUsed {
+	mmMarkRefreshTokenUsed.optional = true
+	return mmMarkRefreshTokenUsed
+}
+
+// Expect sets up expected params for Storage.MarkRefreshTokenUsed
+func (mmMarkRefreshTokenUsed *mStorageMockMarkRefreshTokenUsed) Expect(ctx context.Context, tokenID string) *mStorageMockMarkRefreshTokenUsed {
+	if mmMarkRefreshTokenUsed.mock.funcMarkRefreshTokenUsed != nil {
+		mmMarkRefreshTokenUsed.mock.t.Fatalf("StorageMock.MarkRefreshTokenUsed mock is already set by Set")
+	}
+
+	if mmMarkRefreshTokenUsed.defaultExpectation == nil {
+		mmMarkRefreshTokenUsed.defaultExpectation = &StorageMockMarkRefreshTokenUsedExpectation{}
+	}
+
+	if mmMarkRefreshTokenUsed.defaultExpectation.paramPtrs != nil {
+		mmMarkRefreshTokenUsed.mock.t.Fatalf("StorageMock.MarkRefreshTokenUsed mock is already set by ExpectParams functions")
+	}
+
+	mmMarkRefreshTokenUsed.defaultExpectation.params = &StorageMockMarkRefreshTokenUsedParams{ctx, tokenID}
+	mmMarkRefreshTokenUsed.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmMarkRefreshTokenUsed.expectations {
+		if minimock.Equal(e.params, mmMarkRefreshTokenUsed.defaultExpectation.params) {
+			mmMarkRefreshTokenUsed.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmMarkRefreshTokenUsed.defaultExpectation.params)
+		}
+	}
+
+	return mmMarkRefreshTokenUsed
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.MarkRefreshTokenUsed
+func (mmMarkRefreshTokenUsed *mStorageMockMarkRefreshTokenUsed) ExpectCtxParam1(ctx context.Context) *mStorageMockMarkRefreshTokenUsed {
+	if mmMarkRefreshTokenUsed.mock.funcMarkRefreshTokenUsed != nil {
+		mmMarkRefreshTokenUsed.mock.t.Fatalf("StorageMock.MarkRefreshTokenUsed mock is already set by Set")
+	}
+
+	if mmMarkRefreshTokenUsed.defaultExpectation == nil {
+		mmMarkRefreshTokenUsed.defaultExpectation = &StorageMockMarkRefreshTokenUsedExpectation{}
+	}
+
+	if mmMarkRefreshTokenUsed.defaultExpectation.params != nil {
+		mmMarkRefreshTokenUsed.mock.t.Fatalf("StorageMock.MarkRefreshTokenUsed mock is already set by Expect")
+	}
+
+	if mmMarkRefreshTokenUsed.defaultExpectation.paramPtrs == nil {
+		mmMarkRefreshTokenUsed.defaultExpectation.paramPtrs = &StorageMockMarkRefreshTokenUsedParamPtrs{}
+	}
+	mmMarkRefreshTokenUsed.defaultExpectation.paramPtrs.ctx = &ctx
+	mmMarkRefreshTokenUsed.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmMarkRefreshTokenUsed
+}
+
+// ExpectTokenIDParam2 sets up expected param tokenID for Storage.MarkRefreshTokenUsed
+func (mmMarkRefreshTokenUsed *mStorageMockMarkRefreshTokenUsed) ExpectTokenIDParam2(tokenID string) *mStorageMockMarkRefreshTokenUsed {
+	if mmMarkRefreshTokenUsed.mock.funcMarkRefreshTokenUsed != nil {
+		mmMarkRefreshTokenUsed.mock.t.Fatalf("StorageMock.MarkRefreshTokenUsed mock is already set by Set")
+	}
+
+	if mmMarkRefreshTokenUsed.defaultExpectation == nil {
+		mmMarkRefreshTokenUsed.defaultExpectation = &StorageMockMarkRefreshTokenUsedExpectation{}
+	}
+
+	if mmMarkRefreshTokenUsed.defaultExpectation.params != nil {
+		mmMarkRefreshTokenUsed.mock.t.Fatalf("StorageMock.MarkRefreshTokenUsed mock is already set by Expect")
+	}
+
+	if mmMarkRefreshTokenUsed.defaultExpectation.paramPtrs == nil {
+		mmMarkRefreshTokenUsed.defaultExpectation.paramPtrs = &StorageMockMarkRefreshTokenUsedParamPtrs{}
+	}
+	mmMarkRefreshTokenUsed.defaultExpectation.paramPtrs.tokenID = &tokenID
+	mmMarkRefreshTokenUsed.defaultExpectation.expectationOrigins.originTokenID = minimock.CallerInfo(1)
+
+	return mmMarkRefreshTokenUsed
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.MarkRefreshTokenUsed
+func (mmMarkRefreshTokenUsed *mStorageMockMarkRefreshTokenUsed) Inspect(f func(ctx context.Context, tokenID string)) *mStorageMockMarkRefreshTokenUsed {
+	if mmMarkRefreshTokenUsed.mock.inspectFuncMarkRefreshTokenUsed != nil {
+		mmMarkRefreshTokenUsed.mock.t.Fatalf("Inspect function is already set for StorageMock.MarkRefreshTokenUsed")
+	}
+
+	mmMarkRefreshTokenUsed.mock.inspectFuncMarkRefreshTokenUsed = f
+
+	return mmMarkRefreshTokenUsed
+}
+
+// Return sets up results that will be returned by Storage.MarkRefreshTokenUsed
+func (mmMarkRefreshTokenUsed *mStorageMockMarkRefreshTokenUsed) Return(err error) *StorageMock {
+	if mmMarkRefreshTokenUsed.mock.funcMarkRefreshTokenUsed != nil {
+		mmMarkRefreshTokenUsed.mock.t.Fatalf("StorageMock.MarkRefreshTokenUsed mock is already set by Set")
+	}
+
+	if mmMarkRefreshTokenUsed.defaultExpectation == nil {
+		mmMarkRefreshTokenUsed.defaultExpectation = &StorageMockMarkRefreshTokenUsedExpectation{mock: mmMarkRefreshTokenUsed.mock}
+	}
+	mmMarkRefreshTokenUsed.defaultExpectation.results = &StorageMockMarkRefreshTokenUsedResults{err}
+	mmMarkRefreshTokenUsed.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmMarkRefreshTokenUsed.mock
+}
+
+// Set uses given function f to mock the Storage.MarkRefreshTokenUsed method
+func (mmMarkRefreshTokenUsed *mStorageMockMarkRefreshTokenUsed) Set(f func(ctx context.Context, tokenID string) (err error)) *StorageMock {
+	if mmMarkRefreshTokenUsed.defaultExpectation != nil {
+		mmMarkRefreshTokenUsed.mock.t.Fatalf("Default expectation is already set for the Storage.MarkRefreshTokenUsed method")
+	}
+
+	if len(mmMarkRefreshTokenUsed.expectations) > 0 {
+		mmMarkRefreshTokenUsed.mock.t.Fatalf("Some expectations are already set for the Storage.MarkRefreshTokenUsed method")
+	}
+
+	mmMarkRefreshTokenUsed.mock.funcMarkRefreshTokenUsed = f
+	mmMarkRefreshTokenUsed.mock.funcMarkRefreshTokenUsedOrigin = minimock.CallerInfo(1)
+	return mmMarkRefreshTokenUsed.mock
+}
+
+// When sets expectation for the Storage.MarkRefreshTokenUsed which will trigger the result defined by the following
+// Then helper
+func (mmMarkRefreshTokenUsed *mStorageMockMarkRefreshTokenUsed) When(ctx context.Context, tokenID string) *StorageMockMarkRefreshTokenUsedExpectation {
+	if mmMarkRefreshTokenUsed.mock.funcMarkRefreshTokenUsed != nil {
+		mmMarkRefreshTokenUsed.mock.t.Fatalf("StorageMock.MarkRefreshTokenUsed mock is already set by Set")
+	}
+
+	expectation := &StorageMockMarkRefreshTokenUsedExpectation{
+		mock:               mmMarkRefreshTokenUsed.mock,
+		params:             &StorageMockMarkRefreshTokenUsedParams{ctx, tokenID},
+		expectationOrigins: StorageMockMarkRefreshTokenUsedExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmMarkRefreshTokenUsed.expectations = append(mmMarkRefreshTokenUsed.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.MarkRefreshTokenUsed return parameters for the expectation previously defined by the When method
+func (e *StorageMockMarkRefreshTokenUsedExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockMarkRefreshTokenUsedResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.MarkRefreshTokenUsed should be invoked
+func (mmMarkRefreshTokenUsed *mStorageMockMarkRefreshTokenUsed) Times(n uint64) *mStorageMockMarkRefreshTokenUsed {
+	if n == 0 {
+		mmMarkRefreshTokenUsed.mock.t.Fatalf("Times of StorageMock.MarkRefreshTokenUsed mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmMarkRefreshTokenUsed.expectedInvocations, n)
+	mmMarkRefreshTokenUsed.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmMarkRefreshTokenUsed
+}
+
+func (mmMarkRefreshTokenUsed *mStorageMockMarkRefreshTokenUsed) invocationsDone() bool {
+	if len(mmMarkRefreshTokenUsed.expectations) == 0 && mmMarkRefreshTokenUsed.defaultExpectation == nil && mmMarkRefreshTokenUsed.mock.funcMarkRefreshTokenUsed == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmMarkRefreshTokenUsed.mock.afterMarkRefreshTokenUsedCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmMarkRefreshTokenUsed.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// MarkRefreshTokenUsed implements mm_port.Storage
+func (mmMarkRefreshTokenUsed *StorageMock) MarkRefreshTokenUsed(ctx context.Context, tokenID string) (err error) {
+	mm_atomic.AddUint64(&mmMarkRefreshTokenUsed.beforeMarkRefreshTokenUsedCounter, 1)
+	defer mm_atomic.AddUint64(&mmMarkRefreshTokenUsed.afterMarkRefreshTokenUsedCounter, 1)
+
+	mmMarkRefreshTokenUsed.t.Helper()
+
+	if mmMarkRefreshTokenUsed.inspectFuncMarkRefreshTokenUsed != nil {
+		mmMarkRefreshTokenUsed.inspectFuncMarkRefreshTokenUsed(ctx, tokenID)
+	}
+
+	mm_params := StorageMockMarkRefreshTokenUsedParams{ctx, tokenID}
+
+	// Record call args
+	mmMarkRefreshTokenUsed.MarkRefreshTokenUsedMock.mutex.Lock()
+	mmMarkRefreshTokenUsed.MarkRefreshTokenUsedMock.callArgs = append(mmMarkRefreshTokenUsed.MarkRefreshTokenUsedMock.callArgs, &mm_params)
+	mmMarkRefreshTokenUsed.MarkRefreshTokenUsedMock.mutex.Unlock()
+
+	for _, e := range mmMarkRefreshTokenUsed.MarkRefreshTokenUsedMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmMarkRefreshTokenUsed.MarkRefreshTokenUsedMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmMarkRefreshTokenUsed.MarkRefreshTokenUsedMock.defaultExpectation.Counter, 1)
+		mm_want := mmMarkRefreshTokenUsed.MarkRefreshTokenUsedMock.defaultExpectation.params
+		mm_want_ptrs := mmMarkRefreshTokenUsed.MarkRefreshTokenUsedMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockMarkRefreshTokenUsedParams{ctx, tokenID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmMarkRefreshTokenUsed.t.Errorf("StorageMock.MarkRefreshTokenUsed got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmMarkRefreshTokenUsed.MarkRefreshTokenUsedMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tokenID != nil && !minimock.Equal(*mm_want_ptrs.tokenID, mm_got.tokenID) {
+				mmMarkRefreshTokenUsed.t.Errorf("StorageMock.MarkRefreshTokenUsed got unexpected parameter tokenID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmMarkRefreshTokenUsed.MarkRefreshTokenUsedMock.defaultExpectation.expectationOrigins.originTokenID, *mm_want_ptrs.tokenID, mm_got.tokenID, minimock.Diff(*mm_want_ptrs.tokenID, mm_got.tokenID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmMarkRefreshTokenUsed.t.Errorf("StorageMock.MarkRefreshTokenUsed got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmMarkRefreshTokenUsed.MarkRefreshTokenUsedMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmMarkRefreshTokenUsed.MarkRefreshTokenUsedMock.defaultExpectation.results
+		if mm_results == nil {
+			mmMarkRefreshTokenUsed.t.Fatal("No results are set for the StorageMock.MarkRefreshTokenUsed")
+		}
+		return (*mm_results).err
+	}
+	if mmMarkRefreshTokenUsed.funcMarkRefreshTokenUsed != nil {
+		return mmMarkRefreshTokenUsed.funcMarkRefreshTokenUsed(ctx, tokenID)
+	}
+	mmMarkRefreshTokenUsed.t.Fatalf("Unexpected call to StorageMock.MarkRefreshTokenUsed. %v %v", ctx, tokenID)
+	return
+}
+
+// MarkRefreshTokenUsedAfterCounter returns a count of finished StorageMock.MarkRefreshTokenUsed invocations
+func (mmMarkRefreshTokenUsed *StorageMock) MarkRefreshTokenUsedAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmMarkRefreshTokenUsed.afterMarkRefreshTokenUsedCounter)
+}
+
+// MarkRefreshTokenUsedBeforeCounter returns a count of StorageMock.MarkRefreshTokenUsed invocations
+func (mmMarkRefreshTokenUsed *StorageMock) MarkRefreshTokenUsedBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmMarkRefreshTokenUsed.beforeMarkRefreshTokenUsedCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.MarkRefreshTokenUsed.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmMarkRefreshTokenUsed *mStorageMockMarkRefreshTokenUsed) Calls() []*StorageMockMarkRefreshTokenUsedParams {
+	mmMarkRefreshTokenUsed.mutex.RLock()
+
+	argCopy := make([]*StorageMockMarkRefreshTokenUsedParams, len(mmMarkRefreshTokenUsed.callArgs))
+	copy(argCopy, mmMarkRefreshTokenUsed.callArgs)
+
+	mmMarkRefreshTokenUsed.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockMarkRefreshTokenUsedDone returns true if the count of the MarkRefreshTokenUsed invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockMarkRefreshTokenUsedDone() bool {
+	if m.MarkRefreshTokenUsedMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.MarkRefreshTokenUsedMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.MarkRefreshTokenUsedMock.invocationsDone()
+}
+
+// MinimockMarkRefreshTokenUsedInspect logs each unmet expectation
+func (m *StorageMock) MinimockMarkRefreshTokenUsedInspect() {
+	for _, e := range m.MarkRefreshTokenUsedMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.MarkRefreshTokenUsed at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterMarkRefreshTokenUsedCounter := mm_atomic.LoadUint64(&m.afterMarkRefreshTokenUsedCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.MarkRefreshTokenUsedMock.defaultExpectation != nil && afterMarkRefreshTokenUsedCounter < 1 {
+		if m.MarkRefreshTokenUsedMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.MarkRefreshTokenUsed at\n%s", m.MarkRefreshTokenUsedMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.MarkRefreshTokenUsed at\n%s with params: %#v", m.MarkRefreshTokenUsedMock.defaultExpectation.expectationOrigins.origin, *m.MarkRefreshTokenUsedMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcMarkRefreshTokenUsed != nil && afterMarkRefreshTokenUsedCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.MarkRefreshTokenUsed at\n%s", m.funcMarkRefreshTokenUsedOrigin)
+	}
+
+	if !m.MarkRefreshTokenUsedMock.invocationsDone() && afterMarkRefreshTokenUsedCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.MarkRefreshTokenUsed at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.MarkRefreshTokenUsedMock.expectedInvocations), m.MarkRefreshTokenUsedMock.expectedInvocationsOrigin, afterMarkRefreshTokenUsedCounter)
+	}
+}
+
 type mStorageMockPruneExpiredTokens struct {
 	optional           bool
 	mock               *StorageMock
@@ -9716,6 +10441,348 @@ func (m *StorageMock) MinimockResolveTenantByIDInspect() {
 	if !m.ResolveTenantByIDMock.invocationsDone() && afterResolveTenantByIDCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageMock.ResolveTenantByID at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ResolveTenantByIDMock.expectedInvocations), m.ResolveTenantByIDMock.expectedInvocationsOrigin, afterResolveTenantByIDCounter)
+	}
+}
+
+type mStorageMockRevokeRefreshTokenFamily struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockRevokeRefreshTokenFamilyExpectation
+	expectations       []*StorageMockRevokeRefreshTokenFamilyExpectation
+
+	callArgs []*StorageMockRevokeRefreshTokenFamilyParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockRevokeRefreshTokenFamilyExpectation specifies expectation struct of the Storage.RevokeRefreshTokenFamily
+type StorageMockRevokeRefreshTokenFamilyExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockRevokeRefreshTokenFamilyParams
+	paramPtrs          *StorageMockRevokeRefreshTokenFamilyParamPtrs
+	expectationOrigins StorageMockRevokeRefreshTokenFamilyExpectationOrigins
+	results            *StorageMockRevokeRefreshTokenFamilyResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockRevokeRefreshTokenFamilyParams contains parameters of the Storage.RevokeRefreshTokenFamily
+type StorageMockRevokeRefreshTokenFamilyParams struct {
+	ctx           context.Context
+	tokenFamilyID string
+}
+
+// StorageMockRevokeRefreshTokenFamilyParamPtrs contains pointers to parameters of the Storage.RevokeRefreshTokenFamily
+type StorageMockRevokeRefreshTokenFamilyParamPtrs struct {
+	ctx           *context.Context
+	tokenFamilyID *string
+}
+
+// StorageMockRevokeRefreshTokenFamilyResults contains results of the Storage.RevokeRefreshTokenFamily
+type StorageMockRevokeRefreshTokenFamilyResults struct {
+	err error
+}
+
+// StorageMockRevokeRefreshTokenFamilyOrigins contains origins of expectations of the Storage.RevokeRefreshTokenFamily
+type StorageMockRevokeRefreshTokenFamilyExpectationOrigins struct {
+	origin              string
+	originCtx           string
+	originTokenFamilyID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmRevokeRefreshTokenFamily *mStorageMockRevokeRefreshTokenFamily) Optional() *mStorageMockRevokeRefreshTokenFamily {
+	mmRevokeRefreshTokenFamily.optional = true
+	return mmRevokeRefreshTokenFamily
+}
+
+// Expect sets up expected params for Storage.RevokeRefreshTokenFamily
+func (mmRevokeRefreshTokenFamily *mStorageMockRevokeRefreshTokenFamily) Expect(ctx context.Context, tokenFamilyID string) *mStorageMockRevokeRefreshTokenFamily {
+	if mmRevokeRefreshTokenFamily.mock.funcRevokeRefreshTokenFamily != nil {
+		mmRevokeRefreshTokenFamily.mock.t.Fatalf("StorageMock.RevokeRefreshTokenFamily mock is already set by Set")
+	}
+
+	if mmRevokeRefreshTokenFamily.defaultExpectation == nil {
+		mmRevokeRefreshTokenFamily.defaultExpectation = &StorageMockRevokeRefreshTokenFamilyExpectation{}
+	}
+
+	if mmRevokeRefreshTokenFamily.defaultExpectation.paramPtrs != nil {
+		mmRevokeRefreshTokenFamily.mock.t.Fatalf("StorageMock.RevokeRefreshTokenFamily mock is already set by ExpectParams functions")
+	}
+
+	mmRevokeRefreshTokenFamily.defaultExpectation.params = &StorageMockRevokeRefreshTokenFamilyParams{ctx, tokenFamilyID}
+	mmRevokeRefreshTokenFamily.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmRevokeRefreshTokenFamily.expectations {
+		if minimock.Equal(e.params, mmRevokeRefreshTokenFamily.defaultExpectation.params) {
+			mmRevokeRefreshTokenFamily.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmRevokeRefreshTokenFamily.defaultExpectation.params)
+		}
+	}
+
+	return mmRevokeRefreshTokenFamily
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.RevokeRefreshTokenFamily
+func (mmRevokeRefreshTokenFamily *mStorageMockRevokeRefreshTokenFamily) ExpectCtxParam1(ctx context.Context) *mStorageMockRevokeRefreshTokenFamily {
+	if mmRevokeRefreshTokenFamily.mock.funcRevokeRefreshTokenFamily != nil {
+		mmRevokeRefreshTokenFamily.mock.t.Fatalf("StorageMock.RevokeRefreshTokenFamily mock is already set by Set")
+	}
+
+	if mmRevokeRefreshTokenFamily.defaultExpectation == nil {
+		mmRevokeRefreshTokenFamily.defaultExpectation = &StorageMockRevokeRefreshTokenFamilyExpectation{}
+	}
+
+	if mmRevokeRefreshTokenFamily.defaultExpectation.params != nil {
+		mmRevokeRefreshTokenFamily.mock.t.Fatalf("StorageMock.RevokeRefreshTokenFamily mock is already set by Expect")
+	}
+
+	if mmRevokeRefreshTokenFamily.defaultExpectation.paramPtrs == nil {
+		mmRevokeRefreshTokenFamily.defaultExpectation.paramPtrs = &StorageMockRevokeRefreshTokenFamilyParamPtrs{}
+	}
+	mmRevokeRefreshTokenFamily.defaultExpectation.paramPtrs.ctx = &ctx
+	mmRevokeRefreshTokenFamily.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmRevokeRefreshTokenFamily
+}
+
+// ExpectTokenFamilyIDParam2 sets up expected param tokenFamilyID for Storage.RevokeRefreshTokenFamily
+func (mmRevokeRefreshTokenFamily *mStorageMockRevokeRefreshTokenFamily) ExpectTokenFamilyIDParam2(tokenFamilyID string) *mStorageMockRevokeRefreshTokenFamily {
+	if mmRevokeRefreshTokenFamily.mock.funcRevokeRefreshTokenFamily != nil {
+		mmRevokeRefreshTokenFamily.mock.t.Fatalf("StorageMock.RevokeRefreshTokenFamily mock is already set by Set")
+	}
+
+	if mmRevokeRefreshTokenFamily.defaultExpectation == nil {
+		mmRevokeRefreshTokenFamily.defaultExpectation = &StorageMockRevokeRefreshTokenFamilyExpectation{}
+	}
+
+	if mmRevokeRefreshTokenFamily.defaultExpectation.params != nil {
+		mmRevokeRefreshTokenFamily.mock.t.Fatalf("StorageMock.RevokeRefreshTokenFamily mock is already set by Expect")
+	}
+
+	if mmRevokeRefreshTokenFamily.defaultExpectation.paramPtrs == nil {
+		mmRevokeRefreshTokenFamily.defaultExpectation.paramPtrs = &StorageMockRevokeRefreshTokenFamilyParamPtrs{}
+	}
+	mmRevokeRefreshTokenFamily.defaultExpectation.paramPtrs.tokenFamilyID = &tokenFamilyID
+	mmRevokeRefreshTokenFamily.defaultExpectation.expectationOrigins.originTokenFamilyID = minimock.CallerInfo(1)
+
+	return mmRevokeRefreshTokenFamily
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.RevokeRefreshTokenFamily
+func (mmRevokeRefreshTokenFamily *mStorageMockRevokeRefreshTokenFamily) Inspect(f func(ctx context.Context, tokenFamilyID string)) *mStorageMockRevokeRefreshTokenFamily {
+	if mmRevokeRefreshTokenFamily.mock.inspectFuncRevokeRefreshTokenFamily != nil {
+		mmRevokeRefreshTokenFamily.mock.t.Fatalf("Inspect function is already set for StorageMock.RevokeRefreshTokenFamily")
+	}
+
+	mmRevokeRefreshTokenFamily.mock.inspectFuncRevokeRefreshTokenFamily = f
+
+	return mmRevokeRefreshTokenFamily
+}
+
+// Return sets up results that will be returned by Storage.RevokeRefreshTokenFamily
+func (mmRevokeRefreshTokenFamily *mStorageMockRevokeRefreshTokenFamily) Return(err error) *StorageMock {
+	if mmRevokeRefreshTokenFamily.mock.funcRevokeRefreshTokenFamily != nil {
+		mmRevokeRefreshTokenFamily.mock.t.Fatalf("StorageMock.RevokeRefreshTokenFamily mock is already set by Set")
+	}
+
+	if mmRevokeRefreshTokenFamily.defaultExpectation == nil {
+		mmRevokeRefreshTokenFamily.defaultExpectation = &StorageMockRevokeRefreshTokenFamilyExpectation{mock: mmRevokeRefreshTokenFamily.mock}
+	}
+	mmRevokeRefreshTokenFamily.defaultExpectation.results = &StorageMockRevokeRefreshTokenFamilyResults{err}
+	mmRevokeRefreshTokenFamily.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmRevokeRefreshTokenFamily.mock
+}
+
+// Set uses given function f to mock the Storage.RevokeRefreshTokenFamily method
+func (mmRevokeRefreshTokenFamily *mStorageMockRevokeRefreshTokenFamily) Set(f func(ctx context.Context, tokenFamilyID string) (err error)) *StorageMock {
+	if mmRevokeRefreshTokenFamily.defaultExpectation != nil {
+		mmRevokeRefreshTokenFamily.mock.t.Fatalf("Default expectation is already set for the Storage.RevokeRefreshTokenFamily method")
+	}
+
+	if len(mmRevokeRefreshTokenFamily.expectations) > 0 {
+		mmRevokeRefreshTokenFamily.mock.t.Fatalf("Some expectations are already set for the Storage.RevokeRefreshTokenFamily method")
+	}
+
+	mmRevokeRefreshTokenFamily.mock.funcRevokeRefreshTokenFamily = f
+	mmRevokeRefreshTokenFamily.mock.funcRevokeRefreshTokenFamilyOrigin = minimock.CallerInfo(1)
+	return mmRevokeRefreshTokenFamily.mock
+}
+
+// When sets expectation for the Storage.RevokeRefreshTokenFamily which will trigger the result defined by the following
+// Then helper
+func (mmRevokeRefreshTokenFamily *mStorageMockRevokeRefreshTokenFamily) When(ctx context.Context, tokenFamilyID string) *StorageMockRevokeRefreshTokenFamilyExpectation {
+	if mmRevokeRefreshTokenFamily.mock.funcRevokeRefreshTokenFamily != nil {
+		mmRevokeRefreshTokenFamily.mock.t.Fatalf("StorageMock.RevokeRefreshTokenFamily mock is already set by Set")
+	}
+
+	expectation := &StorageMockRevokeRefreshTokenFamilyExpectation{
+		mock:               mmRevokeRefreshTokenFamily.mock,
+		params:             &StorageMockRevokeRefreshTokenFamilyParams{ctx, tokenFamilyID},
+		expectationOrigins: StorageMockRevokeRefreshTokenFamilyExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmRevokeRefreshTokenFamily.expectations = append(mmRevokeRefreshTokenFamily.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.RevokeRefreshTokenFamily return parameters for the expectation previously defined by the When method
+func (e *StorageMockRevokeRefreshTokenFamilyExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockRevokeRefreshTokenFamilyResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.RevokeRefreshTokenFamily should be invoked
+func (mmRevokeRefreshTokenFamily *mStorageMockRevokeRefreshTokenFamily) Times(n uint64) *mStorageMockRevokeRefreshTokenFamily {
+	if n == 0 {
+		mmRevokeRefreshTokenFamily.mock.t.Fatalf("Times of StorageMock.RevokeRefreshTokenFamily mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmRevokeRefreshTokenFamily.expectedInvocations, n)
+	mmRevokeRefreshTokenFamily.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmRevokeRefreshTokenFamily
+}
+
+func (mmRevokeRefreshTokenFamily *mStorageMockRevokeRefreshTokenFamily) invocationsDone() bool {
+	if len(mmRevokeRefreshTokenFamily.expectations) == 0 && mmRevokeRefreshTokenFamily.defaultExpectation == nil && mmRevokeRefreshTokenFamily.mock.funcRevokeRefreshTokenFamily == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmRevokeRefreshTokenFamily.mock.afterRevokeRefreshTokenFamilyCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmRevokeRefreshTokenFamily.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// RevokeRefreshTokenFamily implements mm_port.Storage
+func (mmRevokeRefreshTokenFamily *StorageMock) RevokeRefreshTokenFamily(ctx context.Context, tokenFamilyID string) (err error) {
+	mm_atomic.AddUint64(&mmRevokeRefreshTokenFamily.beforeRevokeRefreshTokenFamilyCounter, 1)
+	defer mm_atomic.AddUint64(&mmRevokeRefreshTokenFamily.afterRevokeRefreshTokenFamilyCounter, 1)
+
+	mmRevokeRefreshTokenFamily.t.Helper()
+
+	if mmRevokeRefreshTokenFamily.inspectFuncRevokeRefreshTokenFamily != nil {
+		mmRevokeRefreshTokenFamily.inspectFuncRevokeRefreshTokenFamily(ctx, tokenFamilyID)
+	}
+
+	mm_params := StorageMockRevokeRefreshTokenFamilyParams{ctx, tokenFamilyID}
+
+	// Record call args
+	mmRevokeRefreshTokenFamily.RevokeRefreshTokenFamilyMock.mutex.Lock()
+	mmRevokeRefreshTokenFamily.RevokeRefreshTokenFamilyMock.callArgs = append(mmRevokeRefreshTokenFamily.RevokeRefreshTokenFamilyMock.callArgs, &mm_params)
+	mmRevokeRefreshTokenFamily.RevokeRefreshTokenFamilyMock.mutex.Unlock()
+
+	for _, e := range mmRevokeRefreshTokenFamily.RevokeRefreshTokenFamilyMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmRevokeRefreshTokenFamily.RevokeRefreshTokenFamilyMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmRevokeRefreshTokenFamily.RevokeRefreshTokenFamilyMock.defaultExpectation.Counter, 1)
+		mm_want := mmRevokeRefreshTokenFamily.RevokeRefreshTokenFamilyMock.defaultExpectation.params
+		mm_want_ptrs := mmRevokeRefreshTokenFamily.RevokeRefreshTokenFamilyMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockRevokeRefreshTokenFamilyParams{ctx, tokenFamilyID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmRevokeRefreshTokenFamily.t.Errorf("StorageMock.RevokeRefreshTokenFamily got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRevokeRefreshTokenFamily.RevokeRefreshTokenFamilyMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tokenFamilyID != nil && !minimock.Equal(*mm_want_ptrs.tokenFamilyID, mm_got.tokenFamilyID) {
+				mmRevokeRefreshTokenFamily.t.Errorf("StorageMock.RevokeRefreshTokenFamily got unexpected parameter tokenFamilyID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRevokeRefreshTokenFamily.RevokeRefreshTokenFamilyMock.defaultExpectation.expectationOrigins.originTokenFamilyID, *mm_want_ptrs.tokenFamilyID, mm_got.tokenFamilyID, minimock.Diff(*mm_want_ptrs.tokenFamilyID, mm_got.tokenFamilyID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmRevokeRefreshTokenFamily.t.Errorf("StorageMock.RevokeRefreshTokenFamily got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRevokeRefreshTokenFamily.RevokeRefreshTokenFamilyMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmRevokeRefreshTokenFamily.RevokeRefreshTokenFamilyMock.defaultExpectation.results
+		if mm_results == nil {
+			mmRevokeRefreshTokenFamily.t.Fatal("No results are set for the StorageMock.RevokeRefreshTokenFamily")
+		}
+		return (*mm_results).err
+	}
+	if mmRevokeRefreshTokenFamily.funcRevokeRefreshTokenFamily != nil {
+		return mmRevokeRefreshTokenFamily.funcRevokeRefreshTokenFamily(ctx, tokenFamilyID)
+	}
+	mmRevokeRefreshTokenFamily.t.Fatalf("Unexpected call to StorageMock.RevokeRefreshTokenFamily. %v %v", ctx, tokenFamilyID)
+	return
+}
+
+// RevokeRefreshTokenFamilyAfterCounter returns a count of finished StorageMock.RevokeRefreshTokenFamily invocations
+func (mmRevokeRefreshTokenFamily *StorageMock) RevokeRefreshTokenFamilyAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRevokeRefreshTokenFamily.afterRevokeRefreshTokenFamilyCounter)
+}
+
+// RevokeRefreshTokenFamilyBeforeCounter returns a count of StorageMock.RevokeRefreshTokenFamily invocations
+func (mmRevokeRefreshTokenFamily *StorageMock) RevokeRefreshTokenFamilyBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRevokeRefreshTokenFamily.beforeRevokeRefreshTokenFamilyCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.RevokeRefreshTokenFamily.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmRevokeRefreshTokenFamily *mStorageMockRevokeRefreshTokenFamily) Calls() []*StorageMockRevokeRefreshTokenFamilyParams {
+	mmRevokeRefreshTokenFamily.mutex.RLock()
+
+	argCopy := make([]*StorageMockRevokeRefreshTokenFamilyParams, len(mmRevokeRefreshTokenFamily.callArgs))
+	copy(argCopy, mmRevokeRefreshTokenFamily.callArgs)
+
+	mmRevokeRefreshTokenFamily.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockRevokeRefreshTokenFamilyDone returns true if the count of the RevokeRefreshTokenFamily invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockRevokeRefreshTokenFamilyDone() bool {
+	if m.RevokeRefreshTokenFamilyMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.RevokeRefreshTokenFamilyMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.RevokeRefreshTokenFamilyMock.invocationsDone()
+}
+
+// MinimockRevokeRefreshTokenFamilyInspect logs each unmet expectation
+func (m *StorageMock) MinimockRevokeRefreshTokenFamilyInspect() {
+	for _, e := range m.RevokeRefreshTokenFamilyMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.RevokeRefreshTokenFamily at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterRevokeRefreshTokenFamilyCounter := mm_atomic.LoadUint64(&m.afterRevokeRefreshTokenFamilyCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.RevokeRefreshTokenFamilyMock.defaultExpectation != nil && afterRevokeRefreshTokenFamilyCounter < 1 {
+		if m.RevokeRefreshTokenFamilyMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.RevokeRefreshTokenFamily at\n%s", m.RevokeRefreshTokenFamilyMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.RevokeRefreshTokenFamily at\n%s with params: %#v", m.RevokeRefreshTokenFamilyMock.defaultExpectation.expectationOrigins.origin, *m.RevokeRefreshTokenFamilyMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcRevokeRefreshTokenFamily != nil && afterRevokeRefreshTokenFamilyCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.RevokeRefreshTokenFamily at\n%s", m.funcRevokeRefreshTokenFamilyOrigin)
+	}
+
+	if !m.RevokeRefreshTokenFamilyMock.invocationsDone() && afterRevokeRefreshTokenFamilyCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.RevokeRefreshTokenFamily at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.RevokeRefreshTokenFamilyMock.expectedInvocations), m.RevokeRefreshTokenFamilyMock.expectedInvocationsOrigin, afterRevokeRefreshTokenFamilyCounter)
 	}
 }
 
@@ -12579,6 +13646,348 @@ func (m *StorageMock) MinimockSavePasswordCredentialInspect() {
 	}
 }
 
+type mStorageMockSaveRefreshToken struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockSaveRefreshTokenExpectation
+	expectations       []*StorageMockSaveRefreshTokenExpectation
+
+	callArgs []*StorageMockSaveRefreshTokenParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockSaveRefreshTokenExpectation specifies expectation struct of the Storage.SaveRefreshToken
+type StorageMockSaveRefreshTokenExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockSaveRefreshTokenParams
+	paramPtrs          *StorageMockSaveRefreshTokenParamPtrs
+	expectationOrigins StorageMockSaveRefreshTokenExpectationOrigins
+	results            *StorageMockSaveRefreshTokenResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockSaveRefreshTokenParams contains parameters of the Storage.SaveRefreshToken
+type StorageMockSaveRefreshTokenParams struct {
+	ctx   context.Context
+	token model.RefreshToken
+}
+
+// StorageMockSaveRefreshTokenParamPtrs contains pointers to parameters of the Storage.SaveRefreshToken
+type StorageMockSaveRefreshTokenParamPtrs struct {
+	ctx   *context.Context
+	token *model.RefreshToken
+}
+
+// StorageMockSaveRefreshTokenResults contains results of the Storage.SaveRefreshToken
+type StorageMockSaveRefreshTokenResults struct {
+	err error
+}
+
+// StorageMockSaveRefreshTokenOrigins contains origins of expectations of the Storage.SaveRefreshToken
+type StorageMockSaveRefreshTokenExpectationOrigins struct {
+	origin      string
+	originCtx   string
+	originToken string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmSaveRefreshToken *mStorageMockSaveRefreshToken) Optional() *mStorageMockSaveRefreshToken {
+	mmSaveRefreshToken.optional = true
+	return mmSaveRefreshToken
+}
+
+// Expect sets up expected params for Storage.SaveRefreshToken
+func (mmSaveRefreshToken *mStorageMockSaveRefreshToken) Expect(ctx context.Context, token model.RefreshToken) *mStorageMockSaveRefreshToken {
+	if mmSaveRefreshToken.mock.funcSaveRefreshToken != nil {
+		mmSaveRefreshToken.mock.t.Fatalf("StorageMock.SaveRefreshToken mock is already set by Set")
+	}
+
+	if mmSaveRefreshToken.defaultExpectation == nil {
+		mmSaveRefreshToken.defaultExpectation = &StorageMockSaveRefreshTokenExpectation{}
+	}
+
+	if mmSaveRefreshToken.defaultExpectation.paramPtrs != nil {
+		mmSaveRefreshToken.mock.t.Fatalf("StorageMock.SaveRefreshToken mock is already set by ExpectParams functions")
+	}
+
+	mmSaveRefreshToken.defaultExpectation.params = &StorageMockSaveRefreshTokenParams{ctx, token}
+	mmSaveRefreshToken.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmSaveRefreshToken.expectations {
+		if minimock.Equal(e.params, mmSaveRefreshToken.defaultExpectation.params) {
+			mmSaveRefreshToken.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmSaveRefreshToken.defaultExpectation.params)
+		}
+	}
+
+	return mmSaveRefreshToken
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.SaveRefreshToken
+func (mmSaveRefreshToken *mStorageMockSaveRefreshToken) ExpectCtxParam1(ctx context.Context) *mStorageMockSaveRefreshToken {
+	if mmSaveRefreshToken.mock.funcSaveRefreshToken != nil {
+		mmSaveRefreshToken.mock.t.Fatalf("StorageMock.SaveRefreshToken mock is already set by Set")
+	}
+
+	if mmSaveRefreshToken.defaultExpectation == nil {
+		mmSaveRefreshToken.defaultExpectation = &StorageMockSaveRefreshTokenExpectation{}
+	}
+
+	if mmSaveRefreshToken.defaultExpectation.params != nil {
+		mmSaveRefreshToken.mock.t.Fatalf("StorageMock.SaveRefreshToken mock is already set by Expect")
+	}
+
+	if mmSaveRefreshToken.defaultExpectation.paramPtrs == nil {
+		mmSaveRefreshToken.defaultExpectation.paramPtrs = &StorageMockSaveRefreshTokenParamPtrs{}
+	}
+	mmSaveRefreshToken.defaultExpectation.paramPtrs.ctx = &ctx
+	mmSaveRefreshToken.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmSaveRefreshToken
+}
+
+// ExpectTokenParam2 sets up expected param token for Storage.SaveRefreshToken
+func (mmSaveRefreshToken *mStorageMockSaveRefreshToken) ExpectTokenParam2(token model.RefreshToken) *mStorageMockSaveRefreshToken {
+	if mmSaveRefreshToken.mock.funcSaveRefreshToken != nil {
+		mmSaveRefreshToken.mock.t.Fatalf("StorageMock.SaveRefreshToken mock is already set by Set")
+	}
+
+	if mmSaveRefreshToken.defaultExpectation == nil {
+		mmSaveRefreshToken.defaultExpectation = &StorageMockSaveRefreshTokenExpectation{}
+	}
+
+	if mmSaveRefreshToken.defaultExpectation.params != nil {
+		mmSaveRefreshToken.mock.t.Fatalf("StorageMock.SaveRefreshToken mock is already set by Expect")
+	}
+
+	if mmSaveRefreshToken.defaultExpectation.paramPtrs == nil {
+		mmSaveRefreshToken.defaultExpectation.paramPtrs = &StorageMockSaveRefreshTokenParamPtrs{}
+	}
+	mmSaveRefreshToken.defaultExpectation.paramPtrs.token = &token
+	mmSaveRefreshToken.defaultExpectation.expectationOrigins.originToken = minimock.CallerInfo(1)
+
+	return mmSaveRefreshToken
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.SaveRefreshToken
+func (mmSaveRefreshToken *mStorageMockSaveRefreshToken) Inspect(f func(ctx context.Context, token model.RefreshToken)) *mStorageMockSaveRefreshToken {
+	if mmSaveRefreshToken.mock.inspectFuncSaveRefreshToken != nil {
+		mmSaveRefreshToken.mock.t.Fatalf("Inspect function is already set for StorageMock.SaveRefreshToken")
+	}
+
+	mmSaveRefreshToken.mock.inspectFuncSaveRefreshToken = f
+
+	return mmSaveRefreshToken
+}
+
+// Return sets up results that will be returned by Storage.SaveRefreshToken
+func (mmSaveRefreshToken *mStorageMockSaveRefreshToken) Return(err error) *StorageMock {
+	if mmSaveRefreshToken.mock.funcSaveRefreshToken != nil {
+		mmSaveRefreshToken.mock.t.Fatalf("StorageMock.SaveRefreshToken mock is already set by Set")
+	}
+
+	if mmSaveRefreshToken.defaultExpectation == nil {
+		mmSaveRefreshToken.defaultExpectation = &StorageMockSaveRefreshTokenExpectation{mock: mmSaveRefreshToken.mock}
+	}
+	mmSaveRefreshToken.defaultExpectation.results = &StorageMockSaveRefreshTokenResults{err}
+	mmSaveRefreshToken.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmSaveRefreshToken.mock
+}
+
+// Set uses given function f to mock the Storage.SaveRefreshToken method
+func (mmSaveRefreshToken *mStorageMockSaveRefreshToken) Set(f func(ctx context.Context, token model.RefreshToken) (err error)) *StorageMock {
+	if mmSaveRefreshToken.defaultExpectation != nil {
+		mmSaveRefreshToken.mock.t.Fatalf("Default expectation is already set for the Storage.SaveRefreshToken method")
+	}
+
+	if len(mmSaveRefreshToken.expectations) > 0 {
+		mmSaveRefreshToken.mock.t.Fatalf("Some expectations are already set for the Storage.SaveRefreshToken method")
+	}
+
+	mmSaveRefreshToken.mock.funcSaveRefreshToken = f
+	mmSaveRefreshToken.mock.funcSaveRefreshTokenOrigin = minimock.CallerInfo(1)
+	return mmSaveRefreshToken.mock
+}
+
+// When sets expectation for the Storage.SaveRefreshToken which will trigger the result defined by the following
+// Then helper
+func (mmSaveRefreshToken *mStorageMockSaveRefreshToken) When(ctx context.Context, token model.RefreshToken) *StorageMockSaveRefreshTokenExpectation {
+	if mmSaveRefreshToken.mock.funcSaveRefreshToken != nil {
+		mmSaveRefreshToken.mock.t.Fatalf("StorageMock.SaveRefreshToken mock is already set by Set")
+	}
+
+	expectation := &StorageMockSaveRefreshTokenExpectation{
+		mock:               mmSaveRefreshToken.mock,
+		params:             &StorageMockSaveRefreshTokenParams{ctx, token},
+		expectationOrigins: StorageMockSaveRefreshTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmSaveRefreshToken.expectations = append(mmSaveRefreshToken.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.SaveRefreshToken return parameters for the expectation previously defined by the When method
+func (e *StorageMockSaveRefreshTokenExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockSaveRefreshTokenResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.SaveRefreshToken should be invoked
+func (mmSaveRefreshToken *mStorageMockSaveRefreshToken) Times(n uint64) *mStorageMockSaveRefreshToken {
+	if n == 0 {
+		mmSaveRefreshToken.mock.t.Fatalf("Times of StorageMock.SaveRefreshToken mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmSaveRefreshToken.expectedInvocations, n)
+	mmSaveRefreshToken.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmSaveRefreshToken
+}
+
+func (mmSaveRefreshToken *mStorageMockSaveRefreshToken) invocationsDone() bool {
+	if len(mmSaveRefreshToken.expectations) == 0 && mmSaveRefreshToken.defaultExpectation == nil && mmSaveRefreshToken.mock.funcSaveRefreshToken == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmSaveRefreshToken.mock.afterSaveRefreshTokenCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmSaveRefreshToken.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// SaveRefreshToken implements mm_port.Storage
+func (mmSaveRefreshToken *StorageMock) SaveRefreshToken(ctx context.Context, token model.RefreshToken) (err error) {
+	mm_atomic.AddUint64(&mmSaveRefreshToken.beforeSaveRefreshTokenCounter, 1)
+	defer mm_atomic.AddUint64(&mmSaveRefreshToken.afterSaveRefreshTokenCounter, 1)
+
+	mmSaveRefreshToken.t.Helper()
+
+	if mmSaveRefreshToken.inspectFuncSaveRefreshToken != nil {
+		mmSaveRefreshToken.inspectFuncSaveRefreshToken(ctx, token)
+	}
+
+	mm_params := StorageMockSaveRefreshTokenParams{ctx, token}
+
+	// Record call args
+	mmSaveRefreshToken.SaveRefreshTokenMock.mutex.Lock()
+	mmSaveRefreshToken.SaveRefreshTokenMock.callArgs = append(mmSaveRefreshToken.SaveRefreshTokenMock.callArgs, &mm_params)
+	mmSaveRefreshToken.SaveRefreshTokenMock.mutex.Unlock()
+
+	for _, e := range mmSaveRefreshToken.SaveRefreshTokenMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmSaveRefreshToken.SaveRefreshTokenMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmSaveRefreshToken.SaveRefreshTokenMock.defaultExpectation.Counter, 1)
+		mm_want := mmSaveRefreshToken.SaveRefreshTokenMock.defaultExpectation.params
+		mm_want_ptrs := mmSaveRefreshToken.SaveRefreshTokenMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockSaveRefreshTokenParams{ctx, token}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmSaveRefreshToken.t.Errorf("StorageMock.SaveRefreshToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSaveRefreshToken.SaveRefreshTokenMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.token != nil && !minimock.Equal(*mm_want_ptrs.token, mm_got.token) {
+				mmSaveRefreshToken.t.Errorf("StorageMock.SaveRefreshToken got unexpected parameter token, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSaveRefreshToken.SaveRefreshTokenMock.defaultExpectation.expectationOrigins.originToken, *mm_want_ptrs.token, mm_got.token, minimock.Diff(*mm_want_ptrs.token, mm_got.token))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmSaveRefreshToken.t.Errorf("StorageMock.SaveRefreshToken got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmSaveRefreshToken.SaveRefreshTokenMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmSaveRefreshToken.SaveRefreshTokenMock.defaultExpectation.results
+		if mm_results == nil {
+			mmSaveRefreshToken.t.Fatal("No results are set for the StorageMock.SaveRefreshToken")
+		}
+		return (*mm_results).err
+	}
+	if mmSaveRefreshToken.funcSaveRefreshToken != nil {
+		return mmSaveRefreshToken.funcSaveRefreshToken(ctx, token)
+	}
+	mmSaveRefreshToken.t.Fatalf("Unexpected call to StorageMock.SaveRefreshToken. %v %v", ctx, token)
+	return
+}
+
+// SaveRefreshTokenAfterCounter returns a count of finished StorageMock.SaveRefreshToken invocations
+func (mmSaveRefreshToken *StorageMock) SaveRefreshTokenAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSaveRefreshToken.afterSaveRefreshTokenCounter)
+}
+
+// SaveRefreshTokenBeforeCounter returns a count of StorageMock.SaveRefreshToken invocations
+func (mmSaveRefreshToken *StorageMock) SaveRefreshTokenBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSaveRefreshToken.beforeSaveRefreshTokenCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.SaveRefreshToken.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmSaveRefreshToken *mStorageMockSaveRefreshToken) Calls() []*StorageMockSaveRefreshTokenParams {
+	mmSaveRefreshToken.mutex.RLock()
+
+	argCopy := make([]*StorageMockSaveRefreshTokenParams, len(mmSaveRefreshToken.callArgs))
+	copy(argCopy, mmSaveRefreshToken.callArgs)
+
+	mmSaveRefreshToken.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockSaveRefreshTokenDone returns true if the count of the SaveRefreshToken invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockSaveRefreshTokenDone() bool {
+	if m.SaveRefreshTokenMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.SaveRefreshTokenMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.SaveRefreshTokenMock.invocationsDone()
+}
+
+// MinimockSaveRefreshTokenInspect logs each unmet expectation
+func (m *StorageMock) MinimockSaveRefreshTokenInspect() {
+	for _, e := range m.SaveRefreshTokenMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.SaveRefreshToken at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterSaveRefreshTokenCounter := mm_atomic.LoadUint64(&m.afterSaveRefreshTokenCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.SaveRefreshTokenMock.defaultExpectation != nil && afterSaveRefreshTokenCounter < 1 {
+		if m.SaveRefreshTokenMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.SaveRefreshToken at\n%s", m.SaveRefreshTokenMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.SaveRefreshToken at\n%s with params: %#v", m.SaveRefreshTokenMock.defaultExpectation.expectationOrigins.origin, *m.SaveRefreshTokenMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcSaveRefreshToken != nil && afterSaveRefreshTokenCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.SaveRefreshToken at\n%s", m.funcSaveRefreshTokenOrigin)
+	}
+
+	if !m.SaveRefreshTokenMock.invocationsDone() && afterSaveRefreshTokenCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.SaveRefreshToken at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.SaveRefreshTokenMock.expectedInvocations), m.SaveRefreshTokenMock.expectedInvocationsOrigin, afterSaveRefreshTokenCounter)
+	}
+}
+
 type mStorageMockSaveUserProfile struct {
 	optional           bool
 	mock               *StorageMock
@@ -13705,6 +15114,8 @@ func (m *StorageMock) MinimockFinish() {
 
 			m.MinimockGetPasswordCredentialInspect()
 
+			m.MinimockGetRefreshTokenInspect()
+
 			m.MinimockGetUserIdentitiesInspect()
 
 			m.MinimockGetUserProfileByIDInspect()
@@ -13717,11 +15128,15 @@ func (m *StorageMock) MinimockFinish() {
 
 			m.MinimockIsTokenRevokedInspect()
 
+			m.MinimockMarkRefreshTokenUsedInspect()
+
 			m.MinimockPruneExpiredTokensInspect()
 
 			m.MinimockResolveTenantByDomainInspect()
 
 			m.MinimockResolveTenantByIDInspect()
+
+			m.MinimockRevokeRefreshTokenFamilyInspect()
 
 			m.MinimockRevokeSessionInspect()
 
@@ -13738,6 +15153,8 @@ func (m *StorageMock) MinimockFinish() {
 			m.MinimockSavePARInspect()
 
 			m.MinimockSavePasswordCredentialInspect()
+
+			m.MinimockSaveRefreshTokenInspect()
 
 			m.MinimockSaveUserProfileInspect()
 
@@ -13784,15 +15201,18 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockGetIdentityProviderByTypeDone() &&
 		m.MinimockGetIdentityProvidersDone() &&
 		m.MinimockGetPasswordCredentialDone() &&
+		m.MinimockGetRefreshTokenDone() &&
 		m.MinimockGetUserIdentitiesDone() &&
 		m.MinimockGetUserProfileByIDDone() &&
 		m.MinimockGetUserProfileByIdentifierDone() &&
 		m.MinimockGetUserProfilesByTenantDone() &&
 		m.MinimockIsDPoPProofUsedDone() &&
 		m.MinimockIsTokenRevokedDone() &&
+		m.MinimockMarkRefreshTokenUsedDone() &&
 		m.MinimockPruneExpiredTokensDone() &&
 		m.MinimockResolveTenantByDomainDone() &&
 		m.MinimockResolveTenantByIDDone() &&
+		m.MinimockRevokeRefreshTokenFamilyDone() &&
 		m.MinimockRevokeSessionDone() &&
 		m.MinimockRevokeTokenDone() &&
 		m.MinimockSaveAuthSessionDone() &&
@@ -13801,6 +15221,7 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockSaveInteractionSessionDone() &&
 		m.MinimockSavePARDone() &&
 		m.MinimockSavePasswordCredentialDone() &&
+		m.MinimockSaveRefreshTokenDone() &&
 		m.MinimockSaveUserProfileDone() &&
 		m.MinimockUpdateUserProfileDone() &&
 		m.MinimockUpsertIdentityDone()

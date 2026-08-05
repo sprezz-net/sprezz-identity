@@ -154,3 +154,15 @@ To simplify the interface for end administrators while preserving strict conform
 - **Cognitive Complexity**: No Go function in handlers or services must exceed **15** in cognitive complexity. Large structures should be broken down into clean, testable sub-functions.
 - **Unit Testing**: 100% path coverage for the ephemeral authentication bypass, bootstrapping logic, and configuration updates.
 - **Error Formatting**: Error messages remain strictly compliant with `.clinerules` (e.g. lowercase strings without punctuation).
+
+## 8. Refresh Token Rotation (RTR) Integration in Admin UI
+
+Sprezz Identity Admin UI provides interactive management toggles to control the RTR policy on applications.
+
+### 8.1 Interactive RTR Configuration Toggle
+
+- **The `clientFormManager` State**: The Alpine form manager (`layout.templ`) tracks the client-side `enforceRtr` state natively and updates computed states in real-time.
+- **Category Mandate Locking**: If the user selects the **Public** application category, the `enforceRtr` state is automatically set to `true` and locked (the checkbox input is disabled), strictly mandating RTR for native/SPA apps.
+- **Conditional Configuration**: For **Confidential** applications, the input checkbox remains unlocked, allowing administrators to optionally enable or disable Refresh Token Rotation as required.
+- **Form Preservation**: When saving or validation errors occur, the backend parses `enforce_rtr` from the form payload and correctly repopulates the UI toggle state on subsequent renders.
+

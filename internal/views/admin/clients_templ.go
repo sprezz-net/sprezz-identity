@@ -255,9 +255,9 @@ func ClientForm(props ClientFormProps) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var13 string
-		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("clientFormManager('%s', %t, %t, %d)", getInitialClientType(props.Client.ClientType), hasGrantType(props.Client.GrantTypes, "authorization_code", true), hasGrantType(props.Client.GrantTypes, "client_credentials", false), len(props.Client.AllowedIDPs)))
+		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("clientFormManager('%s', %t, %t, %t, %d)", getInitialClientType(props.Client.ClientType), hasGrantType(props.Client.GrantTypes, "authorization_code", true), hasGrantType(props.Client.GrantTypes, "client_credentials", false), props.Client.EnforceRTR, len(props.Client.AllowedIDPs)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 103, Col: 274}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 103, Col: 303}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 		if templ_7745c5c3_Err != nil {
@@ -636,7 +636,7 @@ func ClientLifetimesSection(props ClientFormProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</div><div class=\"pt-4 border-t border-gray-100 space-y-2\"><label class=\"flex items-center space-x-3 text-sm text-gray-700 cursor-pointer select-none\"><input type=\"checkbox\" name=\"enforce_rtr\" value=\"true\" :checked=\"isPublic || enforceRtr\" :disabled=\"isPublic\" @change=\"handleRtrChange($el.checked)\" class=\"h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed\"><div class=\"flex flex-col\"><span class=\"font-medium text-gray-900\">Enforce Refresh Token Rotation (RTR)</span> <span class=\"text-xs text-gray-400\">Forces refresh tokens to rotate on every single exchange, providing absolute replay attack defense.</span></div></label><p x-show=\"isPublic\" x-transition class=\"text-[11px] text-amber-600 font-medium\">⚠️ Attention: Refresh Token Rotation is strictly mandatory for Public application categories to mitigate browser hijacking.</p></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -693,7 +693,7 @@ func ClientIdpRoutingSection(props ClientFormProps) templ.Component {
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(initIdpRoutingData(props))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 347, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 367, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 		if templ_7745c5c3_Err != nil {
@@ -712,7 +712,7 @@ func ClientIdpRoutingSection(props ClientFormProps) templ.Component {
 				var templ_7745c5c3_Var25 string
 				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(idp.ID.String())
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 382, Col: 31}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 402, Col: 31}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 				if templ_7745c5c3_Err != nil {
@@ -725,7 +725,7 @@ func ClientIdpRoutingSection(props ClientFormProps) templ.Component {
 				var templ_7745c5c3_Var26 string
 				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue("allowedIds.includes('" + idp.ID.String() + "')")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 384, Col: 67}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 404, Col: 67}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 				if templ_7745c5c3_Err != nil {
@@ -738,7 +738,7 @@ func ClientIdpRoutingSection(props ClientFormProps) templ.Component {
 				var templ_7745c5c3_Var27 string
 				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(idp.Alias)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 388, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 408, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 				if templ_7745c5c3_Err != nil {
@@ -751,7 +751,7 @@ func ClientIdpRoutingSection(props ClientFormProps) templ.Component {
 				var templ_7745c5c3_Var28 string
 				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(idp.IDPType)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 389, Col: 77}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/clients.templ`, Line: 409, Col: 77}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 				if templ_7745c5c3_Err != nil {

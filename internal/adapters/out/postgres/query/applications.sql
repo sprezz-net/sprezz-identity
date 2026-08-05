@@ -32,7 +32,8 @@ INSERT INTO applications (
     allowed_idps,
     default_idp,
     allowed_audiences,
-    client_type
+    client_type,
+    enforce_rtr
 )
 SELECT
     $2,
@@ -56,7 +57,8 @@ SELECT
     $19,
     $20,
     $21,
-    $22
+    $22,
+    $23
 FROM tenant
 ON CONFLICT (tenant_id, client_id)
 DO UPDATE SET
@@ -78,7 +80,8 @@ DO UPDATE SET
     allowed_idps = EXCLUDED.allowed_idps,
     default_idp = EXCLUDED.default_idp,
     allowed_audiences = EXCLUDED.allowed_audiences,
-    client_type = EXCLUDED.client_type;
+    client_type = EXCLUDED.client_type,
+    enforce_rtr = EXCLUDED.enforce_rtr;
 
 -- name: GetClient :one
 SELECT
@@ -103,7 +106,8 @@ SELECT
     a.allowed_idps,
     a.default_idp,
     a.allowed_audiences,
-    a.client_type
+    a.client_type,
+    a.enforce_rtr
 FROM applications AS a
 JOIN tenants AS t ON t.id = a.tenant_id
 WHERE t.tenant_uuid = $1

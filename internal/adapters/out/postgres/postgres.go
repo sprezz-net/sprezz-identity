@@ -63,6 +63,7 @@ func (s *PostgresStorage) SaveClient(ctx context.Context, client model.ClientApp
 		DefaultIdp:             stringPtr(client.DefaultIDP),
 		AllowedAudiences:       client.AllowedAudiences,
 		ClientType:             clientType,
+		EnforceRtr:             client.EnforceRTR,
 	})
 	if err != nil {
 		return fmt.Errorf("save client: %w", err)
@@ -125,6 +126,7 @@ func (s *PostgresStorage) GetClient(ctx context.Context, tenantID uuid.UUID, cli
 		DefaultIDP:             valueOrEmpty(row.DefaultIdp),
 		AllowedAudiences:       row.AllowedAudiences,
 		ClientType:             row.ClientType,
+		EnforceRTR:             row.EnforceRtr,
 	}, nil
 }
 
@@ -151,7 +153,8 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 			a.allowed_idps,
 			a.default_idp,
 			a.allowed_audiences,
-			a.client_type
+			a.client_type,
+			a.enforce_rtr
 		FROM applications AS a
 		JOIN tenants AS t ON t.id = a.tenant_id
 		WHERE t.tenant_uuid = $1::uuid
@@ -184,6 +187,7 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 		var defaultIdp *string
 		var allowedAudiences []string
 		var clientType string
+		var enforceRTR bool
 
 		err = rows.Scan(
 			&id,
@@ -207,6 +211,7 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 			&defaultIdp,
 			&allowedAudiences,
 			&clientType,
+			&enforceRTR,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan client application: %w", err)
@@ -252,6 +257,7 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 			DefaultIDP:             valueOrEmpty(defaultIdp),
 			AllowedAudiences:       allowedAudiences,
 			ClientType:             clientType,
+			EnforceRTR:             enforceRTR,
 		})
 	}
 
@@ -1249,4 +1255,74 @@ func (s *PostgresStorage) DecoupleIdentity(ctx context.Context, userProfileID uu
 		WHERE user_profile_id = $1::uuid AND identity_provider_id = $2::uuid
 	`, toPGUUID(userProfileID), toPGUUID(identityProviderID))
 	return err
+}
+
+func (s *PostgresStorage) SaveRefreshToken(ctx context.Context, token model.RefreshToken) error {
+	_, err := s.queries.SaveRefreshToken(ctx, sqlcdb.SaveRefreshTokenParams{
+		TenantUuid:    toPGUUID(token.TenantID),
+		TokenID:       token.TokenID,
+		ClientID:      token.ClientID,
+		Subject:       token.Subject,
+		Scopes:        token.Scopes,
+		TokenFamilyID: token.TokenFamilyID,
+		IsUsed:        token.IsUsed,
+		ExpiresAt:     toPGTimestamptz(token.ExpiresAt),
+	})
+	if err != nil {
+		return fmt.Errorf("save refresh token: %w", err)
+	}
+	return nil
+}
+
+func (s *PostgresStorage) GetRefreshToken(ctx context.Context, tokenID string) (*model.RefreshToken, error) {
+	row, err := s.queries.GetRefreshToken(ctx, tokenID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("refresh token %s: %w", tokenID, port.ErrSessionNotFound)
+		}
+		return nil, fmt.Errorf("get refresh token: %w", err)
+	}
+
+	tenantUUID, err := pgUUIDToUUID(row.TenantUuid)
+	if err != nil {
+		return nil, fmt.Errorf("get refresh token: parse tenant UUID: %w", err)
+	}
+
+	expiresAt, err := pgTimestamptzToTime(row.ExpiresAt)
+	if err != nil {
+		return nil, fmt.Errorf("get refresh token: parse expires_at: %w", err)
+	}
+
+	createdAt, err := pgTimestamptzToTime(row.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("get refresh token: parse created_at: %w", err)
+	}
+
+	return &model.RefreshToken{
+		TokenID:       row.TokenID,
+		TenantID:      tenantUUID,
+		ClientID:      row.ClientID,
+		Subject:       row.Subject,
+		Scopes:        row.Scopes,
+		TokenFamilyID: row.TokenFamilyID,
+		IsUsed:        row.IsUsed,
+		ExpiresAt:     expiresAt,
+		CreatedAt:     createdAt,
+	}, nil
+}
+
+func (s *PostgresStorage) MarkRefreshTokenUsed(ctx context.Context, tokenID string) error {
+	_, err := s.queries.MarkRefreshTokenUsed(ctx, tokenID)
+	if err != nil {
+		return fmt.Errorf("mark refresh token used: %w", err)
+	}
+	return nil
+}
+
+func (s *PostgresStorage) RevokeRefreshTokenFamily(ctx context.Context, tokenFamilyID string) error {
+	_, err := s.queries.RevokeRefreshTokenFamily(ctx, tokenFamilyID)
+	if err != nil {
+		return fmt.Errorf("revoke refresh token family: %w", err)
+	}
+	return nil
 }

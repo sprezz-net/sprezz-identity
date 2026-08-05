@@ -331,3 +331,24 @@ Sprezz Identity implements standard RFC 9449 DPoP to bind minted tokens to a cli
 * **Spec-Compliant UserInfo Claims Resolution**: The `/oauth/userinfo` endpoint resolves the human identity directly by retrieving the user profile from storage using the `sub` claim. It dynamically structures and filters returned claims based on authorized OIDC scope claims present in the token:
   * If `"profile"` scope is present: Returns `"name"` and `"preferred_username"`.
   * If `"email"` scope is present: Returns `"email"` and `"email_verified"`.
+
+## 13. Refresh Token Rotation (RTR) with Family Tracking & Breach Detection
+
+Sprezz Identity implements full Refresh Token Rotation (RTR) with Token Family tracking and Breach Detection to protect against token replay attacks and browser-based token hijacking.
+
+### 13.1 Zero-Trust Client Policies
+
+* **Public Clients**: Strictly mandate RTR by default. The RTR flag is forced to `true` and locked to mitigate high browser hijacking risks.
+* **Confidential Clients**: Allow RTR to be configured optionally (defaulting to `false`).
+
+### 13.2 Token Family Tracking
+
+Every rotated refresh token chain is bound to an immutable `token_family_id`. This ID maps a sequence of rotated tokens back to the original human authentication event context.
+
+### 13.3 Breach Detection and Eviction
+
+When a client requests a token exchange using `grant_type=refresh_token`, the server validates the refresh token:
+
+* **Unused Token**: If the token is valid and has `is_used = false`, the server marks the token as used, generates a brand-new cryptographically secure Refresh Token inheriting the same `token_family_id`, and returns the newly rotated token pair.
+* **Used Token (Replay Attack Detected!)**: If the incoming refresh token's `is_used` property is already `true`, a replay attack is detected! The OIDC engine triggers an atomic transaction that revokes and completely invalidates all active tokens sharing that same `token_family_id`. It immediately returns a strict `invalid_grant` error response, instantly evicting both the attacker and the legitimate user.
+

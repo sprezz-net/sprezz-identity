@@ -50,3 +50,15 @@ type PushedAuthorizationRequest struct {
 	ACRValues       string
 	ExpiresAt       time.Time
 }
+
+type RefreshToken struct {
+	TokenID       string
+	TenantID      uuid.UUID
+	ClientID      string
+	Subject       string
+	Scopes        []string
+	TokenFamilyID string
+	IsUsed        bool
+	ExpiresAt     time.Time
+	CreatedAt     time.Time
+}
