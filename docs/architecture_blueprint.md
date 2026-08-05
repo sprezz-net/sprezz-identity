@@ -233,7 +233,10 @@ sequenceDiagram
 ```
 
 The mathematical evaluation inside the business layer service strictly asserts:
-$$\text{Base64URL}(\text{SHA256}(\text{code\_verifier})) == \text{code\_challenge}$$
+
+```math
+\text{Base64URL}(\text{SHA256}(\text{code\_verifier})) == \text{code\_challenge}
+```
 
 ### 5.2 Pushed Authorization Requests (PAR - RFC 9126)
 
