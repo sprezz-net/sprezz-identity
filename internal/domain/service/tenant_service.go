@@ -38,6 +38,7 @@ func (s *TenantService) CreateTenant(ctx context.Context, name, domain string) (
 			PredefinedAudiences: []string{},
 			DefaultRedirectURI:  "http://" + domain,
 			RedirectWhitelist:   []string{"http://" + domain, "https://" + domain},
+			ACRToLevels:         map[string]model.Levels{},
 			AllowSignup:         false,
 		},
 	}
@@ -85,6 +86,18 @@ func (s *TenantService) UpdateTenant(ctx context.Context, id uuid.UUID, name, do
 		tenant.Domain = domain
 	}
 	tenant.Config = config
+	if tenant.Config.PredefinedScopes == nil {
+		tenant.Config.PredefinedScopes = []string{"openid", "profile", "email", "offline_access"}
+	}
+	if tenant.Config.PredefinedAudiences == nil {
+		tenant.Config.PredefinedAudiences = []string{}
+	}
+	if tenant.Config.RedirectWhitelist == nil {
+		tenant.Config.RedirectWhitelist = []string{}
+	}
+	if tenant.Config.ACRToLevels == nil {
+		tenant.Config.ACRToLevels = map[string]model.Levels{}
+	}
 
 	if err := s.storage.CreateTenant(ctx, *tenant); err != nil {
 		return nil, err

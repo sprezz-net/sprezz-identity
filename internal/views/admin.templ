@@ -17,15 +17,15 @@ templ AdminLayout(props AdminLayoutProps) {
     <head>
         <meta charset="UTF-8"/>
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-        <title>{ props.Title }</title>
+        <title>{ props.Title } | Sprezz Identity Admin</title>
         <!-- Tailwind CSS -->
-        <script src="https://jsdelivr.net"></script>
+        <script src="https://cdn.tailwindcss.com" nonce={ templ.GetNonce(ctx) }></script>
         <!-- HTMX -->
-        <script src="https://unpkg.com"></script>
+        <script src="https://unpkg.com/htmx.org@1.9.12" nonce={ templ.GetNonce(ctx) }></script>
         <!-- Alpine.js (deferred) -->
-        <script defer src="https://unpkg.com"></script>
+        <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/csp@3.x.x/dist/cdn.min.js" nonce={ templ.GetNonce(ctx) }></script>
     </head>
-    <body class="bg-gray-5xl font-sans antialiased text-gray-900" x-data="{ mobileMenu: false }">
+    <body class="bg-slate-50 font-sans antialiased text-gray-900" x-data="{ mobileMenu: false }">
         <div class="flex min-h-screen">
             <!-- Sidebar Layout -->
             <aside class="w-64 bg-slate-900 text-slate-300 fixed h-full flex flex-col justify-between z-40">
@@ -34,10 +34,10 @@ templ AdminLayout(props AdminLayoutProps) {
                     <p class="text-xs text-slate-500 mt-1">{ props.TenantName }</p>
 
                     <nav class="mt-8 space-y-2">
-                        <a href="/admin/tenants" class="block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-slate-800 hover:text-white">Tenants</a>
-                        <a href="/admin/clients" class="block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-slate-800 hover:text-white">Applications</a>
-                        <a href="/admin/idps" class="block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-slate-800 hover:text-white">Identity Providers</a>
-                        <a href="/admin/users" class="block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-slate-800 hover:text-white">Users</a>
+                        <a href="/admin/tenants" class={ "block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors", templ.KV("bg-slate-800 text-white", props.CurrentTab == "tenants"), templ.KV("text-slate-400 hover:bg-slate-800 hover:text-white", props.CurrentTab != "tenants") }>Tenants</a>
+                        <a href="/admin/clients" class={ "block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors", templ.KV("bg-slate-800 text-white", props.CurrentTab == "clients"), templ.KV("text-slate-400 hover:bg-slate-800 hover:text-white", props.CurrentTab != "clients") }>Applications</a>
+                        <a href="/admin/idps" class={ "block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors", templ.KV("bg-slate-800 text-white", props.CurrentTab == "idps"), templ.KV("text-slate-400 hover:bg-slate-800 hover:text-white", props.CurrentTab != "idps") }>Identity Providers</a>
+                        <a href="/admin/users" class={ "block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors", templ.KV("bg-slate-800 text-white", props.CurrentTab == "users"), templ.KV("text-slate-400 hover:bg-slate-800 hover:text-white", props.CurrentTab != "users") }>Users</a>
                     </nav>
                 </div>
             </aside>
@@ -407,6 +407,8 @@ type ClientFormProps struct {
 
 templ ClientForm(props ClientFormProps) {
     <form hx-post="/admin/clients" hx-target="#modal-body" class="space-y-4">
+        @InputField("Application Name", "client_name", "text", props.Client.ClientName, props.Errors["client_name"])
+
         if props.IsEdit {
             <input type="hidden" name="id" value={ props.Client.ID }/>
             <input type="hidden" name="client_id" value={ props.Client.ClientID }/>
@@ -417,8 +419,6 @@ templ ClientForm(props ClientFormProps) {
         } else {
             @InputField("Client ID", "client_id", "text", props.Client.ClientID, props.Errors["client_id"])
         }
-
-        @InputField("Application Name", "client_name", "text", props.Client.ClientName, props.Errors["client_name"])
 
         <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
             <button

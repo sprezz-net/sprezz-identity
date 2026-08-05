@@ -33,6 +33,35 @@ func (s *ClientService) CreateClient(ctx context.Context, tenantID uuid.UUID, cl
 	client.ID = uuid.New().String()
 	client.TenantID = tenantID
 
+	// Set required OIDC Defaults for schema constraints
+	if client.RedirectURIs == nil {
+		client.RedirectURIs = []string{}
+	}
+	if client.PostLogoutRedirectURIs == nil {
+		client.PostLogoutRedirectURIs = []string{}
+	}
+	if client.GrantTypes == nil {
+		client.GrantTypes = []string{"authorization_code"}
+	}
+	if client.ResponseTypes == nil {
+		client.ResponseTypes = []string{"code"}
+	}
+	if client.AllowedScopes == nil {
+		client.AllowedScopes = []string{"openid", "profile", "email"}
+	}
+	if client.DefaultScopes == nil {
+		client.DefaultScopes = []string{"openid", "profile", "email"}
+	}
+	if client.AllowedIDPs == nil {
+		client.AllowedIDPs = []string{"username-password"}
+	}
+	if client.AllowedAudiences == nil {
+		client.AllowedAudiences = []string{}
+	}
+	if client.Algorithm == "" {
+		client.Algorithm = model.AlgRS256
+	}
+
 	if err := s.storage.SaveClient(ctx, client); err != nil {
 		return nil, err
 	}
