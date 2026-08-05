@@ -860,6 +860,19 @@ func (h *HttpAdapter) adminEditIDPForm(w http.ResponseWriter, r *http.Request) {
 	_ = component.Render(r.Context(), w)
 }
 
+func (h *HttpAdapter) hasDuplicateUsernamePasswordIDP(r *http.Request, tenantID uuid.UUID, idpUUID uuid.UUID, isEdit bool) bool {
+	existing, err := h.idpService.GetIdentityProviders(r.Context(), tenantID)
+	if err != nil {
+		return false
+	}
+	for _, ext := range existing {
+		if ext.IDPType == model.UsernamePasswordIDPType && (!isEdit || ext.ID != idpUUID) {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *HttpAdapter) adminSaveIDP(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
 	id := r.FormValue("id")
@@ -889,6 +902,10 @@ func (h *HttpAdapter) adminSaveIDP(w http.ResponseWriter, r *http.Request) {
 			h.renderError(w, r, http.StatusBadRequest, errInvalidIDPUUID)
 			return
 		}
+	}
+
+	if idpType == model.UsernamePasswordIDPType && h.hasDuplicateUsernamePasswordIDP(r, tenant.ID, idpUUID, isEdit) {
+		errs["idp_type"] = "A username-password identity provider already exists for this tenant"
 	}
 
 	provider := model.IdentityProvider{

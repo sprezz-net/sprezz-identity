@@ -49,3 +49,32 @@ func (s *UserProfileService) UpdateUserProfile(ctx context.Context, tenantID uui
 
 	return &profile, nil
 }
+
+func (s *UserProfileService) ChangeName(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID, newName string) error {
+	profile, err := s.storage.GetUserProfileByID(ctx, tenantID, userID)
+	if err != nil {
+		return fmt.Errorf("user profile not found: %w", err)
+	}
+
+	profile.Name = newName
+	if err := s.storage.UpdateUserProfile(ctx, tenantID, *profile); err != nil {
+		return fmt.Errorf("failed to update user profile name: %w", err)
+	}
+
+	return nil
+}
+
+func (s *UserProfileService) ChangeEmail(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID, newEmail string) error {
+	profile, err := s.storage.GetUserProfileByID(ctx, tenantID, userID)
+	if err != nil {
+		return fmt.Errorf("user profile not found: %w", err)
+	}
+
+	profile.Email = newEmail
+	profile.EmailVerified = false
+	if err := s.storage.UpdateUserProfile(ctx, tenantID, *profile); err != nil {
+		return fmt.Errorf("failed to update user profile email: %w", err)
+	}
+
+	return nil
+}

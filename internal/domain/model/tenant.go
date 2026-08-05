@@ -29,4 +29,52 @@ type TenantConfig struct {
 	ACREssential         bool              `json:"acr_essential"`
 	AllowSignup          bool              `json:"allow_signup"`
 	EncryptedAdminSecret string            `json:"encrypted_admin_secret,omitempty"`
+	DefaultAAL           int               `json:"default_aal,omitempty"`
+	DefaultIAL           int               `json:"default_ial,omitempty"`
+	ProfileAAL           int               `json:"profile_aal,omitempty"`
+	NameAAL              int               `json:"name_aal,omitempty"`
+	EmailAAL             int               `json:"email_aal,omitempty"`
+	PasswordAAL          int               `json:"password_aal,omitempty"`
+}
+
+func (tc TenantConfig) GetDefaultAAL() int {
+	if tc.DefaultAAL <= 0 {
+		return 1
+	}
+	return tc.DefaultAAL
+}
+
+func (tc TenantConfig) GetDefaultIAL() int {
+	if tc.DefaultIAL <= 0 {
+		return 1
+	}
+	return tc.DefaultIAL
+}
+
+func (tc TenantConfig) GetProfileAAL() int {
+	if tc.ProfileAAL <= 0 {
+		return 1
+	}
+	return tc.ProfileAAL
+}
+
+func (tc TenantConfig) GetNameAAL() int {
+	if tc.NameAAL <= 0 {
+		return 1
+	}
+	return tc.NameAAL
+}
+
+func (tc TenantConfig) GetEmailAAL() int {
+	if tc.EmailAAL <= 0 {
+		return 1
+	}
+	return tc.EmailAAL
+}
+
+func (tc TenantConfig) GetPasswordAAL() int {
+	if tc.PasswordAAL <= 0 {
+		return 1
+	}
+	return tc.PasswordAAL
 }

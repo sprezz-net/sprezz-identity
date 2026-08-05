@@ -214,6 +214,18 @@ func (h *HttpAdapter) registerRoutes() {
 		r.Delete("/users/{id}/identities/{idp}", h.adminDecoupleIdentity)
 	})
 
+	// Profile Routes
+	h.router.Route("/profile", func(r chi.Router) {
+		r.Get("/", h.profileDashboard)
+		r.Get("/password", h.changePasswordForm)
+		r.Post("/password", h.changePasswordSubmit)
+		r.Get("/email", h.changeEmailForm)
+		r.Post("/email", h.changeEmailSubmit)
+		r.Get("/name", h.changeNameForm)
+		r.Post("/name", h.changeNameSubmit)
+		r.Delete("/identities/{idp}", h.decoupleIdentitySubmit)
+	})
+
 	// Routes requiring mandatory client authentication
 	h.router.Group(func(r chi.Router) {
 		r.Use(h.clientAuthMiddleware)

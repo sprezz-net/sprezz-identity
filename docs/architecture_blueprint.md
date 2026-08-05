@@ -298,6 +298,22 @@ Sprezz Identity implements OIDC-compliant trust tiering by introducing the conce
   * **Non-Essential/Reached Claims**: If `essential` is `false`, authentication succeeds, and the server dynamically calculates all tenant-mapped ACR keys satisfied by the login.
 * **Dynamic ACR Minting**: Reached ACR claims are dynamically embedded inside minted Access Tokens, ID Tokens, and UserInfo responses under the standard `"acr"` claim.
 
+### 9.11 User Profile Dashboard & Custom Trust Verification
+
+Sprezz Identity features a built-in user profile dashboard at `/profile` alongside secure credentials management forms for changing display name, email address, and account password. These resources operate under a strict, multi-tiered trust framework.
+
+* **Profile Security Gating (AAL/IAL Checks)**: To enforce custom security requirements, the tenant's configuration manages trust thresholds for access:
+  * `profile_aal`: The Authenticator Assurance Level (AAL) required to access the profile overview page (`/profile`).
+  * `name_aal`: The AAL required to update the user's display name (`/profile/name`).
+  * `email_aal`: The AAL required to change the account email address (`/profile/email`).
+  * `password_aal`: The AAL required to change the user's password (`/profile/password`).
+  * `default_ial`: The minimum Identity Assurance Level (IAL) required across all user-facing profile modification actions.
+  * If a logged-in user's AAL/IAL levels derived from their active session IDP do not meet these thresholds, access is strictly blocked (yielding an HTTP `403 Forbidden` response).
+* **Coupling Enforcement**: The user forms for name, email, and password changes are accessible *only* if the user's profile has an active, coupled identity linked to the `"username-password"` identity provider type.
+* **Email Verification & Reset**: When a user changes their email address through the secure `/profile/email` subpage, the profile's `email_verified` status is instantly reset to `false` in transactional storage, invalidating previous verifications.
+* **Credentials Hashing & Current Password Verification**: Password updates and email address changes mandate the submission and verification of the user's `current_password`. These checks are computed strictly inside the domain's `IdentityProviderService` using the Argon2id hashing algorithms before allowing any modifications.
+* **Identity Decoupling**: Users can decouple connected identities. Decoupling invokes the `UserProfileService.DecoupleIdentity` domain method, safely removing the linked external identity from the tenant partition.
+
 ## 10. Audience Governance and Token Minting
 
 Sprezz Identity implements Audience Governance to restrict the intended recipients (Resource Servers) of minted Access Tokens and ensure least privilege access.
