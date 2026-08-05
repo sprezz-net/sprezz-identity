@@ -347,6 +347,29 @@ func (h *HttpAdapter) adminTenantsPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func isPresentInWhitelist(uri string, whitelist []string) bool {
+	for _, w := range whitelist {
+		if w == uri {
+			return true
+		}
+	}
+	return false
+}
+
+func validateDefaultRedirectURI(uri string, whitelist []string) string {
+	if uri == "" {
+		return ""
+	}
+	u, err := url.Parse(uri)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return errInvalidURLFormat
+	}
+	if !isPresentInWhitelist(uri, whitelist) {
+		return "Default Redirect URI must be present in the Redirect Whitelist"
+	}
+	return ""
+}
+
 func validateTenantSettingsInputs(name, domain, defaultRedirectURI string, redirectWhitelist []string) map[string]string {
 	errs := make(map[string]string)
 	if name == "" {
@@ -355,22 +378,8 @@ func validateTenantSettingsInputs(name, domain, defaultRedirectURI string, redir
 	if domain == "" {
 		errs["domain"] = "canonical domain is required"
 	}
-	if defaultRedirectURI != "" {
-		u, err := url.Parse(defaultRedirectURI)
-		if err != nil || u.Scheme == "" || u.Host == "" {
-			errs["default_redirect_uri"] = errInvalidURLFormat
-		} else {
-			found := false
-			for _, w := range redirectWhitelist {
-				if w == defaultRedirectURI {
-					found = true
-					break
-				}
-			}
-			if !found {
-				errs["default_redirect_uri"] = "Default Redirect URI must be present in the Redirect Whitelist"
-			}
-		}
+	if errMsg := validateDefaultRedirectURI(defaultRedirectURI, redirectWhitelist); errMsg != "" {
+		errs["default_redirect_uri"] = errMsg
 	}
 	return errs
 }
