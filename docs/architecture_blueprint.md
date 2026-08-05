@@ -27,31 +27,42 @@ The project topology forces strict perimeter isolation. Core business logic cann
 
 ```text
 sprezz-identity/
-├── cmd/idp/
+├── cmd/sprezz-identity/
 │   └── main.go                         # Infrastructure entrypoint & dependency wire-up
 ├── docs/
-│   └── architecture_blueprint.md       # This specification document
+│   ├── admin_blueprint.md              # Administrator control panel specifications
+│   └── architecture_blueprint.md       # Functional and technical specs of the IdP engine
 ├── internal/
-│   ├── config/                         # Configuration loaders & Asymmetric Key parsers
+│   ├── config/                         # Configuration loaders & environment mappings
 │   ├── domain/                         # CORE BUSINESS LOGIC (Pure Go, 0 external imports)
-│   │   ├── model/                      # Pure Domain Entities (Tenant, Account, App, Token)
-│   │   ├── port/                       # Driving and Driven Structural Interfaces
-│   │   └── service/                    # Business Engines (OAuth, ClientRegistration, PKCE)
+│   │   ├── model/                      # Pure Domain Entities (Tenant, UserProfile, UserIdentity)
+│   │   ├── port/                       # Driving and Driven Structural Interfaces & Mocks
+│   │   └── service/                    # Business Engines (OAuth, IdentityProvider, ClientApp)
+│   ├── views/                          # UI View Layers (Server-Rendered Templ components)
+│   │   ├── admin/                      # Admin administration forms and dashboard layout
+│   │   └── public/                     # Public login, signup, and profile templates
+│   ├── pkg/                            # Shared package components
+│   │   └── httpclient/                 # Secure, SSRF-protected HTTP request worker
 │   └── adapters/                       # INFRASTRUCTURE WIRE-UP (Ports fulfillment)
 │       ├── in/
-│       │   └── http/                   # Framework endpoints, route handlers, payload parsers
-│       └── out/
-│           ├── postgres/               # Relational persistence layer via sqlc
-│           │   ├── db/                 # Auto-generated code structures from SQL queries
-│           │   ├── migrations/         # DDL transactional schema scripts (.sql)
-│           │   └── query/              # Raw database lookup scripts (.sql)
-│           └── crypto/                 # Asymmetric signature engines (JWT minting / JWKS building)
-├── Dockerfile                          # Multi-stage scratch minimal build environment
-├── go.mod
-└── sqlc.yaml                           # Custom SQL compiler configuration for identity scope
+│       │   └── http/                   # HTTP endpoints, session cookies, route handlers
+│       └── out/                        # Outbound persistence and clock dependencies
+│           ├── clock/                  # Deterministic chronological time adapter
+│           ├── crypto/                 # RS256 & EdDSA dynamic token signature engines
+│           ├── logout/                 # Out-of-band asynchronous logout propagations
+│           ├── memory/                 # Transient in-memory repository mock persistence
+│           ├── state/                  # Context and local lifecycle structures
+│           └── postgres/               # Relational persistence layer via sqlc & pgx
+│               ├── db/                 # Auto-generated relational model structures
+│               ├── migrations/         # Goose transactional DDL migration scripts (.sql)
+│               └── query/              # Raw database queries and lookup statements (.sql)
+├── Dockerfile                          # Multi-stage scratch minimal container workspace
+├── go.mod                              # Go module specifications
+├── Makefile                            # Multi-target build and test orchestrations
+└── sqlc.yaml                           # Custom SQL compiler configurations
 ```
 
-## 1.3 Pure Domain Model Strategy (`internal/domain/model/`)
+### 1.3 Pure Domain Model Strategy (`internal/domain/model/`)
 
 All domain entities use native Go primitives. They remain entirely un-annotated by framework database tags, validation micro-framework anchors, or JSON serialization metadata to safeguard domain core purity.
 
@@ -61,7 +72,7 @@ All domain entities use native Go primitives. They remain entirely un-annotated 
 * **`auth_session` Component**: Manages temporal storage variables during active validation lifecycles, locking active PKCE challenge state matrices down to explicit users.
 * **`oidc_claims` Component**: Handles structural schemas tracking access token lifespans, standard dynamic payload values, and core user-profile field vectors.
 
-## 1.4 Port Boundaries (`internal/domain/port/`)
+### 1.4 Port Boundaries (`internal/domain/port/`)
 
 Ports define the rigid, un-compromised structural abstract contracts of the system boundary.
 
@@ -88,7 +99,7 @@ To allow human users and automated clients to interact seamlessly with their spe
 3. The server calls the `TenantResolutionUseCase`, driving an immediate O(1) indexed lookup against the persistence layer.
 4. If valid, the engine assigns the specific `TenantID` directly to the running context thread (`context.Context`), locking all downstream logins, clients, and cryptographic signatures to that partition.
 
-## 2.2 Multi-Tenant Relational Identity Schema Strategy
+### 2.2 Multi-Tenant Relational Identity Schema Strategy
 
 The persistence architecture isolates records by forcing a primary composite multi-tenant index lock across all lookup rows.
 
@@ -108,7 +119,7 @@ To safeguard critical security audit trails and history files against accidental
 
 ## 3. Identity Providers, User Profiles & Authentication
 
-## 3.1 Multi-Tenant Identity Providers & Identity Coupling
+### 3.1 Multi-Tenant Identity Providers & Identity Coupling
 
 Sprezz Identity natively supports multiple, decoupled identity providers per tenant. This model cleanly separates user authentication mechanisms from the core user identity boundary.
 
@@ -260,8 +271,6 @@ To maintain complete compatibility with off-the-shelf native app clients, the HT
 | `/oauth/logout` | `GET` | OIDC Session 1.0 | Log out the user, clear IDP cookies, and propagate Single Logout to active clients. |
 | `/oauth/userinfo` | `GET` | OIDC Core 1.0 | Authenticated user profile retrieval interface (`Authorization: Bearer`). |
 | **Dynamic Routing Middleware** | `Intercept` | HTTP Host Header Context | Resolves incoming raw server domains (`Host`) to a valid internal `tenant_id` state. |
-
-
 
 ## 6. Token Lifecycle, Governance & Asymmetric Cryptography
 
