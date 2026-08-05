@@ -3,6 +3,8 @@ package http
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
@@ -54,6 +56,77 @@ func mintDPoPProofForTest(t *testing.T, privateKey *rsa.PrivateKey, jwkMap map[s
 		t.Fatalf("failed to sign token: %v", err)
 	}
 	return str
+}
+
+func generateDPoPTestKeyEC(t *testing.T) (*ecdsa.PrivateKey, map[string]any) {
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate client key: %v", err)
+	}
+	xStr := base64.RawURLEncoding.EncodeToString(privateKey.X.Bytes())
+	yStr := base64.RawURLEncoding.EncodeToString(privateKey.Y.Bytes())
+	jwkMap := map[string]any{
+		"kty": "EC",
+		"crv": "P-256",
+		"x":   xStr,
+		"y":   yStr,
+	}
+	return privateKey, jwkMap
+}
+
+func mintDPoPProofForTestEC(t *testing.T, privateKey *ecdsa.PrivateKey, jwkMap map[string]any, method, urlStr, jti string, iat time.Time) string {
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, jwt.MapClaims{
+		"htm": method,
+		"htu": urlStr,
+		"jti": jti,
+		"iat": iat.Unix(),
+	})
+	token.Header["typ"] = "dpop+jwt"
+	token.Header["jwk"] = jwkMap
+	token.Header["alg"] = "ES256"
+
+	str, err := token.SignedString(privateKey)
+	if err != nil {
+		t.Fatalf("failed to sign token: %v", err)
+	}
+	return str
+}
+
+func TestHttpAdapter_DPoPProofValidation_Success_EC(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	auth := portmock.NewAuthMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+
+	privateKey, jwkMap := generateDPoPTestKeyEC(t)
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+
+	jti := "jti-ec-1"
+	proof := mintDPoPProofForTestEC(t, privateKey, jwkMap, "POST", "https://test.com/oauth/token", jti, time.Now())
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", nil)
+	req.Host = "test.com"
+	req.Header.Set("DPoP", proof)
+
+	storage.IsDPoPProofUsedMock.Set(func(ctx context.Context, gotJti string) (bool, error) {
+		if gotJti != jti {
+			t.Errorf("expected checked jti %s, got %s", jti, gotJti)
+		}
+		return false, nil
+	})
+	storage.SaveDPoPProofMock.Set(func(ctx context.Context, gotJti string, exp time.Time) error {
+		if gotJti != jti {
+			t.Errorf("expected jti %s, got %s", jti, gotJti)
+		}
+		return nil
+	})
+
+	jkt, err := adapter.validateDPoPProof(req)
+	if err != nil {
+		t.Fatalf("expected successful EC validation, got: %v", err)
+	}
+	if jkt == "" {
+		t.Error("expected non-empty JKT thumbprint for EC")
+	}
 }
 
 func TestHttpAdapter_DPoPProofValidation_Success(t *testing.T) {

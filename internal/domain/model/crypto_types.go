@@ -4,7 +4,7 @@ type SignatureAlgorithm string
 
 const (
 	AlgRS256 SignatureAlgorithm = "RS256"
-	AlgEdDSA SignatureAlgorithm = "EdDSA"
+	AlgES256 SignatureAlgorithm = "ES256"
 )
 
 type SigningKeyMetadata struct {

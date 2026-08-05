@@ -1,6 +1,8 @@
 package crypto
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -20,9 +22,9 @@ import (
 const httpsScheme = "https://"
 
 type tenantKeyring struct {
-	ActiveKid string
-	Keys      map[string]*rsa.PrivateKey
-	JWKS      []map[string]any
+	ActiveKids map[model.SignatureAlgorithm]string
+	Keys       map[string]any
+	JWKS       []map[string]any
 }
 
 type JWTSigner struct {
@@ -37,7 +39,7 @@ func NewJWTSigner() *JWTSigner {
 }
 
 func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
-	if alg != model.AlgRS256 {
+	if alg != model.AlgRS256 && alg != model.AlgES256 {
 		return "", fmt.Errorf("unsupported signing algorithm %s", alg)
 	}
 
@@ -53,7 +55,9 @@ func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.Signatur
 		return "", err
 	}
 
-	privateKey := keyring.Keys[keyring.ActiveKid]
+	kid := keyring.ActiveKids[alg]
+	privateKey := keyring.Keys[kid]
+
 	audClaim := any(claims.ClientID)
 	if len(claims.Audiences) > 0 {
 		audClaim = claims.Audiences
@@ -80,15 +84,22 @@ func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.Signatur
 		mapClaims["acr"] = claims.ACR
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, mapClaims)
-	token.Header["kid"] = keyring.ActiveKid
+	var method jwt.SigningMethod
+	if alg == model.AlgES256 {
+		method = jwt.SigningMethodES256
+	} else {
+		method = jwt.SigningMethodRS256
+	}
+
+	token := jwt.NewWithClaims(method, mapClaims)
+	token.Header["kid"] = kid
 	token.Header["typ"] = "JWT"
 
 	return token.SignedString(privateKey)
 }
 
 func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
-	if alg != model.AlgRS256 {
+	if alg != model.AlgRS256 && alg != model.AlgES256 {
 		return "", fmt.Errorf("unsupported signing algorithm %s", alg)
 	}
 
@@ -104,7 +115,9 @@ func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.Signatur
 		return "", err
 	}
 
-	privateKey := keyring.Keys[keyring.ActiveKid]
+	kid := keyring.ActiveKids[alg]
+	privateKey := keyring.Keys[kid]
+
 	mapClaims := jwt.MapClaims{
 		"iss":       issuer,
 		"sub":       claims.Subject,
@@ -124,15 +137,22 @@ func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.Signatur
 		mapClaims["acr"] = claims.ACR
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, mapClaims)
-	token.Header["kid"] = keyring.ActiveKid
+	var method jwt.SigningMethod
+	if alg == model.AlgES256 {
+		method = jwt.SigningMethodES256
+	} else {
+		method = jwt.SigningMethodRS256
+	}
+
+	token := jwt.NewWithClaims(method, mapClaims)
+	token.Header["kid"] = kid
 	token.Header["typ"] = "JWT"
 
 	return token.SignedString(privateKey)
 }
 
 func (s *JWTSigner) SignLogoutToken(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (string, error) {
-	if alg != model.AlgRS256 {
+	if alg != model.AlgRS256 && alg != model.AlgES256 {
 		return "", fmt.Errorf("unsupported signing algorithm %s", alg)
 	}
 
@@ -148,8 +168,17 @@ func (s *JWTSigner) SignLogoutToken(claims model.LogoutTokenClaims, alg model.Si
 		return "", err
 	}
 
-	privateKey := keyring.Keys[keyring.ActiveKid]
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+	kid := keyring.ActiveKids[alg]
+	privateKey := keyring.Keys[kid]
+
+	var method jwt.SigningMethod
+	if alg == model.AlgES256 {
+		method = jwt.SigningMethodES256
+	} else {
+		method = jwt.SigningMethodRS256
+	}
+
+	token := jwt.NewWithClaims(method, jwt.MapClaims{
 		"iss": issuer,
 		"sub": claims.Subject,
 		"aud": claims.Audience,
@@ -159,31 +188,56 @@ func (s *JWTSigner) SignLogoutToken(claims model.LogoutTokenClaims, alg model.Si
 			"http://schemas.openid.net/event/back-channel-logout": map[string]any{},
 		},
 	})
-	token.Header["kid"] = keyring.ActiveKid
+	token.Header["kid"] = kid
 	token.Header["typ"] = "JWT"
 
 	return token.SignedString(privateKey)
 }
 
-func (s *JWTSigner) VerifyToken(tokenStr string) (map[string]any, error) {
-	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
+func (s *JWTSigner) lookupKeyByKid(kid string) (any, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, keyring := range s.keyrings {
+		if key, exists := keyring.Keys[kid]; exists {
+			return key, nil
+		}
+	}
+	return nil, fmt.Errorf("key not found for kid: %s", kid)
+}
+
+func validateSigningMethod(t *jwt.Token, key any) (any, error) {
+	switch k := key.(type) {
+	case *rsa.PrivateKey:
 		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
-		kid, _ := t.Header["kid"].(string)
-		if kid == "" {
-			return nil, fmt.Errorf("missing kid in token header")
+		return &k.PublicKey, nil
+	case *ecdsa.PrivateKey:
+		if _, ok := t.Method.(*jwt.SigningMethodECDSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
+		return &k.PublicKey, nil
+	default:
+		return nil, fmt.Errorf("unsupported key type")
+	}
+}
 
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-		for _, keyring := range s.keyrings {
-			if key, exists := keyring.Keys[kid]; exists {
-				return &key.PublicKey, nil
-			}
-		}
-		return nil, fmt.Errorf("key not found for kid: %s", kid)
-	})
+func (s *JWTSigner) getPublicKeyAndValidateMethod(t *jwt.Token) (any, error) {
+	kid, _ := t.Header["kid"].(string)
+	if kid == "" {
+		return nil, fmt.Errorf("missing kid in token header")
+	}
+
+	key, err := s.lookupKeyByKid(kid)
+	if err != nil {
+		return nil, err
+	}
+
+	return validateSigningMethod(t, key)
+}
+
+func (s *JWTSigner) VerifyToken(tokenStr string) (map[string]any, error) {
+	token, err := jwt.Parse(tokenStr, s.getPublicKeyAndValidateMethod)
 	if err != nil {
 		return nil, err
 	}
@@ -229,23 +283,33 @@ func (s *JWTSigner) RotateKeys(tenant string) error {
 		return fmt.Errorf("tenant %s keyring not initialized", tenant)
 	}
 
-	newKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	newRSKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		return fmt.Errorf("rotate keys: generate key: %w", err)
+		return fmt.Errorf("rotate keys: generate rsa key: %w", err)
 	}
 
-	// Generate a unique kid
-	kidHash := sha256.Sum256(fmt.Appendf(nil, "%s-%d", tenant, time.Now().UnixNano()))
-	newKid := fmt.Sprintf("kid-%x", kidHash)
-
-	jwk, err := s.buildJWK(newKid, newKey)
+	newECKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return fmt.Errorf("rotate keys: build jwk: %w", err)
+		return fmt.Errorf("rotate keys: generate ecdsa key: %w", err)
 	}
 
-	keyring.ActiveKid = newKid
-	keyring.Keys[newKid] = newKey
-	keyring.JWKS = append([]map[string]any{jwk}, keyring.JWKS...)
+	rsaKid := s.tenantKeyID(tenant, model.AlgRS256) + fmt.Sprintf("-%d", time.Now().UnixNano())
+	ecKid := s.tenantKeyID(tenant, model.AlgES256) + fmt.Sprintf("-%d", time.Now().UnixNano())
+
+	rsaJwk, err := s.buildRSAJWK(rsaKid, newRSKey)
+	if err != nil {
+		return fmt.Errorf("rotate keys: build rsa jwk: %w", err)
+	}
+
+	ecJwk := s.buildECJWK(ecKid, newECKey)
+
+	keyring.ActiveKids[model.AlgRS256] = rsaKid
+	keyring.ActiveKids[model.AlgES256] = ecKid
+
+	keyring.Keys[rsaKid] = newRSKey
+	keyring.Keys[ecKid] = newECKey
+
+	keyring.JWKS = append([]map[string]any{rsaJwk, ecJwk}, keyring.JWKS...)
 
 	return nil
 }
@@ -255,19 +319,19 @@ func (s *JWTSigner) tenantIdentity(tenant string) (string, string) {
 		tenant = "default"
 	}
 	issuer := strings.TrimSuffix(httpsScheme+strings.TrimPrefix(tenant, httpsScheme), "/")
-	kid := s.tenantKeyID(issuer)
+	kid := s.tenantKeyID(issuer, model.AlgRS256)
 	return issuer, kid
 }
 
-func (s *JWTSigner) tenantKeyID(tenant string) string {
+func (s *JWTSigner) tenantKeyID(tenant string, alg model.SignatureAlgorithm) string {
 	if tenant == "" {
 		tenant = "default"
 	}
-	kidHash := sha256.Sum256([]byte(strings.TrimPrefix(tenant, httpsScheme)))
-	return fmt.Sprintf("kid-%x", kidHash)
+	kidHash := sha256.Sum256(fmt.Appendf(nil, "%s-%s", strings.TrimPrefix(tenant, httpsScheme), alg))
+	return fmt.Sprintf("kid-%s-%x", strings.ToLower(string(alg)), kidHash[:16])
 }
 
-func (s *JWTSigner) buildJWK(kid string, privateKey *rsa.PrivateKey) (map[string]any, error) {
+func (s *JWTSigner) buildRSAJWK(kid string, privateKey *rsa.PrivateKey) (map[string]any, error) {
 	publicKeyBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
 	if err != nil {
 		return nil, fmt.Errorf("marshal public key: %w", err)
@@ -292,6 +356,20 @@ func (s *JWTSigner) buildJWK(kid string, privateKey *rsa.PrivateKey) (map[string
 	}, nil
 }
 
+func (s *JWTSigner) buildECJWK(kid string, privateKey *ecdsa.PrivateKey) map[string]any {
+	x := base64.RawURLEncoding.EncodeToString(privateKey.X.Bytes())
+	y := base64.RawURLEncoding.EncodeToString(privateKey.Y.Bytes())
+	return map[string]any{
+		"kty": "EC",
+		"crv": "P-256",
+		"kid": kid,
+		"use": "sig",
+		"alg": "ES256",
+		"x":   x,
+		"y":   y,
+	}
+}
+
 func (s *JWTSigner) getOrCreateKeyring(tenant string, issuer string) (*tenantKeyring, error) {
 	s.mu.RLock()
 	keyring, ok := s.keyrings[tenant]
@@ -300,16 +378,25 @@ func (s *JWTSigner) getOrCreateKeyring(tenant string, issuer string) (*tenantKey
 		return keyring, nil
 	}
 
-	generatedKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		return nil, fmt.Errorf("generate tenant signing key: %w", err)
+		return nil, fmt.Errorf("generate tenant rsa key: %w", err)
 	}
 
-	kid := s.tenantKeyID(issuer)
-	jwk, err := s.buildJWK(kid, generatedKey)
+	ecKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, fmt.Errorf("generate tenant ecdsa key: %w", err)
+	}
+
+	rsaKid := s.tenantKeyID(issuer, model.AlgRS256)
+	ecKid := s.tenantKeyID(issuer, model.AlgES256)
+
+	rsaJwk, err := s.buildRSAJWK(rsaKid, rsaKey)
 	if err != nil {
 		return nil, err
 	}
+
+	ecJwk := s.buildECJWK(ecKid, ecKey)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -318,9 +405,15 @@ func (s *JWTSigner) getOrCreateKeyring(tenant string, issuer string) (*tenantKey
 	}
 
 	newKeyring := &tenantKeyring{
-		ActiveKid: kid,
-		Keys:      map[string]*rsa.PrivateKey{kid: generatedKey},
-		JWKS:      []map[string]any{jwk},
+		ActiveKids: map[model.SignatureAlgorithm]string{
+			model.AlgRS256: rsaKid,
+			model.AlgES256: ecKid,
+		},
+		Keys: map[string]any{
+			rsaKid: rsaKey,
+			ecKid:  ecKey,
+		},
+		JWKS: []map[string]any{rsaJwk, ecJwk},
 	}
 	s.keyrings[tenant] = newKeyring
 	return newKeyring, nil

@@ -264,7 +264,8 @@ func (h *HttpAdapter) openIDConfiguration(w http.ResponseWriter, r *http.Request
 		"grant_types_supported":                 []string{"authorization_code", "client_credentials", "refresh_token"},
 		"scopes_supported":                      scopesSupported,
 		"token_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post", "none"},
-		"dpop_signing_alg_values_supported":     []string{"RS256"},
+		"dpop_signing_alg_values_supported":     []string{string(model.AlgRS256), string(model.AlgES256)},
+		"id_token_signing_alg_values_supported": []string{string(model.AlgRS256), string(model.AlgES256)},
 	})
 }
 

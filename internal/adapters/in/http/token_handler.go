@@ -1,6 +1,8 @@
 package http
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
@@ -193,7 +195,7 @@ func (h *HttpAdapter) validateUserInfoDPoP(r *http.Request, claims jwt.MapClaims
 	return nil
 }
 
-func (h *HttpAdapter) parseDPoPPubKey(dpopHeader string) (*rsa.PublicKey, string, error) {
+func (h *HttpAdapter) parseDPoPPubKey(dpopHeader string) (any, string, error) {
 	parser := new(jwt.Parser)
 	token, _, err := parser.ParseUnverified(dpopHeader, jwt.MapClaims{})
 	if err != nil {
@@ -215,44 +217,82 @@ func (h *HttpAdapter) parseDPoPPubKey(dpopHeader string) (*rsa.PublicKey, string
 		return nil, "", fmt.Errorf("marshal jwk: %w", err)
 	}
 
-	var rsaPub struct {
+	var jwkBase struct {
 		Kty string `json:"kty"`
-		N   string `json:"n"`
-		E   string `json:"e"`
 	}
-	if err := json.Unmarshal(jwkJSON, &rsaPub); err != nil {
-		return nil, "", fmt.Errorf("unmarshal rsa jwk: %w", err)
-	}
-	if rsaPub.Kty != "RSA" {
-		return nil, "", fmt.Errorf("unsupported JWK kty: %s", rsaPub.Kty)
+	if err := json.Unmarshal(jwkJSON, &jwkBase); err != nil {
+		return nil, "", fmt.Errorf("unmarshal jwk base: %w", err)
 	}
 
-	nBytes, err := base64.RawURLEncoding.DecodeString(rsaPub.N)
-	if err != nil {
-		return nil, "", fmt.Errorf("decode jwk n: %w", err)
-	}
-	eBytes, err := base64.RawURLEncoding.DecodeString(rsaPub.E)
-	if err != nil {
-		return nil, "", fmt.Errorf("decode jwk e: %w", err)
-	}
-	if len(eBytes) < 1 {
-		return nil, "", errors.New("invalid jwk e")
-	}
-	var eVal int
-	for _, b := range eBytes {
-		eVal = (eVal << 8) | int(b)
+	if jwkBase.Kty == "RSA" {
+		var rsaPub struct {
+			N string `json:"n"`
+			E string `json:"e"`
+		}
+		if err := json.Unmarshal(jwkJSON, &rsaPub); err != nil {
+			return nil, "", fmt.Errorf("unmarshal rsa jwk: %w", err)
+		}
+		nBytes, err := base64.RawURLEncoding.DecodeString(rsaPub.N)
+		if err != nil {
+			return nil, "", fmt.Errorf("decode jwk n: %w", err)
+		}
+		eBytes, err := base64.RawURLEncoding.DecodeString(rsaPub.E)
+		if err != nil {
+			return nil, "", fmt.Errorf("decode jwk e: %w", err)
+		}
+		if len(eBytes) < 1 {
+			return nil, "", errors.New("invalid jwk e")
+		}
+		var eVal int
+		for _, b := range eBytes {
+			eVal = (eVal << 8) | int(b)
+		}
+
+		pubKey := &rsa.PublicKey{
+			N: new(big.Int).SetBytes(nBytes),
+			E: eVal,
+		}
+
+		sortedJWKJSON := fmt.Sprintf(`{"e":"%s","kty":"RSA","n":"%s"}`, rsaPub.E, rsaPub.N)
+		hsh := sha256.Sum256([]byte(sortedJWKJSON))
+		jkt := base64.RawURLEncoding.EncodeToString(hsh[:])
+
+		return pubKey, jkt, nil
+	} else if jwkBase.Kty == "EC" {
+		var ecPub struct {
+			Crv string `json:"crv"`
+			X   string `json:"x"`
+			Y   string `json:"y"`
+		}
+		if err := json.Unmarshal(jwkJSON, &ecPub); err != nil {
+			return nil, "", fmt.Errorf("unmarshal ec jwk: %w", err)
+		}
+		if ecPub.Crv != "P-256" {
+			return nil, "", fmt.Errorf("unsupported EC curve: %s", ecPub.Crv)
+		}
+		xBytes, err := base64.RawURLEncoding.DecodeString(ecPub.X)
+		if err != nil {
+			return nil, "", fmt.Errorf("decode jwk x: %w", err)
+		}
+		yBytes, err := base64.RawURLEncoding.DecodeString(ecPub.Y)
+		if err != nil {
+			return nil, "", fmt.Errorf("decode jwk y: %w", err)
+		}
+
+		pubKey := &ecdsa.PublicKey{
+			Curve: elliptic.P256(),
+			X:     new(big.Int).SetBytes(xBytes),
+			Y:     new(big.Int).SetBytes(yBytes),
+		}
+
+		sortedJWKJSON := fmt.Sprintf(`{"crv":"%s","kty":"EC","x":"%s","y":"%s"}`, ecPub.Crv, ecPub.X, ecPub.Y)
+		hsh := sha256.Sum256([]byte(sortedJWKJSON))
+		jkt := base64.RawURLEncoding.EncodeToString(hsh[:])
+
+		return pubKey, jkt, nil
 	}
 
-	pubKey := &rsa.PublicKey{
-		N: new(big.Int).SetBytes(nBytes),
-		E: eVal,
-	}
-
-	sortedJWKJSON := fmt.Sprintf(`{"e":"%s","kty":"RSA","n":"%s"}`, rsaPub.E, rsaPub.N)
-	hsh := sha256.Sum256([]byte(sortedJWKJSON))
-	jkt := base64.RawURLEncoding.EncodeToString(hsh[:])
-
-	return pubKey, jkt, nil
+	return nil, "", fmt.Errorf("unsupported JWK kty: %s", jwkBase.Kty)
 }
 
 func (h *HttpAdapter) validateDPoPClaims(r *http.Request, claims jwt.MapClaims) (time.Time, error) {
