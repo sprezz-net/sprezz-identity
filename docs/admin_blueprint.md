@@ -121,6 +121,7 @@ Because the server runs under a strict Content Security Policy (CSP), we utilize
 To support complex UI lifecycles (like modal transition fades followed by node removal) under these constraints, the system implements the **Global Nonced Helper Pattern**:
 
 1. **Secure Execution**: A secure helper script block is rendered in the `<head>` of `@AdminLayout`, locked to a cryptographically secure, per-request `nonce`:
+
    ```html
    <script nonce={ templ.GetNonce(ctx) }>
        function purgeModal(el) {
@@ -129,7 +130,21 @@ To support complex UI lifecycles (like modal transition fades followed by node r
        }
    </script>
    ```
+
 2. **Standard parameterization**: Inside elements, rather than utilizing arrow functions, standard function pointers are forwarded to the browser's native `setTimeout` utility (e.g., `setTimeout(purgeModal, 200, $root)`). The CSP parser permits this flat method execution, resulting in safe, zero-eval lifecycle management.
+
+### 5.2.1 Scope Inheritance and Flat Callback Pattern
+
+When designing nested forms or complex multi-component configuration pages, the standard Alpine practice of referencing variables from parent data scopes or utilizing complex JavaScript getters (e.g., `get isInvalid() { ... }`) inside element attributes is completely blocked by `@alpinejs/csp`.
+
+To maintain full compliance, prevent parser deadlocks, and eliminate redundant window event overhead:
+
+1. **Scope Inheritance**: Since nested sub-components (such as `ClientIdentitySection` and `ClientGrantTypesSection`) reside directly inside the parent `<form>` layout tag, they inherit the `clientFormManager` parent scope natively.
+2. **Flat Callback Redirection**: Instead of using semicolon statement chaining, multi-expression assignments, or inline `$dispatch` magic tokens inside HTML attributes (which the CSP parser blocks), child nodes directly invoke the inherited flat methods:
+   - Client Type: `@change="handleClientType($el.value)"`
+   - Authorization Code checkbox: `@change="handleAuthCodeChange($el.checked)"`
+   - Client Credentials checkbox: `@change="handleClientCredentialsChange($el.checked)"`
+3. **Internal Event Dispatching**: Any necessary cross-component notifications are dispatched from within the compiled JavaScript context of the manager method itself using `this.$dispatch` securely (e.g., `this.$dispatch('grant-type-change', { authCode: checked });`). This keeps our HTML markup perfectly flat, simple, and 100% compliant under strict Content Security Policies.
 
 ## 5.1 HTMX Partial Render Loop & SPA Architecture
 
