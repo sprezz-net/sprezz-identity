@@ -109,10 +109,20 @@ internal/
 
 Using type-safe `templ` components, Tailwind CSS, and Alpine.js, we construct the Admin UI layout and widgets:
 
-- **`AdminLayout(title string)`**: Responsive side-nav layout in `slate-900`/`slate-300`, global profile actions, dynamic modals, and container slots.
+- **`AdminLayout(title string)`**: Responsive side-nav layout in `slate-900`/`slate-300`, global profile actions, dynamic modals, and container slots. Refactored to utilize a declarative struct slice (`[]NavItem`) looping over uniform navigation definitions cleanly, and featuring HTMX targeted routing.
 - **`InputField(label, name, type, value, error string)`**: Form inputs styled with focus rings (`focus:ring-2 focus:ring-blue-500`) and standard error displays.
 - **`StatusBadge(isActive bool)`**: Dynamic visual indicators utilizing `templ.KV` Tailwind mapping to reflect active (green) and inactive (red) configurations.
-- **`Modal(title, fetchUrl string)`**: Alpine.js managed modal overlay (`x-data="{ isOpen: false }"`, `@click.outside`) incorporating HTMX lazy-loading (`hx-get`) to fetch administrative sub-forms dynamically into a `#modal-body` container.
+- **`Modal(title, fetchUrl string)`**: Alpine.js managed modal overlay (`x-data="{ isOpen: true }"`) incorporating HTMX lazy-loading (`hx-get`) to fetch administrative sub-forms dynamically into a `#modal-body` container. It resolves DOM accumulation / ID collisions by dispatching `modal-open`/`modal-close` events and automatically invoking `$el.remove()` 200ms after closing to completely purge stale HTML fragments from `#modal-container`.
+
+## 5.1 HTMX Partial Render Loop & SPA Architecture
+
+To minimize network payload sizes and prevent high-friction layout repaints on desktop transitions, the administration portal employs a hypermedia partial render design:
+
+1. **Stateful Navigation**: Sidebar navigation links utilize `hx-get` targeting the main `<main>` container, coupled with `hx-swap="innerHTML"` and `hx-push-url="true"` to dynamically alter browser history cleanly.
+2. **Tab Highlighting**: Selected tab states are tracked entirely on the client side via Alpine's CSP-friendly `currentTab` reactive string parameter, updating visually in real-time.
+3. **Hypermedia Detection**: Route handlers check for the presence of the `HX-Request == "true"` request header:
+   - If present, the handler bypasses `@AdminLayout` wrapping and returns only the core page fragment component (`TenantsContent`, `ClientsContent`, `IDPsContent`, or `UsersContent`).
+   - If absent (direct hit / browser refresh), the handler wraps the fragment inside the full layout block to ensure independent addressability.
 
 ## 6. Terminology Layer Adjustments (Clients to Applications)
 

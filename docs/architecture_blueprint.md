@@ -210,6 +210,7 @@ To mitigate Cross-Site Scripting (XSS) and injection vectors on server-rendered 
 
 * **Strict CSP Header**: Every user-facing UI route serves a strict `Content-Security-Policy` header:
   `default-src 'self'; script-src 'self' 'nonce-[nonce]' https://unpkg.com; style-src 'self' 'unsafe-inline'; frame-src 'self' *`
+  *(Note: Transitioning static assets to ahead-of-time (AOT) compiled Tailwind CSS via standard CLI builds allows dropping the `'unsafe-inline'` directive entirely, hardening the boundary to strictly source-locked styles).*
 * **Secure Per-Request Nonce Generation**: A dedicated HTTP middleware generates a secure, high-entropy 16-byte cryptographically random value (using `crypto/rand` and base64-encoded) for every request.
 * **Contextual Nonce Injection**: The middleware injects this unique nonce into the request context via `templ.WithNonce(ctx, nonce)`. The `a-h/templ` rendering system automatically extracts this nonce and applies the `nonce="..."` attribute to all `<script>` blocks (such as those in `login.templ` and `logout.templ`), satisfying the browser's strict script execution safety checks.
 

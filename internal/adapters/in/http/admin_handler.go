@@ -21,6 +21,8 @@ import (
 const (
 	adminTenantName    = "Administrative Tenant"
 	hxTriggerHeader    = "HX-Trigger"
+	hxRedirectHeader   = "HX-Redirect"
+	hxRequestHeader    = "HX-Request"
 	errInvalidIDPUUID  = "invalid IDP UUID"
 	errInvalidUserUUID = "invalid User UUID"
 )
@@ -267,7 +269,7 @@ func (h *HttpAdapter) adminCreateTenant(w http.ResponseWriter, r *http.Request) 
 	}
 	_ = h.storagePort.CreateIdentityProvider(r.Context(), newTenant.ID, defaultProvider)
 
-	w.Header().Set("HX-Redirect", "/admin/dashboard?msg=Tenant+created+successfully")
+	w.Header().Set(hxRedirectHeader, "/admin/dashboard?msg=Tenant+created+successfully")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -300,7 +302,7 @@ func (h *HttpAdapter) adminToggleSignup(w http.ResponseWriter, r *http.Request) 
 	_ = component.Render(r.Context(), w)
 
 	// We use HX-Redirect to natively trigger a full page refresh with the success message
-	w.Header().Set("HX-Redirect", "/admin/dashboard?msg=Registration+status+updated+successfully")
+	w.Header().Set(hxRedirectHeader, "/admin/dashboard?msg=Registration+status+updated+successfully")
 }
 
 func (h *HttpAdapter) adminTenantsPage(w http.ResponseWriter, r *http.Request) {
@@ -319,14 +321,18 @@ func (h *HttpAdapter) adminTenantsPage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	msg := r.URL.Query().Get("msg")
-	component := views.TenantsPage(views.TenantsPageProps{
+	props := views.TenantsPageProps{
 		ActiveTenant:  *tenant,
 		IsAdminTenant: isAdminTenant,
 		Tenants:       allTenants,
 		Msg:           msg,
 		Errors:        make(map[string]string),
-	})
-	_ = component.Render(r.Context(), w)
+	}
+	if r.Header.Get(hxRequestHeader) == "true" {
+		_ = views.TenantsContent(props).Render(r.Context(), w)
+	} else {
+		_ = views.TenantsPage(props).Render(r.Context(), w)
+	}
 }
 
 func parseCommaSeparated(s string) []string {
@@ -403,12 +409,16 @@ func (h *HttpAdapter) adminClientsPage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	msg := r.URL.Query().Get("msg")
-	component := views.ClientsPage(views.ClientsPageProps{
+	props := views.ClientsPageProps{
 		ActiveTenant: *tenant,
 		Clients:      clients,
 		Msg:          msg,
-	})
-	_ = component.Render(r.Context(), w)
+	}
+	if r.Header.Get(hxRequestHeader) == "true" {
+		_ = views.ClientsContent(props).Render(r.Context(), w)
+	} else {
+		_ = views.ClientsPage(props).Render(r.Context(), w)
+	}
 }
 
 func (h *HttpAdapter) adminNewClientForm(w http.ResponseWriter, r *http.Request) {
@@ -506,36 +516,7 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate whitelists and produce warning messages
-	var warnings []string
-	isWhitelisted := func(uri string) bool {
-		if uri == "" {
-			return true
-		}
-		for _, w := range tenant.Config.RedirectWhitelist {
-			if strings.HasPrefix(uri, w) || uri == w {
-				return true
-			}
-		}
-		return false
-	}
-
-	for _, u := range redirectURIs {
-		if !isWhitelisted(u) {
-			warnings = append(warnings, fmt.Sprintf("Redirect URI '%s' is not in the Whitelist", u))
-		}
-	}
-	for _, u := range postLogoutURIs {
-		if !isWhitelisted(u) {
-			warnings = append(warnings, fmt.Sprintf("Post-Logout URI '%s' is not in the Whitelist", u))
-		}
-	}
-	if frontChannelLogoutURI != "" && !isWhitelisted(frontChannelLogoutURI) {
-		warnings = append(warnings, fmt.Sprintf("Front-Channel Logout URI '%s' is not in the Whitelist", frontChannelLogoutURI))
-	}
-	if backChannelLogoutURI != "" && !isWhitelisted(backChannelLogoutURI) {
-		warnings = append(warnings, fmt.Sprintf("Back-Channel Logout URI '%s' is not in the Whitelist", backChannelLogoutURI))
-	}
+	warnings := h.validateClientWhitelists(tenant, redirectURIs, postLogoutURIs, frontChannelLogoutURI, backChannelLogoutURI)
 
 	var err error
 	if isEdit {
@@ -570,7 +551,7 @@ func (h *HttpAdapter) adminSaveClient(w http.ResponseWriter, r *http.Request) {
 		msgStr += ". Warning: some URIs are not in the tenant whitelist: " + strings.Join(warnings, "; ")
 	}
 
-	w.Header().Set("HX-Redirect", "/admin/clients?msg="+url.QueryEscape(msgStr))
+	w.Header().Set(hxRedirectHeader, "/admin/clients?msg="+url.QueryEscape(msgStr))
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -583,7 +564,7 @@ func (h *HttpAdapter) adminDeleteClient(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/admin/clients?msg=Client+deleted+successfully")
+	w.Header().Set(hxRedirectHeader, "/admin/clients?msg=Client+deleted+successfully")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -597,12 +578,16 @@ func (h *HttpAdapter) adminIDPsPage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	msg := r.URL.Query().Get("msg")
-	component := views.IDPsPage(views.IDPsPageProps{
+	props := views.IDPsPageProps{
 		ActiveTenant: *tenant,
 		Providers:    idps,
 		Msg:          msg,
-	})
-	_ = component.Render(r.Context(), w)
+	}
+	if r.Header.Get(hxRequestHeader) == "true" {
+		_ = views.IDPsContent(props).Render(r.Context(), w)
+	} else {
+		_ = views.IDPsPage(props).Render(r.Context(), w)
+	}
 }
 
 func (h *HttpAdapter) adminNewIDPForm(w http.ResponseWriter, r *http.Request) {
@@ -730,7 +715,7 @@ func (h *HttpAdapter) adminSaveIDP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/admin/idps?msg=Identity+Provider+saved+successfully")
+	w.Header().Set(hxRedirectHeader, "/admin/idps?msg=Identity+Provider+saved+successfully")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -748,7 +733,7 @@ func (h *HttpAdapter) adminDeleteIDP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/admin/idps?msg=Identity+Provider+deleted+successfully")
+	w.Header().Set(hxRedirectHeader, "/admin/idps?msg=Identity+Provider+deleted+successfully")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -762,12 +747,16 @@ func (h *HttpAdapter) adminUsersPage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	msg := r.URL.Query().Get("msg")
-	component := views.UsersPage(views.UsersPageProps{
+	props := views.UsersPageProps{
 		ActiveTenant: *tenant,
 		Users:        users,
 		Msg:          msg,
-	})
-	_ = component.Render(r.Context(), w)
+	}
+	if r.Header.Get(hxRequestHeader) == "true" {
+		_ = views.UsersContent(props).Render(r.Context(), w)
+	} else {
+		_ = views.UsersPage(props).Render(r.Context(), w)
+	}
 }
 
 func (h *HttpAdapter) adminViewUser(w http.ResponseWriter, r *http.Request) {
@@ -886,7 +875,7 @@ func (h *HttpAdapter) adminSaveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/admin/users?msg=User+saved+successfully")
+	w.Header().Set(hxRedirectHeader, "/admin/users?msg=User+saved+successfully")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -904,7 +893,7 @@ func (h *HttpAdapter) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/admin/users?msg=User+deleted+successfully")
+	w.Header().Set(hxRedirectHeader, "/admin/users?msg=User+deleted+successfully")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -955,4 +944,38 @@ func (h *HttpAdapter) adminDecoupleIdentity(w http.ResponseWriter, r *http.Reque
 		Providers:  providers,
 	})
 	_ = component.Render(r.Context(), w)
+}
+
+func (h *HttpAdapter) isWhitelisted(tenant *model.Tenant, uri string) bool {
+	if uri == "" {
+		return true
+	}
+	for _, w := range tenant.Config.RedirectWhitelist {
+		if strings.HasPrefix(uri, w) || uri == w {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *HttpAdapter) validateClientWhitelists(tenant *model.Tenant, redirectURIs, postLogoutURIs []string, frontChannelLogoutURI, backChannelLogoutURI string) []string {
+	var warnings []string
+
+	for _, u := range redirectURIs {
+		if !h.isWhitelisted(tenant, u) {
+			warnings = append(warnings, fmt.Sprintf("Redirect URI '%s' is not in the Whitelist", u))
+		}
+	}
+	for _, u := range postLogoutURIs {
+		if !h.isWhitelisted(tenant, u) {
+			warnings = append(warnings, fmt.Sprintf("Post-Logout URI '%s' is not in the Whitelist", u))
+		}
+	}
+	if frontChannelLogoutURI != "" && !h.isWhitelisted(tenant, frontChannelLogoutURI) {
+		warnings = append(warnings, fmt.Sprintf("Front-Channel Logout URI '%s' is not in the Whitelist", frontChannelLogoutURI))
+	}
+	if backChannelLogoutURI != "" && !h.isWhitelisted(tenant, backChannelLogoutURI) {
+		warnings = append(warnings, fmt.Sprintf("Back-Channel Logout URI '%s' is not in the Whitelist", backChannelLogoutURI))
+	}
+	return warnings
 }
