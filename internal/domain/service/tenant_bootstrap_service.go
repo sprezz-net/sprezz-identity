@@ -105,11 +105,6 @@ func (s *TenantBootstrapService) bootstrapNewTenant(ctx context.Context, domain 
 		return nil, fmt.Errorf("create default partition: %w", err)
 	}
 
-	_, err = s.storage.CreatePartition(ctx, newTenant.ID, "Sprezz Admin", "sprezz_admin")
-	if err != nil {
-		return nil, fmt.Errorf("create sprezz admin partition: %w", err)
-	}
-
 	newTenant.DefaultPartition = &p1.ID
 	if err := s.storage.CreateTenant(ctx, *newTenant); err != nil {
 		return nil, fmt.Errorf("update tenant default partition: %w", err)
