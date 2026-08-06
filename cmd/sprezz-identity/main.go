@@ -29,7 +29,7 @@ type dependencies struct {
 }
 
 func main() {
-	log.Println("Starting Sprezz token server...")
+	log.Println("Starting Sprezz Identity server...")
 
 	deps := initDependencies()
 	sysClock := clock.NewSystemClock()
