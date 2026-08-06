@@ -3,8 +3,9 @@ package model
 type SignatureAlgorithm string
 
 const (
-	AlgRS256 SignatureAlgorithm = "RS256"
+	AlgEdDSA SignatureAlgorithm = "EdDSA"
 	AlgES256 SignatureAlgorithm = "ES256"
+	AlgRS256 SignatureAlgorithm = "RS256"
 )
 
 type SigningKeyMetadata struct {

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"crypto/ed25519"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rsa"
@@ -42,8 +43,16 @@ func (h *HttpAdapter) handleAuthorizationCodeGrant(w http.ResponseWriter, r *htt
 }
 
 func (h *HttpAdapter) authenticateClient(w http.ResponseWriter, r *http.Request, tenant *model.Tenant) (*model.ClientApplication, error) {
-	clientID := r.FormValue("client_id")
-	clientSecret := r.FormValue("client_secret")
+	var clientID, clientSecret string
+
+	if id, secret, ok := r.BasicAuth(); ok {
+		clientID = id
+		clientSecret = secret
+	} else {
+		clientID = r.FormValue("client_id")
+		clientSecret = r.FormValue("client_secret")
+	}
+
 	if clientID == "" || clientSecret == "" {
 		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "client_id and client_secret are required"})
 		return nil, fmt.Errorf("client_id and client_secret are required")
@@ -195,6 +204,104 @@ func (h *HttpAdapter) validateUserInfoDPoP(r *http.Request, claims jwt.MapClaims
 	return nil
 }
 
+func (h *HttpAdapter) parseRSADPoPKey(jwkJSON []byte) (*rsa.PublicKey, string, error) {
+	var rsaPub struct {
+		N string `json:"n"`
+		E string `json:"e"`
+	}
+	if err := json.Unmarshal(jwkJSON, &rsaPub); err != nil {
+		return nil, "", fmt.Errorf("unmarshal rsa jwk: %w", err)
+	}
+	nBytes, err := base64.RawURLEncoding.DecodeString(rsaPub.N)
+	if err != nil {
+		return nil, "", fmt.Errorf("decode jwk n: %w", err)
+	}
+	eBytes, err := base64.RawURLEncoding.DecodeString(rsaPub.E)
+	if err != nil {
+		return nil, "", fmt.Errorf("decode jwk e: %w", err)
+	}
+	if len(eBytes) < 1 {
+		return nil, "", errors.New("invalid jwk e")
+	}
+	var eVal int
+	for _, b := range eBytes {
+		eVal = (eVal << 8) | int(b)
+	}
+
+	pubKey := &rsa.PublicKey{
+		N: new(big.Int).SetBytes(nBytes),
+		E: eVal,
+	}
+
+	sortedJWKJSON := fmt.Sprintf(`{"e":"%s","kty":"RSA","n":"%s"}`, rsaPub.E, rsaPub.N)
+	hsh := sha256.Sum256([]byte(sortedJWKJSON))
+	jkt := base64.RawURLEncoding.EncodeToString(hsh[:])
+
+	return pubKey, jkt, nil
+}
+
+func (h *HttpAdapter) parseECDPoPKey(jwkJSON []byte) (*ecdsa.PublicKey, string, error) {
+	var ecPub struct {
+		Crv string `json:"crv"`
+		X   string `json:"x"`
+		Y   string `json:"y"`
+	}
+	if err := json.Unmarshal(jwkJSON, &ecPub); err != nil {
+		return nil, "", fmt.Errorf("unmarshal ec jwk: %w", err)
+	}
+	if ecPub.Crv != "P-256" {
+		return nil, "", fmt.Errorf("unsupported EC curve: %s", ecPub.Crv)
+	}
+	xBytes, err := base64.RawURLEncoding.DecodeString(ecPub.X)
+	if err != nil {
+		return nil, "", fmt.Errorf("decode jwk x: %w", err)
+	}
+	yBytes, err := base64.RawURLEncoding.DecodeString(ecPub.Y)
+	if err != nil {
+		return nil, "", fmt.Errorf("decode jwk y: %w", err)
+	}
+
+	pubKey := &ecdsa.PublicKey{
+		Curve: elliptic.P256(),
+		X:     new(big.Int).SetBytes(xBytes),
+		Y:     new(big.Int).SetBytes(yBytes),
+	}
+
+	sortedJWKJSON := fmt.Sprintf(`{"crv":"%s","kty":"EC","x":"%s","y":"%s"}`, ecPub.Crv, ecPub.X, ecPub.Y)
+	hsh := sha256.Sum256([]byte(sortedJWKJSON))
+	jkt := base64.RawURLEncoding.EncodeToString(hsh[:])
+
+	return pubKey, jkt, nil
+}
+
+func (h *HttpAdapter) parseOKPDPoPKey(jwkJSON []byte) (ed25519.PublicKey, string, error) {
+	var okpPub struct {
+		Crv string `json:"crv"`
+		X   string `json:"x"`
+	}
+	if err := json.Unmarshal(jwkJSON, &okpPub); err != nil {
+		return nil, "", fmt.Errorf("unmarshal okp jwk: %w", err)
+	}
+	if okpPub.Crv != "Ed25519" {
+		return nil, "", fmt.Errorf("unsupported OKP curve: %s", okpPub.Crv)
+	}
+	xBytes, err := base64.RawURLEncoding.DecodeString(okpPub.X)
+	if err != nil {
+		return nil, "", fmt.Errorf("decode jwk x: %w", err)
+	}
+	if len(xBytes) != ed25519.PublicKeySize {
+		return nil, "", fmt.Errorf("invalid Ed25519 public key size: %d", len(xBytes))
+	}
+
+	pubKey := ed25519.PublicKey(xBytes)
+
+	sortedJWKJSON := fmt.Sprintf(`{"crv":"%s","kty":"OKP","x":"%s"}`, okpPub.Crv, okpPub.X)
+	hsh := sha256.Sum256([]byte(sortedJWKJSON))
+	jkt := base64.RawURLEncoding.EncodeToString(hsh[:])
+
+	return pubKey, jkt, nil
+}
+
 func (h *HttpAdapter) parseDPoPPubKey(dpopHeader string) (any, string, error) {
 	parser := new(jwt.Parser)
 	token, _, err := parser.ParseUnverified(dpopHeader, jwt.MapClaims{})
@@ -224,75 +331,16 @@ func (h *HttpAdapter) parseDPoPPubKey(dpopHeader string) (any, string, error) {
 		return nil, "", fmt.Errorf("unmarshal jwk base: %w", err)
 	}
 
-	if jwkBase.Kty == "RSA" {
-		var rsaPub struct {
-			N string `json:"n"`
-			E string `json:"e"`
-		}
-		if err := json.Unmarshal(jwkJSON, &rsaPub); err != nil {
-			return nil, "", fmt.Errorf("unmarshal rsa jwk: %w", err)
-		}
-		nBytes, err := base64.RawURLEncoding.DecodeString(rsaPub.N)
-		if err != nil {
-			return nil, "", fmt.Errorf("decode jwk n: %w", err)
-		}
-		eBytes, err := base64.RawURLEncoding.DecodeString(rsaPub.E)
-		if err != nil {
-			return nil, "", fmt.Errorf("decode jwk e: %w", err)
-		}
-		if len(eBytes) < 1 {
-			return nil, "", errors.New("invalid jwk e")
-		}
-		var eVal int
-		for _, b := range eBytes {
-			eVal = (eVal << 8) | int(b)
-		}
-
-		pubKey := &rsa.PublicKey{
-			N: new(big.Int).SetBytes(nBytes),
-			E: eVal,
-		}
-
-		sortedJWKJSON := fmt.Sprintf(`{"e":"%s","kty":"RSA","n":"%s"}`, rsaPub.E, rsaPub.N)
-		hsh := sha256.Sum256([]byte(sortedJWKJSON))
-		jkt := base64.RawURLEncoding.EncodeToString(hsh[:])
-
-		return pubKey, jkt, nil
-	} else if jwkBase.Kty == "EC" {
-		var ecPub struct {
-			Crv string `json:"crv"`
-			X   string `json:"x"`
-			Y   string `json:"y"`
-		}
-		if err := json.Unmarshal(jwkJSON, &ecPub); err != nil {
-			return nil, "", fmt.Errorf("unmarshal ec jwk: %w", err)
-		}
-		if ecPub.Crv != "P-256" {
-			return nil, "", fmt.Errorf("unsupported EC curve: %s", ecPub.Crv)
-		}
-		xBytes, err := base64.RawURLEncoding.DecodeString(ecPub.X)
-		if err != nil {
-			return nil, "", fmt.Errorf("decode jwk x: %w", err)
-		}
-		yBytes, err := base64.RawURLEncoding.DecodeString(ecPub.Y)
-		if err != nil {
-			return nil, "", fmt.Errorf("decode jwk y: %w", err)
-		}
-
-		pubKey := &ecdsa.PublicKey{
-			Curve: elliptic.P256(),
-			X:     new(big.Int).SetBytes(xBytes),
-			Y:     new(big.Int).SetBytes(yBytes),
-		}
-
-		sortedJWKJSON := fmt.Sprintf(`{"crv":"%s","kty":"EC","x":"%s","y":"%s"}`, ecPub.Crv, ecPub.X, ecPub.Y)
-		hsh := sha256.Sum256([]byte(sortedJWKJSON))
-		jkt := base64.RawURLEncoding.EncodeToString(hsh[:])
-
-		return pubKey, jkt, nil
+	switch jwkBase.Kty {
+	case "RSA":
+		return h.parseRSADPoPKey(jwkJSON)
+	case "EC":
+		return h.parseECDPoPKey(jwkJSON)
+	case "OKP":
+		return h.parseOKPDPoPKey(jwkJSON)
+	default:
+		return nil, "", fmt.Errorf("unsupported JWK kty: %s", jwkBase.Kty)
 	}
-
-	return nil, "", fmt.Errorf("unsupported JWK kty: %s", jwkBase.Kty)
 }
 
 func (h *HttpAdapter) validateDPoPClaims(r *http.Request, claims jwt.MapClaims) (time.Time, error) {

@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -90,6 +91,75 @@ func mintDPoPProofForTestEC(t *testing.T, privateKey *ecdsa.PrivateKey, jwkMap m
 		t.Fatalf("failed to sign token: %v", err)
 	}
 	return str
+}
+
+func generateDPoPTestKeyOKP(t *testing.T) (ed25519.PrivateKey, map[string]any) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate ed25519 key: %v", err)
+	}
+	xStr := base64.RawURLEncoding.EncodeToString(pub)
+	jwkMap := map[string]any{
+		"kty": "OKP",
+		"crv": "Ed25519",
+		"x":   xStr,
+	}
+	return priv, jwkMap
+}
+
+func mintDPoPProofForTestOKP(t *testing.T, privateKey ed25519.PrivateKey, jwkMap map[string]any, method, urlStr, jti string, iat time.Time) string {
+	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, jwt.MapClaims{
+		"htm": method,
+		"htu": urlStr,
+		"jti": jti,
+		"iat": iat.Unix(),
+	})
+	token.Header["typ"] = "dpop+jwt"
+	token.Header["jwk"] = jwkMap
+	token.Header["alg"] = "EdDSA"
+
+	str, err := token.SignedString(privateKey)
+	if err != nil {
+		t.Fatalf("failed to sign token: %v", err)
+	}
+	return str
+}
+
+func TestHttpAdapter_DPoPProofValidation_Success_OKP(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	auth := portmock.NewAuthMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+
+	privateKey, jwkMap := generateDPoPTestKeyOKP(t)
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+
+	jti := "jti-okp-1"
+	proof := mintDPoPProofForTestOKP(t, privateKey, jwkMap, "POST", "https://test.com/oauth/token", jti, time.Now())
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", nil)
+	req.Host = "test.com"
+	req.Header.Set("DPoP", proof)
+
+	storage.IsDPoPProofUsedMock.Set(func(ctx context.Context, gotJti string) (bool, error) {
+		if gotJti != jti {
+			t.Errorf("expected checked jti %s, got %s", jti, gotJti)
+		}
+		return false, nil
+	})
+	storage.SaveDPoPProofMock.Set(func(ctx context.Context, gotJti string, exp time.Time) error {
+		if gotJti != jti {
+			t.Errorf("expected jti %s, got %s", jti, gotJti)
+		}
+		return nil
+	})
+
+	jkt, err := adapter.validateDPoPProof(req)
+	if err != nil {
+		t.Fatalf("expected successful EdDSA/OKP validation, got: %v", err)
+	}
+	if jkt == "" {
+		t.Error("expected non-empty JKT thumbprint for OKP")
+	}
 }
 
 func TestHttpAdapter_DPoPProofValidation_Success_EC(t *testing.T) {
@@ -345,5 +415,212 @@ func TestHttpAdapter_Token_InvalidGrantType(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400, got %d", rec.Code)
+	}
+}
+
+func TestHttpAdapter_Token_ClientCredentials_BasicAuth(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	auth := portmock.NewAuthMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	secret := "supersecret"
+	client := &model.ClientApplication{
+		ID:                  uuid.NewString(),
+		TenantID:            tenantID,
+		ClientID:            "cc-client",
+		ClientSecret:        &secret,
+		DefaultScopes:       []string{"openid"},
+		AccessTokenLifetime: time.Hour,
+		Algorithm:           model.AlgRS256,
+	}
+
+	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
+		return tenant, nil
+	})
+	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
+		return client, nil
+	})
+	crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+		return "mock-access-token-basic", nil
+	})
+
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", bytes.NewBufferString("grant_type=client_credentials"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("cc-client", "supersecret")
+	req.Host = "test.com"
+	rec := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "mock-access-token-basic") {
+		t.Fatalf("expected response to contain access token from basic auth")
+	}
+}
+
+func TestHttpAdapter_Introspect_BasicAuth(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	auth := portmock.NewAuthMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	secret := "clientsecret"
+	client := &model.ClientApplication{
+		ID:           uuid.NewString(),
+		TenantID:     tenantID,
+		ClientID:     "test-client",
+		ClientSecret: &secret,
+	}
+
+	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
+		return tenant, nil
+	})
+	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
+		return client, nil
+	})
+	auth.IntrospectTokenMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string, token string) (*model.IntrospectionResponse, error) {
+		return &model.IntrospectionResponse{
+			Active:   true,
+			ClientID: clientID,
+			Subject:  "user-1",
+		}, nil
+	})
+
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/introspect", bytes.NewBufferString("token=some-token"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("test-client", "clientsecret")
+	req.Host = "test.com"
+	rec := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHttpAdapter_Introspect_Post(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	auth := portmock.NewAuthMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	secret := "clientsecret"
+	client := &model.ClientApplication{
+		ID:           uuid.NewString(),
+		TenantID:     tenantID,
+		ClientID:     "test-client",
+		ClientSecret: &secret,
+	}
+
+	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
+		return tenant, nil
+	})
+	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
+		return client, nil
+	})
+	auth.IntrospectTokenMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string, token string) (*model.IntrospectionResponse, error) {
+		return &model.IntrospectionResponse{
+			Active:   true,
+			ClientID: clientID,
+			Subject:  "user-1",
+		}, nil
+	})
+
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/introspect", bytes.NewBufferString("client_id=test-client&client_secret=clientsecret&token=some-token"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Host = "test.com"
+	rec := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHttpAdapter_Introspect_None_Unauthorized(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	auth := portmock.NewAuthMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+
+	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
+		return tenant, nil
+	})
+
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/introspect", bytes.NewBufferString("token=some-token"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Host = "test.com"
+	rec := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", rec.Code)
+	}
+}
+
+func TestHttpAdapter_Token_RefreshToken_None_Success(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	auth := portmock.NewAuthMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	client := &model.ClientApplication{
+		ID:         uuid.NewString(),
+		TenantID:   tenantID,
+		ClientID:   "public-client",
+		ClientType: model.ClientTypePublic,
+		Algorithm:  model.AlgRS256,
+	}
+
+	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
+		return tenant, nil
+	})
+	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
+		return client, nil
+	})
+	auth.ExchangeRefreshTokenForTokensMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string, refreshTokenStr string, dpopJKT string) (*model.TokenSetResponse, error) {
+		return &model.TokenSetResponse{
+			AccessToken:  "new-at-123",
+			RefreshToken: "new-rt-123",
+			TokenType:    "Bearer",
+		}, nil
+	})
+
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", bytes.NewBufferString("grant_type=refresh_token&client_id=public-client&refresh_token=rt-123"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Host = "test.com"
+	rec := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 }
