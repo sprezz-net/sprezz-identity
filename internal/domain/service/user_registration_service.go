@@ -54,6 +54,7 @@ func (s *UserRegistrationService) RegisterUser(ctx context.Context, tenantID uui
 		Name:              name,
 		Email:             email,
 		EmailVerified:     false,
+		PartitionID:       provider.PartitionID,
 	}
 
 	// Save profile to database (this checks collisions internally)
