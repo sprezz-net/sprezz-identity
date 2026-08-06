@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"sprezz-identity/internal/domain/model"
@@ -252,6 +253,230 @@ func (s *OAuthService) ExchangeRefreshTokenForTokens(ctx context.Context, tenant
 	return &model.TokenSetResponse{
 		AccessToken:  accessToken,
 		RefreshToken: newRefreshTokenStr,
+		TokenType:    tokenType,
+		ExpiresIn:    int64(client.AccessTokenLifetime / time.Second),
+	}, nil
+}
+
+func (s *OAuthService) ExchangeExternalToken(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType string, dpopJKT string) (*model.TokenSetResponse, error) {
+	client, err := s.storage.GetClient(ctx, tenantID, clientID)
+	if err != nil {
+		return nil, fmt.Errorf("get client: %w", err)
+	}
+
+	tenant, err := s.storage.ResolveTenantByID(ctx, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("resolve tenant: %w", err)
+	}
+
+	externalSub, iss, email, name, preferredUsername, err := s.parseExternalToken(subjectToken, subjectTokenType)
+	if err != nil {
+		return nil, err
+	}
+
+	matchedProvider, err := s.matchIdentityProvider(ctx, tenantID, iss)
+	if err != nil {
+		return nil, err
+	}
+
+	now := s.clock.Now()
+
+	profile, err := s.getOrCreateUserProfile(ctx, tenantID, matchedProvider, email, preferredUsername, name, now)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.coupleUserIdentity(ctx, profile.ID, matchedProvider.ID, externalSub, now); err != nil {
+		return nil, fmt.Errorf("couple user identity: %w", err)
+	}
+
+	return s.mintTokensForExchangedUser(ctx, tenant, client, profile.ID.String(), dpopJKT, now)
+}
+
+func (s *OAuthService) parseExternalToken(subjectToken string, subjectTokenType string) (string, string, string, string, string, error) {
+	var externalSub, iss, email, name, preferredUsername string
+
+	if subjectTokenType == "urn:ietf:params:oauth:token-type:jwt" || subjectTokenType == "urn:ietf:params:oauth:token-type:id_token" {
+		parser := new(jwt.Parser)
+		token, _, err := parser.ParseUnverified(subjectToken, jwt.MapClaims{})
+		if err != nil {
+			return "", "", "", "", "", errors.New("invalid external token")
+		}
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			return "", "", "", "", "", errors.New("invalid external claims")
+		}
+
+		externalSub, _ = claims["sub"].(string)
+		iss, _ = claims["iss"].(string)
+		email, _ = claims["email"].(string)
+		name, _ = claims["name"].(string)
+		preferredUsername, _ = claims["preferred_username"].(string)
+		if preferredUsername == "" {
+			preferredUsername, _ = claims["username"].(string)
+		}
+	} else if strings.HasPrefix(subjectToken, "legacy-token:") {
+		parts := strings.Split(subjectToken, ":")
+		if len(parts) >= 4 {
+			email = parts[1]
+			preferredUsername = parts[2]
+			externalSub = parts[3]
+			iss = "legacy-system"
+		} else {
+			return "", "", "", "", "", errors.New("invalid legacy token format")
+		}
+	} else {
+		return "", "", "", "", "", errors.New("unsupported subject token type")
+	}
+
+	if externalSub == "" {
+		return "", "", "", "", "", errors.New("external subject must not be empty")
+	}
+
+	return externalSub, iss, email, name, preferredUsername, nil
+}
+
+func (s *OAuthService) matchIdentityProvider(ctx context.Context, tenantID uuid.UUID, iss string) (*model.IdentityProvider, error) {
+	providers, err := s.storage.GetEnabledIdentityProviders(ctx, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("get enabled identity providers: %w", err)
+	}
+
+	for _, p := range providers {
+		if p.Alias != "" && (strings.Contains(strings.ToLower(iss), strings.ToLower(p.Alias)) || strings.Contains(strings.ToLower(p.Alias), strings.ToLower(iss))) {
+			return &p, nil
+		}
+	}
+
+	for _, p := range providers {
+		if p.IDPType != model.UsernamePasswordIDPType {
+			return &p, nil
+		}
+	}
+
+	if len(providers) > 0 {
+		return &providers[0], nil
+	}
+
+	return nil, errors.New("no matching identity provider found")
+}
+
+func (s *OAuthService) getOrCreateUserProfile(ctx context.Context, tenantID uuid.UUID, provider *model.IdentityProvider, email, preferredUsername, name string, now time.Time) (*model.UserProfile, error) {
+	var profile *model.UserProfile
+	if email != "" {
+		profile, _ = s.storage.GetUserProfileByIdentifier(ctx, tenantID, provider.ID, email)
+	}
+	if profile == nil && preferredUsername != "" {
+		profile, _ = s.storage.GetUserProfileByIdentifier(ctx, tenantID, provider.ID, preferredUsername)
+	}
+
+	if profile != nil {
+		return profile, nil
+	}
+
+	if preferredUsername == "" {
+		preferredUsername = "user_" + uuid.NewString()[:8]
+	}
+	profile = &model.UserProfile{
+		ID:                uuid.New(),
+		TenantID:          tenantID,
+		PreferredUsername: preferredUsername,
+		Email:             email,
+		Name:              name,
+		EmailVerified:     true,
+		PartitionID:       provider.PartitionID,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	if err := s.storage.SaveUserProfile(ctx, tenantID, *profile); err != nil {
+		return nil, fmt.Errorf("auto-register user profile: %w", err)
+	}
+
+	return profile, nil
+}
+
+func (s *OAuthService) coupleUserIdentity(ctx context.Context, profileID uuid.UUID, providerID uuid.UUID, externalSub string, now time.Time) error {
+	identity, err := s.storage.GetIdentityByProfileAndProvider(ctx, profileID, providerID)
+	if err != nil || identity == nil {
+		newIdentity := model.UserIdentity{
+			ID:                 uuid.New(),
+			UserProfileID:      profileID,
+			IdentityProviderID: providerID,
+			ExternalIdentityID: externalSub,
+			CoupledAt:          now,
+			LoginCount:         1,
+			LastLoginAt:        now,
+		}
+		return s.storage.UpsertIdentity(ctx, newIdentity)
+	}
+
+	identity.LoginCount++
+	identity.LastLoginAt = now
+	return s.storage.UpsertIdentity(ctx, *identity)
+}
+
+func (s *OAuthService) mintTokensForExchangedUser(ctx context.Context, tenant *model.Tenant, client *model.ClientApplication, profileID string, dpopJKT string, now time.Time) (*model.TokenSetResponse, error) {
+	issuer := schemeHttps + tenant.Domain
+	accessToken, err := s.crypto.SignAccessToken(model.TokenClaims{
+		TokenID:   uuid.NewString(),
+		Issuer:    issuer,
+		TenantID:  tenant.ID.String(),
+		Subject:   profileID,
+		ClientID:  client.ClientID,
+		Scopes:    client.DefaultScopes,
+		IssuedAt:  now,
+		ExpiresAt: now.Add(client.AccessTokenLifetime),
+		Audiences: client.AllowedAudiences,
+		DPoPHash:  dpopJKT,
+	}, client.Algorithm)
+	if err != nil {
+		return nil, fmt.Errorf("mint exchanged access token: %w", err)
+	}
+
+	idToken, err := s.crypto.SignIDToken(model.OIDCTokenClaims{
+		TokenID:   uuid.NewString(),
+		Issuer:    issuer,
+		Subject:   profileID,
+		Audience:  client.ClientID,
+		TenantID:  tenant.ID.String(),
+		IssuedAt:  now,
+		ExpiresAt: now.Add(client.IDTokenLifetime),
+		AuthTime:  now,
+		Nonce:     uuid.NewString(),
+	}, client.Algorithm)
+	if err != nil {
+		return nil, fmt.Errorf("mint exchanged id token: %w", err)
+	}
+
+	tokenType := "Bearer"
+	if dpopJKT != "" {
+		tokenType = "DPoP"
+	}
+
+	refreshTokenVal := ""
+	if client.EnforceRTR {
+		bytes := make([]byte, 32)
+		if _, err := rand.Read(bytes); err == nil {
+			refreshTokenVal = base64.RawURLEncoding.EncodeToString(bytes)
+		}
+		familyID := uuid.NewString()
+		_ = s.storage.SaveRefreshToken(ctx, model.RefreshToken{
+			TokenID:       refreshTokenVal,
+			TenantID:      tenant.ID,
+			ClientID:      client.ClientID,
+			Subject:       profileID,
+			Scopes:        client.DefaultScopes,
+			TokenFamilyID: familyID,
+			IsUsed:        false,
+			ExpiresAt:     now.Add(client.RefreshTokenLifetime),
+			CreatedAt:     now,
+		})
+	}
+
+	return &model.TokenSetResponse{
+		AccessToken:  accessToken,
+		IDToken:      idToken,
+		RefreshToken: refreshTokenVal,
 		TokenType:    tokenType,
 		ExpiresIn:    int64(client.AccessTokenLifetime / time.Second),
 	}, nil

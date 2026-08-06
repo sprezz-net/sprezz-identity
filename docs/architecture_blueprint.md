@@ -292,6 +292,16 @@ To maintain complete compatibility with off-the-shelf native app clients, the HT
 | `/oauth/userinfo` | `GET` | OIDC Core 1.0 | Authenticated user profile retrieval interface (`Authorization: Bearer`). |
 | **Dynamic Routing Middleware** | `Intercept` | HTTP Host Header Context | Resolves incoming raw server domains (`Host`) to a valid internal `tenant_id` state. |
 
+### 5.6 OAuth 2.0 Token Exchange (RFC 8693)
+
+Sprezz Identity implements OAuth 2.0 Token Exchange (RFC 8693) via the custom grant type `urn:ietf:params:oauth:grant-type:token-exchange` at the `/oauth/token` POST endpoint. This enables standard federated logins by allowing trusted clients to trade an external token (e.g., an OIDC ID Token from Google or GitHub, or a legacy system token) directly for native Sprezz Identity Access and ID tokens.
+
+* **Client Authentication**: Confidential clients are authenticated via standard HTTP Basic Authentication or form parameter checks. Public clients are checked for validity by resolving their registrations.
+* **Token Validation**: The service decodes and extracts claims (e.g. `iss`, `sub`, `email`, `name`, `preferred_username`) from incoming OIDC JWT tokens or custom legacy string formats.
+* **Federated Identity Mapping**: The server matches the token's `iss` issuer to an enabled, configured `IdentityProvider` in the tenant context.
+* **Just-In-Time Dynamic Registration**: If the external identity maps to a non-existent local user profile under the target partition, Sprezz Identity automatically creates the user's native profile and establishes the necessary cryptographic identity coupling records seamlessly.
+* **Token Issuance**: The server mints a secure, native Access Token (and ID/Refresh Token as per client capabilities and configuration) bound to the newly resolved or registered native subject.
+
 ## 6. Token Lifecycle, Governance & Asymmetric Cryptography
 
 ### 6.1 Audience Governance and Token Minting

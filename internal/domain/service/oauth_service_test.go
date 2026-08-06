@@ -599,3 +599,157 @@ func TestOAuthService_ExchangeRefreshTokenForTokens_BreachDetection(t *testing.T
 		t.Errorf("expected error 'invalid_grant', got %s", err.Error())
 	}
 }
+
+func TestOAuthService_ExchangeExternalToken_Legacy_Success(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+	service := NewOAuthService(storage, crypto, nil, nil, portmock.NewMockClock(time.Now()))
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "example.com"}
+	clientID := "client-id"
+	subjectToken := "legacy-token:john@example.com:john_doe:ext-sub-999"
+	subjectTokenType := "urn:ietf:params:oauth:token-type:legacy"
+
+	client := &model.ClientApplication{
+		ID:                   uuid.NewString(),
+		TenantID:             tenantID,
+		ClientID:             clientID,
+		Algorithm:            model.AlgRS256,
+		AccessTokenLifetime:  time.Hour,
+		IDTokenLifetime:      time.Minute,
+		RefreshTokenLifetime: 24 * time.Hour,
+	}
+
+	providerID := uuid.New()
+	providers := []model.IdentityProvider{
+		{
+			ID:          providerID,
+			TenantID:    tenantID,
+			IDPType:     "oidc",
+			Enabled:     true,
+			Alias:       "legacy-system",
+			PartitionID: 1,
+		},
+	}
+
+	profile := &model.UserProfile{
+		ID:                uuid.New(),
+		TenantID:          tenantID,
+		PreferredUsername: "john_doe",
+		Email:             "john@example.com",
+		PartitionID:       1,
+	}
+
+	storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(client, nil)
+	storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(tenant, nil)
+	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return(providers, nil)
+	storage.GetUserProfileByIdentifierMock.Expect(context.Background(), tenantID, providerID, "john@example.com").Return(profile, nil)
+	storage.GetIdentityByProfileAndProviderMock.Expect(context.Background(), profile.ID, providerID).Return(nil, errors.New("not found"))
+	storage.UpsertIdentityMock.Set(func(ctx context.Context, ident model.UserIdentity) error {
+		if ident.ExternalIdentityID != "ext-sub-999" {
+			t.Errorf("expected external identity ID 'ext-sub-999', got %s", ident.ExternalIdentityID)
+		}
+		return nil
+	})
+
+	crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+		return "native-access-token", nil
+	})
+	crypto.SignIDTokenMock.Set(func(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
+		return "native-id-token", nil
+	})
+
+	tokens, err := service.ExchangeExternalToken(context.Background(), tenantID, clientID, subjectToken, subjectTokenType, "")
+	if err != nil {
+		t.Fatalf("ExchangeExternalToken returned error: %v", err)
+	}
+
+	if tokens.AccessToken != "native-access-token" {
+		t.Errorf("expected AccessToken 'native-access-token', got %s", tokens.AccessToken)
+	}
+}
+
+func TestOAuthService_ExchangeExternalToken_JWT_Success(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+	service := NewOAuthService(storage, crypto, nil, nil, portmock.NewMockClock(time.Now()))
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "example.com"}
+	clientID := "client-id"
+
+	claims := jwt.MapClaims{
+		"sub":   "external-sub-jwt-777",
+		"iss":   "https://accounts.google.com",
+		"email": "google-user@example.com",
+		"name":  "Google User",
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte("some-secret"))
+	if err != nil {
+		t.Fatalf("failed to sign token: %v", err)
+	}
+
+	subjectTokenType := "urn:ietf:params:oauth:token-type:jwt"
+
+	client := &model.ClientApplication{
+		ID:                   uuid.NewString(),
+		TenantID:             tenantID,
+		ClientID:             clientID,
+		Algorithm:            model.AlgRS256,
+		AccessTokenLifetime:  time.Hour,
+		IDTokenLifetime:      time.Minute,
+		RefreshTokenLifetime: 24 * time.Hour,
+	}
+
+	providerID := uuid.New()
+	providers := []model.IdentityProvider{
+		{
+			ID:          providerID,
+			TenantID:    tenantID,
+			IDPType:     "google",
+			Enabled:     true,
+			Alias:       "google",
+			PartitionID: 1,
+		},
+	}
+
+	profile := &model.UserProfile{
+		ID:                uuid.New(),
+		TenantID:          tenantID,
+		PreferredUsername: "google_user",
+		Email:             "google-user@example.com",
+		PartitionID:       1,
+	}
+
+	storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(client, nil)
+	storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(tenant, nil)
+	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return(providers, nil)
+	storage.GetUserProfileByIdentifierMock.Expect(context.Background(), tenantID, providerID, "google-user@example.com").Return(profile, nil)
+	storage.GetIdentityByProfileAndProviderMock.Expect(context.Background(), profile.ID, providerID).Return(nil, errors.New("not found"))
+	storage.UpsertIdentityMock.Set(func(ctx context.Context, ident model.UserIdentity) error {
+		if ident.ExternalIdentityID != "external-sub-jwt-777" {
+			t.Errorf("expected external identity ID 'external-sub-jwt-777', got %s", ident.ExternalIdentityID)
+		}
+		return nil
+	})
+
+	crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+		return "native-access-token-jwt", nil
+	})
+	crypto.SignIDTokenMock.Set(func(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
+		return "native-id-token-jwt", nil
+	})
+
+	tokens, err := service.ExchangeExternalToken(context.Background(), tenantID, clientID, tokenString, subjectTokenType, "")
+	if err != nil {
+		t.Fatalf("ExchangeExternalToken returned error: %v", err)
+	}
+
+	if tokens.AccessToken != "native-access-token-jwt" {
+		t.Errorf("expected AccessToken 'native-access-token-jwt', got %s", tokens.AccessToken)
+	}
+}

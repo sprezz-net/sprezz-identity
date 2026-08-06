@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
+	"encoding/json"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -507,6 +508,65 @@ func TestHttpAdapter_Introspect_BasicAuth(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHttpAdapter_Token_TokenExchange_Success(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	auth := portmock.NewAuthMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	client := &model.ClientApplication{
+		ID:         uuid.NewString(),
+		TenantID:   tenantID,
+		ClientID:   "public-client",
+		ClientType: model.ClientTypePublic,
+		Algorithm:  model.AlgRS256,
+	}
+
+	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
+		return tenant, nil
+	})
+	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
+		return client, nil
+	})
+	auth.ExchangeExternalTokenMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType string, dpopJKT string) (*model.TokenSetResponse, error) {
+		if subjectToken != "some-ext-token-123" {
+			t.Errorf("expected subjectToken 'some-ext-token-123', got %s", subjectToken)
+		}
+		if subjectTokenType != "urn:ietf:params:oauth:token-type:jwt" {
+			t.Errorf("expected subjectTokenType 'urn:ietf:params:oauth:token-type:jwt', got %s", subjectTokenType)
+		}
+		return &model.TokenSetResponse{
+			AccessToken: "native-token-abc",
+			TokenType:   "Bearer",
+			ExpiresIn:   3600,
+		}, nil
+	})
+
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", bytes.NewBufferString("grant_type=urn:ietf:params:oauth:grant-type:token-exchange&client_id=public-client&subject_token=some-ext-token-123&subject_token_type=urn:ietf:params:oauth:token-type:jwt"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Host = "test.com"
+	rec := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse JSON response: %v", err)
+	}
+
+	if resp["access_token"] != "native-token-abc" {
+		t.Errorf("expected access_token 'native-token-abc', got %v", resp["access_token"])
 	}
 }
 

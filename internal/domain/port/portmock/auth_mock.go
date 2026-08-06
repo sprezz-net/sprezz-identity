@@ -27,6 +27,13 @@ type AuthMock struct {
 	beforeExchangeCodeForTokensCounter uint64
 	ExchangeCodeForTokensMock          mAuthMockExchangeCodeForTokens
 
+	funcExchangeExternalToken          func(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType string, dpopJKT string) (tp1 *model.TokenSetResponse, err error)
+	funcExchangeExternalTokenOrigin    string
+	inspectFuncExchangeExternalToken   func(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType string, dpopJKT string)
+	afterExchangeExternalTokenCounter  uint64
+	beforeExchangeExternalTokenCounter uint64
+	ExchangeExternalTokenMock          mAuthMockExchangeExternalToken
+
 	funcExchangeRefreshTokenForTokens          func(ctx context.Context, tenantID uuid.UUID, clientID string, refreshTokenStr string, dpopJKT string) (tp1 *model.TokenSetResponse, err error)
 	funcExchangeRefreshTokenForTokensOrigin    string
 	inspectFuncExchangeRefreshTokenForTokens   func(ctx context.Context, tenantID uuid.UUID, clientID string, refreshTokenStr string, dpopJKT string)
@@ -87,6 +94,9 @@ func NewAuthMock(t minimock.Tester) *AuthMock {
 
 	m.ExchangeCodeForTokensMock = mAuthMockExchangeCodeForTokens{mock: m}
 	m.ExchangeCodeForTokensMock.callArgs = []*AuthMockExchangeCodeForTokensParams{}
+
+	m.ExchangeExternalTokenMock = mAuthMockExchangeExternalToken{mock: m}
+	m.ExchangeExternalTokenMock.callArgs = []*AuthMockExchangeExternalTokenParams{}
 
 	m.ExchangeRefreshTokenForTokensMock = mAuthMockExchangeRefreshTokenForTokens{mock: m}
 	m.ExchangeRefreshTokenForTokensMock.callArgs = []*AuthMockExchangeRefreshTokenForTokensParams{}
@@ -578,6 +588,473 @@ func (m *AuthMock) MinimockExchangeCodeForTokensInspect() {
 	if !m.ExchangeCodeForTokensMock.invocationsDone() && afterExchangeCodeForTokensCounter > 0 {
 		m.t.Errorf("Expected %d calls to AuthMock.ExchangeCodeForTokens at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ExchangeCodeForTokensMock.expectedInvocations), m.ExchangeCodeForTokensMock.expectedInvocationsOrigin, afterExchangeCodeForTokensCounter)
+	}
+}
+
+type mAuthMockExchangeExternalToken struct {
+	optional           bool
+	mock               *AuthMock
+	defaultExpectation *AuthMockExchangeExternalTokenExpectation
+	expectations       []*AuthMockExchangeExternalTokenExpectation
+
+	callArgs []*AuthMockExchangeExternalTokenParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AuthMockExchangeExternalTokenExpectation specifies expectation struct of the Auth.ExchangeExternalToken
+type AuthMockExchangeExternalTokenExpectation struct {
+	mock               *AuthMock
+	params             *AuthMockExchangeExternalTokenParams
+	paramPtrs          *AuthMockExchangeExternalTokenParamPtrs
+	expectationOrigins AuthMockExchangeExternalTokenExpectationOrigins
+	results            *AuthMockExchangeExternalTokenResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AuthMockExchangeExternalTokenParams contains parameters of the Auth.ExchangeExternalToken
+type AuthMockExchangeExternalTokenParams struct {
+	ctx              context.Context
+	tenantID         uuid.UUID
+	clientID         string
+	subjectToken     string
+	subjectTokenType string
+	dpopJKT          string
+}
+
+// AuthMockExchangeExternalTokenParamPtrs contains pointers to parameters of the Auth.ExchangeExternalToken
+type AuthMockExchangeExternalTokenParamPtrs struct {
+	ctx              *context.Context
+	tenantID         *uuid.UUID
+	clientID         *string
+	subjectToken     *string
+	subjectTokenType *string
+	dpopJKT          *string
+}
+
+// AuthMockExchangeExternalTokenResults contains results of the Auth.ExchangeExternalToken
+type AuthMockExchangeExternalTokenResults struct {
+	tp1 *model.TokenSetResponse
+	err error
+}
+
+// AuthMockExchangeExternalTokenOrigins contains origins of expectations of the Auth.ExchangeExternalToken
+type AuthMockExchangeExternalTokenExpectationOrigins struct {
+	origin                 string
+	originCtx              string
+	originTenantID         string
+	originClientID         string
+	originSubjectToken     string
+	originSubjectTokenType string
+	originDpopJKT          string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Optional() *mAuthMockExchangeExternalToken {
+	mmExchangeExternalToken.optional = true
+	return mmExchangeExternalToken
+}
+
+// Expect sets up expected params for Auth.ExchangeExternalToken
+func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Expect(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType string, dpopJKT string) *mAuthMockExchangeExternalToken {
+	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+	}
+
+	if mmExchangeExternalToken.defaultExpectation == nil {
+		mmExchangeExternalToken.defaultExpectation = &AuthMockExchangeExternalTokenExpectation{}
+	}
+
+	if mmExchangeExternalToken.defaultExpectation.paramPtrs != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by ExpectParams functions")
+	}
+
+	mmExchangeExternalToken.defaultExpectation.params = &AuthMockExchangeExternalTokenParams{ctx, tenantID, clientID, subjectToken, subjectTokenType, dpopJKT}
+	mmExchangeExternalToken.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmExchangeExternalToken.expectations {
+		if minimock.Equal(e.params, mmExchangeExternalToken.defaultExpectation.params) {
+			mmExchangeExternalToken.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmExchangeExternalToken.defaultExpectation.params)
+		}
+	}
+
+	return mmExchangeExternalToken
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Auth.ExchangeExternalToken
+func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) ExpectCtxParam1(ctx context.Context) *mAuthMockExchangeExternalToken {
+	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+	}
+
+	if mmExchangeExternalToken.defaultExpectation == nil {
+		mmExchangeExternalToken.defaultExpectation = &AuthMockExchangeExternalTokenExpectation{}
+	}
+
+	if mmExchangeExternalToken.defaultExpectation.params != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Expect")
+	}
+
+	if mmExchangeExternalToken.defaultExpectation.paramPtrs == nil {
+		mmExchangeExternalToken.defaultExpectation.paramPtrs = &AuthMockExchangeExternalTokenParamPtrs{}
+	}
+	mmExchangeExternalToken.defaultExpectation.paramPtrs.ctx = &ctx
+	mmExchangeExternalToken.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmExchangeExternalToken
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Auth.ExchangeExternalToken
+func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthMockExchangeExternalToken {
+	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+	}
+
+	if mmExchangeExternalToken.defaultExpectation == nil {
+		mmExchangeExternalToken.defaultExpectation = &AuthMockExchangeExternalTokenExpectation{}
+	}
+
+	if mmExchangeExternalToken.defaultExpectation.params != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Expect")
+	}
+
+	if mmExchangeExternalToken.defaultExpectation.paramPtrs == nil {
+		mmExchangeExternalToken.defaultExpectation.paramPtrs = &AuthMockExchangeExternalTokenParamPtrs{}
+	}
+	mmExchangeExternalToken.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmExchangeExternalToken.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmExchangeExternalToken
+}
+
+// ExpectClientIDParam3 sets up expected param clientID for Auth.ExchangeExternalToken
+func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) ExpectClientIDParam3(clientID string) *mAuthMockExchangeExternalToken {
+	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+	}
+
+	if mmExchangeExternalToken.defaultExpectation == nil {
+		mmExchangeExternalToken.defaultExpectation = &AuthMockExchangeExternalTokenExpectation{}
+	}
+
+	if mmExchangeExternalToken.defaultExpectation.params != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Expect")
+	}
+
+	if mmExchangeExternalToken.defaultExpectation.paramPtrs == nil {
+		mmExchangeExternalToken.defaultExpectation.paramPtrs = &AuthMockExchangeExternalTokenParamPtrs{}
+	}
+	mmExchangeExternalToken.defaultExpectation.paramPtrs.clientID = &clientID
+	mmExchangeExternalToken.defaultExpectation.expectationOrigins.originClientID = minimock.CallerInfo(1)
+
+	return mmExchangeExternalToken
+}
+
+// ExpectSubjectTokenParam4 sets up expected param subjectToken for Auth.ExchangeExternalToken
+func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) ExpectSubjectTokenParam4(subjectToken string) *mAuthMockExchangeExternalToken {
+	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+	}
+
+	if mmExchangeExternalToken.defaultExpectation == nil {
+		mmExchangeExternalToken.defaultExpectation = &AuthMockExchangeExternalTokenExpectation{}
+	}
+
+	if mmExchangeExternalToken.defaultExpectation.params != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Expect")
+	}
+
+	if mmExchangeExternalToken.defaultExpectation.paramPtrs == nil {
+		mmExchangeExternalToken.defaultExpectation.paramPtrs = &AuthMockExchangeExternalTokenParamPtrs{}
+	}
+	mmExchangeExternalToken.defaultExpectation.paramPtrs.subjectToken = &subjectToken
+	mmExchangeExternalToken.defaultExpectation.expectationOrigins.originSubjectToken = minimock.CallerInfo(1)
+
+	return mmExchangeExternalToken
+}
+
+// ExpectSubjectTokenTypeParam5 sets up expected param subjectTokenType for Auth.ExchangeExternalToken
+func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) ExpectSubjectTokenTypeParam5(subjectTokenType string) *mAuthMockExchangeExternalToken {
+	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+	}
+
+	if mmExchangeExternalToken.defaultExpectation == nil {
+		mmExchangeExternalToken.defaultExpectation = &AuthMockExchangeExternalTokenExpectation{}
+	}
+
+	if mmExchangeExternalToken.defaultExpectation.params != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Expect")
+	}
+
+	if mmExchangeExternalToken.defaultExpectation.paramPtrs == nil {
+		mmExchangeExternalToken.defaultExpectation.paramPtrs = &AuthMockExchangeExternalTokenParamPtrs{}
+	}
+	mmExchangeExternalToken.defaultExpectation.paramPtrs.subjectTokenType = &subjectTokenType
+	mmExchangeExternalToken.defaultExpectation.expectationOrigins.originSubjectTokenType = minimock.CallerInfo(1)
+
+	return mmExchangeExternalToken
+}
+
+// ExpectDpopJKTParam6 sets up expected param dpopJKT for Auth.ExchangeExternalToken
+func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) ExpectDpopJKTParam6(dpopJKT string) *mAuthMockExchangeExternalToken {
+	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+	}
+
+	if mmExchangeExternalToken.defaultExpectation == nil {
+		mmExchangeExternalToken.defaultExpectation = &AuthMockExchangeExternalTokenExpectation{}
+	}
+
+	if mmExchangeExternalToken.defaultExpectation.params != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Expect")
+	}
+
+	if mmExchangeExternalToken.defaultExpectation.paramPtrs == nil {
+		mmExchangeExternalToken.defaultExpectation.paramPtrs = &AuthMockExchangeExternalTokenParamPtrs{}
+	}
+	mmExchangeExternalToken.defaultExpectation.paramPtrs.dpopJKT = &dpopJKT
+	mmExchangeExternalToken.defaultExpectation.expectationOrigins.originDpopJKT = minimock.CallerInfo(1)
+
+	return mmExchangeExternalToken
+}
+
+// Inspect accepts an inspector function that has same arguments as the Auth.ExchangeExternalToken
+func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Inspect(f func(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType string, dpopJKT string)) *mAuthMockExchangeExternalToken {
+	if mmExchangeExternalToken.mock.inspectFuncExchangeExternalToken != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("Inspect function is already set for AuthMock.ExchangeExternalToken")
+	}
+
+	mmExchangeExternalToken.mock.inspectFuncExchangeExternalToken = f
+
+	return mmExchangeExternalToken
+}
+
+// Return sets up results that will be returned by Auth.ExchangeExternalToken
+func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Return(tp1 *model.TokenSetResponse, err error) *AuthMock {
+	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+	}
+
+	if mmExchangeExternalToken.defaultExpectation == nil {
+		mmExchangeExternalToken.defaultExpectation = &AuthMockExchangeExternalTokenExpectation{mock: mmExchangeExternalToken.mock}
+	}
+	mmExchangeExternalToken.defaultExpectation.results = &AuthMockExchangeExternalTokenResults{tp1, err}
+	mmExchangeExternalToken.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmExchangeExternalToken.mock
+}
+
+// Set uses given function f to mock the Auth.ExchangeExternalToken method
+func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Set(f func(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType string, dpopJKT string) (tp1 *model.TokenSetResponse, err error)) *AuthMock {
+	if mmExchangeExternalToken.defaultExpectation != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("Default expectation is already set for the Auth.ExchangeExternalToken method")
+	}
+
+	if len(mmExchangeExternalToken.expectations) > 0 {
+		mmExchangeExternalToken.mock.t.Fatalf("Some expectations are already set for the Auth.ExchangeExternalToken method")
+	}
+
+	mmExchangeExternalToken.mock.funcExchangeExternalToken = f
+	mmExchangeExternalToken.mock.funcExchangeExternalTokenOrigin = minimock.CallerInfo(1)
+	return mmExchangeExternalToken.mock
+}
+
+// When sets expectation for the Auth.ExchangeExternalToken which will trigger the result defined by the following
+// Then helper
+func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) When(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType string, dpopJKT string) *AuthMockExchangeExternalTokenExpectation {
+	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
+		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+	}
+
+	expectation := &AuthMockExchangeExternalTokenExpectation{
+		mock:               mmExchangeExternalToken.mock,
+		params:             &AuthMockExchangeExternalTokenParams{ctx, tenantID, clientID, subjectToken, subjectTokenType, dpopJKT},
+		expectationOrigins: AuthMockExchangeExternalTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmExchangeExternalToken.expectations = append(mmExchangeExternalToken.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Auth.ExchangeExternalToken return parameters for the expectation previously defined by the When method
+func (e *AuthMockExchangeExternalTokenExpectation) Then(tp1 *model.TokenSetResponse, err error) *AuthMock {
+	e.results = &AuthMockExchangeExternalTokenResults{tp1, err}
+	return e.mock
+}
+
+// Times sets number of times Auth.ExchangeExternalToken should be invoked
+func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Times(n uint64) *mAuthMockExchangeExternalToken {
+	if n == 0 {
+		mmExchangeExternalToken.mock.t.Fatalf("Times of AuthMock.ExchangeExternalToken mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmExchangeExternalToken.expectedInvocations, n)
+	mmExchangeExternalToken.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmExchangeExternalToken
+}
+
+func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) invocationsDone() bool {
+	if len(mmExchangeExternalToken.expectations) == 0 && mmExchangeExternalToken.defaultExpectation == nil && mmExchangeExternalToken.mock.funcExchangeExternalToken == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmExchangeExternalToken.mock.afterExchangeExternalTokenCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmExchangeExternalToken.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// ExchangeExternalToken implements mm_port.Auth
+func (mmExchangeExternalToken *AuthMock) ExchangeExternalToken(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType string, dpopJKT string) (tp1 *model.TokenSetResponse, err error) {
+	mm_atomic.AddUint64(&mmExchangeExternalToken.beforeExchangeExternalTokenCounter, 1)
+	defer mm_atomic.AddUint64(&mmExchangeExternalToken.afterExchangeExternalTokenCounter, 1)
+
+	mmExchangeExternalToken.t.Helper()
+
+	if mmExchangeExternalToken.inspectFuncExchangeExternalToken != nil {
+		mmExchangeExternalToken.inspectFuncExchangeExternalToken(ctx, tenantID, clientID, subjectToken, subjectTokenType, dpopJKT)
+	}
+
+	mm_params := AuthMockExchangeExternalTokenParams{ctx, tenantID, clientID, subjectToken, subjectTokenType, dpopJKT}
+
+	// Record call args
+	mmExchangeExternalToken.ExchangeExternalTokenMock.mutex.Lock()
+	mmExchangeExternalToken.ExchangeExternalTokenMock.callArgs = append(mmExchangeExternalToken.ExchangeExternalTokenMock.callArgs, &mm_params)
+	mmExchangeExternalToken.ExchangeExternalTokenMock.mutex.Unlock()
+
+	for _, e := range mmExchangeExternalToken.ExchangeExternalTokenMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.tp1, e.results.err
+		}
+	}
+
+	if mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.Counter, 1)
+		mm_want := mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.params
+		mm_want_ptrs := mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.paramPtrs
+
+		mm_got := AuthMockExchangeExternalTokenParams{ctx, tenantID, clientID, subjectToken, subjectTokenType, dpopJKT}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmExchangeExternalToken.t.Errorf("AuthMock.ExchangeExternalToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmExchangeExternalToken.t.Errorf("AuthMock.ExchangeExternalToken got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.clientID != nil && !minimock.Equal(*mm_want_ptrs.clientID, mm_got.clientID) {
+				mmExchangeExternalToken.t.Errorf("AuthMock.ExchangeExternalToken got unexpected parameter clientID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.expectationOrigins.originClientID, *mm_want_ptrs.clientID, mm_got.clientID, minimock.Diff(*mm_want_ptrs.clientID, mm_got.clientID))
+			}
+
+			if mm_want_ptrs.subjectToken != nil && !minimock.Equal(*mm_want_ptrs.subjectToken, mm_got.subjectToken) {
+				mmExchangeExternalToken.t.Errorf("AuthMock.ExchangeExternalToken got unexpected parameter subjectToken, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.expectationOrigins.originSubjectToken, *mm_want_ptrs.subjectToken, mm_got.subjectToken, minimock.Diff(*mm_want_ptrs.subjectToken, mm_got.subjectToken))
+			}
+
+			if mm_want_ptrs.subjectTokenType != nil && !minimock.Equal(*mm_want_ptrs.subjectTokenType, mm_got.subjectTokenType) {
+				mmExchangeExternalToken.t.Errorf("AuthMock.ExchangeExternalToken got unexpected parameter subjectTokenType, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.expectationOrigins.originSubjectTokenType, *mm_want_ptrs.subjectTokenType, mm_got.subjectTokenType, minimock.Diff(*mm_want_ptrs.subjectTokenType, mm_got.subjectTokenType))
+			}
+
+			if mm_want_ptrs.dpopJKT != nil && !minimock.Equal(*mm_want_ptrs.dpopJKT, mm_got.dpopJKT) {
+				mmExchangeExternalToken.t.Errorf("AuthMock.ExchangeExternalToken got unexpected parameter dpopJKT, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.expectationOrigins.originDpopJKT, *mm_want_ptrs.dpopJKT, mm_got.dpopJKT, minimock.Diff(*mm_want_ptrs.dpopJKT, mm_got.dpopJKT))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmExchangeExternalToken.t.Errorf("AuthMock.ExchangeExternalToken got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.results
+		if mm_results == nil {
+			mmExchangeExternalToken.t.Fatal("No results are set for the AuthMock.ExchangeExternalToken")
+		}
+		return (*mm_results).tp1, (*mm_results).err
+	}
+	if mmExchangeExternalToken.funcExchangeExternalToken != nil {
+		return mmExchangeExternalToken.funcExchangeExternalToken(ctx, tenantID, clientID, subjectToken, subjectTokenType, dpopJKT)
+	}
+	mmExchangeExternalToken.t.Fatalf("Unexpected call to AuthMock.ExchangeExternalToken. %v %v %v %v %v %v", ctx, tenantID, clientID, subjectToken, subjectTokenType, dpopJKT)
+	return
+}
+
+// ExchangeExternalTokenAfterCounter returns a count of finished AuthMock.ExchangeExternalToken invocations
+func (mmExchangeExternalToken *AuthMock) ExchangeExternalTokenAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmExchangeExternalToken.afterExchangeExternalTokenCounter)
+}
+
+// ExchangeExternalTokenBeforeCounter returns a count of AuthMock.ExchangeExternalToken invocations
+func (mmExchangeExternalToken *AuthMock) ExchangeExternalTokenBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmExchangeExternalToken.beforeExchangeExternalTokenCounter)
+}
+
+// Calls returns a list of arguments used in each call to AuthMock.ExchangeExternalToken.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Calls() []*AuthMockExchangeExternalTokenParams {
+	mmExchangeExternalToken.mutex.RLock()
+
+	argCopy := make([]*AuthMockExchangeExternalTokenParams, len(mmExchangeExternalToken.callArgs))
+	copy(argCopy, mmExchangeExternalToken.callArgs)
+
+	mmExchangeExternalToken.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockExchangeExternalTokenDone returns true if the count of the ExchangeExternalToken invocations corresponds
+// the number of defined expectations
+func (m *AuthMock) MinimockExchangeExternalTokenDone() bool {
+	if m.ExchangeExternalTokenMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.ExchangeExternalTokenMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.ExchangeExternalTokenMock.invocationsDone()
+}
+
+// MinimockExchangeExternalTokenInspect logs each unmet expectation
+func (m *AuthMock) MinimockExchangeExternalTokenInspect() {
+	for _, e := range m.ExchangeExternalTokenMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AuthMock.ExchangeExternalToken at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterExchangeExternalTokenCounter := mm_atomic.LoadUint64(&m.afterExchangeExternalTokenCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.ExchangeExternalTokenMock.defaultExpectation != nil && afterExchangeExternalTokenCounter < 1 {
+		if m.ExchangeExternalTokenMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AuthMock.ExchangeExternalToken at\n%s", m.ExchangeExternalTokenMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AuthMock.ExchangeExternalToken at\n%s with params: %#v", m.ExchangeExternalTokenMock.defaultExpectation.expectationOrigins.origin, *m.ExchangeExternalTokenMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcExchangeExternalToken != nil && afterExchangeExternalTokenCounter < 1 {
+		m.t.Errorf("Expected call to AuthMock.ExchangeExternalToken at\n%s", m.funcExchangeExternalTokenOrigin)
+	}
+
+	if !m.ExchangeExternalTokenMock.invocationsDone() && afterExchangeExternalTokenCounter > 0 {
+		m.t.Errorf("Expected %d calls to AuthMock.ExchangeExternalToken at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.ExchangeExternalTokenMock.expectedInvocations), m.ExchangeExternalTokenMock.expectedInvocationsOrigin, afterExchangeExternalTokenCounter)
 	}
 }
 
@@ -3295,6 +3772,8 @@ func (m *AuthMock) MinimockFinish() {
 		if !m.minimockDone() {
 			m.MinimockExchangeCodeForTokensInspect()
 
+			m.MinimockExchangeExternalTokenInspect()
+
 			m.MinimockExchangeRefreshTokenForTokensInspect()
 
 			m.MinimockGetAndConsumePARInspect()
@@ -3332,6 +3811,7 @@ func (m *AuthMock) minimockDone() bool {
 	done := true
 	return done &&
 		m.MinimockExchangeCodeForTokensDone() &&
+		m.MinimockExchangeExternalTokenDone() &&
 		m.MinimockExchangeRefreshTokenForTokensDone() &&
 		m.MinimockGetAndConsumePARDone() &&
 		m.MinimockInitiateAuthorizeDone() &&

@@ -178,9 +178,59 @@ func (h *HttpAdapter) token(w http.ResponseWriter, r *http.Request) {
 		h.handleClientCredentialsGrant(w, r, tenant)
 	case "refresh_token":
 		h.handleRefreshTokenGrant(w, r, tenant)
+	case "urn:ietf:params:oauth:grant-type:token-exchange":
+		h.handleTokenExchangeGrant(w, r, tenant)
 	default:
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported grant_type"})
 	}
+}
+
+func (h *HttpAdapter) handleTokenExchangeGrant(w http.ResponseWriter, r *http.Request, tenant *model.Tenant) {
+	clientID := r.FormValue("client_id")
+	subjectToken := r.FormValue("subject_token")
+	subjectTokenType := r.FormValue("subject_token_type")
+
+	if id, _, ok := r.BasicAuth(); ok {
+		clientID = id
+	}
+
+	if clientID == "" || subjectToken == "" || subjectTokenType == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "client_id, subject_token and subject_token_type are required"})
+		return
+	}
+
+	client, err := h.storagePort.GetClient(r.Context(), tenant.ID, clientID)
+	if err != nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
+		return
+	}
+
+	if client.ClientType == model.ClientTypeConfidential {
+		var clientSecret string
+		if _, secret, ok := r.BasicAuth(); ok {
+			clientSecret = secret
+		} else {
+			clientSecret = r.FormValue("client_secret")
+		}
+		if client.ClientSecret == nil || subtle.ConstantTimeCompare([]byte(*client.ClientSecret), []byte(clientSecret)) != 1 {
+			respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
+			return
+		}
+	}
+
+	dpopJKT, err := h.validateDPoPProof(r)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": errInvalidDPoP + err.Error()})
+		return
+	}
+
+	tokens, err := h.authPort.ExchangeExternalToken(r.Context(), tenant.ID, clientID, subjectToken, subjectTokenType, dpopJKT)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, tokens)
 }
 
 func (h *HttpAdapter) validateUserInfoDPoP(r *http.Request, claims jwt.MapClaims, isDPoP bool) error {

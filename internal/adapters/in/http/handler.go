@@ -265,7 +265,7 @@ func (h *HttpAdapter) getDiscoveryMetadata(r *http.Request, tenant *model.Tenant
 		"authorization_response_iss_parameter_supported": true,
 		"response_types_supported":                       []string{"code"},
 		"response_modes_supported":                       []string{"query", "form_post"},
-		"grant_types_supported":                          []string{"authorization_code", "client_credentials", "refresh_token"},
+		"grant_types_supported":                          []string{"authorization_code", "client_credentials", "refresh_token", "urn:ietf:params:oauth:grant-type:token-exchange"},
 		"scopes_supported":                               scopesSupported,
 		"acr_values_supported":                           acrValues,
 		"token_endpoint_auth_methods_supported":          []string{"client_secret_basic", "client_secret_post", "none"},
