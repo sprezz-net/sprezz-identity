@@ -140,6 +140,47 @@ func TestHttpAdapter_Authorize_DisallowedRedirectURI(t *testing.T) {
 	}
 }
 
+func TestHttpAdapter_Authorize_PARClientIDMismatch(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	auth := portmock.NewAuthMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+
+	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
+		return tenant, nil
+	})
+
+	reqURI := "urn:ietf:params:oauth:request_uri:123"
+	parReq := &model.PushedAuthorizationRequest{
+		RequestURI:  reqURI,
+		TenantID:    tenantID,
+		ClientID:    "test-client",
+		RedirectURI: "https://test.com/callback",
+		Scopes:      []string{"openid"},
+	}
+
+	auth.GetAndConsumePARMock.Expect(minimock.AnyContext, tenantID, reqURI).Return(parReq, nil)
+
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+
+	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?request_uri="+reqURI+"&client_id=mismatched-client", nil)
+	req.Host = "test.com"
+	rec := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", rec.Code)
+	}
+
+	if !strings.Contains(rec.Body.String(), "client_id mismatch with request_uri") {
+		t.Fatalf("expected client_id mismatch error, got: %s", rec.Body.String())
+	}
+}
+
 func TestHttpAdapter_Authorize_AuthenticatedSSO(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)

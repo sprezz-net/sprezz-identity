@@ -6,6 +6,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -65,14 +66,14 @@ func (h *HttpAdapter) authenticateClient(w http.ResponseWriter, r *http.Request,
 	}
 
 	if client.ClientType == model.ClientTypeInternalEphemeral {
-		if h.adminState == nil || h.adminState.GetEphemeralSecret() != clientSecret {
+		if h.adminState == nil || subtle.ConstantTimeCompare([]byte(h.adminState.GetEphemeralSecret()), []byte(clientSecret)) != 1 {
 			respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
 			return nil, fmt.Errorf("%s", errClientAuthFailed)
 		}
 		return client, nil
 	}
 
-	if client.ClientSecret == nil || *client.ClientSecret != clientSecret {
+	if client.ClientSecret == nil || subtle.ConstantTimeCompare([]byte(*client.ClientSecret), []byte(clientSecret)) != 1 {
 		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
 		return nil, fmt.Errorf("%s", errClientAuthFailed)
 	}
@@ -96,7 +97,7 @@ func (h *HttpAdapter) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Req
 
 	if client.ClientType == model.ClientTypeConfidential {
 		clientSecret := r.FormValue("client_secret")
-		if client.ClientSecret == nil || *client.ClientSecret != clientSecret {
+		if client.ClientSecret == nil || subtle.ConstantTimeCompare([]byte(*client.ClientSecret), []byte(clientSecret)) != 1 {
 			respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
 			return
 		}

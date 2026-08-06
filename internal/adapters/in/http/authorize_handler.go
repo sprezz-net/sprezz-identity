@@ -332,6 +332,10 @@ func (h *HttpAdapter) extractAuthorizeParams(r *http.Request, tenant *model.Tena
 		if loadErr != nil {
 			return "", "", "", "", "", "", "", "", nil, errors.New("invalid or expired request_uri")
 		}
+		queryClientID := r.FormValue("client_id")
+		if queryClientID != "" && queryClientID != parReq.ClientID {
+			return "", "", "", "", "", "", "", "", nil, errors.New("client_id mismatch with request_uri")
+		}
 		return parReq.ClientID, parReq.RedirectURI, parReq.CodeChallenge, parReq.ChallengeMethod, parReq.IDPHint, parReq.State, parReq.Nonce, parReq.ACRValues, parReq.Scopes, nil
 	}
 

@@ -32,9 +32,40 @@ func NewOAuthValidatorService() *OAuthValidatorService {
 	return &OAuthValidatorService{}
 }
 
+func (s *OAuthValidatorService) validateClientRedirect(client *model.ClientApplication, redirectURL string) error {
+	if client == nil {
+		return nil
+	}
+	for _, u := range client.RedirectURIs {
+		if u == redirectURL {
+			return nil
+		}
+	}
+	return ErrClientRedirectNotAllowed
+}
+
+func (s *OAuthValidatorService) validateTenantRedirect(tenant *model.Tenant, redirectURL string) error {
+	whitelist := tenant.Config.RedirectWhitelist
+	if len(whitelist) == 0 {
+		return ErrRedirectNotAllowed
+	}
+
+	for _, pattern := range whitelist {
+		if s.matchPattern(redirectURL, pattern) {
+			return nil
+		}
+	}
+
+	return ErrRedirectNotAllowed
+}
+
 // ValidateRedirect checks if the redirectURL is allowed under the client and matches the tenant's redirect whitelist.
 func (s *OAuthValidatorService) ValidateRedirect(ctx context.Context, tenant *model.Tenant, client *model.ClientApplication, redirectURL string) error {
 	if redirectURL == "" {
+		return ErrInvalidRedirectURI
+	}
+
+	if strings.Contains(redirectURL, "/../") || strings.Contains(redirectURL, "..") || strings.Contains(redirectURL, "#") {
 		return ErrInvalidRedirectURI
 	}
 
@@ -43,39 +74,11 @@ func (s *OAuthValidatorService) ValidateRedirect(ctx context.Context, tenant *mo
 		return ErrInvalidRedirectURI
 	}
 
-	// 1. Client level validation (if client is provided)
-	if client != nil {
-		allowedByClient := false
-		for _, u := range client.RedirectURIs {
-			if u == redirectURL {
-				allowedByClient = true
-				break
-			}
-		}
-		if !allowedByClient {
-			return ErrClientRedirectNotAllowed
-		}
+	if err := s.validateClientRedirect(client, redirectURL); err != nil {
+		return err
 	}
 
-	// 2. Tenant level validation (whitelist matching)
-	whitelist := tenant.Config.RedirectWhitelist
-	if len(whitelist) == 0 {
-		return ErrRedirectNotAllowed
-	}
-
-	matched := false
-	for _, pattern := range whitelist {
-		if s.matchPattern(redirectURL, pattern) {
-			matched = true
-			break
-		}
-	}
-
-	if !matched {
-		return ErrRedirectNotAllowed
-	}
-
-	return nil
+	return s.validateTenantRedirect(tenant, redirectURL)
 }
 
 // ValidateScopes checks if requested scopes are allowed by the client application (if provided) and predefined by the tenant.

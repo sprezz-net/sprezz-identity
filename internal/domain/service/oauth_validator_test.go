@@ -91,6 +91,24 @@ func TestOAuthValidatorService_ValidateRedirect(t *testing.T) {
 			useClient:   false,
 			wantErr:     ErrInvalidRedirectURI,
 		},
+		{
+			name:        "Path traversal with parent directory",
+			redirectURL: "https://example.com/callback/../../etc/passwd",
+			useClient:   false,
+			wantErr:     ErrInvalidRedirectURI,
+		},
+		{
+			name:        "Path traversal with double dot segment",
+			redirectURL: "https://example.com/..",
+			useClient:   false,
+			wantErr:     ErrInvalidRedirectURI,
+		},
+		{
+			name:        "URL with embedded fragment",
+			redirectURL: "https://example.com/callback#fragment",
+			useClient:   false,
+			wantErr:     ErrInvalidRedirectURI,
+		},
 	}
 
 	for _, tt := range tests {
