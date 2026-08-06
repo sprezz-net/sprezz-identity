@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
@@ -122,6 +123,7 @@ func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock, a
 }
 
 func (h *HttpAdapter) renderError(w http.ResponseWriter, r *http.Request, status int, errorMessage string) {
+	slog.Error("HTTP rendering error", "status", status, "path", r.URL.Path, "error", errorMessage)
 	w.Header().Set(contentTypeHeader, "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	component := public.Error(errorMessage)
@@ -471,6 +473,9 @@ func (h *HttpAdapter) resolveTenant(ctx context.Context, host string) (*model.Te
 }
 
 func respondJSON(w http.ResponseWriter, status int, payload any) {
+	if status >= 400 {
+		slog.Error("JSON API error response", "status", status, "payload", payload)
+	}
 	w.Header().Set(contentTypeHeader, contentTypeJSON)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)

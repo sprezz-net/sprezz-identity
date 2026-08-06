@@ -3,6 +3,7 @@ package http
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 
@@ -126,6 +127,7 @@ func (h *HttpAdapter) signUpSubmit(w http.ResponseWriter, r *http.Request) {
 
 	profile, err := h.processSignUpRegistration(r, tenant, provider)
 	if err != nil {
+		slog.Error("Self-service registration submission failed", "error", err, "tenant_id", tenant.ID, "username", r.FormValue("username"))
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
 		w.WriteHeader(http.StatusOK) // Return HTML back to HTMX or browser with the error message rendered
 		component := public.SignUp(err.Error(), provider, r.FormValue("email"), r.FormValue("username"), r.FormValue("name"))

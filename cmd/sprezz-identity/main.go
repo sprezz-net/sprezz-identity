@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -32,6 +33,14 @@ func main() {
 	log.Println("Starting Sprezz Identity server...")
 
 	deps := initDependencies()
+
+	logLevel := slog.LevelInfo
+	if deps.cfg.AppEnv == "local" {
+		logLevel = slog.LevelDebug
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: logLevel,
+	})))
 	sysClock := clock.NewSystemClock()
 
 	bootstrap := service.NewTenantBootstrapService(deps.storage, sysClock)
@@ -68,7 +77,7 @@ func main() {
 		Addr:    ":" + deps.cfg.Port,
 		Handler: handler.Router(),
 	}
-	log.Printf("Token server listening on :%s", deps.cfg.Port)
+	log.Printf("Sprezz Identity server listening on :%s", deps.cfg.Port)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Token server terminated: %v", err)
 	}
