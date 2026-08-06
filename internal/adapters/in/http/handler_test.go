@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"sprezz-identity/internal/adapters/out/clock"
+	jwtcrypto "sprezz-identity/internal/adapters/out/crypto"
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port/portmock"
 
@@ -309,5 +310,35 @@ func TestHttpAdapter_TenantMiddleware_ResolutionFailure(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHttpAdapter_JWKS_CacheControl(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	auth := portmock.NewAuthMock(ctrl)
+	crypto := jwtcrypto.NewJWTSigner()
+
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/jwks.json", nil)
+	req.Host = "test.com"
+	rec := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	contentType := rec.Header().Get("Content-Type")
+	if !strings.Contains(contentType, "application/json") {
+		t.Fatalf("expected Content-Type to contain application/json, got %q", contentType)
+	}
+
+	cacheControl := rec.Header().Get("Cache-Control")
+	expectedCacheControl := "public, max-age=600, stale-while-revalidate=86400"
+	if cacheControl != expectedCacheControl {
+		t.Fatalf("expected Cache-Control %q, got %q", expectedCacheControl, cacheControl)
 	}
 }

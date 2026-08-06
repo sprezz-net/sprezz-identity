@@ -298,6 +298,7 @@ func (h *HttpAdapter) jwks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set(contentTypeHeader, contentTypeJSON)
+	w.Header().Set("Cache-Control", "public, max-age=600, stale-while-revalidate=86400")
 	_, _ = w.Write([]byte(body))
 }
 
