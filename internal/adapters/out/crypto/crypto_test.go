@@ -65,6 +65,15 @@ func TestJWTSigner_SignAccessToken_Success(t *testing.T) {
 	if !matched {
 		t.Errorf("token kid %q not found in JWKS", kid)
 	}
+
+	// Verify the parsed claims contain 'tid'
+	claimsVerified, err := signer.VerifyToken(tokenStr)
+	if err != nil {
+		t.Fatalf("failed to verify RS256 token: %v", err)
+	}
+	if claimsVerified["tid"] != "https://auth.example.com" {
+		t.Errorf("expected tid 'https://auth.example.com', got %v", claimsVerified["tid"])
+	}
 }
 
 func TestJWTSigner_SignAccessToken_ES256_Success(t *testing.T) {
@@ -97,6 +106,10 @@ func TestJWTSigner_SignAccessToken_ES256_Success(t *testing.T) {
 
 	if claimsVerified["sub"] != "user-sub" {
 		t.Errorf("expected sub 'user-sub', got %v", claimsVerified["sub"])
+	}
+
+	if claimsVerified["tid"] != "https://auth.example.com" {
+		t.Errorf("expected tid 'https://auth.example.com', got %v", claimsVerified["tid"])
 	}
 }
 
@@ -133,6 +146,14 @@ func TestJWTSigner_SignIDToken_Success(t *testing.T) {
 	if tokenStr == "" {
 		t.Fatal("expected non-empty signed token string")
 	}
+
+	claimsVerified, err := signer.VerifyToken(tokenStr)
+	if err != nil {
+		t.Fatalf("failed to verify RS256 ID token: %v", err)
+	}
+	if claimsVerified["tid"] != "https://auth.example.com" {
+		t.Errorf("expected tid 'https://auth.example.com', got %v", claimsVerified["tid"])
+	}
 }
 
 func TestJWTSigner_SignIDToken_ES256_Success(t *testing.T) {
@@ -162,6 +183,10 @@ func TestJWTSigner_SignIDToken_ES256_Success(t *testing.T) {
 
 	if claimsVerified["sub"] != "user-sub-es" {
 		t.Errorf("expected sub 'user-sub-es', got %v", claimsVerified["sub"])
+	}
+
+	if claimsVerified["tid"] != "https://auth.example.com" {
+		t.Errorf("expected tid 'https://auth.example.com', got %v", claimsVerified["tid"])
 	}
 }
 
