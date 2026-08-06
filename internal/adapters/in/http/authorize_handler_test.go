@@ -46,8 +46,8 @@ func TestHttpAdapter_Authorize_PreservesParams(t *testing.T) {
 	})
 
 	storage.SaveInteractionSessionMock.Set(func(ctx context.Context, session model.InteractionSession) error {
-		if session.State != "state-123" {
-			t.Errorf("expected State 'state-123', got %s", session.State)
+		if session.State != "state-1234567890-abcdef" {
+			t.Errorf("expected State 'state-1234567890-abcdef', got %s", session.State)
 		}
 		if session.Nonce != "nonce-456" {
 			t.Errorf("expected Nonce 'nonce-456', got %s", session.Nonce)
@@ -60,7 +60,7 @@ func TestHttpAdapter_Authorize_PreservesParams(t *testing.T) {
 
 	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
 
-	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?client_id=test-client&redirect_uri=https://test.com/callback&state=state-123&nonce=nonce-456&acr_values=acr-silver", nil)
+	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?client_id=test-client&redirect_uri=https://test.com/callback&state=state-1234567890-abcdef&nonce=nonce-456&acr_values=acr-silver", nil)
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
 
@@ -220,7 +220,7 @@ func TestHttpAdapter_Authorize_AuthenticatedSSO(t *testing.T) {
 
 	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
 
-	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?client_id=test-client&redirect_uri=https://test.com/callback&state=state123", nil)
+	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?client_id=test-client&redirect_uri=https://test.com/callback&state=state1234567890abcdef", nil)
 	req.Host = "test.com"
 	// Set valid SSO cookie
 	req.AddCookie(&http.Cookie{
@@ -236,7 +236,7 @@ func TestHttpAdapter_Authorize_AuthenticatedSSO(t *testing.T) {
 	}
 
 	loc := rec.Header().Get("Location")
-	if !strings.Contains(loc, "code=") || !strings.Contains(loc, "state=state123") || !strings.Contains(loc, "iss=https%3A%2F%2Ftest.com") {
+	if !strings.Contains(loc, "code=") || !strings.Contains(loc, "state=state1234567890abcdef") || !strings.Contains(loc, "iss=https%3A%2F%2Ftest.com") {
 		t.Fatalf("unexpected redirect URI: %s", loc)
 	}
 }

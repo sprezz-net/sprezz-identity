@@ -409,3 +409,59 @@ func TestOAuthValidatorService_ValidateACR_ClaimsJSON(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 }
+
+func TestOAuthValidatorService_ValidateState(t *testing.T) {
+	v := NewOAuthValidatorService()
+	ctx := context.Background()
+
+	tests := []struct {
+		name    string
+		state   string
+		wantErr bool
+	}{
+		{
+			name:    "Empty state is valid (optional)",
+			state:   "",
+			wantErr: false,
+		},
+		{
+			name:    "High entropy secure state",
+			state:   "state-1234567890-abcdef-xyz",
+			wantErr: false,
+		},
+		{
+			name:    "Too short state",
+			state:   "state-123",
+			wantErr: true,
+		},
+		{
+			name:    "Trivial repeated characters state",
+			state:   "aaaaaaaaaaaaaaaa",
+			wantErr: true,
+		},
+		{
+			name:    "State looks like URL (contains colon-slash-slash)",
+			state:   "http://localhost:3000/callback",
+			wantErr: true,
+		},
+		{
+			name:    "State contains slash",
+			state:   "state-1234567890/abc",
+			wantErr: true,
+		},
+		{
+			name:    "State contains backslash",
+			state:   "state-1234567890\\abc",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := v.ValidateState(ctx, tt.state)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("expected error: %v, got: %v", tt.wantErr, err)
+			}
+		})
+	}
+}

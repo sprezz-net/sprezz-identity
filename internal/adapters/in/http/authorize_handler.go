@@ -3,6 +3,7 @@ package http
 import (
 	"errors"
 	"fmt"
+	"html"
 	"net/http"
 	"net/url"
 	"os"
@@ -210,7 +211,7 @@ func (h *HttpAdapter) login(w http.ResponseWriter, r *http.Request) {
 		if errMsg == "invalid username or password" {
 			errMsg = "Invalid username or password"
 		}
-		_, _ = fmt.Fprintf(w, `<div style="color:red;margin-bottom:1rem;">%s</div>`, errMsg)
+		_, _ = fmt.Fprintf(w, `<div style="color:red;margin-bottom:1rem;">%s</div>`, html.EscapeString(errMsg))
 		return
 	}
 
@@ -365,6 +366,11 @@ func (h *HttpAdapter) authorize(w http.ResponseWriter, r *http.Request) {
 
 	clientID, redirectURI, codeChallenge, challengeMethod, idpHint, state, nonce, acrValues, scopes, err := h.extractAuthorizeParams(r, tenant)
 	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	if err := h.oauthValidator.ValidateState(r.Context(), state); err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}

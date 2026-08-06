@@ -239,6 +239,11 @@ func (h *HttpAdapter) par(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := h.oauthValidator.ValidateState(r.Context(), r.FormValue("state")); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
 	redirectURI := r.FormValue("redirect_uri")
 	if redirectURI == "" {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "redirect_uri is required"})

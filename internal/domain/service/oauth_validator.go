@@ -317,3 +317,37 @@ func (s *OAuthValidatorService) isSubset(subset, set []string) bool {
 	}
 	return true
 }
+
+// ValidateState ensures that if a state parameter is present, it meets a strict minimum length
+// requirement (minimum 16 characters), is not completely blank or trivial, and does not
+// resemble a URL to prevent Open Redirects.
+func (s *OAuthValidatorService) ValidateState(ctx context.Context, state string) error {
+	if state == "" {
+		return nil
+	}
+	if len(state) < 16 {
+		return errors.New("state parameter must be at least 16 characters long")
+	}
+
+	// Check for trivial/repeated character strings
+	unique := make(map[rune]struct{})
+	for _, r := range state {
+		unique[r] = struct{}{}
+	}
+	if len(unique) < 4 {
+		return errors.New("state parameter is too trivial")
+	}
+
+	// Prevent State-Based Open Redirects by rejecting values that look like URLs or path traversal
+	lower := strings.ToLower(state)
+	if strings.Contains(lower, "://") ||
+		strings.Contains(lower, "/") ||
+		strings.Contains(lower, "\\") ||
+		strings.Contains(lower, "%2f") ||
+		strings.Contains(lower, "%5c") ||
+		strings.Contains(lower, "%3a") {
+		return errors.New("state parameter contains invalid characters or resembles a URL")
+	}
+
+	return nil
+}
