@@ -415,7 +415,7 @@ func TestOAuthService_PAR(t *testing.T) {
 
 	tenantID := uuid.New()
 	req := model.PushedAuthorizationRequest{
-		RequestURI: "urn:ietf:params:oauth:request_uri:123",
+		RequestURI: "urn:ietf:params:oauth:request_uri:" + uuid.NewString(),
 		TenantID:   tenantID,
 		ClientID:   "client",
 	}

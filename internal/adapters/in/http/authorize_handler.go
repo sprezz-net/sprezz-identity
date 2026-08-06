@@ -328,6 +328,15 @@ func (h *HttpAdapter) handleAuthenticatedAuthorize(w http.ResponseWriter, r *htt
 func (h *HttpAdapter) extractAuthorizeParams(r *http.Request, tenant *model.Tenant) (clientID, redirectURI, codeChallenge, challengeMethod, idpHint, state, nonce, acrValues string, scopes []string, err error) {
 	requestURI := r.FormValue("request_uri")
 	if requestURI != "" {
+		const prefix = "urn:ietf:params:oauth:request_uri:"
+		if !strings.HasPrefix(requestURI, prefix) {
+			return "", "", "", "", "", "", "", "", nil, errors.New("invalid or expired request_uri")
+		}
+		uuidPart := strings.TrimPrefix(requestURI, prefix)
+		if _, parseErr := uuid.Parse(uuidPart); parseErr != nil {
+			return "", "", "", "", "", "", "", "", nil, errors.New("invalid or expired request_uri")
+		}
+
 		parReq, loadErr := h.authPort.GetAndConsumePAR(r.Context(), tenant.ID, requestURI)
 		if loadErr != nil {
 			return "", "", "", "", "", "", "", "", nil, errors.New("invalid or expired request_uri")

@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -153,7 +154,7 @@ func TestHttpAdapter_Authorize_PARClientIDMismatch(t *testing.T) {
 		return tenant, nil
 	})
 
-	reqURI := "urn:ietf:params:oauth:request_uri:123"
+	reqURI := "urn:ietf:params:oauth:request_uri:" + uuid.NewString()
 	parReq := &model.PushedAuthorizationRequest{
 		RequestURI:  reqURI,
 		TenantID:    tenantID,
@@ -294,5 +295,75 @@ func TestHttpAdapter_Login_Malformed(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400, got %d", rec.Code)
+	}
+}
+
+func TestHttpAdapter_Authorize_PAR_Validation(t *testing.T) {
+	tests := []struct {
+		name       string
+		requestURI string
+		setupMock  func(auth *portmock.AuthMock, tenantID uuid.UUID)
+		wantCode   int
+		wantError  string
+	}{
+		{
+			name:       "Malformed Request URI - Missing Prefix",
+			requestURI: "invalid-request-uri-format",
+			setupMock:  func(auth *portmock.AuthMock, tenantID uuid.UUID) {}, // No mocks expected as it should fast-fail
+			wantCode:   http.StatusBadRequest,
+			wantError:  "invalid or expired request_uri",
+		},
+		{
+			name:       "Malformed Request URI - Invalid UUID Suffix",
+			requestURI: "urn:ietf:params:oauth:request_uri:not-a-valid-uuid",
+			setupMock:  func(auth *portmock.AuthMock, tenantID uuid.UUID) {}, // No mocks expected as it should fast-fail
+			wantCode:   http.StatusBadRequest,
+			wantError:  "invalid or expired request_uri",
+		},
+		{
+			name:       "Valid Request URI - Not Found in Storage",
+			requestURI: "urn:ietf:params:oauth:request_uri:00000000-0000-0000-0000-000000000000",
+			setupMock: func(auth *portmock.AuthMock, tenantID uuid.UUID) {
+				// Hits standard lookup since it passed syntax pre-validation
+				auth.GetAndConsumePARMock.Expect(minimock.AnyContext, tenantID, "urn:ietf:params:oauth:request_uri:00000000-0000-0000-0000-000000000000").
+					Return(nil, errors.New("not found"))
+			},
+			wantCode:  http.StatusBadRequest,
+			wantError: "invalid or expired request_uri",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := minimock.NewController(t)
+			storage := portmock.NewStorageMock(ctrl)
+			auth := portmock.NewAuthMock(ctrl)
+			crypto := portmock.NewCryptoMock(ctrl)
+
+			tenantID := uuid.New()
+			tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+
+			storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
+				return tenant, nil
+			})
+
+			tt.setupMock(auth, tenantID)
+
+			adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+
+			req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?request_uri="+tt.requestURI, nil)
+			req.Host = "test.com"
+			rec := httptest.NewRecorder()
+
+			adapter.Router().ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantCode {
+				t.Errorf("expected status %d, got %d", tt.wantCode, rec.Code)
+			}
+
+			if tt.wantError != "" && !strings.Contains(rec.Body.String(), tt.wantError) {
+				t.Errorf("expected error containing %q, got: %s", tt.wantError, rec.Body.String())
+			}
+		})
 	}
 }
