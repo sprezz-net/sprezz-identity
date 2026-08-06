@@ -50,7 +50,43 @@ func (s *IdentityProviderService) checkPasswordCredential(ctx context.Context, u
 	return verifyArgon2idPassword(password, passwordRecord.Argon2Hash), nil
 }
 
-func (s *IdentityProviderService) AuthenticateUsernamePassword(ctx context.Context, tenantID uuid.UUID, username string, password string) (*model.LoginResult, error) {
+func (s *IdentityProviderService) resolvePartitionID(ctx context.Context, tenantID uuid.UUID, partitionID int64) int64 {
+	if partitionID != 0 {
+		return partitionID
+	}
+	tenant, err := s.storage.ResolveTenantByID(ctx, tenantID)
+	if err == nil && tenant.DefaultPartition != nil {
+		return *tenant.DefaultPartition
+	}
+	return 0
+}
+
+func (s *IdentityProviderService) findUsernamePasswordProvider(providers []model.IdentityProvider, partitionID int64) *model.IdentityProvider {
+	for _, candidate := range providers {
+		if candidate.IDPType != model.UsernamePasswordIDPType {
+			continue
+		}
+		if partitionID == 0 || candidate.PartitionID == partitionID {
+			return &candidate
+		}
+	}
+	return nil
+}
+
+func (s *IdentityProviderService) recordSuccessfulLogin(ctx context.Context, profileID uuid.UUID, providerID uuid.UUID, now time.Time) error {
+	identity, err := s.storage.GetIdentityByProfileAndProvider(ctx, profileID, providerID)
+	if err != nil {
+		return fmt.Errorf("lookup identity record: %w", err)
+	}
+	identity.LastLoginAt = now
+	identity.LoginCount++
+	if err := s.storage.UpsertIdentity(ctx, *identity); err != nil {
+		return fmt.Errorf("upsert identity record: %w", err)
+	}
+	return nil
+}
+
+func (s *IdentityProviderService) AuthenticateUsernamePassword(ctx context.Context, tenantID uuid.UUID, partitionID int64, username string, password string) (*model.LoginResult, error) {
 	providers, err := s.storage.GetEnabledIdentityProviders(ctx, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("resolve enabled identity providers: %w", err)
@@ -59,13 +95,8 @@ func (s *IdentityProviderService) AuthenticateUsernamePassword(ctx context.Conte
 		return nil, errors.New("no identity providers configured for tenant")
 	}
 
-	var provider *model.IdentityProvider
-	for _, candidate := range providers {
-		if candidate.IDPType == model.UsernamePasswordIDPType {
-			provider = &candidate
-			break
-		}
-	}
+	resolvedPartitionID := s.resolvePartitionID(ctx, tenantID, partitionID)
+	provider := s.findUsernamePasswordProvider(providers, resolvedPartitionID)
 	if provider == nil {
 		return nil, fmt.Errorf("identity provider %s is not configured for tenant", model.UsernamePasswordIDPType)
 	}
@@ -84,14 +115,13 @@ func (s *IdentityProviderService) AuthenticateUsernamePassword(ctx context.Conte
 	}
 
 	now := s.clock.Now()
+	if err := s.recordSuccessfulLogin(ctx, profile.ID, provider.ID, now); err != nil {
+		return nil, err
+	}
+
 	identity, err := s.storage.GetIdentityByProfileAndProvider(ctx, profile.ID, provider.ID)
 	if err != nil {
-		return nil, fmt.Errorf("lookup identity record: %w", err)
-	}
-	identity.LastLoginAt = now
-	identity.LoginCount++
-	if err := s.storage.UpsertIdentity(ctx, *identity); err != nil {
-		return nil, fmt.Errorf("upsert identity record: %w", err)
+		return nil, err
 	}
 
 	return &model.LoginResult{UserProfile: profile, Identity: identity}, nil
@@ -106,10 +136,55 @@ func (s *IdentityProviderService) GetIdentityProviders(ctx context.Context, tena
 	return s.storage.GetIdentityProviders(ctx, tenantID)
 }
 
-func (s *IdentityProviderService) VerifyPassword(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID, password string) (bool, error) {
-	provider, err := s.storage.GetIdentityProviderByType(ctx, tenantID, model.UsernamePasswordIDPType)
+func (s *IdentityProviderService) resolveUserPartitionProvider(ctx context.Context, tenantID uuid.UUID, profile *model.UserProfile) (*model.IdentityProvider, error) {
+	providers, err := s.storage.GetIdentityProviders(ctx, tenantID)
 	if err != nil {
-		return false, fmt.Errorf("username-password provider not found: %w", err)
+		return nil, fmt.Errorf("get identity providers: %w", err)
+	}
+	for _, p := range providers {
+		if p.IDPType == model.UsernamePasswordIDPType && p.PartitionID == profile.PartitionID {
+			return &p, nil
+		}
+	}
+	return nil, errors.New("username-password provider not found for user partition")
+}
+
+func (s *IdentityProviderService) checkTemporalBlock(identity *model.UserIdentity, provider *model.IdentityProvider, now time.Time) bool {
+	if !identity.Blocked {
+		return false
+	}
+	blockedDuration := time.Duration(provider.Config.PasswordBlockedTime) * time.Second
+	if now.Sub(identity.LastVerificationAttemptAt) <= blockedDuration {
+		identity.LastVerificationAttemptAt = now
+		_ = s.storage.UpsertIdentity(context.Background(), *identity)
+		return true
+	}
+	return false
+}
+
+func (s *IdentityProviderService) updateFailedAttempts(identity *model.UserIdentity, provider *model.IdentityProvider, correct bool) {
+	if correct {
+		identity.Blocked = false
+		identity.FailedVerificationCount = 0
+		return
+	}
+	if !identity.Blocked {
+		identity.FailedVerificationCount++
+		if identity.FailedVerificationCount >= provider.Config.MaxFailedVerificationCount {
+			identity.Blocked = true
+		}
+	}
+}
+
+func (s *IdentityProviderService) VerifyPassword(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID, password string) (bool, error) {
+	profile, err := s.storage.GetUserProfileByID(ctx, tenantID, userID)
+	if err != nil {
+		return false, fmt.Errorf("get user profile: %w", err)
+	}
+
+	provider, err := s.resolveUserPartitionProvider(ctx, tenantID, profile)
+	if err != nil {
+		return false, err
 	}
 
 	now := s.clock.Now()
@@ -118,13 +193,8 @@ func (s *IdentityProviderService) VerifyPassword(ctx context.Context, tenantID u
 		return false, fmt.Errorf("get or create identity: %w", err)
 	}
 
-	if identity.Blocked {
-		blockedDuration := time.Duration(provider.Config.PasswordBlockedTime) * time.Second
-		if now.Sub(identity.LastVerificationAttemptAt) <= blockedDuration {
-			identity.LastVerificationAttemptAt = now
-			_ = s.storage.UpsertIdentity(ctx, *identity)
-			return false, nil
-		}
+	if s.checkTemporalBlock(identity, provider, now) {
+		return false, nil
 	}
 
 	correct, err := s.checkPasswordCredential(ctx, userID, provider.ID, password)
@@ -133,15 +203,7 @@ func (s *IdentityProviderService) VerifyPassword(ctx context.Context, tenantID u
 	}
 
 	identity.LastVerificationAttemptAt = now
-	if correct {
-		identity.Blocked = false
-		identity.FailedVerificationCount = 0
-	} else if !identity.Blocked {
-		identity.FailedVerificationCount++
-		if identity.FailedVerificationCount >= provider.Config.MaxFailedVerificationCount {
-			identity.Blocked = true
-		}
-	}
+	s.updateFailedAttempts(identity, provider, correct)
 
 	_ = s.storage.UpsertIdentity(ctx, *identity)
 	return correct, nil
@@ -193,8 +255,8 @@ func (s *IdentityProviderService) CreateIdentityProvider(ctx context.Context, te
 			return nil, err
 		}
 		for _, ext := range existing {
-			if ext.IDPType == model.UsernamePasswordIDPType {
-				return nil, errors.New("a username-password identity provider already exists for this tenant")
+			if ext.IDPType == model.UsernamePasswordIDPType && ext.PartitionID == provider.PartitionID {
+				return nil, errors.New("a username-password identity provider already exists for this partition")
 			}
 		}
 	}
@@ -227,8 +289,8 @@ func (s *IdentityProviderService) UpdateIdentityProvider(ctx context.Context, te
 			return nil, err
 		}
 		for _, ext := range existing {
-			if ext.IDPType == model.UsernamePasswordIDPType && ext.ID != provider.ID {
-				return nil, errors.New("a username-password identity provider already exists for this tenant")
+			if ext.IDPType == model.UsernamePasswordIDPType && ext.ID != provider.ID && ext.PartitionID == provider.PartitionID {
+				return nil, errors.New("a username-password identity provider already exists for this partition")
 			}
 		}
 	}

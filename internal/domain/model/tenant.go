@@ -7,12 +7,14 @@ import (
 )
 
 type Tenant struct {
-	ID        uuid.UUID
-	Name      string
-	Domain    string
-	IsActive  bool
-	CreatedAt time.Time
-	Config    TenantConfig
+	ID               uuid.UUID
+	Name             string
+	Domain           string
+	IsActive         bool
+	CreatedAt        time.Time
+	Config           TenantConfig
+	DefaultPartition *int64
+	UpdatedAt        time.Time
 }
 
 type Levels struct {

@@ -119,13 +119,19 @@ To safeguard critical security audit trails and history files against accidental
 
 ## 3. Identity Providers, User Profiles & Authentication
 
-### 3.1 Multi-Tenant Identity Providers & Identity Coupling
+### 3.1 Multi-Tenant Identity Providers, Partitions & Identity Coupling
 
 Sprezz Identity natively supports multiple, decoupled identity providers per tenant. This model cleanly separates user authentication mechanisms from the core user identity boundary.
 
+A Tenant space can be further divided into one or more logical **Partitions**:
+
+* Each user profile belongs to exactly one partition.
+* Each partition can have multiple identity providers configured to handle user authentication.
+* For each tenant, a "default" partition and an admin-specific "Sprezz Admin" partition are automatically created during bootstrapping or tenant setup.
+
 ### 3.1.1 Architectural Domain Model
 
-* **User Profile**: A singular representation of the human identity within a tenant, identified by a UUIDv4. It holds standard claim values (display name, email address, verification status).
+* **User Profile**: A singular representation of the human identity within a tenant, identified by a UUIDv4. It holds standard claim values (display name, email address, verification status) and belongs to a specific Partition.
 * **Identity Provider (IdP)**: A configured mechanism of authentication for a tenant (e.g., `"username-password"`, and future OIDC/SAML configurations).
 * **User Identity**: A verified coupling record mapping a User Profile to a specific Identity Provider. Successful authentication on an IdP couples that user profile to the identity. It tracks:
   * `coupled_at` (First login/coupling time)
@@ -208,7 +214,16 @@ Sprezz Identity implements OIDC-compliant trust tiering by introducing the conce
 
 ## 5. OAuth 2.0 & OpenID Connect Flow Control Engine
 
-### 5.1 Authorization Code Flow with PKCE (RFC 7636) & Issuer Parameter (RFC 9207)
+### 5.1 OIDC Discovery & OAuth 2.0 Metadata Compliance
+
+Sprezz Identity Server publishes server capabilities on both the OpenID Connect Discovery 1.0 endpoint and the OAuth 2.0 Authorization Server Metadata (RFC 8414) endpoint:
+
+* **OIDC Discovery**: `/.well-known/openid-configuration`
+* **OAuth 2.0 Metadata**: `/.well-known/oauth-authorization-server`
+
+To completely eliminate duplication, both endpoints delegate metadata generation to a unified helper function `getDiscoveryMetadata` that compiles all supported scopes, grant types, signing algorithms, and endpoint paths.
+
+### 5.2 Authorization Code Flow with PKCE (RFC 7636) & Issuer Parameter (RFC 9207)
 
 Protects public, native mobile clients from intercept attacks by forcing runtime cryptographic proofs.
 
@@ -240,7 +255,7 @@ The mathematical evaluation inside the business layer service strictly asserts:
 \text{Base64URL}(\text{SHA256}(\text{code\_verifier})) == \text{code\_challenge}
 ```
 
-### 5.2 Pushed Authorization Requests (PAR - RFC 9126)
+### 5.3 Pushed Authorization Requests (PAR - RFC 9126)
 
 Sprezz Identity implements standard RFC 9126 Pushed Authorization Requests (PAR) at the POST endpoint `/oauth/par` to increase authorization security and compatibility with native application types.
 
@@ -248,21 +263,21 @@ Sprezz Identity implements standard RFC 9126 Pushed Authorization Requests (PAR)
 * **Request URI Generation**: The PAR engine validates the redirect URI and scope subsets and, if correct, stores the authorization parameters in our transactional storage, generating a unique, short-lived `urn:ietf:params:oauth:request_uri:<uuid>`.
 * **Decoupled Browser Navigation**: The client redirects the user to `/oauth/authorize?request_uri=<request_uri>`. The HTTP adapter resolves the tenant, consumes (deletes) the request parameters from storage, and executes the user login/authentication interaction, fully shielding downstream OIDC parameters from network query string interception or user manipulation.
 
-### 5.3 Dynamic Client Registration (DCR - RFC 7591)
+### 5.4 Dynamic Client Registration (DCR - RFC 7591)
 
 Enables native apps (like mobile clients or single-page applications) to register themselves dynamically over an unauthenticated boundary.
 
 * **Rule 1 (Public Client Stripping)**: If the registration payload specifies a native mobile or browser client application type, the engine **must not** generate or return a `client_secret`. The application profile is saved with a null secret and locked out of standard client-credential grant executions.
 * **Rule 2 (Scope Filtering)**: The registration engine matches requested scopes against the tenant's predefined list of allowed scopes (`PredefinedScopes`) before committing the client application registration.
 
-### 5.4 Protocol Compliance Interface Map
+### 5.5 Protocol Compliance Interface Map
 
 To maintain complete compatibility with off-the-shelf native app clients, the HTTP Inbound Adapter layer translates protocol transport wire conventions down to domain primitives.
 
 1. **Scope Tokenization Check**: On the HTTP wire, scopes pass as space-delimited string vectors (`"openid profile email"`). The inbound controller must intercept this parameter and tokenize it immediately, routing only a pure Go slice array to the ports layer.
 2. **Extended Boundary Constraints**: The IDP serves strictly as an access gatekeeper mapping identities down to an un-alterable `sub` URI or resource pointer. It **does not** function as an expansive CRM, contact manager, or corporate directory table. Any future requirement for semantic contact mapping via RDF or triple stores must reside in an entirely detached, isolated application container.
 
-#### 5.4.1 Token Endpoint Route Requirements
+#### 5.5.1 Token Endpoint Route Requirements
 
 | Route Endpoint | HTTP Method | RFC/Specification Context | Functional Responsibility |
 | :--- | :--- | :--- | :--- |

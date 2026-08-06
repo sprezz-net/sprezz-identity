@@ -42,6 +42,7 @@ type Storage interface {
 	RevokeSession(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) error
 	SaveInteractionSession(ctx context.Context, session model.InteractionSession) error
 	GetAndConsumeInteractionSession(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.InteractionSession, error)
+	GetInteractionSession(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.InteractionSession, error)
 	RevokeToken(ctx context.Context, tokenID string, expiresAt time.Time) error
 	IsTokenRevoked(ctx context.Context, tokenID string) (bool, error)
 	PruneExpiredTokens(ctx context.Context) error
@@ -65,7 +66,14 @@ type Storage interface {
 	MarkRefreshTokenUsed(ctx context.Context, tokenID string) error
 	RevokeRefreshTokenFamily(ctx context.Context, tokenFamilyID string) error
 	PurgeTenantSessionsAndTokens(ctx context.Context, tenantID uuid.UUID) error
+
+	GetPartitions(ctx context.Context, tenantID uuid.UUID) ([]model.Partition, error)
+	GetPartitionByAlias(ctx context.Context, tenantID uuid.UUID, alias string) (*model.Partition, error)
+	CreatePartition(ctx context.Context, tenantID uuid.UUID, name, aliasName string) (*model.Partition, error)
+	GetPartitionByID(ctx context.Context, id int64) (*model.Partition, error)
 }
+
+var ErrPartitionNotFound = errors.New("partition not found")
 
 // Errors returned by the StoragePort.
 var (

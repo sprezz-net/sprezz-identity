@@ -13,22 +13,24 @@ import (
 )
 
 const createTenant = `-- name: CreateTenant :execresult
-INSERT INTO tenants (tenant_uuid, name, domain_name, is_active, created_at, config)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO tenants (tenant_uuid, name, domain_name, is_active, created_at, config, default_partition)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (tenant_uuid) DO UPDATE SET
     name = EXCLUDED.name,
     domain_name = EXCLUDED.domain_name,
     is_active = EXCLUDED.is_active,
-    config = EXCLUDED.config
+    config = EXCLUDED.config,
+    default_partition = EXCLUDED.default_partition
 `
 
 type CreateTenantParams struct {
-	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
-	Name       string             `json:"name"`
-	DomainName string             `json:"domain_name"`
-	IsActive   bool               `json:"is_active"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	Config     []byte             `json:"config"`
+	TenantUuid       pgtype.UUID        `json:"tenant_uuid"`
+	Name             string             `json:"name"`
+	DomainName       string             `json:"domain_name"`
+	IsActive         bool               `json:"is_active"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	Config           []byte             `json:"config"`
+	DefaultPartition *int64             `json:"default_partition"`
 }
 
 func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (pgconn.CommandTag, error) {
@@ -39,23 +41,26 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (pgc
 		arg.IsActive,
 		arg.CreatedAt,
 		arg.Config,
+		arg.DefaultPartition,
 	)
 }
 
 const resolveTenantByDomain = `-- name: ResolveTenantByDomain :one
-SELECT tenant_uuid, name, domain_name, is_active, created_at, config
+SELECT tenant_uuid, name, domain_name, is_active, created_at, config, default_partition, updated_at
 FROM tenants
 WHERE domain_name = $1
 LIMIT 1
 `
 
 type ResolveTenantByDomainRow struct {
-	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
-	Name       string             `json:"name"`
-	DomainName string             `json:"domain_name"`
-	IsActive   bool               `json:"is_active"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	Config     []byte             `json:"config"`
+	TenantUuid       pgtype.UUID        `json:"tenant_uuid"`
+	Name             string             `json:"name"`
+	DomainName       string             `json:"domain_name"`
+	IsActive         bool               `json:"is_active"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	Config           []byte             `json:"config"`
+	DefaultPartition *int64             `json:"default_partition"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) ResolveTenantByDomain(ctx context.Context, domainName string) (ResolveTenantByDomainRow, error) {
@@ -68,24 +73,28 @@ func (q *Queries) ResolveTenantByDomain(ctx context.Context, domainName string) 
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.Config,
+		&i.DefaultPartition,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const resolveTenantByUUID = `-- name: ResolveTenantByUUID :one
-SELECT tenant_uuid, name, domain_name, is_active, created_at, config
+SELECT tenant_uuid, name, domain_name, is_active, created_at, config, default_partition, updated_at
 FROM tenants
 WHERE tenant_uuid = $1
 LIMIT 1
 `
 
 type ResolveTenantByUUIDRow struct {
-	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
-	Name       string             `json:"name"`
-	DomainName string             `json:"domain_name"`
-	IsActive   bool               `json:"is_active"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	Config     []byte             `json:"config"`
+	TenantUuid       pgtype.UUID        `json:"tenant_uuid"`
+	Name             string             `json:"name"`
+	DomainName       string             `json:"domain_name"`
+	IsActive         bool               `json:"is_active"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	Config           []byte             `json:"config"`
+	DefaultPartition *int64             `json:"default_partition"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) ResolveTenantByUUID(ctx context.Context, tenantUuid pgtype.UUID) (ResolveTenantByUUIDRow, error) {
@@ -98,6 +107,8 @@ func (q *Queries) ResolveTenantByUUID(ctx context.Context, tenantUuid pgtype.UUI
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.Config,
+		&i.DefaultPartition,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

@@ -28,6 +28,7 @@ const (
 	routeToken          = "/oauth/token"
 	routeUserInfo       = "/oauth/userinfo"
 	routeRegister       = "/oauth/register"
+	routeAuthServer     = "/.well-known/oauth-authorization-server"
 	routeOpenIDConfig   = "/.well-known/openid-configuration"
 	routeKeys           = "/.well-known/jwks.json"
 	routeRevoke         = "/oauth/revoke"
@@ -170,6 +171,7 @@ func (h *HttpAdapter) registerRoutes() {
 	h.router.Get(routeWebSignUp, h.signUpForm)
 	h.router.Post(routeWebSignUp, h.signUpSubmit)
 	h.router.Get(routeOpenIDConfig, h.openIDConfiguration)
+	h.router.Get(routeAuthServer, h.oauthAuthorizationServer)
 	h.router.Get(routeKeys, h.jwks)
 	h.router.Post(routeRegister, h.register)
 	h.router.Get(routeAuthorize, h.authorize)
@@ -236,13 +238,7 @@ func (h *HttpAdapter) registerRoutes() {
 	})
 }
 
-func (h *HttpAdapter) openIDConfiguration(w http.ResponseWriter, r *http.Request) {
-	tenant, ok := TenantFromContext(r.Context())
-	if !ok {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": errTenantNotResolved})
-		return
-	}
-
+func (h *HttpAdapter) getDiscoveryMetadata(r *http.Request, tenant *model.Tenant, isOIDC bool) map[string]any {
 	scopesSupported := tenant.Config.PredefinedScopes
 	if len(scopesSupported) == 0 {
 		scopesSupported = []string{"openid", "profile", "email", "offline_access"}
@@ -255,35 +251,63 @@ func (h *HttpAdapter) openIDConfiguration(w http.ResponseWriter, r *http.Request
 	sort.Strings(acrValues)
 
 	issuer := schemeHttps + r.Host
-	respondJSON(w, http.StatusOK, map[string]any{
+	meta := map[string]any{
 		"issuer":                                issuer,
 		"jwks_uri":                              issuer + routeKeys,
 		"authorization_endpoint":                issuer + routeAuthorize,
 		"token_endpoint":                        issuer + routeToken,
-		"userinfo_endpoint":                     issuer + routeUserInfo,
 		"registration_endpoint":                 issuer + routeRegister,
 		"introspection_endpoint":                issuer + routeIntrospect,
 		"revocation_endpoint":                   issuer + routeRevoke,
-		"end_session_endpoint":                  issuer + routeLogout,
 		"pushed_authorization_request_endpoint": issuer + routePAR,
 		"authorization_response_iss_parameter_supported": true,
-		"frontchannel_logout_supported":                  true,
-		"frontchannel_logout_session_supported":          true,
-		"response_types_supported":                       []string{"code", "token"},
+		"response_types_supported":                       []string{"code"},
 		"response_modes_supported":                       []string{"query", "form_post"},
 		"grant_types_supported":                          []string{"authorization_code", "client_credentials", "refresh_token"},
 		"scopes_supported":                               scopesSupported,
 		"acr_values_supported":                           acrValues,
-		"claims_supported":                               []string{"sub", "name", "preferred_username", "email", "email_verified", "tid"},
 		"token_endpoint_auth_methods_supported":          []string{"client_secret_basic", "client_secret_post", "none"},
 		"revocation_endpoint_auth_methods_supported":     []string{"client_secret_basic", "client_secret_post", "none"},
 		"introspection_endpoint_auth_methods_supported":  []string{"client_secret_basic", "client_secret_post"},
 		"dpop_signing_alg_values_supported":              []string{string(model.AlgRS256), string(model.AlgES256), string(model.AlgEdDSA)},
-		"id_token_signing_alg_values_supported":          []string{string(model.AlgRS256), string(model.AlgES256)},
 		"code_challenge_methods_supported":               []string{"S256"},
-		"subject_types_supported":                        []string{"public"},
 		"request_uri_parameter_supported":                false,
-	})
+		"require_pushed_authorization_requests":          false,
+	}
+
+	if isOIDC {
+		meta["userinfo_endpoint"] = issuer + routeUserInfo
+		meta["end_session_endpoint"] = issuer + routeLogout
+		meta["frontchannel_logout_supported"] = true
+		meta["frontchannel_logout_session_supported"] = true
+		meta["claims_supported"] = []string{"sub", "name", "preferred_username", "email", "email_verified", "tid"}
+		meta["id_token_signing_alg_values_supported"] = []string{string(model.AlgRS256), string(model.AlgES256)}
+		meta["subject_types_supported"] = []string{"public"}
+	}
+
+	return meta
+}
+
+func (h *HttpAdapter) openIDConfiguration(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := TenantFromContext(r.Context())
+	if !ok {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": errTenantNotResolved})
+		return
+	}
+
+	metadata := h.getDiscoveryMetadata(r, tenant, true)
+	respondJSON(w, http.StatusOK, metadata)
+}
+
+func (h *HttpAdapter) oauthAuthorizationServer(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := TenantFromContext(r.Context())
+	if !ok {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": errTenantNotResolved})
+		return
+	}
+
+	metadata := h.getDiscoveryMetadata(r, tenant, false)
+	respondJSON(w, http.StatusOK, metadata)
 }
 
 func (h *HttpAdapter) jwks(w http.ResponseWriter, r *http.Request) {

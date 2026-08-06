@@ -107,7 +107,9 @@ SELECT
     a.default_idp,
     a.allowed_audiences,
     a.client_type,
-    a.enforce_rtr
+    a.enforce_rtr,
+    a.created_at,
+    a.updated_at
 FROM applications AS a
 JOIN tenants AS t ON t.id = a.tenant_id
 WHERE t.tenant_uuid = $1

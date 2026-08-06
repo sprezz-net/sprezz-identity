@@ -11,14 +11,24 @@ const (
 	UsernamePasswordIDPType = "username-password"
 )
 
-type IdentityProvider struct {
-	ID        uuid.UUID
+type Partition struct {
+	ID        int64
 	TenantID  uuid.UUID
-	IDPType   string
-	Enabled   bool
-	Alias     string
-	Config    IdentityProviderConfig
-	CreatedAt time.Time
+	Name      string
+	AliasName string
+}
+
+type IdentityProvider struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	IDPType     string
+	Enabled     bool
+	Alias       string
+	Name        string
+	PartitionID int64
+	Config      IdentityProviderConfig
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type IdentityProviderConfig struct {
@@ -47,6 +57,8 @@ type PasswordCredential struct {
 	UserProfileID      uuid.UUID
 	IdentityProviderID uuid.UUID
 	Argon2Hash         string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 type LoginResult struct {

@@ -20,9 +20,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestHttpAdapter_OpenIDConfiguration_Success(t *testing.T) {
-	ctrl := minimock.NewController(t)
-
+func buildTestAdapter(ctrl *minimock.Controller) (*HttpAdapter, *model.Tenant) {
 	storage := portmock.NewStorageMock(ctrl)
 	auth := portmock.NewAuthMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
@@ -46,7 +44,12 @@ func TestHttpAdapter_OpenIDConfiguration_Success(t *testing.T) {
 		return tenant, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	return NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock()), tenant
+}
+
+func TestHttpAdapter_OpenIDConfiguration_Success(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	adapter, _ := buildTestAdapter(ctrl)
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/openid-configuration", nil)
 	req.Host = "test.com"
@@ -68,11 +71,7 @@ func TestHttpAdapter_OpenIDConfiguration_Success(t *testing.T) {
 		t.Fatal("scopes_supported is missing or not a list")
 	}
 
-	if len(scopes) != 2 {
-		t.Fatalf("expected 2 scopes, got %v", scopes)
-	}
-
-	if scopes[0] != "openid" || scopes[1] != "custom-scope" {
+	if len(scopes) != 2 || scopes[0] != "openid" || scopes[1] != "custom-scope" {
 		t.Fatalf("unexpected scopes in configuration: %v", scopes)
 	}
 
@@ -81,11 +80,7 @@ func TestHttpAdapter_OpenIDConfiguration_Success(t *testing.T) {
 		t.Fatal("acr_values_supported is missing or not a list")
 	}
 
-	if len(acrValues) != 2 {
-		t.Fatalf("expected 2 acr values, got %v", acrValues)
-	}
-
-	if acrValues[0] != "acr:a" || acrValues[1] != "acr:b" {
+	if len(acrValues) != 2 || acrValues[0] != "acr:a" || acrValues[1] != "acr:b" {
 		t.Fatalf("unexpected acr values order (must be sorted): %v", acrValues)
 	}
 
@@ -93,12 +88,48 @@ func TestHttpAdapter_OpenIDConfiguration_Success(t *testing.T) {
 		t.Fatalf("expected end_session_endpoint https://test.com/oauth/logout, got %v", resp["end_session_endpoint"])
 	}
 
-	if resp["frontchannel_logout_supported"] != true {
-		t.Fatalf("expected frontchannel_logout_supported true, got %v", resp["frontchannel_logout_supported"])
+	if resp["frontchannel_logout_supported"] != true || resp["frontchannel_logout_session_supported"] != true {
+		t.Fatal("expected frontchannel logout to be supported")
+	}
+}
+
+func TestHttpAdapter_OAuthAuthorizationServer_Success(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	adapter, _ := buildTestAdapter(ctrl)
+
+	req2 := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-authorization-server", nil)
+	req2.Host = "test.com"
+	rec2 := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(rec2, req2)
+
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec2.Code)
 	}
 
-	if resp["frontchannel_logout_session_supported"] != true {
-		t.Fatalf("expected frontchannel_logout_session_supported true, got %v", resp["frontchannel_logout_session_supported"])
+	var resp2 map[string]any
+	if err := json.Unmarshal(rec2.Body.Bytes(), &resp2); err != nil {
+		t.Fatalf("failed to decode response 2: %v", err)
+	}
+
+	oidcFields := []string{
+		"userinfo_endpoint",
+		"end_session_endpoint",
+		"frontchannel_logout_supported",
+		"frontchannel_logout_session_supported",
+		"claims_supported",
+		"id_token_signing_alg_values_supported",
+		"subject_types_supported",
+	}
+
+	for _, f := range oidcFields {
+		if _, exists := resp2[f]; exists {
+			t.Fatalf("expected field %q to be absent in OAuth 2.0 metadata, but it exists", f)
+		}
+	}
+
+	if resp2["issuer"] != "https://test.com" || resp2["authorization_endpoint"] != "https://test.com/oauth/authorize" {
+		t.Fatalf("unexpected OAuth 2.0 metadata endpoint values: %v", resp2)
 	}
 }
 
@@ -239,6 +270,8 @@ func TestHttpAdapter_CSPNonce(t *testing.T) {
 			},
 		}, nil
 	})
+	storage.GetEnabledIdentityProvidersMock.Return(nil, nil)
+	storage.GetPartitionsMock.Return(nil, nil)
 
 	auth := portmock.NewAuthMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)

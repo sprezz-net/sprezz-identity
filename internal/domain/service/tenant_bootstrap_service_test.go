@@ -23,6 +23,16 @@ func TestTenantBootstrapService_BootstrapAdminTenant_InitialCreation(t *testing.
 	// Mock ResolveTenantByDomain to return ErrTenantNotFound
 	storage.ResolveTenantByDomainMock.Expect(context.Background(), domain).Return(nil, port.ErrTenantNotFound)
 
+	// Mock CreatePartition
+	storage.CreatePartitionMock.Set(func(ctx context.Context, tenantID uuid.UUID, name, aliasName string) (*model.Partition, error) {
+		return &model.Partition{ID: 1, TenantID: tenantID, Name: name, AliasName: aliasName}, nil
+	})
+	// Mock ResolveTenantByID
+	storage.ResolveTenantByIDMock.Set(func(ctx context.Context, tenantID uuid.UUID) (*model.Tenant, error) {
+		var defaultPart int64 = 1
+		return &model.Tenant{ID: tenantID, DefaultPartition: &defaultPart}, nil
+	})
+
 	// Mock CreateTenant
 	storage.CreateTenantMock.Set(validateTenant(t, domain))
 

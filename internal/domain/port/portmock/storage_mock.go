@@ -28,6 +28,13 @@ type StorageMock struct {
 	beforeCreateIdentityProviderCounter uint64
 	CreateIdentityProviderMock          mStorageMockCreateIdentityProvider
 
+	funcCreatePartition          func(ctx context.Context, tenantID uuid.UUID, name string, aliasName string) (pp1 *model.Partition, err error)
+	funcCreatePartitionOrigin    string
+	inspectFuncCreatePartition   func(ctx context.Context, tenantID uuid.UUID, name string, aliasName string)
+	afterCreatePartitionCounter  uint64
+	beforeCreatePartitionCounter uint64
+	CreatePartitionMock          mStorageMockCreatePartition
+
 	funcCreateTenant          func(ctx context.Context, tenant model.Tenant) (err error)
 	funcCreateTenantOrigin    string
 	inspectFuncCreateTenant   func(ctx context.Context, tenant model.Tenant)
@@ -132,6 +139,34 @@ type StorageMock struct {
 	afterGetIdentityProvidersCounter  uint64
 	beforeGetIdentityProvidersCounter uint64
 	GetIdentityProvidersMock          mStorageMockGetIdentityProviders
+
+	funcGetInteractionSession          func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (ip1 *model.InteractionSession, err error)
+	funcGetInteractionSessionOrigin    string
+	inspectFuncGetInteractionSession   func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID)
+	afterGetInteractionSessionCounter  uint64
+	beforeGetInteractionSessionCounter uint64
+	GetInteractionSessionMock          mStorageMockGetInteractionSession
+
+	funcGetPartitionByAlias          func(ctx context.Context, tenantID uuid.UUID, alias string) (pp1 *model.Partition, err error)
+	funcGetPartitionByAliasOrigin    string
+	inspectFuncGetPartitionByAlias   func(ctx context.Context, tenantID uuid.UUID, alias string)
+	afterGetPartitionByAliasCounter  uint64
+	beforeGetPartitionByAliasCounter uint64
+	GetPartitionByAliasMock          mStorageMockGetPartitionByAlias
+
+	funcGetPartitionByID          func(ctx context.Context, id int64) (pp1 *model.Partition, err error)
+	funcGetPartitionByIDOrigin    string
+	inspectFuncGetPartitionByID   func(ctx context.Context, id int64)
+	afterGetPartitionByIDCounter  uint64
+	beforeGetPartitionByIDCounter uint64
+	GetPartitionByIDMock          mStorageMockGetPartitionByID
+
+	funcGetPartitions          func(ctx context.Context, tenantID uuid.UUID) (pa1 []model.Partition, err error)
+	funcGetPartitionsOrigin    string
+	inspectFuncGetPartitions   func(ctx context.Context, tenantID uuid.UUID)
+	afterGetPartitionsCounter  uint64
+	beforeGetPartitionsCounter uint64
+	GetPartitionsMock          mStorageMockGetPartitions
 
 	funcGetPasswordCredential          func(ctx context.Context, userProfileID uuid.UUID, providerID uuid.UUID) (pp1 *model.PasswordCredential, err error)
 	funcGetPasswordCredentialOrigin    string
@@ -327,6 +362,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 	m.CreateIdentityProviderMock = mStorageMockCreateIdentityProvider{mock: m}
 	m.CreateIdentityProviderMock.callArgs = []*StorageMockCreateIdentityProviderParams{}
 
+	m.CreatePartitionMock = mStorageMockCreatePartition{mock: m}
+	m.CreatePartitionMock.callArgs = []*StorageMockCreatePartitionParams{}
+
 	m.CreateTenantMock = mStorageMockCreateTenant{mock: m}
 	m.CreateTenantMock.callArgs = []*StorageMockCreateTenantParams{}
 
@@ -371,6 +409,18 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 
 	m.GetIdentityProvidersMock = mStorageMockGetIdentityProviders{mock: m}
 	m.GetIdentityProvidersMock.callArgs = []*StorageMockGetIdentityProvidersParams{}
+
+	m.GetInteractionSessionMock = mStorageMockGetInteractionSession{mock: m}
+	m.GetInteractionSessionMock.callArgs = []*StorageMockGetInteractionSessionParams{}
+
+	m.GetPartitionByAliasMock = mStorageMockGetPartitionByAlias{mock: m}
+	m.GetPartitionByAliasMock.callArgs = []*StorageMockGetPartitionByAliasParams{}
+
+	m.GetPartitionByIDMock = mStorageMockGetPartitionByID{mock: m}
+	m.GetPartitionByIDMock.callArgs = []*StorageMockGetPartitionByIDParams{}
+
+	m.GetPartitionsMock = mStorageMockGetPartitions{mock: m}
+	m.GetPartitionsMock.callArgs = []*StorageMockGetPartitionsParams{}
 
 	m.GetPasswordCredentialMock = mStorageMockGetPasswordCredential{mock: m}
 	m.GetPasswordCredentialMock.callArgs = []*StorageMockGetPasswordCredentialParams{}
@@ -825,6 +875,411 @@ func (m *StorageMock) MinimockCreateIdentityProviderInspect() {
 	if !m.CreateIdentityProviderMock.invocationsDone() && afterCreateIdentityProviderCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageMock.CreateIdentityProvider at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.CreateIdentityProviderMock.expectedInvocations), m.CreateIdentityProviderMock.expectedInvocationsOrigin, afterCreateIdentityProviderCounter)
+	}
+}
+
+type mStorageMockCreatePartition struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockCreatePartitionExpectation
+	expectations       []*StorageMockCreatePartitionExpectation
+
+	callArgs []*StorageMockCreatePartitionParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockCreatePartitionExpectation specifies expectation struct of the Storage.CreatePartition
+type StorageMockCreatePartitionExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockCreatePartitionParams
+	paramPtrs          *StorageMockCreatePartitionParamPtrs
+	expectationOrigins StorageMockCreatePartitionExpectationOrigins
+	results            *StorageMockCreatePartitionResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockCreatePartitionParams contains parameters of the Storage.CreatePartition
+type StorageMockCreatePartitionParams struct {
+	ctx       context.Context
+	tenantID  uuid.UUID
+	name      string
+	aliasName string
+}
+
+// StorageMockCreatePartitionParamPtrs contains pointers to parameters of the Storage.CreatePartition
+type StorageMockCreatePartitionParamPtrs struct {
+	ctx       *context.Context
+	tenantID  *uuid.UUID
+	name      *string
+	aliasName *string
+}
+
+// StorageMockCreatePartitionResults contains results of the Storage.CreatePartition
+type StorageMockCreatePartitionResults struct {
+	pp1 *model.Partition
+	err error
+}
+
+// StorageMockCreatePartitionOrigins contains origins of expectations of the Storage.CreatePartition
+type StorageMockCreatePartitionExpectationOrigins struct {
+	origin          string
+	originCtx       string
+	originTenantID  string
+	originName      string
+	originAliasName string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmCreatePartition *mStorageMockCreatePartition) Optional() *mStorageMockCreatePartition {
+	mmCreatePartition.optional = true
+	return mmCreatePartition
+}
+
+// Expect sets up expected params for Storage.CreatePartition
+func (mmCreatePartition *mStorageMockCreatePartition) Expect(ctx context.Context, tenantID uuid.UUID, name string, aliasName string) *mStorageMockCreatePartition {
+	if mmCreatePartition.mock.funcCreatePartition != nil {
+		mmCreatePartition.mock.t.Fatalf("StorageMock.CreatePartition mock is already set by Set")
+	}
+
+	if mmCreatePartition.defaultExpectation == nil {
+		mmCreatePartition.defaultExpectation = &StorageMockCreatePartitionExpectation{}
+	}
+
+	if mmCreatePartition.defaultExpectation.paramPtrs != nil {
+		mmCreatePartition.mock.t.Fatalf("StorageMock.CreatePartition mock is already set by ExpectParams functions")
+	}
+
+	mmCreatePartition.defaultExpectation.params = &StorageMockCreatePartitionParams{ctx, tenantID, name, aliasName}
+	mmCreatePartition.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmCreatePartition.expectations {
+		if minimock.Equal(e.params, mmCreatePartition.defaultExpectation.params) {
+			mmCreatePartition.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmCreatePartition.defaultExpectation.params)
+		}
+	}
+
+	return mmCreatePartition
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.CreatePartition
+func (mmCreatePartition *mStorageMockCreatePartition) ExpectCtxParam1(ctx context.Context) *mStorageMockCreatePartition {
+	if mmCreatePartition.mock.funcCreatePartition != nil {
+		mmCreatePartition.mock.t.Fatalf("StorageMock.CreatePartition mock is already set by Set")
+	}
+
+	if mmCreatePartition.defaultExpectation == nil {
+		mmCreatePartition.defaultExpectation = &StorageMockCreatePartitionExpectation{}
+	}
+
+	if mmCreatePartition.defaultExpectation.params != nil {
+		mmCreatePartition.mock.t.Fatalf("StorageMock.CreatePartition mock is already set by Expect")
+	}
+
+	if mmCreatePartition.defaultExpectation.paramPtrs == nil {
+		mmCreatePartition.defaultExpectation.paramPtrs = &StorageMockCreatePartitionParamPtrs{}
+	}
+	mmCreatePartition.defaultExpectation.paramPtrs.ctx = &ctx
+	mmCreatePartition.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmCreatePartition
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.CreatePartition
+func (mmCreatePartition *mStorageMockCreatePartition) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockCreatePartition {
+	if mmCreatePartition.mock.funcCreatePartition != nil {
+		mmCreatePartition.mock.t.Fatalf("StorageMock.CreatePartition mock is already set by Set")
+	}
+
+	if mmCreatePartition.defaultExpectation == nil {
+		mmCreatePartition.defaultExpectation = &StorageMockCreatePartitionExpectation{}
+	}
+
+	if mmCreatePartition.defaultExpectation.params != nil {
+		mmCreatePartition.mock.t.Fatalf("StorageMock.CreatePartition mock is already set by Expect")
+	}
+
+	if mmCreatePartition.defaultExpectation.paramPtrs == nil {
+		mmCreatePartition.defaultExpectation.paramPtrs = &StorageMockCreatePartitionParamPtrs{}
+	}
+	mmCreatePartition.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmCreatePartition.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmCreatePartition
+}
+
+// ExpectNameParam3 sets up expected param name for Storage.CreatePartition
+func (mmCreatePartition *mStorageMockCreatePartition) ExpectNameParam3(name string) *mStorageMockCreatePartition {
+	if mmCreatePartition.mock.funcCreatePartition != nil {
+		mmCreatePartition.mock.t.Fatalf("StorageMock.CreatePartition mock is already set by Set")
+	}
+
+	if mmCreatePartition.defaultExpectation == nil {
+		mmCreatePartition.defaultExpectation = &StorageMockCreatePartitionExpectation{}
+	}
+
+	if mmCreatePartition.defaultExpectation.params != nil {
+		mmCreatePartition.mock.t.Fatalf("StorageMock.CreatePartition mock is already set by Expect")
+	}
+
+	if mmCreatePartition.defaultExpectation.paramPtrs == nil {
+		mmCreatePartition.defaultExpectation.paramPtrs = &StorageMockCreatePartitionParamPtrs{}
+	}
+	mmCreatePartition.defaultExpectation.paramPtrs.name = &name
+	mmCreatePartition.defaultExpectation.expectationOrigins.originName = minimock.CallerInfo(1)
+
+	return mmCreatePartition
+}
+
+// ExpectAliasNameParam4 sets up expected param aliasName for Storage.CreatePartition
+func (mmCreatePartition *mStorageMockCreatePartition) ExpectAliasNameParam4(aliasName string) *mStorageMockCreatePartition {
+	if mmCreatePartition.mock.funcCreatePartition != nil {
+		mmCreatePartition.mock.t.Fatalf("StorageMock.CreatePartition mock is already set by Set")
+	}
+
+	if mmCreatePartition.defaultExpectation == nil {
+		mmCreatePartition.defaultExpectation = &StorageMockCreatePartitionExpectation{}
+	}
+
+	if mmCreatePartition.defaultExpectation.params != nil {
+		mmCreatePartition.mock.t.Fatalf("StorageMock.CreatePartition mock is already set by Expect")
+	}
+
+	if mmCreatePartition.defaultExpectation.paramPtrs == nil {
+		mmCreatePartition.defaultExpectation.paramPtrs = &StorageMockCreatePartitionParamPtrs{}
+	}
+	mmCreatePartition.defaultExpectation.paramPtrs.aliasName = &aliasName
+	mmCreatePartition.defaultExpectation.expectationOrigins.originAliasName = minimock.CallerInfo(1)
+
+	return mmCreatePartition
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.CreatePartition
+func (mmCreatePartition *mStorageMockCreatePartition) Inspect(f func(ctx context.Context, tenantID uuid.UUID, name string, aliasName string)) *mStorageMockCreatePartition {
+	if mmCreatePartition.mock.inspectFuncCreatePartition != nil {
+		mmCreatePartition.mock.t.Fatalf("Inspect function is already set for StorageMock.CreatePartition")
+	}
+
+	mmCreatePartition.mock.inspectFuncCreatePartition = f
+
+	return mmCreatePartition
+}
+
+// Return sets up results that will be returned by Storage.CreatePartition
+func (mmCreatePartition *mStorageMockCreatePartition) Return(pp1 *model.Partition, err error) *StorageMock {
+	if mmCreatePartition.mock.funcCreatePartition != nil {
+		mmCreatePartition.mock.t.Fatalf("StorageMock.CreatePartition mock is already set by Set")
+	}
+
+	if mmCreatePartition.defaultExpectation == nil {
+		mmCreatePartition.defaultExpectation = &StorageMockCreatePartitionExpectation{mock: mmCreatePartition.mock}
+	}
+	mmCreatePartition.defaultExpectation.results = &StorageMockCreatePartitionResults{pp1, err}
+	mmCreatePartition.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmCreatePartition.mock
+}
+
+// Set uses given function f to mock the Storage.CreatePartition method
+func (mmCreatePartition *mStorageMockCreatePartition) Set(f func(ctx context.Context, tenantID uuid.UUID, name string, aliasName string) (pp1 *model.Partition, err error)) *StorageMock {
+	if mmCreatePartition.defaultExpectation != nil {
+		mmCreatePartition.mock.t.Fatalf("Default expectation is already set for the Storage.CreatePartition method")
+	}
+
+	if len(mmCreatePartition.expectations) > 0 {
+		mmCreatePartition.mock.t.Fatalf("Some expectations are already set for the Storage.CreatePartition method")
+	}
+
+	mmCreatePartition.mock.funcCreatePartition = f
+	mmCreatePartition.mock.funcCreatePartitionOrigin = minimock.CallerInfo(1)
+	return mmCreatePartition.mock
+}
+
+// When sets expectation for the Storage.CreatePartition which will trigger the result defined by the following
+// Then helper
+func (mmCreatePartition *mStorageMockCreatePartition) When(ctx context.Context, tenantID uuid.UUID, name string, aliasName string) *StorageMockCreatePartitionExpectation {
+	if mmCreatePartition.mock.funcCreatePartition != nil {
+		mmCreatePartition.mock.t.Fatalf("StorageMock.CreatePartition mock is already set by Set")
+	}
+
+	expectation := &StorageMockCreatePartitionExpectation{
+		mock:               mmCreatePartition.mock,
+		params:             &StorageMockCreatePartitionParams{ctx, tenantID, name, aliasName},
+		expectationOrigins: StorageMockCreatePartitionExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmCreatePartition.expectations = append(mmCreatePartition.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.CreatePartition return parameters for the expectation previously defined by the When method
+func (e *StorageMockCreatePartitionExpectation) Then(pp1 *model.Partition, err error) *StorageMock {
+	e.results = &StorageMockCreatePartitionResults{pp1, err}
+	return e.mock
+}
+
+// Times sets number of times Storage.CreatePartition should be invoked
+func (mmCreatePartition *mStorageMockCreatePartition) Times(n uint64) *mStorageMockCreatePartition {
+	if n == 0 {
+		mmCreatePartition.mock.t.Fatalf("Times of StorageMock.CreatePartition mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmCreatePartition.expectedInvocations, n)
+	mmCreatePartition.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmCreatePartition
+}
+
+func (mmCreatePartition *mStorageMockCreatePartition) invocationsDone() bool {
+	if len(mmCreatePartition.expectations) == 0 && mmCreatePartition.defaultExpectation == nil && mmCreatePartition.mock.funcCreatePartition == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmCreatePartition.mock.afterCreatePartitionCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmCreatePartition.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// CreatePartition implements mm_port.Storage
+func (mmCreatePartition *StorageMock) CreatePartition(ctx context.Context, tenantID uuid.UUID, name string, aliasName string) (pp1 *model.Partition, err error) {
+	mm_atomic.AddUint64(&mmCreatePartition.beforeCreatePartitionCounter, 1)
+	defer mm_atomic.AddUint64(&mmCreatePartition.afterCreatePartitionCounter, 1)
+
+	mmCreatePartition.t.Helper()
+
+	if mmCreatePartition.inspectFuncCreatePartition != nil {
+		mmCreatePartition.inspectFuncCreatePartition(ctx, tenantID, name, aliasName)
+	}
+
+	mm_params := StorageMockCreatePartitionParams{ctx, tenantID, name, aliasName}
+
+	// Record call args
+	mmCreatePartition.CreatePartitionMock.mutex.Lock()
+	mmCreatePartition.CreatePartitionMock.callArgs = append(mmCreatePartition.CreatePartitionMock.callArgs, &mm_params)
+	mmCreatePartition.CreatePartitionMock.mutex.Unlock()
+
+	for _, e := range mmCreatePartition.CreatePartitionMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.pp1, e.results.err
+		}
+	}
+
+	if mmCreatePartition.CreatePartitionMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmCreatePartition.CreatePartitionMock.defaultExpectation.Counter, 1)
+		mm_want := mmCreatePartition.CreatePartitionMock.defaultExpectation.params
+		mm_want_ptrs := mmCreatePartition.CreatePartitionMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockCreatePartitionParams{ctx, tenantID, name, aliasName}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmCreatePartition.t.Errorf("StorageMock.CreatePartition got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmCreatePartition.CreatePartitionMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmCreatePartition.t.Errorf("StorageMock.CreatePartition got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmCreatePartition.CreatePartitionMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.name != nil && !minimock.Equal(*mm_want_ptrs.name, mm_got.name) {
+				mmCreatePartition.t.Errorf("StorageMock.CreatePartition got unexpected parameter name, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmCreatePartition.CreatePartitionMock.defaultExpectation.expectationOrigins.originName, *mm_want_ptrs.name, mm_got.name, minimock.Diff(*mm_want_ptrs.name, mm_got.name))
+			}
+
+			if mm_want_ptrs.aliasName != nil && !minimock.Equal(*mm_want_ptrs.aliasName, mm_got.aliasName) {
+				mmCreatePartition.t.Errorf("StorageMock.CreatePartition got unexpected parameter aliasName, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmCreatePartition.CreatePartitionMock.defaultExpectation.expectationOrigins.originAliasName, *mm_want_ptrs.aliasName, mm_got.aliasName, minimock.Diff(*mm_want_ptrs.aliasName, mm_got.aliasName))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmCreatePartition.t.Errorf("StorageMock.CreatePartition got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmCreatePartition.CreatePartitionMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmCreatePartition.CreatePartitionMock.defaultExpectation.results
+		if mm_results == nil {
+			mmCreatePartition.t.Fatal("No results are set for the StorageMock.CreatePartition")
+		}
+		return (*mm_results).pp1, (*mm_results).err
+	}
+	if mmCreatePartition.funcCreatePartition != nil {
+		return mmCreatePartition.funcCreatePartition(ctx, tenantID, name, aliasName)
+	}
+	mmCreatePartition.t.Fatalf("Unexpected call to StorageMock.CreatePartition. %v %v %v %v", ctx, tenantID, name, aliasName)
+	return
+}
+
+// CreatePartitionAfterCounter returns a count of finished StorageMock.CreatePartition invocations
+func (mmCreatePartition *StorageMock) CreatePartitionAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmCreatePartition.afterCreatePartitionCounter)
+}
+
+// CreatePartitionBeforeCounter returns a count of StorageMock.CreatePartition invocations
+func (mmCreatePartition *StorageMock) CreatePartitionBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmCreatePartition.beforeCreatePartitionCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.CreatePartition.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmCreatePartition *mStorageMockCreatePartition) Calls() []*StorageMockCreatePartitionParams {
+	mmCreatePartition.mutex.RLock()
+
+	argCopy := make([]*StorageMockCreatePartitionParams, len(mmCreatePartition.callArgs))
+	copy(argCopy, mmCreatePartition.callArgs)
+
+	mmCreatePartition.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockCreatePartitionDone returns true if the count of the CreatePartition invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockCreatePartitionDone() bool {
+	if m.CreatePartitionMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.CreatePartitionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.CreatePartitionMock.invocationsDone()
+}
+
+// MinimockCreatePartitionInspect logs each unmet expectation
+func (m *StorageMock) MinimockCreatePartitionInspect() {
+	for _, e := range m.CreatePartitionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.CreatePartition at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterCreatePartitionCounter := mm_atomic.LoadUint64(&m.afterCreatePartitionCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.CreatePartitionMock.defaultExpectation != nil && afterCreatePartitionCounter < 1 {
+		if m.CreatePartitionMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.CreatePartition at\n%s", m.CreatePartitionMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.CreatePartition at\n%s with params: %#v", m.CreatePartitionMock.defaultExpectation.expectationOrigins.origin, *m.CreatePartitionMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcCreatePartition != nil && afterCreatePartitionCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.CreatePartition at\n%s", m.funcCreatePartitionOrigin)
+	}
+
+	if !m.CreatePartitionMock.invocationsDone() && afterCreatePartitionCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.CreatePartition at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.CreatePartitionMock.expectedInvocations), m.CreatePartitionMock.expectedInvocationsOrigin, afterCreatePartitionCounter)
 	}
 }
 
@@ -6244,6 +6699,1440 @@ func (m *StorageMock) MinimockGetIdentityProvidersInspect() {
 	if !m.GetIdentityProvidersMock.invocationsDone() && afterGetIdentityProvidersCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageMock.GetIdentityProviders at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.GetIdentityProvidersMock.expectedInvocations), m.GetIdentityProvidersMock.expectedInvocationsOrigin, afterGetIdentityProvidersCounter)
+	}
+}
+
+type mStorageMockGetInteractionSession struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockGetInteractionSessionExpectation
+	expectations       []*StorageMockGetInteractionSessionExpectation
+
+	callArgs []*StorageMockGetInteractionSessionParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockGetInteractionSessionExpectation specifies expectation struct of the Storage.GetInteractionSession
+type StorageMockGetInteractionSessionExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockGetInteractionSessionParams
+	paramPtrs          *StorageMockGetInteractionSessionParamPtrs
+	expectationOrigins StorageMockGetInteractionSessionExpectationOrigins
+	results            *StorageMockGetInteractionSessionResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockGetInteractionSessionParams contains parameters of the Storage.GetInteractionSession
+type StorageMockGetInteractionSessionParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+	id       uuid.UUID
+}
+
+// StorageMockGetInteractionSessionParamPtrs contains pointers to parameters of the Storage.GetInteractionSession
+type StorageMockGetInteractionSessionParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+	id       *uuid.UUID
+}
+
+// StorageMockGetInteractionSessionResults contains results of the Storage.GetInteractionSession
+type StorageMockGetInteractionSessionResults struct {
+	ip1 *model.InteractionSession
+	err error
+}
+
+// StorageMockGetInteractionSessionOrigins contains origins of expectations of the Storage.GetInteractionSession
+type StorageMockGetInteractionSessionExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+	originId       string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetInteractionSession *mStorageMockGetInteractionSession) Optional() *mStorageMockGetInteractionSession {
+	mmGetInteractionSession.optional = true
+	return mmGetInteractionSession
+}
+
+// Expect sets up expected params for Storage.GetInteractionSession
+func (mmGetInteractionSession *mStorageMockGetInteractionSession) Expect(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) *mStorageMockGetInteractionSession {
+	if mmGetInteractionSession.mock.funcGetInteractionSession != nil {
+		mmGetInteractionSession.mock.t.Fatalf("StorageMock.GetInteractionSession mock is already set by Set")
+	}
+
+	if mmGetInteractionSession.defaultExpectation == nil {
+		mmGetInteractionSession.defaultExpectation = &StorageMockGetInteractionSessionExpectation{}
+	}
+
+	if mmGetInteractionSession.defaultExpectation.paramPtrs != nil {
+		mmGetInteractionSession.mock.t.Fatalf("StorageMock.GetInteractionSession mock is already set by ExpectParams functions")
+	}
+
+	mmGetInteractionSession.defaultExpectation.params = &StorageMockGetInteractionSessionParams{ctx, tenantID, id}
+	mmGetInteractionSession.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetInteractionSession.expectations {
+		if minimock.Equal(e.params, mmGetInteractionSession.defaultExpectation.params) {
+			mmGetInteractionSession.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetInteractionSession.defaultExpectation.params)
+		}
+	}
+
+	return mmGetInteractionSession
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.GetInteractionSession
+func (mmGetInteractionSession *mStorageMockGetInteractionSession) ExpectCtxParam1(ctx context.Context) *mStorageMockGetInteractionSession {
+	if mmGetInteractionSession.mock.funcGetInteractionSession != nil {
+		mmGetInteractionSession.mock.t.Fatalf("StorageMock.GetInteractionSession mock is already set by Set")
+	}
+
+	if mmGetInteractionSession.defaultExpectation == nil {
+		mmGetInteractionSession.defaultExpectation = &StorageMockGetInteractionSessionExpectation{}
+	}
+
+	if mmGetInteractionSession.defaultExpectation.params != nil {
+		mmGetInteractionSession.mock.t.Fatalf("StorageMock.GetInteractionSession mock is already set by Expect")
+	}
+
+	if mmGetInteractionSession.defaultExpectation.paramPtrs == nil {
+		mmGetInteractionSession.defaultExpectation.paramPtrs = &StorageMockGetInteractionSessionParamPtrs{}
+	}
+	mmGetInteractionSession.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetInteractionSession.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetInteractionSession
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.GetInteractionSession
+func (mmGetInteractionSession *mStorageMockGetInteractionSession) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockGetInteractionSession {
+	if mmGetInteractionSession.mock.funcGetInteractionSession != nil {
+		mmGetInteractionSession.mock.t.Fatalf("StorageMock.GetInteractionSession mock is already set by Set")
+	}
+
+	if mmGetInteractionSession.defaultExpectation == nil {
+		mmGetInteractionSession.defaultExpectation = &StorageMockGetInteractionSessionExpectation{}
+	}
+
+	if mmGetInteractionSession.defaultExpectation.params != nil {
+		mmGetInteractionSession.mock.t.Fatalf("StorageMock.GetInteractionSession mock is already set by Expect")
+	}
+
+	if mmGetInteractionSession.defaultExpectation.paramPtrs == nil {
+		mmGetInteractionSession.defaultExpectation.paramPtrs = &StorageMockGetInteractionSessionParamPtrs{}
+	}
+	mmGetInteractionSession.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetInteractionSession.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetInteractionSession
+}
+
+// ExpectIdParam3 sets up expected param id for Storage.GetInteractionSession
+func (mmGetInteractionSession *mStorageMockGetInteractionSession) ExpectIdParam3(id uuid.UUID) *mStorageMockGetInteractionSession {
+	if mmGetInteractionSession.mock.funcGetInteractionSession != nil {
+		mmGetInteractionSession.mock.t.Fatalf("StorageMock.GetInteractionSession mock is already set by Set")
+	}
+
+	if mmGetInteractionSession.defaultExpectation == nil {
+		mmGetInteractionSession.defaultExpectation = &StorageMockGetInteractionSessionExpectation{}
+	}
+
+	if mmGetInteractionSession.defaultExpectation.params != nil {
+		mmGetInteractionSession.mock.t.Fatalf("StorageMock.GetInteractionSession mock is already set by Expect")
+	}
+
+	if mmGetInteractionSession.defaultExpectation.paramPtrs == nil {
+		mmGetInteractionSession.defaultExpectation.paramPtrs = &StorageMockGetInteractionSessionParamPtrs{}
+	}
+	mmGetInteractionSession.defaultExpectation.paramPtrs.id = &id
+	mmGetInteractionSession.defaultExpectation.expectationOrigins.originId = minimock.CallerInfo(1)
+
+	return mmGetInteractionSession
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.GetInteractionSession
+func (mmGetInteractionSession *mStorageMockGetInteractionSession) Inspect(f func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID)) *mStorageMockGetInteractionSession {
+	if mmGetInteractionSession.mock.inspectFuncGetInteractionSession != nil {
+		mmGetInteractionSession.mock.t.Fatalf("Inspect function is already set for StorageMock.GetInteractionSession")
+	}
+
+	mmGetInteractionSession.mock.inspectFuncGetInteractionSession = f
+
+	return mmGetInteractionSession
+}
+
+// Return sets up results that will be returned by Storage.GetInteractionSession
+func (mmGetInteractionSession *mStorageMockGetInteractionSession) Return(ip1 *model.InteractionSession, err error) *StorageMock {
+	if mmGetInteractionSession.mock.funcGetInteractionSession != nil {
+		mmGetInteractionSession.mock.t.Fatalf("StorageMock.GetInteractionSession mock is already set by Set")
+	}
+
+	if mmGetInteractionSession.defaultExpectation == nil {
+		mmGetInteractionSession.defaultExpectation = &StorageMockGetInteractionSessionExpectation{mock: mmGetInteractionSession.mock}
+	}
+	mmGetInteractionSession.defaultExpectation.results = &StorageMockGetInteractionSessionResults{ip1, err}
+	mmGetInteractionSession.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetInteractionSession.mock
+}
+
+// Set uses given function f to mock the Storage.GetInteractionSession method
+func (mmGetInteractionSession *mStorageMockGetInteractionSession) Set(f func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (ip1 *model.InteractionSession, err error)) *StorageMock {
+	if mmGetInteractionSession.defaultExpectation != nil {
+		mmGetInteractionSession.mock.t.Fatalf("Default expectation is already set for the Storage.GetInteractionSession method")
+	}
+
+	if len(mmGetInteractionSession.expectations) > 0 {
+		mmGetInteractionSession.mock.t.Fatalf("Some expectations are already set for the Storage.GetInteractionSession method")
+	}
+
+	mmGetInteractionSession.mock.funcGetInteractionSession = f
+	mmGetInteractionSession.mock.funcGetInteractionSessionOrigin = minimock.CallerInfo(1)
+	return mmGetInteractionSession.mock
+}
+
+// When sets expectation for the Storage.GetInteractionSession which will trigger the result defined by the following
+// Then helper
+func (mmGetInteractionSession *mStorageMockGetInteractionSession) When(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) *StorageMockGetInteractionSessionExpectation {
+	if mmGetInteractionSession.mock.funcGetInteractionSession != nil {
+		mmGetInteractionSession.mock.t.Fatalf("StorageMock.GetInteractionSession mock is already set by Set")
+	}
+
+	expectation := &StorageMockGetInteractionSessionExpectation{
+		mock:               mmGetInteractionSession.mock,
+		params:             &StorageMockGetInteractionSessionParams{ctx, tenantID, id},
+		expectationOrigins: StorageMockGetInteractionSessionExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetInteractionSession.expectations = append(mmGetInteractionSession.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.GetInteractionSession return parameters for the expectation previously defined by the When method
+func (e *StorageMockGetInteractionSessionExpectation) Then(ip1 *model.InteractionSession, err error) *StorageMock {
+	e.results = &StorageMockGetInteractionSessionResults{ip1, err}
+	return e.mock
+}
+
+// Times sets number of times Storage.GetInteractionSession should be invoked
+func (mmGetInteractionSession *mStorageMockGetInteractionSession) Times(n uint64) *mStorageMockGetInteractionSession {
+	if n == 0 {
+		mmGetInteractionSession.mock.t.Fatalf("Times of StorageMock.GetInteractionSession mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetInteractionSession.expectedInvocations, n)
+	mmGetInteractionSession.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetInteractionSession
+}
+
+func (mmGetInteractionSession *mStorageMockGetInteractionSession) invocationsDone() bool {
+	if len(mmGetInteractionSession.expectations) == 0 && mmGetInteractionSession.defaultExpectation == nil && mmGetInteractionSession.mock.funcGetInteractionSession == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetInteractionSession.mock.afterGetInteractionSessionCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetInteractionSession.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetInteractionSession implements mm_port.Storage
+func (mmGetInteractionSession *StorageMock) GetInteractionSession(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (ip1 *model.InteractionSession, err error) {
+	mm_atomic.AddUint64(&mmGetInteractionSession.beforeGetInteractionSessionCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetInteractionSession.afterGetInteractionSessionCounter, 1)
+
+	mmGetInteractionSession.t.Helper()
+
+	if mmGetInteractionSession.inspectFuncGetInteractionSession != nil {
+		mmGetInteractionSession.inspectFuncGetInteractionSession(ctx, tenantID, id)
+	}
+
+	mm_params := StorageMockGetInteractionSessionParams{ctx, tenantID, id}
+
+	// Record call args
+	mmGetInteractionSession.GetInteractionSessionMock.mutex.Lock()
+	mmGetInteractionSession.GetInteractionSessionMock.callArgs = append(mmGetInteractionSession.GetInteractionSessionMock.callArgs, &mm_params)
+	mmGetInteractionSession.GetInteractionSessionMock.mutex.Unlock()
+
+	for _, e := range mmGetInteractionSession.GetInteractionSessionMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.ip1, e.results.err
+		}
+	}
+
+	if mmGetInteractionSession.GetInteractionSessionMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetInteractionSession.GetInteractionSessionMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetInteractionSession.GetInteractionSessionMock.defaultExpectation.params
+		mm_want_ptrs := mmGetInteractionSession.GetInteractionSessionMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockGetInteractionSessionParams{ctx, tenantID, id}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetInteractionSession.t.Errorf("StorageMock.GetInteractionSession got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetInteractionSession.GetInteractionSessionMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetInteractionSession.t.Errorf("StorageMock.GetInteractionSession got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetInteractionSession.GetInteractionSessionMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.id != nil && !minimock.Equal(*mm_want_ptrs.id, mm_got.id) {
+				mmGetInteractionSession.t.Errorf("StorageMock.GetInteractionSession got unexpected parameter id, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetInteractionSession.GetInteractionSessionMock.defaultExpectation.expectationOrigins.originId, *mm_want_ptrs.id, mm_got.id, minimock.Diff(*mm_want_ptrs.id, mm_got.id))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetInteractionSession.t.Errorf("StorageMock.GetInteractionSession got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetInteractionSession.GetInteractionSessionMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetInteractionSession.GetInteractionSessionMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetInteractionSession.t.Fatal("No results are set for the StorageMock.GetInteractionSession")
+		}
+		return (*mm_results).ip1, (*mm_results).err
+	}
+	if mmGetInteractionSession.funcGetInteractionSession != nil {
+		return mmGetInteractionSession.funcGetInteractionSession(ctx, tenantID, id)
+	}
+	mmGetInteractionSession.t.Fatalf("Unexpected call to StorageMock.GetInteractionSession. %v %v %v", ctx, tenantID, id)
+	return
+}
+
+// GetInteractionSessionAfterCounter returns a count of finished StorageMock.GetInteractionSession invocations
+func (mmGetInteractionSession *StorageMock) GetInteractionSessionAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetInteractionSession.afterGetInteractionSessionCounter)
+}
+
+// GetInteractionSessionBeforeCounter returns a count of StorageMock.GetInteractionSession invocations
+func (mmGetInteractionSession *StorageMock) GetInteractionSessionBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetInteractionSession.beforeGetInteractionSessionCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.GetInteractionSession.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetInteractionSession *mStorageMockGetInteractionSession) Calls() []*StorageMockGetInteractionSessionParams {
+	mmGetInteractionSession.mutex.RLock()
+
+	argCopy := make([]*StorageMockGetInteractionSessionParams, len(mmGetInteractionSession.callArgs))
+	copy(argCopy, mmGetInteractionSession.callArgs)
+
+	mmGetInteractionSession.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetInteractionSessionDone returns true if the count of the GetInteractionSession invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockGetInteractionSessionDone() bool {
+	if m.GetInteractionSessionMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetInteractionSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetInteractionSessionMock.invocationsDone()
+}
+
+// MinimockGetInteractionSessionInspect logs each unmet expectation
+func (m *StorageMock) MinimockGetInteractionSessionInspect() {
+	for _, e := range m.GetInteractionSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.GetInteractionSession at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetInteractionSessionCounter := mm_atomic.LoadUint64(&m.afterGetInteractionSessionCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetInteractionSessionMock.defaultExpectation != nil && afterGetInteractionSessionCounter < 1 {
+		if m.GetInteractionSessionMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.GetInteractionSession at\n%s", m.GetInteractionSessionMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.GetInteractionSession at\n%s with params: %#v", m.GetInteractionSessionMock.defaultExpectation.expectationOrigins.origin, *m.GetInteractionSessionMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetInteractionSession != nil && afterGetInteractionSessionCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.GetInteractionSession at\n%s", m.funcGetInteractionSessionOrigin)
+	}
+
+	if !m.GetInteractionSessionMock.invocationsDone() && afterGetInteractionSessionCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.GetInteractionSession at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetInteractionSessionMock.expectedInvocations), m.GetInteractionSessionMock.expectedInvocationsOrigin, afterGetInteractionSessionCounter)
+	}
+}
+
+type mStorageMockGetPartitionByAlias struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockGetPartitionByAliasExpectation
+	expectations       []*StorageMockGetPartitionByAliasExpectation
+
+	callArgs []*StorageMockGetPartitionByAliasParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockGetPartitionByAliasExpectation specifies expectation struct of the Storage.GetPartitionByAlias
+type StorageMockGetPartitionByAliasExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockGetPartitionByAliasParams
+	paramPtrs          *StorageMockGetPartitionByAliasParamPtrs
+	expectationOrigins StorageMockGetPartitionByAliasExpectationOrigins
+	results            *StorageMockGetPartitionByAliasResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockGetPartitionByAliasParams contains parameters of the Storage.GetPartitionByAlias
+type StorageMockGetPartitionByAliasParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+	alias    string
+}
+
+// StorageMockGetPartitionByAliasParamPtrs contains pointers to parameters of the Storage.GetPartitionByAlias
+type StorageMockGetPartitionByAliasParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+	alias    *string
+}
+
+// StorageMockGetPartitionByAliasResults contains results of the Storage.GetPartitionByAlias
+type StorageMockGetPartitionByAliasResults struct {
+	pp1 *model.Partition
+	err error
+}
+
+// StorageMockGetPartitionByAliasOrigins contains origins of expectations of the Storage.GetPartitionByAlias
+type StorageMockGetPartitionByAliasExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+	originAlias    string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetPartitionByAlias *mStorageMockGetPartitionByAlias) Optional() *mStorageMockGetPartitionByAlias {
+	mmGetPartitionByAlias.optional = true
+	return mmGetPartitionByAlias
+}
+
+// Expect sets up expected params for Storage.GetPartitionByAlias
+func (mmGetPartitionByAlias *mStorageMockGetPartitionByAlias) Expect(ctx context.Context, tenantID uuid.UUID, alias string) *mStorageMockGetPartitionByAlias {
+	if mmGetPartitionByAlias.mock.funcGetPartitionByAlias != nil {
+		mmGetPartitionByAlias.mock.t.Fatalf("StorageMock.GetPartitionByAlias mock is already set by Set")
+	}
+
+	if mmGetPartitionByAlias.defaultExpectation == nil {
+		mmGetPartitionByAlias.defaultExpectation = &StorageMockGetPartitionByAliasExpectation{}
+	}
+
+	if mmGetPartitionByAlias.defaultExpectation.paramPtrs != nil {
+		mmGetPartitionByAlias.mock.t.Fatalf("StorageMock.GetPartitionByAlias mock is already set by ExpectParams functions")
+	}
+
+	mmGetPartitionByAlias.defaultExpectation.params = &StorageMockGetPartitionByAliasParams{ctx, tenantID, alias}
+	mmGetPartitionByAlias.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetPartitionByAlias.expectations {
+		if minimock.Equal(e.params, mmGetPartitionByAlias.defaultExpectation.params) {
+			mmGetPartitionByAlias.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetPartitionByAlias.defaultExpectation.params)
+		}
+	}
+
+	return mmGetPartitionByAlias
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.GetPartitionByAlias
+func (mmGetPartitionByAlias *mStorageMockGetPartitionByAlias) ExpectCtxParam1(ctx context.Context) *mStorageMockGetPartitionByAlias {
+	if mmGetPartitionByAlias.mock.funcGetPartitionByAlias != nil {
+		mmGetPartitionByAlias.mock.t.Fatalf("StorageMock.GetPartitionByAlias mock is already set by Set")
+	}
+
+	if mmGetPartitionByAlias.defaultExpectation == nil {
+		mmGetPartitionByAlias.defaultExpectation = &StorageMockGetPartitionByAliasExpectation{}
+	}
+
+	if mmGetPartitionByAlias.defaultExpectation.params != nil {
+		mmGetPartitionByAlias.mock.t.Fatalf("StorageMock.GetPartitionByAlias mock is already set by Expect")
+	}
+
+	if mmGetPartitionByAlias.defaultExpectation.paramPtrs == nil {
+		mmGetPartitionByAlias.defaultExpectation.paramPtrs = &StorageMockGetPartitionByAliasParamPtrs{}
+	}
+	mmGetPartitionByAlias.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetPartitionByAlias.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetPartitionByAlias
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.GetPartitionByAlias
+func (mmGetPartitionByAlias *mStorageMockGetPartitionByAlias) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockGetPartitionByAlias {
+	if mmGetPartitionByAlias.mock.funcGetPartitionByAlias != nil {
+		mmGetPartitionByAlias.mock.t.Fatalf("StorageMock.GetPartitionByAlias mock is already set by Set")
+	}
+
+	if mmGetPartitionByAlias.defaultExpectation == nil {
+		mmGetPartitionByAlias.defaultExpectation = &StorageMockGetPartitionByAliasExpectation{}
+	}
+
+	if mmGetPartitionByAlias.defaultExpectation.params != nil {
+		mmGetPartitionByAlias.mock.t.Fatalf("StorageMock.GetPartitionByAlias mock is already set by Expect")
+	}
+
+	if mmGetPartitionByAlias.defaultExpectation.paramPtrs == nil {
+		mmGetPartitionByAlias.defaultExpectation.paramPtrs = &StorageMockGetPartitionByAliasParamPtrs{}
+	}
+	mmGetPartitionByAlias.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetPartitionByAlias.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetPartitionByAlias
+}
+
+// ExpectAliasParam3 sets up expected param alias for Storage.GetPartitionByAlias
+func (mmGetPartitionByAlias *mStorageMockGetPartitionByAlias) ExpectAliasParam3(alias string) *mStorageMockGetPartitionByAlias {
+	if mmGetPartitionByAlias.mock.funcGetPartitionByAlias != nil {
+		mmGetPartitionByAlias.mock.t.Fatalf("StorageMock.GetPartitionByAlias mock is already set by Set")
+	}
+
+	if mmGetPartitionByAlias.defaultExpectation == nil {
+		mmGetPartitionByAlias.defaultExpectation = &StorageMockGetPartitionByAliasExpectation{}
+	}
+
+	if mmGetPartitionByAlias.defaultExpectation.params != nil {
+		mmGetPartitionByAlias.mock.t.Fatalf("StorageMock.GetPartitionByAlias mock is already set by Expect")
+	}
+
+	if mmGetPartitionByAlias.defaultExpectation.paramPtrs == nil {
+		mmGetPartitionByAlias.defaultExpectation.paramPtrs = &StorageMockGetPartitionByAliasParamPtrs{}
+	}
+	mmGetPartitionByAlias.defaultExpectation.paramPtrs.alias = &alias
+	mmGetPartitionByAlias.defaultExpectation.expectationOrigins.originAlias = minimock.CallerInfo(1)
+
+	return mmGetPartitionByAlias
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.GetPartitionByAlias
+func (mmGetPartitionByAlias *mStorageMockGetPartitionByAlias) Inspect(f func(ctx context.Context, tenantID uuid.UUID, alias string)) *mStorageMockGetPartitionByAlias {
+	if mmGetPartitionByAlias.mock.inspectFuncGetPartitionByAlias != nil {
+		mmGetPartitionByAlias.mock.t.Fatalf("Inspect function is already set for StorageMock.GetPartitionByAlias")
+	}
+
+	mmGetPartitionByAlias.mock.inspectFuncGetPartitionByAlias = f
+
+	return mmGetPartitionByAlias
+}
+
+// Return sets up results that will be returned by Storage.GetPartitionByAlias
+func (mmGetPartitionByAlias *mStorageMockGetPartitionByAlias) Return(pp1 *model.Partition, err error) *StorageMock {
+	if mmGetPartitionByAlias.mock.funcGetPartitionByAlias != nil {
+		mmGetPartitionByAlias.mock.t.Fatalf("StorageMock.GetPartitionByAlias mock is already set by Set")
+	}
+
+	if mmGetPartitionByAlias.defaultExpectation == nil {
+		mmGetPartitionByAlias.defaultExpectation = &StorageMockGetPartitionByAliasExpectation{mock: mmGetPartitionByAlias.mock}
+	}
+	mmGetPartitionByAlias.defaultExpectation.results = &StorageMockGetPartitionByAliasResults{pp1, err}
+	mmGetPartitionByAlias.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetPartitionByAlias.mock
+}
+
+// Set uses given function f to mock the Storage.GetPartitionByAlias method
+func (mmGetPartitionByAlias *mStorageMockGetPartitionByAlias) Set(f func(ctx context.Context, tenantID uuid.UUID, alias string) (pp1 *model.Partition, err error)) *StorageMock {
+	if mmGetPartitionByAlias.defaultExpectation != nil {
+		mmGetPartitionByAlias.mock.t.Fatalf("Default expectation is already set for the Storage.GetPartitionByAlias method")
+	}
+
+	if len(mmGetPartitionByAlias.expectations) > 0 {
+		mmGetPartitionByAlias.mock.t.Fatalf("Some expectations are already set for the Storage.GetPartitionByAlias method")
+	}
+
+	mmGetPartitionByAlias.mock.funcGetPartitionByAlias = f
+	mmGetPartitionByAlias.mock.funcGetPartitionByAliasOrigin = minimock.CallerInfo(1)
+	return mmGetPartitionByAlias.mock
+}
+
+// When sets expectation for the Storage.GetPartitionByAlias which will trigger the result defined by the following
+// Then helper
+func (mmGetPartitionByAlias *mStorageMockGetPartitionByAlias) When(ctx context.Context, tenantID uuid.UUID, alias string) *StorageMockGetPartitionByAliasExpectation {
+	if mmGetPartitionByAlias.mock.funcGetPartitionByAlias != nil {
+		mmGetPartitionByAlias.mock.t.Fatalf("StorageMock.GetPartitionByAlias mock is already set by Set")
+	}
+
+	expectation := &StorageMockGetPartitionByAliasExpectation{
+		mock:               mmGetPartitionByAlias.mock,
+		params:             &StorageMockGetPartitionByAliasParams{ctx, tenantID, alias},
+		expectationOrigins: StorageMockGetPartitionByAliasExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetPartitionByAlias.expectations = append(mmGetPartitionByAlias.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.GetPartitionByAlias return parameters for the expectation previously defined by the When method
+func (e *StorageMockGetPartitionByAliasExpectation) Then(pp1 *model.Partition, err error) *StorageMock {
+	e.results = &StorageMockGetPartitionByAliasResults{pp1, err}
+	return e.mock
+}
+
+// Times sets number of times Storage.GetPartitionByAlias should be invoked
+func (mmGetPartitionByAlias *mStorageMockGetPartitionByAlias) Times(n uint64) *mStorageMockGetPartitionByAlias {
+	if n == 0 {
+		mmGetPartitionByAlias.mock.t.Fatalf("Times of StorageMock.GetPartitionByAlias mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetPartitionByAlias.expectedInvocations, n)
+	mmGetPartitionByAlias.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetPartitionByAlias
+}
+
+func (mmGetPartitionByAlias *mStorageMockGetPartitionByAlias) invocationsDone() bool {
+	if len(mmGetPartitionByAlias.expectations) == 0 && mmGetPartitionByAlias.defaultExpectation == nil && mmGetPartitionByAlias.mock.funcGetPartitionByAlias == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetPartitionByAlias.mock.afterGetPartitionByAliasCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetPartitionByAlias.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetPartitionByAlias implements mm_port.Storage
+func (mmGetPartitionByAlias *StorageMock) GetPartitionByAlias(ctx context.Context, tenantID uuid.UUID, alias string) (pp1 *model.Partition, err error) {
+	mm_atomic.AddUint64(&mmGetPartitionByAlias.beforeGetPartitionByAliasCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetPartitionByAlias.afterGetPartitionByAliasCounter, 1)
+
+	mmGetPartitionByAlias.t.Helper()
+
+	if mmGetPartitionByAlias.inspectFuncGetPartitionByAlias != nil {
+		mmGetPartitionByAlias.inspectFuncGetPartitionByAlias(ctx, tenantID, alias)
+	}
+
+	mm_params := StorageMockGetPartitionByAliasParams{ctx, tenantID, alias}
+
+	// Record call args
+	mmGetPartitionByAlias.GetPartitionByAliasMock.mutex.Lock()
+	mmGetPartitionByAlias.GetPartitionByAliasMock.callArgs = append(mmGetPartitionByAlias.GetPartitionByAliasMock.callArgs, &mm_params)
+	mmGetPartitionByAlias.GetPartitionByAliasMock.mutex.Unlock()
+
+	for _, e := range mmGetPartitionByAlias.GetPartitionByAliasMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.pp1, e.results.err
+		}
+	}
+
+	if mmGetPartitionByAlias.GetPartitionByAliasMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetPartitionByAlias.GetPartitionByAliasMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetPartitionByAlias.GetPartitionByAliasMock.defaultExpectation.params
+		mm_want_ptrs := mmGetPartitionByAlias.GetPartitionByAliasMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockGetPartitionByAliasParams{ctx, tenantID, alias}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetPartitionByAlias.t.Errorf("StorageMock.GetPartitionByAlias got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetPartitionByAlias.GetPartitionByAliasMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetPartitionByAlias.t.Errorf("StorageMock.GetPartitionByAlias got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetPartitionByAlias.GetPartitionByAliasMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.alias != nil && !minimock.Equal(*mm_want_ptrs.alias, mm_got.alias) {
+				mmGetPartitionByAlias.t.Errorf("StorageMock.GetPartitionByAlias got unexpected parameter alias, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetPartitionByAlias.GetPartitionByAliasMock.defaultExpectation.expectationOrigins.originAlias, *mm_want_ptrs.alias, mm_got.alias, minimock.Diff(*mm_want_ptrs.alias, mm_got.alias))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetPartitionByAlias.t.Errorf("StorageMock.GetPartitionByAlias got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetPartitionByAlias.GetPartitionByAliasMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetPartitionByAlias.GetPartitionByAliasMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetPartitionByAlias.t.Fatal("No results are set for the StorageMock.GetPartitionByAlias")
+		}
+		return (*mm_results).pp1, (*mm_results).err
+	}
+	if mmGetPartitionByAlias.funcGetPartitionByAlias != nil {
+		return mmGetPartitionByAlias.funcGetPartitionByAlias(ctx, tenantID, alias)
+	}
+	mmGetPartitionByAlias.t.Fatalf("Unexpected call to StorageMock.GetPartitionByAlias. %v %v %v", ctx, tenantID, alias)
+	return
+}
+
+// GetPartitionByAliasAfterCounter returns a count of finished StorageMock.GetPartitionByAlias invocations
+func (mmGetPartitionByAlias *StorageMock) GetPartitionByAliasAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetPartitionByAlias.afterGetPartitionByAliasCounter)
+}
+
+// GetPartitionByAliasBeforeCounter returns a count of StorageMock.GetPartitionByAlias invocations
+func (mmGetPartitionByAlias *StorageMock) GetPartitionByAliasBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetPartitionByAlias.beforeGetPartitionByAliasCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.GetPartitionByAlias.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetPartitionByAlias *mStorageMockGetPartitionByAlias) Calls() []*StorageMockGetPartitionByAliasParams {
+	mmGetPartitionByAlias.mutex.RLock()
+
+	argCopy := make([]*StorageMockGetPartitionByAliasParams, len(mmGetPartitionByAlias.callArgs))
+	copy(argCopy, mmGetPartitionByAlias.callArgs)
+
+	mmGetPartitionByAlias.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetPartitionByAliasDone returns true if the count of the GetPartitionByAlias invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockGetPartitionByAliasDone() bool {
+	if m.GetPartitionByAliasMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetPartitionByAliasMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetPartitionByAliasMock.invocationsDone()
+}
+
+// MinimockGetPartitionByAliasInspect logs each unmet expectation
+func (m *StorageMock) MinimockGetPartitionByAliasInspect() {
+	for _, e := range m.GetPartitionByAliasMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.GetPartitionByAlias at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetPartitionByAliasCounter := mm_atomic.LoadUint64(&m.afterGetPartitionByAliasCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetPartitionByAliasMock.defaultExpectation != nil && afterGetPartitionByAliasCounter < 1 {
+		if m.GetPartitionByAliasMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.GetPartitionByAlias at\n%s", m.GetPartitionByAliasMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.GetPartitionByAlias at\n%s with params: %#v", m.GetPartitionByAliasMock.defaultExpectation.expectationOrigins.origin, *m.GetPartitionByAliasMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetPartitionByAlias != nil && afterGetPartitionByAliasCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.GetPartitionByAlias at\n%s", m.funcGetPartitionByAliasOrigin)
+	}
+
+	if !m.GetPartitionByAliasMock.invocationsDone() && afterGetPartitionByAliasCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.GetPartitionByAlias at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetPartitionByAliasMock.expectedInvocations), m.GetPartitionByAliasMock.expectedInvocationsOrigin, afterGetPartitionByAliasCounter)
+	}
+}
+
+type mStorageMockGetPartitionByID struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockGetPartitionByIDExpectation
+	expectations       []*StorageMockGetPartitionByIDExpectation
+
+	callArgs []*StorageMockGetPartitionByIDParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockGetPartitionByIDExpectation specifies expectation struct of the Storage.GetPartitionByID
+type StorageMockGetPartitionByIDExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockGetPartitionByIDParams
+	paramPtrs          *StorageMockGetPartitionByIDParamPtrs
+	expectationOrigins StorageMockGetPartitionByIDExpectationOrigins
+	results            *StorageMockGetPartitionByIDResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockGetPartitionByIDParams contains parameters of the Storage.GetPartitionByID
+type StorageMockGetPartitionByIDParams struct {
+	ctx context.Context
+	id  int64
+}
+
+// StorageMockGetPartitionByIDParamPtrs contains pointers to parameters of the Storage.GetPartitionByID
+type StorageMockGetPartitionByIDParamPtrs struct {
+	ctx *context.Context
+	id  *int64
+}
+
+// StorageMockGetPartitionByIDResults contains results of the Storage.GetPartitionByID
+type StorageMockGetPartitionByIDResults struct {
+	pp1 *model.Partition
+	err error
+}
+
+// StorageMockGetPartitionByIDOrigins contains origins of expectations of the Storage.GetPartitionByID
+type StorageMockGetPartitionByIDExpectationOrigins struct {
+	origin    string
+	originCtx string
+	originId  string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetPartitionByID *mStorageMockGetPartitionByID) Optional() *mStorageMockGetPartitionByID {
+	mmGetPartitionByID.optional = true
+	return mmGetPartitionByID
+}
+
+// Expect sets up expected params for Storage.GetPartitionByID
+func (mmGetPartitionByID *mStorageMockGetPartitionByID) Expect(ctx context.Context, id int64) *mStorageMockGetPartitionByID {
+	if mmGetPartitionByID.mock.funcGetPartitionByID != nil {
+		mmGetPartitionByID.mock.t.Fatalf("StorageMock.GetPartitionByID mock is already set by Set")
+	}
+
+	if mmGetPartitionByID.defaultExpectation == nil {
+		mmGetPartitionByID.defaultExpectation = &StorageMockGetPartitionByIDExpectation{}
+	}
+
+	if mmGetPartitionByID.defaultExpectation.paramPtrs != nil {
+		mmGetPartitionByID.mock.t.Fatalf("StorageMock.GetPartitionByID mock is already set by ExpectParams functions")
+	}
+
+	mmGetPartitionByID.defaultExpectation.params = &StorageMockGetPartitionByIDParams{ctx, id}
+	mmGetPartitionByID.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetPartitionByID.expectations {
+		if minimock.Equal(e.params, mmGetPartitionByID.defaultExpectation.params) {
+			mmGetPartitionByID.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetPartitionByID.defaultExpectation.params)
+		}
+	}
+
+	return mmGetPartitionByID
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.GetPartitionByID
+func (mmGetPartitionByID *mStorageMockGetPartitionByID) ExpectCtxParam1(ctx context.Context) *mStorageMockGetPartitionByID {
+	if mmGetPartitionByID.mock.funcGetPartitionByID != nil {
+		mmGetPartitionByID.mock.t.Fatalf("StorageMock.GetPartitionByID mock is already set by Set")
+	}
+
+	if mmGetPartitionByID.defaultExpectation == nil {
+		mmGetPartitionByID.defaultExpectation = &StorageMockGetPartitionByIDExpectation{}
+	}
+
+	if mmGetPartitionByID.defaultExpectation.params != nil {
+		mmGetPartitionByID.mock.t.Fatalf("StorageMock.GetPartitionByID mock is already set by Expect")
+	}
+
+	if mmGetPartitionByID.defaultExpectation.paramPtrs == nil {
+		mmGetPartitionByID.defaultExpectation.paramPtrs = &StorageMockGetPartitionByIDParamPtrs{}
+	}
+	mmGetPartitionByID.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetPartitionByID.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetPartitionByID
+}
+
+// ExpectIdParam2 sets up expected param id for Storage.GetPartitionByID
+func (mmGetPartitionByID *mStorageMockGetPartitionByID) ExpectIdParam2(id int64) *mStorageMockGetPartitionByID {
+	if mmGetPartitionByID.mock.funcGetPartitionByID != nil {
+		mmGetPartitionByID.mock.t.Fatalf("StorageMock.GetPartitionByID mock is already set by Set")
+	}
+
+	if mmGetPartitionByID.defaultExpectation == nil {
+		mmGetPartitionByID.defaultExpectation = &StorageMockGetPartitionByIDExpectation{}
+	}
+
+	if mmGetPartitionByID.defaultExpectation.params != nil {
+		mmGetPartitionByID.mock.t.Fatalf("StorageMock.GetPartitionByID mock is already set by Expect")
+	}
+
+	if mmGetPartitionByID.defaultExpectation.paramPtrs == nil {
+		mmGetPartitionByID.defaultExpectation.paramPtrs = &StorageMockGetPartitionByIDParamPtrs{}
+	}
+	mmGetPartitionByID.defaultExpectation.paramPtrs.id = &id
+	mmGetPartitionByID.defaultExpectation.expectationOrigins.originId = minimock.CallerInfo(1)
+
+	return mmGetPartitionByID
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.GetPartitionByID
+func (mmGetPartitionByID *mStorageMockGetPartitionByID) Inspect(f func(ctx context.Context, id int64)) *mStorageMockGetPartitionByID {
+	if mmGetPartitionByID.mock.inspectFuncGetPartitionByID != nil {
+		mmGetPartitionByID.mock.t.Fatalf("Inspect function is already set for StorageMock.GetPartitionByID")
+	}
+
+	mmGetPartitionByID.mock.inspectFuncGetPartitionByID = f
+
+	return mmGetPartitionByID
+}
+
+// Return sets up results that will be returned by Storage.GetPartitionByID
+func (mmGetPartitionByID *mStorageMockGetPartitionByID) Return(pp1 *model.Partition, err error) *StorageMock {
+	if mmGetPartitionByID.mock.funcGetPartitionByID != nil {
+		mmGetPartitionByID.mock.t.Fatalf("StorageMock.GetPartitionByID mock is already set by Set")
+	}
+
+	if mmGetPartitionByID.defaultExpectation == nil {
+		mmGetPartitionByID.defaultExpectation = &StorageMockGetPartitionByIDExpectation{mock: mmGetPartitionByID.mock}
+	}
+	mmGetPartitionByID.defaultExpectation.results = &StorageMockGetPartitionByIDResults{pp1, err}
+	mmGetPartitionByID.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetPartitionByID.mock
+}
+
+// Set uses given function f to mock the Storage.GetPartitionByID method
+func (mmGetPartitionByID *mStorageMockGetPartitionByID) Set(f func(ctx context.Context, id int64) (pp1 *model.Partition, err error)) *StorageMock {
+	if mmGetPartitionByID.defaultExpectation != nil {
+		mmGetPartitionByID.mock.t.Fatalf("Default expectation is already set for the Storage.GetPartitionByID method")
+	}
+
+	if len(mmGetPartitionByID.expectations) > 0 {
+		mmGetPartitionByID.mock.t.Fatalf("Some expectations are already set for the Storage.GetPartitionByID method")
+	}
+
+	mmGetPartitionByID.mock.funcGetPartitionByID = f
+	mmGetPartitionByID.mock.funcGetPartitionByIDOrigin = minimock.CallerInfo(1)
+	return mmGetPartitionByID.mock
+}
+
+// When sets expectation for the Storage.GetPartitionByID which will trigger the result defined by the following
+// Then helper
+func (mmGetPartitionByID *mStorageMockGetPartitionByID) When(ctx context.Context, id int64) *StorageMockGetPartitionByIDExpectation {
+	if mmGetPartitionByID.mock.funcGetPartitionByID != nil {
+		mmGetPartitionByID.mock.t.Fatalf("StorageMock.GetPartitionByID mock is already set by Set")
+	}
+
+	expectation := &StorageMockGetPartitionByIDExpectation{
+		mock:               mmGetPartitionByID.mock,
+		params:             &StorageMockGetPartitionByIDParams{ctx, id},
+		expectationOrigins: StorageMockGetPartitionByIDExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetPartitionByID.expectations = append(mmGetPartitionByID.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.GetPartitionByID return parameters for the expectation previously defined by the When method
+func (e *StorageMockGetPartitionByIDExpectation) Then(pp1 *model.Partition, err error) *StorageMock {
+	e.results = &StorageMockGetPartitionByIDResults{pp1, err}
+	return e.mock
+}
+
+// Times sets number of times Storage.GetPartitionByID should be invoked
+func (mmGetPartitionByID *mStorageMockGetPartitionByID) Times(n uint64) *mStorageMockGetPartitionByID {
+	if n == 0 {
+		mmGetPartitionByID.mock.t.Fatalf("Times of StorageMock.GetPartitionByID mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetPartitionByID.expectedInvocations, n)
+	mmGetPartitionByID.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetPartitionByID
+}
+
+func (mmGetPartitionByID *mStorageMockGetPartitionByID) invocationsDone() bool {
+	if len(mmGetPartitionByID.expectations) == 0 && mmGetPartitionByID.defaultExpectation == nil && mmGetPartitionByID.mock.funcGetPartitionByID == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetPartitionByID.mock.afterGetPartitionByIDCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetPartitionByID.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetPartitionByID implements mm_port.Storage
+func (mmGetPartitionByID *StorageMock) GetPartitionByID(ctx context.Context, id int64) (pp1 *model.Partition, err error) {
+	mm_atomic.AddUint64(&mmGetPartitionByID.beforeGetPartitionByIDCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetPartitionByID.afterGetPartitionByIDCounter, 1)
+
+	mmGetPartitionByID.t.Helper()
+
+	if mmGetPartitionByID.inspectFuncGetPartitionByID != nil {
+		mmGetPartitionByID.inspectFuncGetPartitionByID(ctx, id)
+	}
+
+	mm_params := StorageMockGetPartitionByIDParams{ctx, id}
+
+	// Record call args
+	mmGetPartitionByID.GetPartitionByIDMock.mutex.Lock()
+	mmGetPartitionByID.GetPartitionByIDMock.callArgs = append(mmGetPartitionByID.GetPartitionByIDMock.callArgs, &mm_params)
+	mmGetPartitionByID.GetPartitionByIDMock.mutex.Unlock()
+
+	for _, e := range mmGetPartitionByID.GetPartitionByIDMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.pp1, e.results.err
+		}
+	}
+
+	if mmGetPartitionByID.GetPartitionByIDMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetPartitionByID.GetPartitionByIDMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetPartitionByID.GetPartitionByIDMock.defaultExpectation.params
+		mm_want_ptrs := mmGetPartitionByID.GetPartitionByIDMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockGetPartitionByIDParams{ctx, id}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetPartitionByID.t.Errorf("StorageMock.GetPartitionByID got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetPartitionByID.GetPartitionByIDMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.id != nil && !minimock.Equal(*mm_want_ptrs.id, mm_got.id) {
+				mmGetPartitionByID.t.Errorf("StorageMock.GetPartitionByID got unexpected parameter id, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetPartitionByID.GetPartitionByIDMock.defaultExpectation.expectationOrigins.originId, *mm_want_ptrs.id, mm_got.id, minimock.Diff(*mm_want_ptrs.id, mm_got.id))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetPartitionByID.t.Errorf("StorageMock.GetPartitionByID got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetPartitionByID.GetPartitionByIDMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetPartitionByID.GetPartitionByIDMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetPartitionByID.t.Fatal("No results are set for the StorageMock.GetPartitionByID")
+		}
+		return (*mm_results).pp1, (*mm_results).err
+	}
+	if mmGetPartitionByID.funcGetPartitionByID != nil {
+		return mmGetPartitionByID.funcGetPartitionByID(ctx, id)
+	}
+	mmGetPartitionByID.t.Fatalf("Unexpected call to StorageMock.GetPartitionByID. %v %v", ctx, id)
+	return
+}
+
+// GetPartitionByIDAfterCounter returns a count of finished StorageMock.GetPartitionByID invocations
+func (mmGetPartitionByID *StorageMock) GetPartitionByIDAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetPartitionByID.afterGetPartitionByIDCounter)
+}
+
+// GetPartitionByIDBeforeCounter returns a count of StorageMock.GetPartitionByID invocations
+func (mmGetPartitionByID *StorageMock) GetPartitionByIDBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetPartitionByID.beforeGetPartitionByIDCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.GetPartitionByID.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetPartitionByID *mStorageMockGetPartitionByID) Calls() []*StorageMockGetPartitionByIDParams {
+	mmGetPartitionByID.mutex.RLock()
+
+	argCopy := make([]*StorageMockGetPartitionByIDParams, len(mmGetPartitionByID.callArgs))
+	copy(argCopy, mmGetPartitionByID.callArgs)
+
+	mmGetPartitionByID.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetPartitionByIDDone returns true if the count of the GetPartitionByID invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockGetPartitionByIDDone() bool {
+	if m.GetPartitionByIDMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetPartitionByIDMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetPartitionByIDMock.invocationsDone()
+}
+
+// MinimockGetPartitionByIDInspect logs each unmet expectation
+func (m *StorageMock) MinimockGetPartitionByIDInspect() {
+	for _, e := range m.GetPartitionByIDMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.GetPartitionByID at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetPartitionByIDCounter := mm_atomic.LoadUint64(&m.afterGetPartitionByIDCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetPartitionByIDMock.defaultExpectation != nil && afterGetPartitionByIDCounter < 1 {
+		if m.GetPartitionByIDMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.GetPartitionByID at\n%s", m.GetPartitionByIDMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.GetPartitionByID at\n%s with params: %#v", m.GetPartitionByIDMock.defaultExpectation.expectationOrigins.origin, *m.GetPartitionByIDMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetPartitionByID != nil && afterGetPartitionByIDCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.GetPartitionByID at\n%s", m.funcGetPartitionByIDOrigin)
+	}
+
+	if !m.GetPartitionByIDMock.invocationsDone() && afterGetPartitionByIDCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.GetPartitionByID at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetPartitionByIDMock.expectedInvocations), m.GetPartitionByIDMock.expectedInvocationsOrigin, afterGetPartitionByIDCounter)
+	}
+}
+
+type mStorageMockGetPartitions struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockGetPartitionsExpectation
+	expectations       []*StorageMockGetPartitionsExpectation
+
+	callArgs []*StorageMockGetPartitionsParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockGetPartitionsExpectation specifies expectation struct of the Storage.GetPartitions
+type StorageMockGetPartitionsExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockGetPartitionsParams
+	paramPtrs          *StorageMockGetPartitionsParamPtrs
+	expectationOrigins StorageMockGetPartitionsExpectationOrigins
+	results            *StorageMockGetPartitionsResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockGetPartitionsParams contains parameters of the Storage.GetPartitions
+type StorageMockGetPartitionsParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+}
+
+// StorageMockGetPartitionsParamPtrs contains pointers to parameters of the Storage.GetPartitions
+type StorageMockGetPartitionsParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+}
+
+// StorageMockGetPartitionsResults contains results of the Storage.GetPartitions
+type StorageMockGetPartitionsResults struct {
+	pa1 []model.Partition
+	err error
+}
+
+// StorageMockGetPartitionsOrigins contains origins of expectations of the Storage.GetPartitions
+type StorageMockGetPartitionsExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetPartitions *mStorageMockGetPartitions) Optional() *mStorageMockGetPartitions {
+	mmGetPartitions.optional = true
+	return mmGetPartitions
+}
+
+// Expect sets up expected params for Storage.GetPartitions
+func (mmGetPartitions *mStorageMockGetPartitions) Expect(ctx context.Context, tenantID uuid.UUID) *mStorageMockGetPartitions {
+	if mmGetPartitions.mock.funcGetPartitions != nil {
+		mmGetPartitions.mock.t.Fatalf("StorageMock.GetPartitions mock is already set by Set")
+	}
+
+	if mmGetPartitions.defaultExpectation == nil {
+		mmGetPartitions.defaultExpectation = &StorageMockGetPartitionsExpectation{}
+	}
+
+	if mmGetPartitions.defaultExpectation.paramPtrs != nil {
+		mmGetPartitions.mock.t.Fatalf("StorageMock.GetPartitions mock is already set by ExpectParams functions")
+	}
+
+	mmGetPartitions.defaultExpectation.params = &StorageMockGetPartitionsParams{ctx, tenantID}
+	mmGetPartitions.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetPartitions.expectations {
+		if minimock.Equal(e.params, mmGetPartitions.defaultExpectation.params) {
+			mmGetPartitions.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetPartitions.defaultExpectation.params)
+		}
+	}
+
+	return mmGetPartitions
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.GetPartitions
+func (mmGetPartitions *mStorageMockGetPartitions) ExpectCtxParam1(ctx context.Context) *mStorageMockGetPartitions {
+	if mmGetPartitions.mock.funcGetPartitions != nil {
+		mmGetPartitions.mock.t.Fatalf("StorageMock.GetPartitions mock is already set by Set")
+	}
+
+	if mmGetPartitions.defaultExpectation == nil {
+		mmGetPartitions.defaultExpectation = &StorageMockGetPartitionsExpectation{}
+	}
+
+	if mmGetPartitions.defaultExpectation.params != nil {
+		mmGetPartitions.mock.t.Fatalf("StorageMock.GetPartitions mock is already set by Expect")
+	}
+
+	if mmGetPartitions.defaultExpectation.paramPtrs == nil {
+		mmGetPartitions.defaultExpectation.paramPtrs = &StorageMockGetPartitionsParamPtrs{}
+	}
+	mmGetPartitions.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetPartitions.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetPartitions
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.GetPartitions
+func (mmGetPartitions *mStorageMockGetPartitions) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockGetPartitions {
+	if mmGetPartitions.mock.funcGetPartitions != nil {
+		mmGetPartitions.mock.t.Fatalf("StorageMock.GetPartitions mock is already set by Set")
+	}
+
+	if mmGetPartitions.defaultExpectation == nil {
+		mmGetPartitions.defaultExpectation = &StorageMockGetPartitionsExpectation{}
+	}
+
+	if mmGetPartitions.defaultExpectation.params != nil {
+		mmGetPartitions.mock.t.Fatalf("StorageMock.GetPartitions mock is already set by Expect")
+	}
+
+	if mmGetPartitions.defaultExpectation.paramPtrs == nil {
+		mmGetPartitions.defaultExpectation.paramPtrs = &StorageMockGetPartitionsParamPtrs{}
+	}
+	mmGetPartitions.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetPartitions.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetPartitions
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.GetPartitions
+func (mmGetPartitions *mStorageMockGetPartitions) Inspect(f func(ctx context.Context, tenantID uuid.UUID)) *mStorageMockGetPartitions {
+	if mmGetPartitions.mock.inspectFuncGetPartitions != nil {
+		mmGetPartitions.mock.t.Fatalf("Inspect function is already set for StorageMock.GetPartitions")
+	}
+
+	mmGetPartitions.mock.inspectFuncGetPartitions = f
+
+	return mmGetPartitions
+}
+
+// Return sets up results that will be returned by Storage.GetPartitions
+func (mmGetPartitions *mStorageMockGetPartitions) Return(pa1 []model.Partition, err error) *StorageMock {
+	if mmGetPartitions.mock.funcGetPartitions != nil {
+		mmGetPartitions.mock.t.Fatalf("StorageMock.GetPartitions mock is already set by Set")
+	}
+
+	if mmGetPartitions.defaultExpectation == nil {
+		mmGetPartitions.defaultExpectation = &StorageMockGetPartitionsExpectation{mock: mmGetPartitions.mock}
+	}
+	mmGetPartitions.defaultExpectation.results = &StorageMockGetPartitionsResults{pa1, err}
+	mmGetPartitions.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetPartitions.mock
+}
+
+// Set uses given function f to mock the Storage.GetPartitions method
+func (mmGetPartitions *mStorageMockGetPartitions) Set(f func(ctx context.Context, tenantID uuid.UUID) (pa1 []model.Partition, err error)) *StorageMock {
+	if mmGetPartitions.defaultExpectation != nil {
+		mmGetPartitions.mock.t.Fatalf("Default expectation is already set for the Storage.GetPartitions method")
+	}
+
+	if len(mmGetPartitions.expectations) > 0 {
+		mmGetPartitions.mock.t.Fatalf("Some expectations are already set for the Storage.GetPartitions method")
+	}
+
+	mmGetPartitions.mock.funcGetPartitions = f
+	mmGetPartitions.mock.funcGetPartitionsOrigin = minimock.CallerInfo(1)
+	return mmGetPartitions.mock
+}
+
+// When sets expectation for the Storage.GetPartitions which will trigger the result defined by the following
+// Then helper
+func (mmGetPartitions *mStorageMockGetPartitions) When(ctx context.Context, tenantID uuid.UUID) *StorageMockGetPartitionsExpectation {
+	if mmGetPartitions.mock.funcGetPartitions != nil {
+		mmGetPartitions.mock.t.Fatalf("StorageMock.GetPartitions mock is already set by Set")
+	}
+
+	expectation := &StorageMockGetPartitionsExpectation{
+		mock:               mmGetPartitions.mock,
+		params:             &StorageMockGetPartitionsParams{ctx, tenantID},
+		expectationOrigins: StorageMockGetPartitionsExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetPartitions.expectations = append(mmGetPartitions.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.GetPartitions return parameters for the expectation previously defined by the When method
+func (e *StorageMockGetPartitionsExpectation) Then(pa1 []model.Partition, err error) *StorageMock {
+	e.results = &StorageMockGetPartitionsResults{pa1, err}
+	return e.mock
+}
+
+// Times sets number of times Storage.GetPartitions should be invoked
+func (mmGetPartitions *mStorageMockGetPartitions) Times(n uint64) *mStorageMockGetPartitions {
+	if n == 0 {
+		mmGetPartitions.mock.t.Fatalf("Times of StorageMock.GetPartitions mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetPartitions.expectedInvocations, n)
+	mmGetPartitions.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetPartitions
+}
+
+func (mmGetPartitions *mStorageMockGetPartitions) invocationsDone() bool {
+	if len(mmGetPartitions.expectations) == 0 && mmGetPartitions.defaultExpectation == nil && mmGetPartitions.mock.funcGetPartitions == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetPartitions.mock.afterGetPartitionsCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetPartitions.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetPartitions implements mm_port.Storage
+func (mmGetPartitions *StorageMock) GetPartitions(ctx context.Context, tenantID uuid.UUID) (pa1 []model.Partition, err error) {
+	mm_atomic.AddUint64(&mmGetPartitions.beforeGetPartitionsCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetPartitions.afterGetPartitionsCounter, 1)
+
+	mmGetPartitions.t.Helper()
+
+	if mmGetPartitions.inspectFuncGetPartitions != nil {
+		mmGetPartitions.inspectFuncGetPartitions(ctx, tenantID)
+	}
+
+	mm_params := StorageMockGetPartitionsParams{ctx, tenantID}
+
+	// Record call args
+	mmGetPartitions.GetPartitionsMock.mutex.Lock()
+	mmGetPartitions.GetPartitionsMock.callArgs = append(mmGetPartitions.GetPartitionsMock.callArgs, &mm_params)
+	mmGetPartitions.GetPartitionsMock.mutex.Unlock()
+
+	for _, e := range mmGetPartitions.GetPartitionsMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.pa1, e.results.err
+		}
+	}
+
+	if mmGetPartitions.GetPartitionsMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetPartitions.GetPartitionsMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetPartitions.GetPartitionsMock.defaultExpectation.params
+		mm_want_ptrs := mmGetPartitions.GetPartitionsMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockGetPartitionsParams{ctx, tenantID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetPartitions.t.Errorf("StorageMock.GetPartitions got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetPartitions.GetPartitionsMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetPartitions.t.Errorf("StorageMock.GetPartitions got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetPartitions.GetPartitionsMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetPartitions.t.Errorf("StorageMock.GetPartitions got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetPartitions.GetPartitionsMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetPartitions.GetPartitionsMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetPartitions.t.Fatal("No results are set for the StorageMock.GetPartitions")
+		}
+		return (*mm_results).pa1, (*mm_results).err
+	}
+	if mmGetPartitions.funcGetPartitions != nil {
+		return mmGetPartitions.funcGetPartitions(ctx, tenantID)
+	}
+	mmGetPartitions.t.Fatalf("Unexpected call to StorageMock.GetPartitions. %v %v", ctx, tenantID)
+	return
+}
+
+// GetPartitionsAfterCounter returns a count of finished StorageMock.GetPartitions invocations
+func (mmGetPartitions *StorageMock) GetPartitionsAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetPartitions.afterGetPartitionsCounter)
+}
+
+// GetPartitionsBeforeCounter returns a count of StorageMock.GetPartitions invocations
+func (mmGetPartitions *StorageMock) GetPartitionsBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetPartitions.beforeGetPartitionsCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.GetPartitions.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetPartitions *mStorageMockGetPartitions) Calls() []*StorageMockGetPartitionsParams {
+	mmGetPartitions.mutex.RLock()
+
+	argCopy := make([]*StorageMockGetPartitionsParams, len(mmGetPartitions.callArgs))
+	copy(argCopy, mmGetPartitions.callArgs)
+
+	mmGetPartitions.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetPartitionsDone returns true if the count of the GetPartitions invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockGetPartitionsDone() bool {
+	if m.GetPartitionsMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetPartitionsMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetPartitionsMock.invocationsDone()
+}
+
+// MinimockGetPartitionsInspect logs each unmet expectation
+func (m *StorageMock) MinimockGetPartitionsInspect() {
+	for _, e := range m.GetPartitionsMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.GetPartitions at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetPartitionsCounter := mm_atomic.LoadUint64(&m.afterGetPartitionsCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetPartitionsMock.defaultExpectation != nil && afterGetPartitionsCounter < 1 {
+		if m.GetPartitionsMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.GetPartitions at\n%s", m.GetPartitionsMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.GetPartitions at\n%s with params: %#v", m.GetPartitionsMock.defaultExpectation.expectationOrigins.origin, *m.GetPartitionsMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetPartitions != nil && afterGetPartitionsCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.GetPartitions at\n%s", m.funcGetPartitionsOrigin)
+	}
+
+	if !m.GetPartitionsMock.invocationsDone() && afterGetPartitionsCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.GetPartitions at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetPartitionsMock.expectedInvocations), m.GetPartitionsMock.expectedInvocationsOrigin, afterGetPartitionsCounter)
 	}
 }
 
@@ -15434,6 +17323,8 @@ func (m *StorageMock) MinimockFinish() {
 		if !m.minimockDone() {
 			m.MinimockCreateIdentityProviderInspect()
 
+			m.MinimockCreatePartitionInspect()
+
 			m.MinimockCreateTenantInspect()
 
 			m.MinimockDecoupleIdentityInspect()
@@ -15463,6 +17354,14 @@ func (m *StorageMock) MinimockFinish() {
 			m.MinimockGetIdentityProviderByTypeInspect()
 
 			m.MinimockGetIdentityProvidersInspect()
+
+			m.MinimockGetInteractionSessionInspect()
+
+			m.MinimockGetPartitionByAliasInspect()
+
+			m.MinimockGetPartitionByIDInspect()
+
+			m.MinimockGetPartitionsInspect()
 
 			m.MinimockGetPasswordCredentialInspect()
 
@@ -15539,6 +17438,7 @@ func (m *StorageMock) minimockDone() bool {
 	done := true
 	return done &&
 		m.MinimockCreateIdentityProviderDone() &&
+		m.MinimockCreatePartitionDone() &&
 		m.MinimockCreateTenantDone() &&
 		m.MinimockDecoupleIdentityDone() &&
 		m.MinimockDeleteClientDone() &&
@@ -15554,6 +17454,10 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockGetIdentityByProfileAndProviderDone() &&
 		m.MinimockGetIdentityProviderByTypeDone() &&
 		m.MinimockGetIdentityProvidersDone() &&
+		m.MinimockGetInteractionSessionDone() &&
+		m.MinimockGetPartitionByAliasDone() &&
+		m.MinimockGetPartitionByIDDone() &&
+		m.MinimockGetPartitionsDone() &&
 		m.MinimockGetPasswordCredentialDone() &&
 		m.MinimockGetRefreshTokenDone() &&
 		m.MinimockGetUserIdentitiesDone() &&

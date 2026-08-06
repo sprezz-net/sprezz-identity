@@ -27,17 +27,6 @@ func TestVerifyPassword_Success(t *testing.T) {
 	password := "MySecretPassword1"
 	hash, _ := argon2id.CreateHash(password, argon2id.DefaultParams)
 
-	provider := &model.IdentityProvider{
-		ID:       providerID,
-		TenantID: tenantID,
-		IDPType:  model.UsernamePasswordIDPType,
-		Enabled:  true,
-		Config: model.IdentityProviderConfig{
-			MaxFailedVerificationCount: 3,
-			PasswordBlockedTime:        60,
-		},
-	}
-
 	identity := &model.UserIdentity{
 		ID:                      uuid.New(),
 		UserProfileID:           userID,
@@ -52,7 +41,20 @@ func TestVerifyPassword_Success(t *testing.T) {
 		Argon2Hash:         hash,
 	}
 
-	storage.GetIdentityProviderByTypeMock.Expect(context.Background(), tenantID, model.UsernamePasswordIDPType).Return(provider, nil)
+	storage.GetUserProfileByIDMock.Expect(context.Background(), tenantID, userID).Return(&model.UserProfile{ID: userID, PartitionID: 1}, nil)
+	storage.GetIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{
+		{
+			ID:          providerID,
+			TenantID:    tenantID,
+			IDPType:     model.UsernamePasswordIDPType,
+			Enabled:     true,
+			PartitionID: 1,
+			Config: model.IdentityProviderConfig{
+				MaxFailedVerificationCount: 3,
+				PasswordBlockedTime:        60,
+			},
+		},
+	}, nil)
 	storage.GetIdentityByProfileAndProviderMock.Expect(context.Background(), userID, providerID).Return(identity, nil)
 	storage.GetPasswordCredentialMock.Expect(context.Background(), userID, providerID).Return(cred, nil)
 
@@ -89,17 +91,6 @@ func TestVerifyPassword_FailureAndBlocking(t *testing.T) {
 	password := "MySecretPassword1"
 	hash, _ := argon2id.CreateHash(password, argon2id.DefaultParams)
 
-	provider := &model.IdentityProvider{
-		ID:       providerID,
-		TenantID: tenantID,
-		IDPType:  model.UsernamePasswordIDPType,
-		Enabled:  true,
-		Config: model.IdentityProviderConfig{
-			MaxFailedVerificationCount: 3,
-			PasswordBlockedTime:        60,
-		},
-	}
-
 	identity := &model.UserIdentity{
 		ID:                      uuid.New(),
 		UserProfileID:           userID,
@@ -114,7 +105,20 @@ func TestVerifyPassword_FailureAndBlocking(t *testing.T) {
 		Argon2Hash:         hash,
 	}
 
-	storage.GetIdentityProviderByTypeMock.Expect(context.Background(), tenantID, model.UsernamePasswordIDPType).Return(provider, nil)
+	storage.GetUserProfileByIDMock.Expect(context.Background(), tenantID, userID).Return(&model.UserProfile{ID: userID, PartitionID: 1}, nil)
+	storage.GetIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{
+		{
+			ID:          providerID,
+			TenantID:    tenantID,
+			IDPType:     model.UsernamePasswordIDPType,
+			Enabled:     true,
+			PartitionID: 1,
+			Config: model.IdentityProviderConfig{
+				MaxFailedVerificationCount: 3,
+				PasswordBlockedTime:        60,
+			},
+		},
+	}, nil)
 	storage.GetIdentityByProfileAndProviderMock.Expect(context.Background(), userID, providerID).Return(identity, nil)
 	storage.GetPasswordCredentialMock.Expect(context.Background(), userID, providerID).Return(cred, nil)
 
@@ -148,17 +152,6 @@ func TestVerifyPassword_Blocked_RejectsWithinBlockedTime(t *testing.T) {
 	userID := uuid.New()
 	providerID := uuid.New()
 
-	provider := &model.IdentityProvider{
-		ID:       providerID,
-		TenantID: tenantID,
-		IDPType:  model.UsernamePasswordIDPType,
-		Enabled:  true,
-		Config: model.IdentityProviderConfig{
-			MaxFailedVerificationCount: 3,
-			PasswordBlockedTime:        60,
-		},
-	}
-
 	identity := &model.UserIdentity{
 		ID:                        uuid.New(),
 		UserProfileID:             userID,
@@ -168,7 +161,20 @@ func TestVerifyPassword_Blocked_RejectsWithinBlockedTime(t *testing.T) {
 		LastVerificationAttemptAt: now.Add(-30 * time.Second), // 30s ago < 60s block time
 	}
 
-	storage.GetIdentityProviderByTypeMock.Expect(context.Background(), tenantID, model.UsernamePasswordIDPType).Return(provider, nil)
+	storage.GetUserProfileByIDMock.Expect(context.Background(), tenantID, userID).Return(&model.UserProfile{ID: userID, PartitionID: 1}, nil)
+	storage.GetIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{
+		{
+			ID:          providerID,
+			TenantID:    tenantID,
+			IDPType:     model.UsernamePasswordIDPType,
+			Enabled:     true,
+			PartitionID: 1,
+			Config: model.IdentityProviderConfig{
+				MaxFailedVerificationCount: 3,
+				PasswordBlockedTime:        60,
+			},
+		},
+	}, nil)
 	storage.GetIdentityByProfileAndProviderMock.Expect(context.Background(), userID, providerID).Return(identity, nil)
 
 	storage.UpsertIdentityMock.Set(func(ctx context.Context, ident model.UserIdentity) error {
@@ -201,17 +207,6 @@ func TestVerifyPassword_Blocked_Expires_UnblocksWithCorrectPassword(t *testing.T
 	password := "MySecretPassword1"
 	hash, _ := argon2id.CreateHash(password, argon2id.DefaultParams)
 
-	provider := &model.IdentityProvider{
-		ID:       providerID,
-		TenantID: tenantID,
-		IDPType:  model.UsernamePasswordIDPType,
-		Enabled:  true,
-		Config: model.IdentityProviderConfig{
-			MaxFailedVerificationCount: 3,
-			PasswordBlockedTime:        60,
-		},
-	}
-
 	identity := &model.UserIdentity{
 		ID:                        uuid.New(),
 		UserProfileID:             userID,
@@ -227,7 +222,20 @@ func TestVerifyPassword_Blocked_Expires_UnblocksWithCorrectPassword(t *testing.T
 		Argon2Hash:         hash,
 	}
 
-	storage.GetIdentityProviderByTypeMock.Expect(context.Background(), tenantID, model.UsernamePasswordIDPType).Return(provider, nil)
+	storage.GetUserProfileByIDMock.Expect(context.Background(), tenantID, userID).Return(&model.UserProfile{ID: userID, PartitionID: 1}, nil)
+	storage.GetIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{
+		{
+			ID:          providerID,
+			TenantID:    tenantID,
+			IDPType:     model.UsernamePasswordIDPType,
+			Enabled:     true,
+			PartitionID: 1,
+			Config: model.IdentityProviderConfig{
+				MaxFailedVerificationCount: 3,
+				PasswordBlockedTime:        60,
+			},
+		},
+	}, nil)
 	storage.GetIdentityByProfileAndProviderMock.Expect(context.Background(), userID, providerID).Return(identity, nil)
 	storage.GetPasswordCredentialMock.Expect(context.Background(), userID, providerID).Return(cred, nil)
 
@@ -265,11 +273,12 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_Success(t *testing
 	hashedPassword, _ := argon2id.CreateHash(password, argon2id.DefaultParams)
 
 	provider := model.IdentityProvider{
-		ID:       providerID,
-		TenantID: tenantID,
-		IDPType:  model.UsernamePasswordIDPType,
-		Enabled:  true,
-		Alias:    "username-password",
+		ID:          providerID,
+		TenantID:    tenantID,
+		IDPType:     model.UsernamePasswordIDPType,
+		Enabled:     true,
+		Alias:       "username-password",
+		PartitionID: 1,
 		Config: model.IdentityProviderConfig{
 			UsernameField:              "preferredUsername",
 			MaxFailedVerificationCount: 5,
@@ -278,6 +287,7 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_Success(t *testing
 
 	profile := &model.UserProfile{
 		ID:                userProfileID,
+		PartitionID:       1,
 		PreferredUsername: "john_doe",
 	}
 
@@ -294,9 +304,12 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_Success(t *testing
 		LoginCount:         1,
 	}
 
+	var defaultPart int64 = 1
+	storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(&model.Tenant{ID: tenantID, DefaultPartition: &defaultPart}, nil)
 	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{provider}, nil)
 	storage.GetUserProfileByIdentifierMock.Expect(context.Background(), tenantID, providerID, "john_doe").Return(profile, nil)
-	storage.GetIdentityProviderByTypeMock.Expect(context.Background(), tenantID, model.UsernamePasswordIDPType).Return(&provider, nil)
+	storage.GetUserProfileByIDMock.Expect(context.Background(), tenantID, userProfileID).Return(profile, nil)
+	storage.GetIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{provider}, nil)
 	storage.GetIdentityByProfileAndProviderMock.Expect(context.Background(), userProfileID, providerID).Return(identity, nil)
 	storage.GetPasswordCredentialMock.Expect(context.Background(), userProfileID, providerID).Return(cred, nil)
 
@@ -306,7 +319,7 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_Success(t *testing
 		return nil
 	})
 
-	result, err := service.AuthenticateUsernamePassword(context.Background(), tenantID, "john_doe", password)
+	result, err := service.AuthenticateUsernamePassword(context.Background(), tenantID, 0, "john_doe", password)
 	if err != nil {
 		t.Fatalf("unexpected error during authentication: %v", err)
 	}
@@ -334,11 +347,12 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_Failure(t *testing
 	hashedPassword, _ := argon2id.CreateHash("SecretPass123!", argon2id.DefaultParams)
 
 	provider := model.IdentityProvider{
-		ID:       providerID,
-		TenantID: tenantID,
-		IDPType:  model.UsernamePasswordIDPType,
-		Enabled:  true,
-		Alias:    "username-password",
+		ID:          providerID,
+		TenantID:    tenantID,
+		IDPType:     model.UsernamePasswordIDPType,
+		Enabled:     true,
+		Alias:       "username-password",
+		PartitionID: 1,
 		Config: model.IdentityProviderConfig{
 			UsernameField:              "preferredUsername",
 			MaxFailedVerificationCount: 5,
@@ -347,6 +361,7 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_Failure(t *testing
 
 	profile := &model.UserProfile{
 		ID:                userProfileID,
+		PartitionID:       1,
 		PreferredUsername: "john_doe",
 	}
 
@@ -363,15 +378,18 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_Failure(t *testing
 		LoginCount:         1,
 	}
 
+	var defaultPart int64 = 1
+	storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(&model.Tenant{ID: tenantID, DefaultPartition: &defaultPart}, nil)
 	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{provider}, nil)
 	storage.GetUserProfileByIdentifierMock.Expect(context.Background(), tenantID, providerID, "john_doe").Return(profile, nil)
-	storage.GetIdentityProviderByTypeMock.Expect(context.Background(), tenantID, model.UsernamePasswordIDPType).Return(&provider, nil)
+	storage.GetUserProfileByIDMock.Expect(context.Background(), tenantID, userProfileID).Return(profile, nil)
+	storage.GetIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{provider}, nil)
 	storage.GetIdentityByProfileAndProviderMock.Expect(context.Background(), userProfileID, providerID).Return(identity, nil)
 	storage.GetPasswordCredentialMock.Expect(context.Background(), userProfileID, providerID).Return(cred, nil)
 
 	storage.UpsertIdentityMock.Return(nil)
 
-	_, err := service.AuthenticateUsernamePassword(context.Background(), tenantID, "john_doe", "WrongPass")
+	_, err := service.AuthenticateUsernamePassword(context.Background(), tenantID, 0, "john_doe", "WrongPass")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

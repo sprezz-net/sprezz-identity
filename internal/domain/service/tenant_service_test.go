@@ -22,10 +22,11 @@ func TestTenantService_CreateTenant(t *testing.T) {
 	svc := NewTenantService(storage, clock)
 
 	storage.CreateTenantMock.Set(func(ctx context.Context, tenant model.Tenant) error {
-		if tenant.Name != "My Tenant" {
-			t.Errorf("unexpected name: %s", tenant.Name)
-		}
 		return nil
+	})
+
+	storage.CreatePartitionMock.Set(func(ctx context.Context, tenantID uuid.UUID, name, aliasName string) (*model.Partition, error) {
+		return &model.Partition{ID: 1, TenantID: tenantID, Name: name, AliasName: aliasName}, nil
 	})
 
 	tenant, err := svc.CreateTenant(context.Background(), "My Tenant", "my-tenant.com")

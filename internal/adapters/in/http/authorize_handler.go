@@ -1,12 +1,14 @@
 package http
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"html"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -110,15 +112,100 @@ func (h *HttpAdapter) clearSSOSessionCookie(w http.ResponseWriter, r *http.Reque
 	})
 }
 
+func (h *HttpAdapter) resolveConnectingClient(r *http.Request, tenant *model.Tenant) ([]string, bool) {
+	cookie, err := r.Cookie("spz_auth_session_id")
+	if err != nil || cookie.Value == "" {
+		return nil, true
+	}
+	sessionUUID, err := uuid.Parse(cookie.Value)
+	if err != nil {
+		return nil, true
+	}
+	session, err := h.storagePort.GetInteractionSession(r.Context(), tenant.ID, sessionUUID)
+	if err != nil {
+		return nil, true
+	}
+	client, err := h.storagePort.GetClient(r.Context(), tenant.ID, session.ClientID)
+	if err != nil {
+		return nil, true
+	}
+	return client.AllowedIDPs, false
+}
+
+func (h *HttpAdapter) resolveDirectAccessProviders(ctx context.Context, tenant *model.Tenant, allProviders []model.IdentityProvider) []model.IdentityProvider {
+	var defaultPartitionID int64
+	if tenant.DefaultPartition != nil {
+		defaultPartitionID = *tenant.DefaultPartition
+	} else {
+		parts, _ := h.storagePort.GetPartitions(ctx, tenant.ID)
+		if len(parts) > 0 {
+			defaultPartitionID = parts[0].ID
+		}
+	}
+	var filtered []model.IdentityProvider
+	for _, p := range allProviders {
+		if p.PartitionID == defaultPartitionID {
+			filtered = append(filtered, p)
+		}
+	}
+	return filtered
+}
+
+func (h *HttpAdapter) resolveClientProviders(allProviders []model.IdentityProvider, allowedIDPKeys []string) []model.IdentityProvider {
+	var filtered []model.IdentityProvider
+	for _, p := range allProviders {
+		for _, allowedAlias := range allowedIDPKeys {
+			if p.Alias == allowedAlias {
+				filtered = append(filtered, p)
+				break
+			}
+		}
+	}
+	return filtered
+}
+
 func (h *HttpAdapter) loginRoot(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 
-	allowSignup := false
-	if tenant, err := h.resolveTenant(r.Context(), r.Host); err == nil {
-		allowSignup = tenant.Config.AllowSignup
+	tenant, err := h.resolveTenant(r.Context(), r.Host)
+	if err != nil {
+		h.renderError(w, r, http.StatusBadRequest, err.Error())
+		return
 	}
 
-	component := public.Login("", allowSignup)
+	allowedIDPKeys, isDirectAccess := h.resolveConnectingClient(r, tenant)
+
+	allProviders, err := h.storagePort.GetEnabledIdentityProviders(r.Context(), tenant.ID)
+	if err != nil {
+		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var finalProviders []model.IdentityProvider
+	if isDirectAccess {
+		finalProviders = h.resolveDirectAccessProviders(r.Context(), tenant, allProviders)
+	} else {
+		finalProviders = h.resolveClientProviders(allProviders, allowedIDPKeys)
+	}
+
+	var showUsernamePasswordForm bool
+	var matchedPartitionID int64
+	for _, p := range finalProviders {
+		if p.IDPType == model.UsernamePasswordIDPType {
+			showUsernamePasswordForm = true
+			matchedPartitionID = p.PartitionID
+			break
+		}
+	}
+
+	w.Header().Set(contentTypeHeader, contentTypeHtml)
+	component := public.Login(public.LoginProps{
+		ErrorMessage:             "",
+		AllowSignup:              tenant.Config.AllowSignup,
+		Providers:                finalProviders,
+		ShowUsernamePasswordForm: showUsernamePasswordForm,
+		PartitionID:              matchedPartitionID,
+	})
 	_ = component.Render(r.Context(), w)
 }
 
@@ -184,6 +271,31 @@ func (h *HttpAdapter) processInteractionRedirect(w http.ResponseWriter, r *http.
 	return true
 }
 
+func (h *HttpAdapter) parsePartitionID(r *http.Request) int64 {
+	pStr := r.FormValue("partition_id")
+	if pStr == "" {
+		return 0
+	}
+	pID, err := strconv.ParseInt(pStr, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return pID
+}
+
+func (h *HttpAdapter) findMatchingProvider(ctx context.Context, tenantID uuid.UUID, providerID uuid.UUID) (*model.IdentityProvider, error) {
+	providers, err := h.storagePort.GetIdentityProviders(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range providers {
+		if p.ID == providerID {
+			return &p, nil
+		}
+	}
+	return nil, errors.New("provider not found")
+}
+
 func (h *HttpAdapter) login(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -204,7 +316,9 @@ func (h *HttpAdapter) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.idpService.AuthenticateUsernamePassword(r.Context(), tenant.ID, username, password)
+	partitionID := h.parsePartitionID(r)
+
+	result, err := h.idpService.AuthenticateUsernamePassword(r.Context(), tenant.ID, partitionID, username, password)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		errMsg := err.Error()
@@ -215,7 +329,7 @@ func (h *HttpAdapter) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provider, err := h.storagePort.GetIdentityProviderByType(r.Context(), tenant.ID, model.UsernamePasswordIDPType)
+	provider, err := h.findMatchingProvider(r.Context(), tenant.ID, result.Identity.IdentityProviderID)
 	if err != nil {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte("Self-service login is not configured/enabled for this tenant"))

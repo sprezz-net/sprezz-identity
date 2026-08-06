@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -790,12 +791,35 @@ func (h *HttpAdapter) adminIDPsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var filterPartitionID int64
+	if pStr := r.URL.Query().Get("partition_id"); pStr != "" {
+		filterPartitionID, _ = strconv.ParseInt(pStr, 10, 64)
+	}
+
+	partitions, err := h.storagePort.GetPartitions(r.Context(), tenant.ID)
+	if err != nil {
+		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if filterPartitionID > 0 {
+		var filtered []model.IdentityProvider
+		for _, idp := range idps {
+			if idp.PartitionID == filterPartitionID {
+				filtered = append(filtered, idp)
+			}
+		}
+		idps = filtered
+	}
+
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	msg := r.URL.Query().Get("msg")
 	props := admin.IDPsPageProps{
-		ActiveTenant: *tenant,
-		Providers:    idps,
-		Msg:          msg,
+		ActiveTenant:      *tenant,
+		Providers:         idps,
+		Partitions:        partitions,
+		FilterPartitionID: filterPartitionID,
+		Msg:               msg,
 	}
 	if r.Header.Get(hxRequestHeader) == "true" {
 		_ = admin.IDPsContent(props).Render(r.Context(), w)
@@ -805,15 +829,22 @@ func (h *HttpAdapter) adminIDPsPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HttpAdapter) adminNewIDPForm(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := TenantFromContext(r.Context())
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	if r.URL.Query().Get("modal") == "true" {
 		component := admin.Modal("Add Identity Provider", "/admin/idps/new")
 		_ = component.Render(r.Context(), w)
 		return
 	}
+	partitions, err := h.storagePort.GetPartitions(r.Context(), tenant.ID)
+	if err != nil {
+		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
 	component := admin.IDPForm(admin.IDPFormProps{
-		Provider: model.IdentityProvider{},
-		Errors:   make(map[string]string),
+		Provider:   model.IdentityProvider{},
+		Partitions: partitions,
+		Errors:     make(map[string]string),
 	})
 	_ = component.Render(r.Context(), w)
 }
@@ -846,6 +877,12 @@ func (h *HttpAdapter) adminEditIDPForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	partitions, err := h.storagePort.GetPartitions(r.Context(), tenant.ID)
+	if err != nil {
+		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	if r.URL.Query().Get("modal") == "true" {
 		component := admin.Modal("Edit Identity Provider", "/admin/idps/edit?id="+idpIDStr)
@@ -853,9 +890,10 @@ func (h *HttpAdapter) adminEditIDPForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	component := admin.IDPForm(admin.IDPFormProps{
-		Provider: *provider,
-		Errors:   make(map[string]string),
-		IsEdit:   true,
+		Provider:   *provider,
+		Partitions: partitions,
+		Errors:     make(map[string]string),
+		IsEdit:     true,
 	})
 	_ = component.Render(r.Context(), w)
 }
@@ -977,12 +1015,35 @@ func (h *HttpAdapter) adminUsersPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var filterPartitionID int64
+	if pStr := r.URL.Query().Get("partition_id"); pStr != "" {
+		filterPartitionID, _ = strconv.ParseInt(pStr, 10, 64)
+	}
+
+	partitions, err := h.storagePort.GetPartitions(r.Context(), tenant.ID)
+	if err != nil {
+		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if filterPartitionID > 0 {
+		var filtered []model.UserProfile
+		for _, u := range users {
+			if u.PartitionID == filterPartitionID {
+				filtered = append(filtered, u)
+			}
+		}
+		users = filtered
+	}
+
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	msg := r.URL.Query().Get("msg")
 	props := admin.UsersPageProps{
-		ActiveTenant: *tenant,
-		Users:        users,
-		Msg:          msg,
+		ActiveTenant:      *tenant,
+		Users:             users,
+		Partitions:        partitions,
+		FilterPartitionID: filterPartitionID,
+		Msg:               msg,
 	}
 	if r.Header.Get(hxRequestHeader) == "true" {
 		_ = admin.UsersContent(props).Render(r.Context(), w)
@@ -1047,6 +1108,12 @@ func (h *HttpAdapter) adminEditUserForm(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	partitions, err := h.storagePort.GetPartitions(r.Context(), tenant.ID)
+	if err != nil {
+		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	if r.URL.Query().Get("modal") == "true" {
 		component := admin.Modal("Edit User Profile", "/admin/users/edit?id="+userIDStr)
@@ -1054,8 +1121,9 @@ func (h *HttpAdapter) adminEditUserForm(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	component := admin.UserForm(admin.UserFormProps{
-		User:   *user,
-		Errors: make(map[string]string),
+		User:       *user,
+		Partitions: partitions,
+		Errors:     make(map[string]string),
 	})
 	_ = component.Render(r.Context(), w)
 }
@@ -1067,6 +1135,12 @@ func (h *HttpAdapter) adminSaveUser(w http.ResponseWriter, r *http.Request) {
 	name := r.FormValue("name")
 	email := r.FormValue("email")
 	emailVerified := r.FormValue("email_verified") == "true"
+	partitionIDStr := r.FormValue("partition_id")
+
+	var partitionID int64
+	if partitionIDStr != "" {
+		partitionID, _ = strconv.ParseInt(partitionIDStr, 10, 64)
+	}
 
 	userUUID, err := uuid.Parse(id)
 	if err != nil {
@@ -1088,9 +1162,11 @@ func (h *HttpAdapter) adminSaveUser(w http.ResponseWriter, r *http.Request) {
 	if len(errs) > 0 {
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
 		w.WriteHeader(http.StatusUnprocessableEntity)
+		partitions, _ := h.storagePort.GetPartitions(r.Context(), tenant.ID)
 		component := admin.UserForm(admin.UserFormProps{
-			User:   model.UserProfile{ID: userUUID, PreferredUsername: username, Name: name, Email: email, EmailVerified: emailVerified},
-			Errors: errs,
+			User:       model.UserProfile{ID: userUUID, PreferredUsername: username, Name: name, Email: email, EmailVerified: emailVerified, PartitionID: partitionID},
+			Partitions: partitions,
+			Errors:     errs,
 		})
 		_ = component.Render(r.Context(), w)
 		return
@@ -1102,6 +1178,7 @@ func (h *HttpAdapter) adminSaveUser(w http.ResponseWriter, r *http.Request) {
 		Name:              name,
 		Email:             email,
 		EmailVerified:     emailVerified,
+		PartitionID:       partitionID,
 	})
 	if err != nil {
 		h.renderError(w, r, http.StatusInternalServerError, err.Error())

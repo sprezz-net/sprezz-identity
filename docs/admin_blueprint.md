@@ -205,3 +205,13 @@ This section maps out how the Inbound HTTP Adapter and the frontend views interf
 
 - **Semantic Error Delivery**: In compliance with Section 13.4, any form validation failure on the backend (e.g., an invalid URI or scope entry) rejects the transaction with an HTTP Status Code of `422 Unprocessable Entity`.
 - **HTMX Listener Binding**: To ensure HTMX does not drop the 4xx error block and safely swaps the validation component highlights into the view layout, the master global layout shell (`@AdminLayout`) embeds the strict, nonced event listener established in Section 13.4.
+
+## 10. Multi-Partition User and Provider Isolation
+
+Sprezz Identity supports dividing a single Tenant's space into multiple logical **Partitions**.
+
+### 10.1 Partition-Aware Filtering & Form Controls
+
+- **Admin Dropdown Filters**: Both the **Identity Providers** and **User Profiles** list pages in the Admin UI feature a select dropdown component matching the selected partition. Selecting a partition triggers an HTMX `GET` request reloading the content with the selected `partition_id` query parameter, filtering the data view.
+- **Partition Assignment**: When creating or editing an Identity Provider or a User Profile, administrators choose which Partition the resource belongs to.
+- **Validation Constraints**: Username-password IDP configurations are restricted to at most **1** per Partition.

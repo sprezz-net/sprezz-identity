@@ -36,7 +36,9 @@ SELECT
     a.default_idp,
     a.allowed_audiences,
     a.client_type,
-    a.enforce_rtr
+    a.enforce_rtr,
+    a.created_at,
+    a.updated_at
 FROM applications AS a
 JOIN tenants AS t ON t.id = a.tenant_id
 WHERE t.tenant_uuid = $1
@@ -50,29 +52,31 @@ type GetClientParams struct {
 }
 
 type GetClientRow struct {
-	ID                     pgtype.UUID     `json:"id"`
-	TenantID               int32           `json:"tenant_id"`
-	ClientID               string          `json:"client_id"`
-	ClientSecretHash       *string         `json:"client_secret_hash"`
-	ClientName             string          `json:"client_name"`
-	RedirectUri            string          `json:"redirect_uri"`
-	RedirectUris           []string        `json:"redirect_uris"`
-	PostLogoutRedirectUris []string        `json:"post_logout_redirect_uris"`
-	FrontChannelLogoutUri  *string         `json:"front_channel_logout_uri"`
-	BackChannelLogoutUri   *string         `json:"back_channel_logout_uri"`
-	GrantTypes             []string        `json:"grant_types"`
-	ResponseTypes          []string        `json:"response_types"`
-	IdpSigningAlgorithm    string          `json:"idp_signing_algorithm"`
-	AccessTokenLifetime    pgtype.Interval `json:"access_token_lifetime"`
-	RefreshTokenLifetime   pgtype.Interval `json:"refresh_token_lifetime"`
-	IDTokenLifetime        pgtype.Interval `json:"id_token_lifetime"`
-	AllowedScopes          []string        `json:"allowed_scopes"`
-	DefaultScopes          []string        `json:"default_scopes"`
-	AllowedIdps            []string        `json:"allowed_idps"`
-	DefaultIdp             *string         `json:"default_idp"`
-	AllowedAudiences       []string        `json:"allowed_audiences"`
-	ClientType             string          `json:"client_type"`
-	EnforceRtr             bool            `json:"enforce_rtr"`
+	ID                     pgtype.UUID        `json:"id"`
+	TenantID               int32              `json:"tenant_id"`
+	ClientID               string             `json:"client_id"`
+	ClientSecretHash       *string            `json:"client_secret_hash"`
+	ClientName             string             `json:"client_name"`
+	RedirectUri            string             `json:"redirect_uri"`
+	RedirectUris           []string           `json:"redirect_uris"`
+	PostLogoutRedirectUris []string           `json:"post_logout_redirect_uris"`
+	FrontChannelLogoutUri  *string            `json:"front_channel_logout_uri"`
+	BackChannelLogoutUri   *string            `json:"back_channel_logout_uri"`
+	GrantTypes             []string           `json:"grant_types"`
+	ResponseTypes          []string           `json:"response_types"`
+	IdpSigningAlgorithm    string             `json:"idp_signing_algorithm"`
+	AccessTokenLifetime    pgtype.Interval    `json:"access_token_lifetime"`
+	RefreshTokenLifetime   pgtype.Interval    `json:"refresh_token_lifetime"`
+	IDTokenLifetime        pgtype.Interval    `json:"id_token_lifetime"`
+	AllowedScopes          []string           `json:"allowed_scopes"`
+	DefaultScopes          []string           `json:"default_scopes"`
+	AllowedIdps            []string           `json:"allowed_idps"`
+	DefaultIdp             *string            `json:"default_idp"`
+	AllowedAudiences       []string           `json:"allowed_audiences"`
+	ClientType             string             `json:"client_type"`
+	EnforceRtr             bool               `json:"enforce_rtr"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) GetClient(ctx context.Context, arg GetClientParams) (GetClientRow, error) {
@@ -102,6 +106,8 @@ func (q *Queries) GetClient(ctx context.Context, arg GetClientParams) (GetClient
 		&i.AllowedAudiences,
 		&i.ClientType,
 		&i.EnforceRtr,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

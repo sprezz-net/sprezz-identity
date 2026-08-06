@@ -26,6 +26,7 @@ type Storage struct {
 	parSessions         map[string]model.PushedAuthorizationRequest
 	dpopProofs          map[string]time.Time
 	refreshTokens       map[string]model.RefreshToken
+	partitions          map[string]map[int64]model.Partition
 }
 
 func NewStorage() *Storage {
@@ -42,6 +43,7 @@ func NewStorage() *Storage {
 		parSessions:         make(map[string]model.PushedAuthorizationRequest),
 		dpopProofs:          make(map[string]time.Time),
 		refreshTokens:       make(map[string]model.RefreshToken),
+		partitions:          make(map[string]map[int64]model.Partition),
 	}
 }
 
@@ -340,6 +342,19 @@ func (s *Storage) GetAndConsumeInteractionSession(ctx context.Context, tenantID 
 	return &session, nil
 }
 
+func (s *Storage) GetInteractionSession(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.InteractionSession, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	session, ok := s.interactionSessions[id]
+	if !ok {
+		return nil, port.ErrInteractionSessionNotFound
+	}
+	if session.TenantID != tenantID {
+		return nil, port.ErrInteractionSessionNotFound
+	}
+	return &session, nil
+}
+
 func (s *Storage) RevokeToken(ctx context.Context, tokenID string, expiresAt time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -480,4 +495,68 @@ func (s *Storage) PurgeTenantSessionsAndTokens(ctx context.Context, tenantID uui
 	}
 
 	return nil
+}
+
+func (s *Storage) GetPartitions(ctx context.Context, tenantID uuid.UUID) ([]model.Partition, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	parts, ok := s.partitions[tenantID.String()]
+	if !ok {
+		return []model.Partition{}, nil
+	}
+
+	res := make([]model.Partition, 0, len(parts))
+	for _, p := range parts {
+		res = append(res, p)
+	}
+	return res, nil
+}
+
+func (s *Storage) GetPartitionByAlias(ctx context.Context, tenantID uuid.UUID, alias string) (*model.Partition, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	parts, ok := s.partitions[tenantID.String()]
+	if !ok {
+		return nil, port.ErrPartitionNotFound
+	}
+
+	for _, p := range parts {
+		if p.AliasName == alias {
+			return &p, nil
+		}
+	}
+	return nil, port.ErrPartitionNotFound
+}
+
+func (s *Storage) CreatePartition(ctx context.Context, tenantID uuid.UUID, name, aliasName string) (*model.Partition, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.partitions[tenantID.String()]; !ok {
+		s.partitions[tenantID.String()] = make(map[int64]model.Partition)
+	}
+
+	id := int64(len(s.partitions[tenantID.String()]) + 1)
+	p := model.Partition{
+		ID:        id,
+		TenantID:  tenantID,
+		Name:      name,
+		AliasName: aliasName,
+	}
+	s.partitions[tenantID.String()][id] = p
+	return &p, nil
+}
+
+func (s *Storage) GetPartitionByID(ctx context.Context, id int64) (*model.Partition, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, parts := range s.partitions {
+		if p, ok := parts[id]; ok {
+			return &p, nil
+		}
+	}
+	return nil, port.ErrPartitionNotFound
 }

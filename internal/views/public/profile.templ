@@ -98,7 +98,11 @@ templ ProfileDashboard(user model.UserProfile, identities []model.UserIdentity, 
 										<p class="font-bold text-slate-800 text-sm">
 											for _, p := range providers {
 												if p.ID == ident.IdentityProviderID {
-													{ p.Alias } <span class="text-xs text-slate-400 capitalize">({ p.IDPType })</span>
+													if p.Name != "" {
+														{ p.Name } <span class="text-xs text-slate-400 capitalize">({ p.IDPType })</span>
+													} else {
+														{ p.Alias } <span class="text-xs text-slate-400 capitalize">({ p.IDPType })</span>
+													}
 												}
 											}
 										</p>

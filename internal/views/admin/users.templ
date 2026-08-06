@@ -6,9 +6,11 @@ import (
 )
 
 type UsersPageProps struct {
-	ActiveTenant model.Tenant
-	Users        []model.UserProfile
-	Msg          string
+	ActiveTenant      model.Tenant
+	Users             []model.UserProfile
+	Partitions        []model.Partition
+	FilterPartitionID int64
+	Msg               string
 }
 
 templ UsersContent(props UsersPageProps) {
@@ -20,8 +22,28 @@ templ UsersContent(props UsersPageProps) {
 		}
 
 		<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-			<div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-				<h3 class="font-bold text-gray-800">User Profiles</h3>
+			<div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-4">
+				<div class="flex items-center gap-4">
+					<h3 class="font-bold text-gray-800">User Profiles</h3>
+					<select
+						name="partition_id"
+						hx-get="/admin/users"
+						hx-target="main"
+						hx-trigger="change"
+						class="px-3 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+					>
+						<option value="">All Partitions</option>
+						for _, part := range props.Partitions {
+							<option value={ fmt.Sprintf("%d", part.ID) } selected?={ props.FilterPartitionID == part.ID }>
+								if part.AliasName != "" {
+									{ part.AliasName }
+								} else {
+									default
+								}
+							</option>
+						}
+					</select>
+				</div>
 			</div>
 			<div class="overflow-x-auto">
 				<table class="min-w-full divide-y divide-gray-200 text-sm">
@@ -86,8 +108,9 @@ templ UsersPage(props UsersPageProps) {
 }
 
 type UserFormProps struct {
-	User   model.UserProfile
-	Errors map[string]string
+	User       model.UserProfile
+	Partitions []model.Partition
+	Errors     map[string]string
 }
 
 templ UserForm(props UserFormProps) {
@@ -97,6 +120,21 @@ templ UserForm(props UserFormProps) {
 		@InputField("Username", "preferred_username", "text", props.User.PreferredUsername, props.Errors["preferred_username"])
 		@InputField("Full Name", "name", "text", props.User.Name, props.Errors["name"])
 		@InputField("Email", "email", "email", props.User.Email, props.Errors["email"])
+
+		<div class="mb-4">
+			<label class="block text-sm font-medium text-slate-700 mb-1">Partition</label>
+			<select name="partition_id" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+				for _, part := range props.Partitions {
+					<option value={ fmt.Sprintf("%d", part.ID) } selected?={ props.User.PartitionID == part.ID }>
+						if part.AliasName != "" {
+							{ part.AliasName }
+						} else {
+							default
+						}
+					</option>
+				}
+			</select>
+		</div>
 
 		<div class="flex items-center space-x-3 mb-4">
 			<input
@@ -173,7 +211,11 @@ templ UserDetails(props UserDetailsProps) {
 								<p class="font-semibold text-gray-800">
 									for _, p := range props.Providers {
 										if p.ID == ident.IdentityProviderID {
-											{ p.Alias } <span class="text-xs text-gray-400 capitalize">({ p.IDPType })</span>
+											if p.Name != "" {
+												{ p.Name } <span class="text-xs text-gray-400 capitalize">({ p.IDPType })</span>
+											} else {
+												{ p.Alias } <span class="text-xs text-gray-400 capitalize">({ p.IDPType })</span>
+											}
 										}
 									}
 								</p>

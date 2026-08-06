@@ -103,6 +103,15 @@ func (s *PostgresStorage) GetClient(ctx context.Context, tenantID uuid.UUID, cli
 		return nil, fmt.Errorf("get client: %w", err)
 	}
 
+	createdAt, err := pgTimestamptzToTime(row.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("get client: parse created_at: %w", err)
+	}
+	updatedAt, err := pgTimestamptzToTime(row.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("get client: parse updated_at: %w", err)
+	}
+
 	return &model.ClientApplication{
 		ID:                     id.String(),
 		TenantID:               tenantID,
@@ -127,6 +136,118 @@ func (s *PostgresStorage) GetClient(ctx context.Context, tenantID uuid.UUID, cli
 		AllowedAudiences:       row.AllowedAudiences,
 		ClientType:             row.ClientType,
 		EnforceRTR:             row.EnforceRtr,
+		CreatedAt:              createdAt,
+		UpdatedAt:              updatedAt,
+	}, nil
+}
+
+func scanClientRow(row pgx.Row, tenantID uuid.UUID) (model.ClientApplication, error) {
+	var id pgtype.UUID
+	var clientID string
+	var clientSecret *string
+	var clientName string
+	var redirectURI string
+	var redirectURIs []string
+	var postLogoutRedirectURIs []string
+	var frontChannelLogoutURI *string
+	var backChannelLogoutURI *string
+	var grantTypes []string
+	var responseTypes []string
+	var algorithm string
+	var accessLifetime pgtype.Interval
+	var refreshLifetime pgtype.Interval
+	var idTokenLifetime pgtype.Interval
+	var allowedScopes []string
+	var defaultScopes []string
+	var allowedIdps []string
+	var defaultIdp *string
+	var allowedAudiences []string
+	var clientType string
+	var enforceRTR bool
+	var createdAt pgtype.Timestamptz
+	var updatedAt pgtype.Timestamptz
+
+	err := row.Scan(
+		&id,
+		&clientID,
+		&clientSecret,
+		&clientName,
+		&redirectURI,
+		&redirectURIs,
+		&postLogoutRedirectURIs,
+		&frontChannelLogoutURI,
+		&backChannelLogoutURI,
+		&grantTypes,
+		&responseTypes,
+		&algorithm,
+		&accessLifetime,
+		&refreshLifetime,
+		&idTokenLifetime,
+		&allowedScopes,
+		&defaultScopes,
+		&allowedIdps,
+		&defaultIdp,
+		&allowedAudiences,
+		&clientType,
+		&enforceRTR,
+		&createdAt,
+		&updatedAt,
+	)
+	if err != nil {
+		return model.ClientApplication{}, fmt.Errorf("scan client application: %w", err)
+	}
+
+	parsedID, err := pgUUIDToUUID(id)
+	if err != nil {
+		return model.ClientApplication{}, fmt.Errorf("parse client UUID: %w", err)
+	}
+	parsedAccess, err := pgIntervalToDuration(accessLifetime)
+	if err != nil {
+		return model.ClientApplication{}, fmt.Errorf("parse access lifetime: %w", err)
+	}
+	parsedRefresh, err := pgIntervalToDuration(refreshLifetime)
+	if err != nil {
+		return model.ClientApplication{}, fmt.Errorf("parse refresh lifetime: %w", err)
+	}
+	parsedIDToken, err := pgIntervalToDuration(idTokenLifetime)
+	if err != nil {
+		return model.ClientApplication{}, fmt.Errorf("parse id token lifetime: %w", err)
+	}
+	parsedCreatedAt, err := pgTimestamptzToTime(createdAt)
+	if err != nil {
+		return model.ClientApplication{}, fmt.Errorf("parse created_at: %w", err)
+	}
+	parsedUpdatedAt, err := pgTimestamptzToTime(updatedAt)
+	if err != nil {
+		return model.ClientApplication{}, fmt.Errorf("parse updated_at: %w", err)
+	}
+
+	return model.ClientApplication{
+		ID:                     parsedID.String(),
+		TenantID:               tenantID,
+		ClientID:               clientID,
+		ClientSecret:           clientSecret,
+		ClientName:             clientName,
+		RedirectURI:            redirectURI,
+		RedirectURIs:           redirectURIs,
+		PostLogoutRedirectURIs: postLogoutRedirectURIs,
+		FrontChannelLogoutURI:  valueOrEmpty(frontChannelLogoutURI),
+		BackChannelLogoutURI:   valueOrEmpty(backChannelLogoutURI),
+		GrantTypes:             grantTypes,
+		ResponseTypes:          responseTypes,
+		Algorithm:              model.SignatureAlgorithm(algorithm),
+		AccessTokenLifetime:    parsedAccess,
+		RefreshTokenLifetime:   parsedRefresh,
+		IDTokenLifetime:        parsedIDToken,
+		AllowedScopes:          allowedScopes,
+		DefaultScopes:          defaultScopes,
+		AllowedIDPs:            allowedIdps,
+		DefaultIDP:             valueOrEmpty(defaultIdp),
+		AllowedAudiences:       allowedAudiences,
+		ClientType:             clientType,
+		EnforceRTR:             enforceRTR,
+		CreatedAt:              parsedCreatedAt,
+		UpdatedAt:              parsedUpdatedAt,
 	}, nil
 }
 
@@ -154,7 +275,9 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 			a.default_idp,
 			a.allowed_audiences,
 			a.client_type,
-			a.enforce_rtr
+			a.enforce_rtr,
+			a.created_at,
+			a.updated_at
 		FROM applications AS a
 		JOIN tenants AS t ON t.id = a.tenant_id
 		WHERE t.tenant_uuid = $1::uuid
@@ -166,99 +289,11 @@ func (s *PostgresStorage) GetClientsByTenant(ctx context.Context, tenantID uuid.
 
 	var clients []model.ClientApplication
 	for rows.Next() {
-		var id pgtype.UUID
-		var clientID string
-		var clientSecret *string
-		var clientName string
-		var redirectURI string
-		var redirectURIs []string
-		var postLogoutRedirectURIs []string
-		var frontChannelLogoutURI *string
-		var backChannelLogoutURI *string
-		var grantTypes []string
-		var responseTypes []string
-		var algorithm string
-		var accessLifetime pgtype.Interval
-		var refreshLifetime pgtype.Interval
-		var idTokenLifetime pgtype.Interval
-		var allowedScopes []string
-		var defaultScopes []string
-		var allowedIdps []string
-		var defaultIdp *string
-		var allowedAudiences []string
-		var clientType string
-		var enforceRTR bool
-
-		err = rows.Scan(
-			&id,
-			&clientID,
-			&clientSecret,
-			&clientName,
-			&redirectURI,
-			&redirectURIs,
-			&postLogoutRedirectURIs,
-			&frontChannelLogoutURI,
-			&backChannelLogoutURI,
-			&grantTypes,
-			&responseTypes,
-			&algorithm,
-			&accessLifetime,
-			&refreshLifetime,
-			&idTokenLifetime,
-			&allowedScopes,
-			&defaultScopes,
-			&allowedIdps,
-			&defaultIdp,
-			&allowedAudiences,
-			&clientType,
-			&enforceRTR,
-		)
+		client, err := scanClientRow(rows, tenantID)
 		if err != nil {
-			return nil, fmt.Errorf("scan client application: %w", err)
+			return nil, err
 		}
-
-		parsedID, err := pgUUIDToUUID(id)
-		if err != nil {
-			return nil, fmt.Errorf("parse client UUID: %w", err)
-		}
-		parsedAccess, err := pgIntervalToDuration(accessLifetime)
-		if err != nil {
-			return nil, fmt.Errorf("parse access lifetime: %w", err)
-		}
-		parsedRefresh, err := pgIntervalToDuration(refreshLifetime)
-		if err != nil {
-			return nil, fmt.Errorf("parse refresh lifetime: %w", err)
-		}
-		parsedIDToken, err := pgIntervalToDuration(idTokenLifetime)
-		if err != nil {
-			return nil, fmt.Errorf("parse id token lifetime: %w", err)
-		}
-
-		clients = append(clients, model.ClientApplication{
-			ID:                     parsedID.String(),
-			TenantID:               tenantID,
-			ClientID:               clientID,
-			ClientSecret:           clientSecret,
-			ClientName:             clientName,
-			RedirectURI:            redirectURI,
-			RedirectURIs:           redirectURIs,
-			PostLogoutRedirectURIs: postLogoutRedirectURIs,
-			FrontChannelLogoutURI:  valueOrEmpty(frontChannelLogoutURI),
-			BackChannelLogoutURI:   valueOrEmpty(backChannelLogoutURI),
-			GrantTypes:             grantTypes,
-			ResponseTypes:          responseTypes,
-			Algorithm:              model.SignatureAlgorithm(algorithm),
-			AccessTokenLifetime:    parsedAccess,
-			RefreshTokenLifetime:   parsedRefresh,
-			IDTokenLifetime:        parsedIDToken,
-			AllowedScopes:          allowedScopes,
-			DefaultScopes:          defaultScopes,
-			AllowedIDPs:            allowedIdps,
-			DefaultIDP:             valueOrEmpty(defaultIdp),
-			AllowedAudiences:       allowedAudiences,
-			ClientType:             clientType,
-			EnforceRTR:             enforceRTR,
-		})
+		clients = append(clients, client)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -351,6 +386,11 @@ func (s *PostgresStorage) ResolveTenantByDomain(ctx context.Context, domain stri
 		return nil, fmt.Errorf("resolve tenant by domain: %w", err)
 	}
 
+	updatedAt, err := pgTimestamptzToTime(row.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("resolve tenant by domain: %w", err)
+	}
+
 	var cfg model.TenantConfig
 	if len(row.Config) > 0 {
 		if err := json.Unmarshal(row.Config, &cfg); err != nil {
@@ -359,12 +399,14 @@ func (s *PostgresStorage) ResolveTenantByDomain(ctx context.Context, domain stri
 	}
 
 	return &model.Tenant{
-		ID:        tenantID,
-		Name:      row.Name,
-		Domain:    row.DomainName,
-		IsActive:  row.IsActive,
-		CreatedAt: createdAt,
-		Config:    cfg,
+		ID:               tenantID,
+		Name:             row.Name,
+		Domain:           row.DomainName,
+		IsActive:         row.IsActive,
+		CreatedAt:        createdAt,
+		Config:           cfg,
+		DefaultPartition: row.DefaultPartition,
+		UpdatedAt:        updatedAt,
 	}, nil
 }
 
@@ -387,6 +429,11 @@ func (s *PostgresStorage) ResolveTenantByID(ctx context.Context, tenantID uuid.U
 		return nil, fmt.Errorf("resolve tenant by ID: %w", err)
 	}
 
+	updatedAt, err := pgTimestamptzToTime(row.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("resolve tenant by ID: %w", err)
+	}
+
 	var cfg model.TenantConfig
 	if len(row.Config) > 0 {
 		if err := json.Unmarshal(row.Config, &cfg); err != nil {
@@ -395,18 +442,69 @@ func (s *PostgresStorage) ResolveTenantByID(ctx context.Context, tenantID uuid.U
 	}
 
 	return &model.Tenant{
-		ID:        resolvedID,
-		Name:      row.Name,
-		Domain:    row.DomainName,
-		IsActive:  row.IsActive,
-		CreatedAt: createdAt,
-		Config:    cfg,
+		ID:               resolvedID,
+		Name:             row.Name,
+		Domain:           row.DomainName,
+		IsActive:         row.IsActive,
+		CreatedAt:        createdAt,
+		Config:           cfg,
+		DefaultPartition: row.DefaultPartition,
+		UpdatedAt:        updatedAt,
+	}, nil
+}
+
+func scanTenantRow(row pgx.Row) (model.Tenant, error) {
+	var tenantUUID pgtype.UUID
+	var name string
+	var domainName string
+	var isActive bool
+	var createdAt pgtype.Timestamptz
+	var configJSON []byte
+	var defaultPartition *int64
+	var updatedAt pgtype.Timestamptz
+
+	err := row.Scan(&tenantUUID, &name, &domainName, &isActive, &createdAt, &configJSON, &defaultPartition, &updatedAt)
+	if err != nil {
+		return model.Tenant{}, fmt.Errorf("scan tenant: %w", err)
+	}
+
+	parsedID, err := pgUUIDToUUID(tenantUUID)
+	if err != nil {
+		return model.Tenant{}, fmt.Errorf("parse tenant UUID: %w", err)
+	}
+
+	parsedCreatedAt, err := pgTimestamptzToTime(createdAt)
+	if err != nil {
+		return model.Tenant{}, fmt.Errorf("parse created_at: %w", err)
+	}
+
+	parsedUpdatedAt, err := pgTimestamptzToTime(updatedAt)
+	if err != nil {
+		return model.Tenant{}, fmt.Errorf("parse updated_at: %w", err)
+	}
+
+	var cfg model.TenantConfig
+	if len(configJSON) > 0 {
+		if err := json.Unmarshal(configJSON, &cfg); err != nil {
+			return model.Tenant{}, fmt.Errorf("unmarshal config: %w", err)
+		}
+	}
+
+	return model.Tenant{
+		ID:               parsedID,
+		Name:             name,
+		Domain:           domainName,
+		IsActive:         isActive,
+		CreatedAt:        parsedCreatedAt,
+		Config:           cfg,
+		DefaultPartition: defaultPartition,
+		UpdatedAt:        parsedUpdatedAt,
 	}, nil
 }
 
 func (s *PostgresStorage) GetAllTenants(ctx context.Context) ([]model.Tenant, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT tenant_uuid, name, domain_name, is_active, created_at, config
+		SELECT tenant_uuid, name, domain_name, is_active, created_at, config, default_partition, updated_at
 		FROM tenants
 		ORDER BY name ASC
 	`)
@@ -417,43 +515,11 @@ func (s *PostgresStorage) GetAllTenants(ctx context.Context) ([]model.Tenant, er
 
 	var tenants []model.Tenant
 	for rows.Next() {
-		var tenantUUID pgtype.UUID
-		var name string
-		var domainName string
-		var isActive bool
-		var createdAt pgtype.Timestamptz
-		var configJSON []byte
-
-		err = rows.Scan(&tenantUUID, &name, &domainName, &isActive, &createdAt, &configJSON)
+		tenant, err := scanTenantRow(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan tenant: %w", err)
+			return nil, err
 		}
-
-		parsedID, err := pgUUIDToUUID(tenantUUID)
-		if err != nil {
-			return nil, fmt.Errorf("parse tenant UUID: %w", err)
-		}
-
-		parsedCreatedAt, err := pgTimestamptzToTime(createdAt)
-		if err != nil {
-			return nil, fmt.Errorf("parse created_at: %w", err)
-		}
-
-		var cfg model.TenantConfig
-		if len(configJSON) > 0 {
-			if err := json.Unmarshal(configJSON, &cfg); err != nil {
-				return nil, fmt.Errorf("unmarshal config: %w", err)
-			}
-		}
-
-		tenants = append(tenants, model.Tenant{
-			ID:        parsedID,
-			Name:      name,
-			Domain:    domainName,
-			IsActive:  isActive,
-			CreatedAt: parsedCreatedAt,
-			Config:    cfg,
-		})
+		tenants = append(tenants, tenant)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -470,12 +536,13 @@ func (s *PostgresStorage) CreateTenant(ctx context.Context, tenant model.Tenant)
 	}
 
 	commandTag, err := s.queries.CreateTenant(ctx, sqlcdb.CreateTenantParams{
-		TenantUuid: toPGUUID(tenant.ID),
-		Name:       tenant.Name,
-		DomainName: tenant.Domain,
-		IsActive:   tenant.IsActive,
-		CreatedAt:  toPGTimestamptz(tenant.CreatedAt),
-		Config:     configJSON,
+		TenantUuid:       toPGUUID(tenant.ID),
+		Name:             tenant.Name,
+		DomainName:       tenant.Domain,
+		IsActive:         tenant.IsActive,
+		CreatedAt:        toPGTimestamptz(tenant.CreatedAt),
+		Config:           configJSON,
+		DefaultPartition: tenant.DefaultPartition,
 	})
 	if err != nil {
 		return fmt.Errorf("create tenant: %w", err)
@@ -494,14 +561,15 @@ func (s *PostgresStorage) CreateIdentityProvider(ctx context.Context, tenantID u
 	}
 
 	_, err = s.pool.Exec(ctx, `
-		INSERT INTO identity_providers (id, tenant_id, idp_type, enabled, alias_name, config)
-		SELECT $1::uuid, t.id, $2, $3, $4, $5::jsonb
+		INSERT INTO identity_providers (id, tenant_id, idp_type, enabled, alias_name, config, name, partition_id)
+		SELECT $1::uuid, t.id, $2, $3, $4, $5::jsonb, $7, $8
 		FROM tenants t
 		WHERE t.tenant_uuid = $6::uuid
-		ON CONFLICT (tenant_id, idp_type, alias_name) DO UPDATE SET
+		ON CONFLICT (tenant_id, partition_id, idp_type, alias_name) DO UPDATE SET
 			enabled = EXCLUDED.enabled,
-			config = EXCLUDED.config
-	`, toPGUUID(provider.ID), provider.IDPType, provider.Enabled, provider.Alias, string(configJSON), toPGUUID(tenantID))
+			config = EXCLUDED.config,
+			name = EXCLUDED.name
+	`, toPGUUID(provider.ID), provider.IDPType, provider.Enabled, provider.Alias, string(configJSON), toPGUUID(tenantID), provider.Name, provider.PartitionID)
 	if err != nil {
 		return fmt.Errorf("create identity provider: %w", err)
 	}
@@ -513,13 +581,16 @@ func (s *PostgresStorage) GetIdentityProviderByType(ctx context.Context, tenantI
 	var enabled bool
 	var alias string
 	var configJSON []byte
+	var name string
+	var partitionID int64
+	var createdAt, updatedAt pgtype.Timestamptz
 
 	err := s.pool.QueryRow(ctx, `
-		SELECT ip.id, ip.enabled, ip.alias_name, ip.config
+		SELECT ip.id, ip.enabled, ip.alias_name, ip.config, ip.name, ip.partition_id, ip.created_at, ip.updated_at
 		FROM identity_providers ip
 		JOIN tenants t ON t.id = ip.tenant_id
 		WHERE t.tenant_uuid = $1::uuid AND ip.idp_type = $2 AND ip.enabled = TRUE
-	`, toPGUUID(tenantID), idpType).Scan(&providerID, &enabled, &alias, &configJSON)
+	`, toPGUUID(tenantID), idpType).Scan(&providerID, &enabled, &alias, &configJSON, &name, &partitionID, &createdAt, &updatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("identity provider not found: %w", port.ErrIdentityProviderNotFound)
@@ -532,6 +603,15 @@ func (s *PostgresStorage) GetIdentityProviderByType(ctx context.Context, tenantI
 		return nil, fmt.Errorf("parse provider UUID: %w", err)
 	}
 
+	parsedCreatedAt, err := pgTimestamptzToTime(createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse created_at: %w", err)
+	}
+	parsedUpdatedAt, err := pgTimestamptzToTime(updatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse updated_at: %w", err)
+	}
+
 	providerCfg := model.IdentityProviderConfig{}
 	if len(configJSON) > 0 {
 		if err := json.Unmarshal(configJSON, &providerCfg); err != nil {
@@ -540,12 +620,16 @@ func (s *PostgresStorage) GetIdentityProviderByType(ctx context.Context, tenantI
 	}
 
 	return &model.IdentityProvider{
-		ID:       providerUUID,
-		TenantID: tenantID,
-		IDPType:  idpType,
-		Enabled:  enabled,
-		Alias:    alias,
-		Config:   providerCfg,
+		ID:          providerUUID,
+		TenantID:    tenantID,
+		IDPType:     idpType,
+		Enabled:     enabled,
+		Alias:       alias,
+		Name:        name,
+		PartitionID: partitionID,
+		Config:      providerCfg,
+		CreatedAt:   parsedCreatedAt,
+		UpdatedAt:   parsedUpdatedAt,
 	}, nil
 }
 
@@ -556,9 +640,10 @@ func (s *PostgresStorage) SaveUserProfile(ctx context.Context, tenantID uuid.UUI
 		SELECT EXISTS (
 			SELECT 1 FROM user_profiles
 			WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
+			  AND partition_id = $4
 			  AND (preferred_username = $2 OR email = $3)
 		)
-	`, toPGUUID(tenantID), profile.PreferredUsername, profile.Email).Scan(&exists)
+	`, toPGUUID(tenantID), profile.PreferredUsername, profile.Email, profile.PartitionID).Scan(&exists)
 	if err != nil {
 		return fmt.Errorf("collision check user profile: %w", err)
 	}
@@ -568,8 +653,9 @@ func (s *PostgresStorage) SaveUserProfile(ctx context.Context, tenantID uuid.UUI
 		_ = s.pool.QueryRow(ctx, `
 			SELECT COUNT(*) FROM user_profiles
 			WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
+			  AND partition_id = $3
 			  AND preferred_username = $2
-		`, toPGUUID(tenantID), profile.PreferredUsername).Scan(&count)
+		`, toPGUUID(tenantID), profile.PreferredUsername, profile.PartitionID).Scan(&count)
 		if count > 0 {
 			return port.ErrUsernameAlreadyExists
 		}
@@ -577,11 +663,11 @@ func (s *PostgresStorage) SaveUserProfile(ctx context.Context, tenantID uuid.UUI
 	}
 
 	_, err = s.pool.Exec(ctx, `
-		INSERT INTO user_profiles (id, tenant_id, preferred_username, name, email, email_verified)
-		SELECT $1::uuid, t.id, $2, $3, $4, $5
+		INSERT INTO user_profiles (id, tenant_id, preferred_username, name, email, email_verified, partition_id)
+		SELECT $1::uuid, t.id, $2, $3, $4, $5, $7
 		FROM tenants t
 		WHERE t.tenant_uuid = $6::uuid
-	`, toPGUUID(profile.ID), profile.PreferredUsername, profile.Name, profile.Email, profile.EmailVerified, toPGUUID(tenantID))
+	`, toPGUUID(profile.ID), profile.PreferredUsername, profile.Name, profile.Email, profile.EmailVerified, toPGUUID(tenantID), profile.PartitionID)
 	if err != nil {
 		return fmt.Errorf("insert user profile: %w", err)
 	}
@@ -603,7 +689,7 @@ func (s *PostgresStorage) SavePasswordCredential(ctx context.Context, credential
 
 func (s *PostgresStorage) GetEnabledIdentityProviders(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProvider, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT ip.id, ip.idp_type, ip.enabled, ip.alias_name, ip.config
+		SELECT ip.id, ip.idp_type, ip.enabled, ip.alias_name, ip.config, ip.name, ip.partition_id, ip.created_at, ip.updated_at
 		FROM identity_providers ip
 		JOIN tenants t ON t.id = ip.tenant_id
 		WHERE t.tenant_uuid = $1::uuid AND ip.enabled = TRUE
@@ -621,12 +707,24 @@ func (s *PostgresStorage) GetEnabledIdentityProviders(ctx context.Context, tenan
 		var enabled bool
 		var alias string
 		var configJSON []byte
-		if err := rows.Scan(&providerID, &idpType, &enabled, &alias, &configJSON); err != nil {
+		var name string
+		var partitionID int64
+		var createdAt pgtype.Timestamptz
+		var updatedAt pgtype.Timestamptz
+		if err := rows.Scan(&providerID, &idpType, &enabled, &alias, &configJSON, &name, &partitionID, &createdAt, &updatedAt); err != nil {
 			return nil, fmt.Errorf("scan identity provider: %w", err)
 		}
 		providerUUID, err := pgUUIDToUUID(providerID)
 		if err != nil {
 			return nil, fmt.Errorf("parse provider UUID: %w", err)
+		}
+		parsedCreatedAt, err := pgTimestamptzToTime(createdAt)
+		if err != nil {
+			return nil, fmt.Errorf("parse created_at: %w", err)
+		}
+		parsedUpdatedAt, err := pgTimestamptzToTime(updatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("parse updated_at: %w", err)
 		}
 		providerCfg := model.IdentityProviderConfig{}
 		if len(configJSON) > 0 {
@@ -635,12 +733,16 @@ func (s *PostgresStorage) GetEnabledIdentityProviders(ctx context.Context, tenan
 			}
 		}
 		providers = append(providers, model.IdentityProvider{
-			ID:       providerUUID,
-			TenantID: tenantID,
-			IDPType:  idpType,
-			Enabled:  enabled,
-			Alias:    alias,
-			Config:   providerCfg,
+			ID:          providerUUID,
+			TenantID:    tenantID,
+			IDPType:     idpType,
+			Enabled:     enabled,
+			Alias:       alias,
+			Name:        name,
+			PartitionID: partitionID,
+			Config:      providerCfg,
+			CreatedAt:   parsedCreatedAt,
+			UpdatedAt:   parsedUpdatedAt,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -649,7 +751,7 @@ func (s *PostgresStorage) GetEnabledIdentityProviders(ctx context.Context, tenan
 	return providers, nil
 }
 
-func (s *PostgresStorage) GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.UUID, providerID uuid.UUID, identifier string) (*model.UserProfile, error) {
+func (s *PostgresStorage) getUsernameField(ctx context.Context, tenantID uuid.UUID, providerID uuid.UUID) (string, error) {
 	var configJSON []byte
 	err := s.pool.QueryRow(ctx, `
 		SELECT ip.config
@@ -659,44 +761,48 @@ func (s *PostgresStorage) GetUserProfileByIdentifier(ctx context.Context, tenant
 	`, toPGUUID(tenantID), toPGUUID(providerID)).Scan(&configJSON)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("identity provider not found: %w", port.ErrIdentityProviderNotFound)
+			return "", port.ErrIdentityProviderNotFound
 		}
-		return nil, fmt.Errorf("get identity provider config: %w", err)
+		return "", fmt.Errorf("get identity provider config: %w", err)
 	}
 
 	var providerCfg model.IdentityProviderConfig
 	if len(configJSON) > 0 {
 		_ = json.Unmarshal(configJSON, &providerCfg)
 	}
-	usernameField := "preferredUsername"
 	if providerCfg.UsernameField != "" {
-		usernameField = providerCfg.UsernameField
+		return providerCfg.UsernameField, nil
 	}
+	return "preferredUsername", nil
+}
 
-	var id pgtype.UUID
-	var preferredUsername string
-	var name string
-	var email string
-	var emailVerified bool
+func (s *PostgresStorage) GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.UUID, providerID uuid.UUID, identifier string) (*model.UserProfile, error) {
+	usernameField, err := s.getUsernameField(ctx, tenantID, providerID)
+	if err != nil {
+		return nil, err
+	}
 
 	var query string
 	if usernameField == "email" {
 		query = `
-			SELECT id, preferred_username, name, email, email_verified
+			SELECT id, preferred_username, name, email, email_verified, partition_id, created_at, updated_at
 			FROM user_profiles
 			WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
+			  AND partition_id = (SELECT partition_id FROM identity_providers WHERE id = $3::uuid)
 			  AND email = $2
 		`
 	} else {
 		query = `
-			SELECT id, preferred_username, name, email, email_verified
+			SELECT id, preferred_username, name, email, email_verified, partition_id, created_at, updated_at
 			FROM user_profiles
 			WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
+			  AND partition_id = (SELECT partition_id FROM identity_providers WHERE id = $3::uuid)
 			  AND preferred_username = $2
 		`
 	}
 
-	err = s.pool.QueryRow(ctx, query, toPGUUID(tenantID), identifier).Scan(&id, &preferredUsername, &name, &email, &emailVerified)
+	row := s.pool.QueryRow(ctx, query, toPGUUID(tenantID), identifier, toPGUUID(providerID))
+	profile, err := scanUserProfileRow(row, tenantID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("user profile not found for identifier %s: %w", identifier, port.ErrUserProfileNotFound)
@@ -704,18 +810,7 @@ func (s *PostgresStorage) GetUserProfileByIdentifier(ctx context.Context, tenant
 		return nil, fmt.Errorf("lookup user profile: %w", err)
 	}
 
-	profileID, err := pgUUIDToUUID(id)
-	if err != nil {
-		return nil, fmt.Errorf("parse profile UUID: %w", err)
-	}
-
-	return &model.UserProfile{
-		ID:                profileID,
-		PreferredUsername: preferredUsername,
-		Name:              name,
-		Email:             email,
-		EmailVerified:     emailVerified,
-	}, nil
+	return &profile, nil
 }
 
 func (s *PostgresStorage) GetUserProfileByID(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.UserProfile, error) {
@@ -723,13 +818,15 @@ func (s *PostgresStorage) GetUserProfileByID(ctx context.Context, tenantID uuid.
 	var name string
 	var email string
 	var emailVerified bool
+	var partitionID int64
+	var createdAt, updatedAt pgtype.Timestamptz
 
 	err := s.pool.QueryRow(ctx, `
-		SELECT preferred_username, name, email, email_verified
+		SELECT preferred_username, name, email, email_verified, partition_id, created_at, updated_at
 		FROM user_profiles
 		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
 		  AND id = $2::uuid
-	`, toPGUUID(tenantID), toPGUUID(id)).Scan(&preferredUsername, &name, &email, &emailVerified)
+	`, toPGUUID(tenantID), toPGUUID(id)).Scan(&preferredUsername, &name, &email, &emailVerified, &partitionID, &createdAt, &updatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, port.ErrUserProfileNotFound
@@ -737,32 +834,57 @@ func (s *PostgresStorage) GetUserProfileByID(ctx context.Context, tenantID uuid.
 		return nil, fmt.Errorf("get user profile by ID: %w", err)
 	}
 
+	parsedCreatedAt, err := pgTimestamptzToTime(createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse created_at: %w", err)
+	}
+
+	parsedUpdatedAt, err := pgTimestamptzToTime(updatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse updated_at: %w", err)
+	}
+
 	return &model.UserProfile{
 		ID:                id,
+		TenantID:          tenantID,
+		PartitionID:       partitionID,
 		PreferredUsername: preferredUsername,
 		Name:              name,
 		Email:             email,
 		EmailVerified:     emailVerified,
+		CreatedAt:         parsedCreatedAt,
+		UpdatedAt:         parsedUpdatedAt,
 	}, nil
 }
 
 func (s *PostgresStorage) GetPasswordCredential(ctx context.Context, userProfileID uuid.UUID, providerID uuid.UUID) (*model.PasswordCredential, error) {
 	var hash string
+	var createdAt, updatedAt pgtype.Timestamptz
 	err := s.pool.QueryRow(ctx, `
-		SELECT password_hash
+		SELECT password_hash, created_at, updated_at
 		FROM passwords
 		WHERE user_profile_id = $1::uuid AND identity_provider_id = $2::uuid
-	`, toPGUUID(userProfileID), toPGUUID(providerID)).Scan(&hash)
+	`, toPGUUID(userProfileID), toPGUUID(providerID)).Scan(&hash, &createdAt, &updatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("password credential not found: %w", port.ErrPasswordCredentialNotFound)
 		}
 		return nil, fmt.Errorf("get password credential: %w", err)
 	}
+	parsedCreatedAt, err := pgTimestamptzToTime(createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse created_at: %w", err)
+	}
+	parsedUpdatedAt, err := pgTimestamptzToTime(updatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse updated_at: %w", err)
+	}
 	return &model.PasswordCredential{
 		UserProfileID:      userProfileID,
 		IdentityProviderID: providerID,
 		Argon2Hash:         hash,
+		CreatedAt:          parsedCreatedAt,
+		UpdatedAt:          parsedUpdatedAt,
 	}, nil
 }
 
@@ -883,6 +1005,55 @@ func (s *PostgresStorage) GetAndConsumeInteractionSession(ctx context.Context, t
 			return nil, fmt.Errorf("interaction session %s not found: %w", id, port.ErrInteractionSessionNotFound)
 		}
 		return nil, fmt.Errorf("get and consume interaction session: %w", err)
+	}
+
+	parsedTenantID, err := pgUUIDToUUID(tenantUUID)
+	if err != nil {
+		return nil, fmt.Errorf("parse tenant UUID: %w", err)
+	}
+	parsedExpiresAt, err := pgTimestamptzToTime(expiresAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse expires_at: %w", err)
+	}
+
+	return &model.InteractionSession{
+		ID:              id,
+		TenantID:        parsedTenantID,
+		ClientID:        clientID,
+		RedirectURI:     redirectURI,
+		CodeChallenge:   codeChallenge,
+		ChallengeMethod: codeChallengeMethod,
+		IDPHint:         valueOrEmpty(idpHint),
+		ExpiresAt:       parsedExpiresAt,
+		State:           state,
+		Nonce:           nonce,
+		ACRValues:       acrValues,
+	}, nil
+}
+
+func (s *PostgresStorage) GetInteractionSession(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.InteractionSession, error) {
+	var clientID string
+	var redirectURI string
+	var codeChallenge string
+	var codeChallengeMethod string
+	var idpHint *string
+	var expiresAt pgtype.Timestamptz
+	var tenantUUID pgtype.UUID
+	var state string
+	var nonce string
+	var acrValues string
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT client_id, redirect_uri, code_challenge, code_challenge_method, idp_hint, expires_at, state, nonce, acr_values,
+		       (SELECT tenant_uuid FROM tenants WHERE id = tenant_id)
+		FROM interaction_sessions
+		WHERE id = $1::uuid AND tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $2::uuid)
+	`, toPGUUID(id), toPGUUID(tenantID)).Scan(&clientID, &redirectURI, &codeChallenge, &codeChallengeMethod, &idpHint, &expiresAt, &state, &nonce, &acrValues, &tenantUUID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("interaction session %s not found: %w", id, port.ErrInteractionSessionNotFound)
+		}
+		return nil, fmt.Errorf("get interaction session: %w", err)
 	}
 
 	parsedTenantID, err := pgUUIDToUUID(tenantUUID)
@@ -1113,7 +1284,7 @@ func (s *PostgresStorage) DeleteClient(ctx context.Context, tenantID uuid.UUID, 
 
 func (s *PostgresStorage) GetIdentityProviders(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProvider, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT ip.id, ip.idp_type, ip.enabled, ip.alias_name, ip.config
+		SELECT ip.id, ip.idp_type, ip.enabled, ip.alias_name, ip.config, ip.name, ip.partition_id, ip.created_at, ip.updated_at
 		FROM identity_providers ip
 		JOIN tenants t ON t.id = ip.tenant_id
 		WHERE t.tenant_uuid = $1::uuid
@@ -1131,21 +1302,30 @@ func (s *PostgresStorage) GetIdentityProviders(ctx context.Context, tenantID uui
 		var enabled bool
 		var aliasName string
 		var configJSON []byte
-		if err := rows.Scan(&id, &idpType, &enabled, &aliasName, &configJSON); err != nil {
+		var name string
+		var partitionID int64
+		var createdAt, updatedAt pgtype.Timestamptz
+		if err := rows.Scan(&id, &idpType, &enabled, &aliasName, &configJSON, &name, &partitionID, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
 		parsedID, _ := pgUUIDToUUID(id)
+		parsedCreatedAt, _ := pgTimestamptzToTime(createdAt)
+		parsedUpdatedAt, _ := pgTimestamptzToTime(updatedAt)
 		var config model.IdentityProviderConfig
 		if len(configJSON) > 0 {
 			_ = json.Unmarshal(configJSON, &config)
 		}
 		providers = append(providers, model.IdentityProvider{
-			ID:       parsedID,
-			TenantID: tenantID,
-			IDPType:  idpType,
-			Enabled:  enabled,
-			Alias:    aliasName,
-			Config:   config,
+			ID:          parsedID,
+			TenantID:    tenantID,
+			IDPType:     idpType,
+			Enabled:     enabled,
+			Alias:       aliasName,
+			Name:        name,
+			PartitionID: partitionID,
+			Config:      config,
+			CreatedAt:   parsedCreatedAt,
+			UpdatedAt:   parsedUpdatedAt,
 		})
 	}
 	return providers, nil
@@ -1159,9 +1339,50 @@ func (s *PostgresStorage) DeleteIdentityProvider(ctx context.Context, tenantID u
 	return err
 }
 
+func scanUserProfileRow(row pgx.Row, tenantID uuid.UUID) (model.UserProfile, error) {
+	var id pgtype.UUID
+	var preferredUsername string
+	var name string
+	var email string
+	var emailVerified bool
+	var partitionID int64
+	var createdAt, updatedAt pgtype.Timestamptz
+
+	if err := row.Scan(&id, &preferredUsername, &name, &email, &emailVerified, &partitionID, &createdAt, &updatedAt); err != nil {
+		return model.UserProfile{}, err
+	}
+
+	parsedID, err := pgUUIDToUUID(id)
+	if err != nil {
+		return model.UserProfile{}, err
+	}
+
+	parsedCreatedAt, err := pgTimestamptzToTime(createdAt)
+	if err != nil {
+		return model.UserProfile{}, err
+	}
+
+	parsedUpdatedAt, err := pgTimestamptzToTime(updatedAt)
+	if err != nil {
+		return model.UserProfile{}, err
+	}
+
+	return model.UserProfile{
+		ID:                parsedID,
+		TenantID:          tenantID,
+		PreferredUsername: preferredUsername,
+		Name:              name,
+		Email:             email,
+		EmailVerified:     emailVerified,
+		PartitionID:       partitionID,
+		CreatedAt:         parsedCreatedAt,
+		UpdatedAt:         parsedUpdatedAt,
+	}, nil
+}
+
 func (s *PostgresStorage) GetUserProfilesByTenant(ctx context.Context, tenantID uuid.UUID) ([]model.UserProfile, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT up.id, up.preferred_username, up.name, up.email, up.email_verified
+		SELECT up.id, up.preferred_username, up.name, up.email, up.email_verified, up.partition_id, up.created_at, up.updated_at
 		FROM user_profiles up
 		JOIN tenants t ON t.id = up.tenant_id
 		WHERE t.tenant_uuid = $1::uuid
@@ -1174,24 +1395,17 @@ func (s *PostgresStorage) GetUserProfilesByTenant(ctx context.Context, tenantID 
 
 	var profiles []model.UserProfile
 	for rows.Next() {
-		var id pgtype.UUID
-		var preferredUsername string
-		var name string
-		var email string
-		var emailVerified bool
-		if err := rows.Scan(&id, &preferredUsername, &name, &email, &emailVerified); err != nil {
+		profile, err := scanUserProfileRow(rows, tenantID)
+		if err != nil {
 			return nil, err
 		}
-		parsedID, _ := pgUUIDToUUID(id)
-		profiles = append(profiles, model.UserProfile{
-			ID:                parsedID,
-			TenantID:          tenantID,
-			PreferredUsername: preferredUsername,
-			Name:              name,
-			Email:             email,
-			EmailVerified:     emailVerified,
-		})
+		profiles = append(profiles, profile)
 	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return profiles, nil
 }
 
@@ -1206,9 +1420,9 @@ func (s *PostgresStorage) DeleteUserProfile(ctx context.Context, tenantID uuid.U
 func (s *PostgresStorage) UpdateUserProfile(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) error {
 	_, err := s.pool.Exec(ctx, `
 		UPDATE user_profiles
-		SET preferred_username = $1, name = $2, email = $3, email_verified = $4
-		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $5::uuid) AND id = $6::uuid
-	`, profile.PreferredUsername, profile.Name, profile.Email, profile.EmailVerified, toPGUUID(tenantID), toPGUUID(profile.ID))
+		SET preferred_username = $1, name = $2, email = $3, email_verified = $4, partition_id = $5
+		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $6::uuid) AND id = $7::uuid
+	`, profile.PreferredUsername, profile.Name, profile.Email, profile.EmailVerified, profile.PartitionID, toPGUUID(tenantID), toPGUUID(profile.ID))
 	return err
 }
 
@@ -1356,4 +1570,87 @@ func (s *PostgresStorage) PurgeTenantSessionsAndTokens(ctx context.Context, tena
 	}
 
 	return tx.Commit(ctx)
+}
+
+func (s *PostgresStorage) GetPartitions(ctx context.Context, tenantID uuid.UUID) ([]model.Partition, error) {
+	rows, err := s.queries.GetPartitions(ctx, toPGUUID(tenantID))
+	if err != nil {
+		return nil, fmt.Errorf("get partitions: %w", err)
+	}
+
+	partitions := make([]model.Partition, len(rows))
+	for i, r := range rows {
+		partitions[i] = model.Partition{
+			ID:        r.ID,
+			TenantID:  tenantID,
+			Name:      r.Name,
+			AliasName: r.AliasName,
+		}
+	}
+	return partitions, nil
+}
+
+func (s *PostgresStorage) GetPartitionByAlias(ctx context.Context, tenantID uuid.UUID, alias string) (*model.Partition, error) {
+	row, err := s.queries.GetPartitionByAlias(ctx, sqlcdb.GetPartitionByAliasParams{
+		Column1:   toPGUUID(tenantID),
+		AliasName: alias,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("get partition by alias: %w", port.ErrPartitionNotFound)
+		}
+		return nil, fmt.Errorf("get partition by alias: %w", err)
+	}
+
+	return &model.Partition{
+		ID:        row.ID,
+		TenantID:  tenantID,
+		Name:      row.Name,
+		AliasName: row.AliasName,
+	}, nil
+}
+
+func (s *PostgresStorage) CreatePartition(ctx context.Context, tenantID uuid.UUID, name, aliasName string) (*model.Partition, error) {
+	row, err := s.queries.CreatePartition(ctx, sqlcdb.CreatePartitionParams{
+		Column1:   toPGUUID(tenantID),
+		Name:      name,
+		AliasName: aliasName,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create partition: %w", err)
+	}
+
+	return &model.Partition{
+		ID:        row.ID,
+		TenantID:  tenantID,
+		Name:      row.Name,
+		AliasName: row.AliasName,
+	}, nil
+}
+
+func (s *PostgresStorage) GetPartitionByID(ctx context.Context, id int64) (*model.Partition, error) {
+	row, err := s.queries.GetPartitionByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("get partition by ID: %w", port.ErrPartitionNotFound)
+		}
+		return nil, fmt.Errorf("get partition by ID: %w", err)
+	}
+
+	var tenantUUID pgtype.UUID
+	err = s.pool.QueryRow(ctx, "SELECT tenant_uuid FROM tenants WHERE id = $1", row.TenantID).Scan(&tenantUUID)
+	if err != nil {
+		return nil, fmt.Errorf("get partition tenant: %w", err)
+	}
+	tID, err := pgUUIDToUUID(tenantUUID)
+	if err != nil {
+		return nil, fmt.Errorf("parse partition tenant uuid: %w", err)
+	}
+
+	return &model.Partition{
+		ID:        row.ID,
+		TenantID:  tID,
+		Name:      row.Name,
+		AliasName: row.AliasName,
+	}, nil
 }

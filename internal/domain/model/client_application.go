@@ -36,4 +36,6 @@ type ClientApplication struct {
 	AllowedAudiences       []string
 	ClientType             string
 	EnforceRTR             bool
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
 }

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -87,12 +88,31 @@ func (s *TenantBootstrapService) bootstrapNewTenant(ctx context.Context, domain 
 			PredefinedAudiences: []string{},
 			DefaultRedirectURI:  scheme + domain + routeAdmin,
 			RedirectWhitelist:   []string{schemeHttps + domain + routeAdmin, schemeHttp + domain + routeAdmin, schemeHttp + domain + routeCallback, schemeHttps + domain + routeCallback},
-			AllowSignup:         true,
+			ACRToLevels: map[string]model.Levels{
+				"aal1": {AAL: 1},
+				"ial1": {IAL: 1},
+			},
+			AllowSignup: true,
 		},
 	}
 
 	if err := s.storage.CreateTenant(ctx, *newTenant); err != nil {
 		return nil, err
+	}
+
+	p1, err := s.storage.CreatePartition(ctx, newTenant.ID, newTenant.Name, "default")
+	if err != nil {
+		return nil, fmt.Errorf("create default partition: %w", err)
+	}
+
+	_, err = s.storage.CreatePartition(ctx, newTenant.ID, "Sprezz Admin", "sprezz_admin")
+	if err != nil {
+		return nil, fmt.Errorf("create sprezz admin partition: %w", err)
+	}
+
+	newTenant.DefaultPartition = &p1.ID
+	if err := s.storage.CreateTenant(ctx, *newTenant); err != nil {
+		return nil, fmt.Errorf("update tenant default partition: %w", err)
 	}
 
 	if err := s.ensureDefaultIdentityProvider(ctx, newTenant.ID); err != nil {
@@ -112,12 +132,30 @@ func (s *TenantBootstrapService) ensureDefaultIdentityProvider(ctx context.Conte
 		return nil
 	}
 
+	tenant, err := s.storage.ResolveTenantByID(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+
+	var partitionID int64
+	if tenant.DefaultPartition != nil {
+		partitionID = *tenant.DefaultPartition
+	} else {
+		parts, err := s.storage.GetPartitions(ctx, tenantID)
+		if err != nil || len(parts) == 0 {
+			return fmt.Errorf("no partitions found for tenant: %w", err)
+		}
+		partitionID = parts[0].ID
+	}
+
 	defaultProvider := model.IdentityProvider{
-		ID:       uuid.New(),
-		TenantID: tenantID,
-		IDPType:  model.UsernamePasswordIDPType,
-		Enabled:  true,
-		Alias:    usernamePasswordIDPAlias,
+		ID:          uuid.New(),
+		TenantID:    tenantID,
+		IDPType:     model.UsernamePasswordIDPType,
+		Enabled:     true,
+		Alias:       usernamePasswordIDPAlias,
+		Name:        "Local Accounts",
+		PartitionID: partitionID,
 		Config: model.IdentityProviderConfig{
 			UsernameField: "preferredUsername",
 		},
