@@ -208,7 +208,7 @@ Sprezz Identity implements OIDC-compliant trust tiering by introducing the conce
 
 ## 5. OAuth 2.0 & OpenID Connect Flow Control Engine
 
-### 5.1 Authorization Code Flow with PKCE (RFC 7636)
+### 5.1 Authorization Code Flow with PKCE (RFC 7636) & Issuer Parameter (RFC 9207)
 
 Protects public, native mobile clients from intercept attacks by forcing runtime cryptographic proofs.
 
@@ -224,13 +224,15 @@ sequenceDiagram
     User->>Server: GET /oauth/authorize?response_type=code&client_id=client_123&code_challenge=XYZ...&code_challenge_method=S256
     Note over Server: Renders Login/Consent UI
     Server-->>User: Authenticates user & tenant credentials
-    Server->>User: Redirects with 302 Found to client redirect_uri?code=abc...
-    User->>Client: Redirect to client redirect_uri?code=abc...
-    Note over Client: Extracts code parameter
+    Server->>User: Redirects with 302 Found to client redirect_uri?code=abc&state=xyz&iss=https%3A%2F%2Fserver.com
+    User->>Client: Redirect to client redirect_uri?code=abc&state=xyz&iss=https%3A%2F%2Fserver.com
+    Note over Client: Extracts code, state, & iss parameters
     Client->>Server: POST /oauth/token (Payload: code, client_id, code_verifier)
     Note over Server: Core Service Engine Validation:<br/>- Recomputes SHA256 of verifier<br/>- Compares against challenge<br/>- Mints Access, ID, & Refresh tokens
     Server-->>Client: Returns 200 OK (JSON Token Set containing access_token, id_token, refresh_token)
 ```
+
+* **Issuer Parameter Redirection (RFC 9207)**: To shield client applications against authorization server mix-up attacks, successful authorization code redirects dynamically append the `iss` parameter containing the exact issuer identifier of the authorization server (e.g. `&iss=https%3A%2F%2Ftest.com`).
 
 The mathematical evaluation inside the business layer service strictly asserts:
 
@@ -368,6 +370,14 @@ Sprezz Identity implements concurrent asymmetric dual-signing. It uses an intern
 Sprezz Identity implements standard RFC 9449 DPoP to bind minted tokens to a client's specific public/private keypair, protecting against token theft and unauthorized sender usage.
 
 * **Cryptographic Key Binding**: Token endpoints `/oauth/token` (Authorization Code and Client Credentials grants) accept a signed `DPoP` header (DPoP Proof JWT) containing the client's public key (`jwk`). The server validates the proof's signature, matches its claims (`htm` and `htu` must target the current request method and URL, and `iat` must be within a +/- 2 minute window), and hashes the public key to compute the thumbprint (`jkt` via RFC 7638).
+* **Supported Signing Algorithms**: Sprezz Identity supports a multi-algorithm suite for verifying DPoP proofs:
+  * **RS256**: For standard RSA-2048 keys (`kty: "RSA"`).
+  * **ES256**: For high-performance ECDSA P-256 keys (`kty: "EC"`).
+  * **EdDSA**: For modern Ed25519 OKP keys (`kty: "OKP"`).
+* **Deterministic RFC 7638 Thumbprint Calculation (`jkt`)**: The JWK thumbprint hashes are computed using canonical JSON formatting with lexicographically sorted fields based on key type:
+  * RSA: `{"e","kty","n"}`
+  * EC: `{"crv","kty","x","y"}`
+  * OKP: `{"crv","kty","x"}`
 * **The `"cnf"` (Confirmation) Claim**: If valid, the access token is minted with a `"cnf"` claim mapping the thumbprint:
     `"cnf": { "jkt": "thumbprint" }`
     The return `token_type` is dynamically changed from `"Bearer"` to `"DPoP"`.

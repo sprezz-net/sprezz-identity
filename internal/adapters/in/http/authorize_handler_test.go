@@ -194,7 +194,7 @@ func TestHttpAdapter_Authorize_AuthenticatedSSO(t *testing.T) {
 	}
 
 	loc := rec.Header().Get("Location")
-	if !strings.Contains(loc, "code=") || !strings.Contains(loc, "state=state123") {
+	if !strings.Contains(loc, "code=") || !strings.Contains(loc, "state=state123") || !strings.Contains(loc, "iss=https%3A%2F%2Ftest.com") {
 		t.Fatalf("unexpected redirect URI: %s", loc)
 	}
 }

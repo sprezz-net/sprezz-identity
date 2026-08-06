@@ -34,6 +34,10 @@ func TestHttpAdapter_OpenIDConfiguration_Success(t *testing.T) {
 		IsActive: true,
 		Config: model.TenantConfig{
 			PredefinedScopes: []string{"openid", "custom-scope"},
+			ACRToLevels: map[string]model.Levels{
+				"acr:b": {},
+				"acr:a": {},
+			},
 		},
 	}
 
@@ -69,6 +73,19 @@ func TestHttpAdapter_OpenIDConfiguration_Success(t *testing.T) {
 
 	if scopes[0] != "openid" || scopes[1] != "custom-scope" {
 		t.Fatalf("unexpected scopes in configuration: %v", scopes)
+	}
+
+	acrValues, ok := resp["acr_values_supported"].([]any)
+	if !ok {
+		t.Fatal("acr_values_supported is missing or not a list")
+	}
+
+	if len(acrValues) != 2 {
+		t.Fatalf("expected 2 acr values, got %v", acrValues)
+	}
+
+	if acrValues[0] != "acr:a" || acrValues[1] != "acr:b" {
+		t.Fatalf("unexpected acr values order (must be sorted): %v", acrValues)
 	}
 
 	if resp["end_session_endpoint"] != "https://test.com/oauth/logout" {

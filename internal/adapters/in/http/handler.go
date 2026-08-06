@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -247,6 +248,12 @@ func (h *HttpAdapter) openIDConfiguration(w http.ResponseWriter, r *http.Request
 		scopesSupported = []string{"openid", "profile", "email", "offline_access"}
 	}
 
+	acrValues := make([]string, 0, len(tenant.Config.ACRToLevels))
+	for acr := range tenant.Config.ACRToLevels {
+		acrValues = append(acrValues, acr)
+	}
+	sort.Strings(acrValues)
+
 	issuer := schemeHttps + r.Host
 	respondJSON(w, http.StatusOK, map[string]any{
 		"issuer":                                issuer,
@@ -256,16 +263,26 @@ func (h *HttpAdapter) openIDConfiguration(w http.ResponseWriter, r *http.Request
 		"userinfo_endpoint":                     issuer + routeUserInfo,
 		"registration_endpoint":                 issuer + routeRegister,
 		"introspection_endpoint":                issuer + routeIntrospect,
+		"revocation_endpoint":                   issuer + routeRevoke,
 		"end_session_endpoint":                  issuer + routeLogout,
 		"pushed_authorization_request_endpoint": issuer + routePAR,
-		"frontchannel_logout_supported":         true,
-		"frontchannel_logout_session_supported": true,
-		"response_types_supported":              []string{"code", "token"},
-		"grant_types_supported":                 []string{"authorization_code", "client_credentials", "refresh_token"},
-		"scopes_supported":                      scopesSupported,
-		"token_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post", "none"},
-		"dpop_signing_alg_values_supported":     []string{string(model.AlgRS256), string(model.AlgES256)},
-		"id_token_signing_alg_values_supported": []string{string(model.AlgRS256), string(model.AlgES256)},
+		"authorization_response_iss_parameter_supported":           true,
+		"frontchannel_logout_supported":                            true,
+		"frontchannel_logout_session_supported":                    true,
+		"response_types_supported":                                 []string{"code", "token"},
+		"response_modes_supported":                                 []string{"query", "form_post"},
+		"grant_types_supported":                                    []string{"authorization_code", "client_credentials", "refresh_token"},
+		"scopes_supported":                                         scopesSupported,
+		"acr_values_supported":                                     acrValues,
+		"claims_supported":                                         []string{"sub", "name", "preferred_username", "email", "email_verified", "tid"},
+		"token_endpoint_auth_methods_supported":                    []string{"client_secret_basic", "client_secret_post", "none"},
+		"revocation_endpoint_auth_methods_supported":               []string{"client_secret_basic", "client_secret_post", "none"},
+		"introspection_endpoint_auth_methods_supported":            []string{"client_secret_basic", "client_secret_post"},
+		"dpop_signing_alg_values_supported":                        []string{string(model.AlgRS256), string(model.AlgES256), string(model.AlgEdDSA)},
+		"id_token_signing_alg_values_supported":                    []string{string(model.AlgRS256), string(model.AlgES256)},
+		"code_challenge_methods_supported":                         []string{"S256"},
+		"subject_types_supported":                                  []string{"public"},
+		"request_uri_parameter_supported":                          false,
 	})
 }
 

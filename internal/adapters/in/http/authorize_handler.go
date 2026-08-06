@@ -320,6 +320,8 @@ func (h *HttpAdapter) handleAuthenticatedAuthorize(w http.ResponseWriter, r *htt
 	if state != "" {
 		redirectURL += "&state=" + url.QueryEscape(state)
 	}
+	issuer := schemeHttps + r.Host
+	redirectURL += "&iss=" + url.QueryEscape(issuer)
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
