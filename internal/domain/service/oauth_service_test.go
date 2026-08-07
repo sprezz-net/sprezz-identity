@@ -5,10 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"sprezz-identity/internal/domain/model"
+	"sprezz-identity/internal/domain/port"
 	"sprezz-identity/internal/domain/port/portmock"
 
 	"github.com/gojuno/minimock/v3"
@@ -645,8 +647,9 @@ func TestOAuthService_ExchangeExternalToken_Legacy_Success(t *testing.T) {
 	storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(client, nil)
 	storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(tenant, nil)
 	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return(providers, nil)
-	storage.GetUserProfileByIdentifierMock.Expect(context.Background(), tenantID, providerID, "john@example.com").Return(profile, nil)
-	storage.GetIdentityByProfileAndProviderMock.Expect(context.Background(), profile.ID, providerID).Return(nil, errors.New("not found"))
+	storage.GetIdentityByProviderAndExternalIDMock.Expect(context.Background(), providerID, "ext-sub-999").Return(nil, port.ErrIdentityNotFound)
+	storage.FindProfileByEmailMock.Expect(context.Background(), int64(1), "john@example.com").Return(profile, nil)
+	storage.GetIdentityByProfileAndProviderMock.Expect(context.Background(), profile.ID, providerID).Return(nil, port.ErrIdentityNotFound)
 	storage.UpsertIdentityMock.Set(func(ctx context.Context, ident model.UserIdentity) error {
 		if ident.ExternalIdentityID != "ext-sub-999" {
 			t.Errorf("expected external identity ID 'ext-sub-999', got %s", ident.ExternalIdentityID)
@@ -682,10 +685,11 @@ func TestOAuthService_ExchangeExternalToken_JWT_Success(t *testing.T) {
 	clientID := "client-id"
 
 	claims := jwt.MapClaims{
-		"sub":   "external-sub-jwt-777",
-		"iss":   "https://accounts.google.com",
-		"email": "google-user@example.com",
-		"name":  "Google User",
+		"sub":            "external-sub-jwt-777",
+		"iss":            "https://accounts.google.com",
+		"email":          "google-user@example.com",
+		"name":           "Google User",
+		"email_verified": true,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString([]byte("some-secret"))
@@ -728,8 +732,9 @@ func TestOAuthService_ExchangeExternalToken_JWT_Success(t *testing.T) {
 	storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(client, nil)
 	storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(tenant, nil)
 	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return(providers, nil)
-	storage.GetUserProfileByIdentifierMock.Expect(context.Background(), tenantID, providerID, "google-user@example.com").Return(profile, nil)
-	storage.GetIdentityByProfileAndProviderMock.Expect(context.Background(), profile.ID, providerID).Return(nil, errors.New("not found"))
+	storage.GetIdentityByProviderAndExternalIDMock.Expect(context.Background(), providerID, "external-sub-jwt-777").Return(nil, port.ErrIdentityNotFound)
+	storage.FindProfileByEmailMock.Expect(context.Background(), int64(1), "google-user@example.com").Return(profile, nil)
+	storage.GetIdentityByProfileAndProviderMock.Expect(context.Background(), profile.ID, providerID).Return(nil, port.ErrIdentityNotFound)
 	storage.UpsertIdentityMock.Set(func(ctx context.Context, ident model.UserIdentity) error {
 		if ident.ExternalIdentityID != "external-sub-jwt-777" {
 			t.Errorf("expected external identity ID 'external-sub-jwt-777', got %s", ident.ExternalIdentityID)
@@ -751,5 +756,67 @@ func TestOAuthService_ExchangeExternalToken_JWT_Success(t *testing.T) {
 
 	if tokens.AccessToken != "native-access-token-jwt" {
 		t.Errorf("expected AccessToken 'native-access-token-jwt', got %s", tokens.AccessToken)
+	}
+}
+
+func TestOAuthService_ExchangeExternalToken_NoProfile_Failure(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+	service := NewOAuthService(storage, crypto, nil, nil, portmock.NewMockClock(time.Now()))
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "example.com"}
+	clientID := "client-id"
+
+	claims := jwt.MapClaims{
+		"sub":            "external-sub-jwt-777",
+		"iss":            "https://accounts.google.com",
+		"email":          "missing-user@example.com",
+		"name":           "Google User",
+		"email_verified": true,
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte("some-secret"))
+	if err != nil {
+		t.Fatalf("failed to sign token: %v", err)
+	}
+
+	subjectTokenType := "urn:ietf:params:oauth:token-type:jwt"
+
+	client := &model.ClientApplication{
+		ID:                   uuid.NewString(),
+		TenantID:             tenantID,
+		ClientID:             clientID,
+		Algorithm:            model.AlgRS256,
+		AccessTokenLifetime:  time.Hour,
+		IDTokenLifetime:      time.Minute,
+		RefreshTokenLifetime: 24 * time.Hour,
+	}
+
+	providerID := uuid.New()
+	providers := []model.IdentityProvider{
+		{
+			ID:          providerID,
+			TenantID:    tenantID,
+			IDPType:     "google",
+			Enabled:     true,
+			Alias:       "google",
+			PartitionID: 1,
+		},
+	}
+
+	storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(client, nil)
+	storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(tenant, nil)
+	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return(providers, nil)
+	storage.GetIdentityByProviderAndExternalIDMock.Expect(context.Background(), providerID, "external-sub-jwt-777").Return(nil, port.ErrIdentityNotFound)
+	storage.FindProfileByEmailMock.Expect(context.Background(), int64(1), "missing-user@example.com").Return(nil, port.ErrUserProfileNotFound)
+
+	_, err = service.ExchangeExternalToken(context.Background(), tenantID, clientID, tokenString, subjectTokenType, "")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "token exchange denied") {
+		t.Errorf("expected 'token exchange denied' error, got: %v", err)
 	}
 }

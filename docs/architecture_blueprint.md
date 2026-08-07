@@ -297,10 +297,14 @@ To maintain complete compatibility with off-the-shelf native app clients, the HT
 Sprezz Identity implements OAuth 2.0 Token Exchange (RFC 8693) via the custom grant type `urn:ietf:params:oauth:grant-type:token-exchange` at the `/oauth/token` POST endpoint. This enables standard federated logins by allowing trusted clients to trade an external token (e.g., an OIDC ID Token from Google or GitHub, or a legacy system token) directly for native Sprezz Identity Access and ID tokens.
 
 * **Client Authentication**: Confidential clients are authenticated via standard HTTP Basic Authentication or form parameter checks. Public clients are checked for validity by resolving their registrations.
-* **Token Validation**: The service decodes and extracts claims (e.g. `iss`, `sub`, `email`, `name`, `preferred_username`) from incoming OIDC JWT tokens or custom legacy string formats.
-* **Federated Identity Mapping**: The server matches the token's `iss` issuer to an enabled, configured `IdentityProvider` in the tenant context.
-* **Just-In-Time Dynamic Registration**: If the external identity maps to a non-existent local user profile under the target partition, Sprezz Identity automatically creates the user's native profile and establishes the necessary cryptographic identity coupling records seamlessly.
-* **Token Issuance**: The server mints a secure, native Access Token (and ID/Refresh Token as per client capabilities and configuration) bound to the newly resolved or registered native subject.
+* **Token Validation**: The service decodes and extracts claims (e.g., `iss`, `sub`, `email`, `name`, `preferred_username`, `email_verified`) from incoming OIDC JWT tokens or custom legacy string formats.
+* **Federated Identity Mapping**: The server matches the token's `iss` issuer exactly on `p.IssuerURL == iss` or `p.Alias == iss` to an enabled, configured `IdentityProvider` in the tenant context. If direct issuer matching fails, the engine falls back to matching the email's domain alias against the configured provider's `DomainAliases`.
+* **Prioritized Profile Matching & Verification Safety Gating**:
+  * **Stage 1 (Identity External ID Match)**: If the provider is configured with a `UserIdentifierClaim` (e.g., `"sub"`), the engine extracts it from the payload as `externalSub` and queries the `identities` table using `GetIdentityByProviderAndExternalID`. If a matching coupled identity exists, the linked `UserProfile` is resolved and returned immediately.
+  * **Stage 2 (Email Verification Gate)**: If no identity match is found, the engine evaluates the `email_verified` claim of the incoming token. If `email_verified` is false or missing, the exchange is immediately denied with an `invalid_grant` error (`ErrExternalEmailNotVerified`) to prevent account takeover via spoofed external identities.
+  * **Stage 3 (Verified Email Match & Auto-Link)**: If email verification passes, the engine queries the `user_profiles` table using `FindProfileByEmail` matching the partition. If a verified matching profile is found, the engine automatically persists a new link in the `identities` table using `UpsertIdentity` so subsequent logins resolve instantly via Stage 1, then returns the profile.
+  * **Stage 4 (Deny Token Exchange)**: If no profile matches any of these stages, or if safety gates fail, the token exchange is strictly denied.
+* **Token Issuance**: The server mints a secure, native Access Token (and ID/Refresh Token as per client capabilities and configuration) bound to the newly resolved native subject.
 
 ## 6. Token Lifecycle, Governance & Asymmetric Cryptography
 

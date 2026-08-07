@@ -269,21 +269,24 @@ func (s *OAuthService) ExchangeExternalToken(ctx context.Context, tenantID uuid.
 		return nil, fmt.Errorf("resolve tenant: %w", err)
 	}
 
-	externalSub, iss, email, name, preferredUsername, err := s.parseExternalToken(subjectToken, subjectTokenType)
+	externalSub, iss, email, _, _, emailVerified, err := s.parseExternalToken(subjectToken, subjectTokenType)
 	if err != nil {
 		return nil, err
 	}
 
-	matchedProvider, err := s.matchIdentityProvider(ctx, tenantID, iss)
+	matchedProvider, err := s.matchIdentityProvider(ctx, tenantID, iss, email)
 	if err != nil {
 		return nil, err
 	}
 
 	now := s.clock.Now()
 
-	profile, err := s.getOrCreateUserProfile(ctx, tenantID, matchedProvider, email, preferredUsername, name, now)
+	profile, err := s.findUserProfile(ctx, tenantID, matchedProvider, externalSub, email, emailVerified)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, port.ErrExternalEmailNotVerified) {
+			return nil, errors.New(model.ErrInvalidGrant)
+		}
+		return nil, fmt.Errorf("token exchange denied: %w", err)
 	}
 
 	if err := s.coupleUserIdentity(ctx, profile.ID, matchedProvider.ID, externalSub, now); err != nil {
@@ -293,27 +296,51 @@ func (s *OAuthService) ExchangeExternalToken(ctx context.Context, tenantID uuid.
 	return s.mintTokensForExchangedUser(ctx, tenant, client, profile.ID.String(), dpopJKT, now)
 }
 
-func (s *OAuthService) parseExternalToken(subjectToken string, subjectTokenType string) (string, string, string, string, string, error) {
+func parseJWTClaims(subjectToken string) (jwt.MapClaims, error) {
+	parser := new(jwt.Parser)
+	token, _, err := parser.ParseUnverified(subjectToken, jwt.MapClaims{})
+	if err != nil {
+		return nil, errors.New("invalid external token")
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, errors.New("invalid external claims")
+	}
+	return claims, nil
+}
+
+func parseJWTToken(subjectToken string) (string, string, string, string, string, bool, error) {
+	claims, err := parseJWTClaims(subjectToken)
+	if err != nil {
+		return "", "", "", "", "", false, err
+	}
+
+	externalSub, _ := claims["sub"].(string)
+	iss, _ := claims["iss"].(string)
+	email, _ := claims["email"].(string)
+	name, _ := claims["name"].(string)
+	preferredUsername, _ := claims["preferred_username"].(string)
+	if preferredUsername == "" {
+		preferredUsername, _ = claims["username"].(string)
+	}
+	var emailVerified bool
+	if ev, ok := claims["email_verified"].(bool); ok {
+		emailVerified = ev
+	} else if evStr, ok := claims["email_verified"].(string); ok {
+		emailVerified = evStr == "true"
+	}
+	return externalSub, iss, email, name, preferredUsername, emailVerified, nil
+}
+
+func (s *OAuthService) parseExternalToken(subjectToken string, subjectTokenType string) (string, string, string, string, string, bool, error) {
 	var externalSub, iss, email, name, preferredUsername string
+	var emailVerified bool
+	var err error
 
 	if subjectTokenType == "urn:ietf:params:oauth:token-type:jwt" || subjectTokenType == "urn:ietf:params:oauth:token-type:id_token" {
-		parser := new(jwt.Parser)
-		token, _, err := parser.ParseUnverified(subjectToken, jwt.MapClaims{})
+		externalSub, iss, email, name, preferredUsername, emailVerified, err = parseJWTToken(subjectToken)
 		if err != nil {
-			return "", "", "", "", "", errors.New("invalid external token")
-		}
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			return "", "", "", "", "", errors.New("invalid external claims")
-		}
-
-		externalSub, _ = claims["sub"].(string)
-		iss, _ = claims["iss"].(string)
-		email, _ = claims["email"].(string)
-		name, _ = claims["name"].(string)
-		preferredUsername, _ = claims["preferred_username"].(string)
-		if preferredUsername == "" {
-			preferredUsername, _ = claims["username"].(string)
+			return "", "", "", "", "", false, err
 		}
 	} else if strings.HasPrefix(subjectToken, "legacy-token:") {
 		parts := strings.Split(subjectToken, ":")
@@ -322,77 +349,114 @@ func (s *OAuthService) parseExternalToken(subjectToken string, subjectTokenType 
 			preferredUsername = parts[2]
 			externalSub = parts[3]
 			iss = "legacy-system"
+			emailVerified = true
 		} else {
-			return "", "", "", "", "", errors.New("invalid legacy token format")
+			return "", "", "", "", "", false, errors.New("invalid legacy token format")
 		}
 	} else {
-		return "", "", "", "", "", errors.New("unsupported subject token type")
+		return "", "", "", "", "", false, errors.New("unsupported subject token type")
 	}
 
 	if externalSub == "" {
-		return "", "", "", "", "", errors.New("external subject must not be empty")
+		return "", "", "", "", "", false, errors.New("external subject must not be empty")
 	}
 
-	return externalSub, iss, email, name, preferredUsername, nil
+	return externalSub, iss, email, name, preferredUsername, emailVerified, nil
 }
 
-func (s *OAuthService) matchIdentityProvider(ctx context.Context, tenantID uuid.UUID, iss string) (*model.IdentityProvider, error) {
+func matchExactIssuer(providers []model.IdentityProvider, iss string) *model.IdentityProvider {
+	for _, p := range providers {
+		if p.IssuerURL != "" && p.IssuerURL == iss {
+			return &p
+		}
+		if p.Alias != "" && p.Alias == iss {
+			return &p
+		}
+	}
+	return nil
+}
+
+func matchDomainAlias(providers []model.IdentityProvider, email string) *model.IdentityProvider {
+	if email == "" || !strings.Contains(email, "@") {
+		return nil
+	}
+	parts := strings.Split(email, "@")
+	emailDomain := strings.ToLower(parts[len(parts)-1])
+	for _, p := range providers {
+		for _, alias := range p.Config.DomainAliases {
+			if strings.ToLower(alias) == emailDomain {
+				return &p
+			}
+		}
+	}
+	return nil
+}
+
+func fallbackNonPasswordProvider(providers []model.IdentityProvider) *model.IdentityProvider {
+	for _, p := range providers {
+		if p.IDPType != model.UsernamePasswordIDPType {
+			return &p
+		}
+	}
+	if len(providers) > 0 {
+		return &providers[0]
+	}
+	return nil
+}
+
+func (s *OAuthService) matchIdentityProvider(ctx context.Context, tenantID uuid.UUID, iss string, email string) (*model.IdentityProvider, error) {
 	providers, err := s.storage.GetEnabledIdentityProviders(ctx, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("get enabled identity providers: %w", err)
 	}
 
-	for _, p := range providers {
-		if p.Alias != "" && (strings.Contains(strings.ToLower(iss), strings.ToLower(p.Alias)) || strings.Contains(strings.ToLower(p.Alias), strings.ToLower(iss))) {
-			return &p, nil
-		}
+	if p := matchExactIssuer(providers, iss); p != nil {
+		return p, nil
 	}
 
-	for _, p := range providers {
-		if p.IDPType != model.UsernamePasswordIDPType {
-			return &p, nil
-		}
+	if p := matchDomainAlias(providers, email); p != nil {
+		return p, nil
 	}
 
-	if len(providers) > 0 {
-		return &providers[0], nil
+	if p := fallbackNonPasswordProvider(providers); p != nil {
+		return p, nil
 	}
 
 	return nil, errors.New("no matching identity provider found")
 }
 
-func (s *OAuthService) getOrCreateUserProfile(ctx context.Context, tenantID uuid.UUID, provider *model.IdentityProvider, email, preferredUsername, name string, now time.Time) (*model.UserProfile, error) {
-	var profile *model.UserProfile
+func (s *OAuthService) findUserProfile(ctx context.Context, tenantID uuid.UUID, provider *model.IdentityProvider, externalSub, email string, emailVerified bool) (*model.UserProfile, error) {
+	// 1. Identity External ID Match (UserIdentifierClaim)
+	identity, err := s.storage.GetIdentityByProviderAndExternalID(ctx, provider.ID, externalSub)
+	if err == nil && identity != nil {
+		profile, err := s.storage.GetUserProfileByID(ctx, tenantID, identity.UserProfileID)
+		if err == nil && profile != nil {
+			return profile, nil
+		}
+	}
+
+	// 2. Verified Email Matching Fallback & Auto-Link
+	if !emailVerified {
+		return nil, port.ErrExternalEmailNotVerified
+	}
+
 	if email != "" {
-		profile, _ = s.storage.GetUserProfileByIdentifier(ctx, tenantID, provider.ID, email)
-	}
-	if profile == nil && preferredUsername != "" {
-		profile, _ = s.storage.GetUserProfileByIdentifier(ctx, tenantID, provider.ID, preferredUsername)
-	}
-
-	if profile != nil {
-		return profile, nil
-	}
-
-	if preferredUsername == "" {
-		preferredUsername = "user_" + uuid.NewString()[:8]
-	}
-	profile = &model.UserProfile{
-		ID:                uuid.New(),
-		TenantID:          tenantID,
-		PreferredUsername: preferredUsername,
-		Email:             email,
-		Name:              name,
-		EmailVerified:     true,
-		PartitionID:       provider.PartitionID,
-		CreatedAt:         now,
-		UpdatedAt:         now,
-	}
-	if err := s.storage.SaveUserProfile(ctx, tenantID, *profile); err != nil {
-		return nil, fmt.Errorf("auto-register user profile: %w", err)
+		profile, err := s.storage.FindProfileByEmail(ctx, provider.PartitionID, email)
+		if err == nil && profile != nil {
+			// Auto-link: immediately persist link in identities table
+			newIdentity := model.UserIdentity{
+				ID:                 uuid.New(),
+				UserProfileID:      profile.ID,
+				IdentityProviderID: provider.ID,
+				ExternalIdentityID: externalSub,
+				CoupledAt:          s.clock.Now(),
+			}
+			_ = s.storage.UpsertIdentity(ctx, newIdentity)
+			return profile, nil
+		}
 	}
 
-	return profile, nil
+	return nil, errors.New("user profile not found")
 }
 
 func (s *OAuthService) coupleUserIdentity(ctx context.Context, profileID uuid.UUID, providerID uuid.UUID, externalSub string, now time.Time) error {

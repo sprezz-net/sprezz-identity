@@ -63,7 +63,7 @@ func (s *UserRegistrationService) RegisterUser(ctx context.Context, tenantID uui
 	}
 
 	// Resolve the newly created profile with UUID
-	savedProfile, err := s.storage.GetUserProfileByIdentifier(ctx, tenantID, provider.ID, username)
+	savedProfile, err := s.storage.GetUserProfileByIdentifier(ctx, tenantID, provider.PartitionID, provider.ID, username)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve registered profile: %w", err)
 	}

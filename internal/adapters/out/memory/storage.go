@@ -76,6 +76,7 @@ func (s *Storage) CreateIdentityProvider(ctx context.Context, tenantID uuid.UUID
 	if _, ok := s.providers[tenantID.String()]; !ok {
 		s.providers[tenantID.String()] = make(map[uuid.UUID]model.IdentityProvider)
 	}
+	provider.IssuerURL = provider.Config.Issuer
 	s.providers[tenantID.String()][provider.ID] = provider
 	return nil
 }
@@ -158,12 +159,12 @@ func (s *Storage) SavePasswordCredential(ctx context.Context, credential model.P
 	return nil
 }
 
-func (s *Storage) GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.UUID, identifier string) (*model.UserProfile, error) {
+func (s *Storage) GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.UUID, partitionID int64, providerID uuid.UUID, identifier string) (*model.UserProfile, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	for _, profile := range s.profiles {
-		if profile.TenantID == tenantID && (profile.PreferredUsername == identifier || profile.Email == identifier) {
+		if profile.TenantID == tenantID && profile.PartitionID == partitionID && (profile.PreferredUsername == identifier || profile.Email == identifier) {
 			clone := *profile
 			return &clone, nil
 		}
@@ -208,6 +209,32 @@ func (s *Storage) GetIdentityByProfileAndProvider(ctx context.Context, userProfi
 	}
 	clone := *identity
 	return &clone, nil
+}
+
+func (s *Storage) GetIdentityByProviderAndExternalID(ctx context.Context, providerID uuid.UUID, externalID string) (*model.UserIdentity, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, identity := range s.identities {
+		if identity.IdentityProviderID == providerID && identity.ExternalIdentityID == externalID {
+			clone := *identity
+			return &clone, nil
+		}
+	}
+	return nil, port.ErrIdentityNotFound
+}
+
+func (s *Storage) FindProfileByEmail(ctx context.Context, partitionID int64, email string) (*model.UserProfile, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, profile := range s.profiles {
+		if profile.PartitionID == partitionID && profile.Email == email {
+			clone := *profile
+			return &clone, nil
+		}
+	}
+	return nil, port.ErrUserProfileNotFound
 }
 
 func (s *Storage) UpsertIdentity(ctx context.Context, identity model.UserIdentity) error {

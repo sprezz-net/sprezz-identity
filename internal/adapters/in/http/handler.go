@@ -36,6 +36,7 @@ const (
 	routeIntrospect     = "/oauth/introspect"
 	routeLogout         = "/oauth/logout"
 	routePAR            = "/oauth/par"
+	routeCallback       = "/oauth/callback"
 	contentTypeHeader   = "Content-Type"
 	contentTypeJSON     = "application/json"
 	contentTypeHtml     = "text/html; charset=utf-8"
@@ -169,6 +170,7 @@ func (h *HttpAdapter) Router() http.Handler {
 
 func (h *HttpAdapter) registerRoutes() {
 	h.router.Get(routeRoot, h.loginRoot)
+	h.router.Get(routeCallback, h.oauthCallback)
 	h.router.Post(routeWebLogin, h.login)
 	h.router.Get(routeWebSignUp, h.signUpForm)
 	h.router.Post(routeWebSignUp, h.signUpSubmit)

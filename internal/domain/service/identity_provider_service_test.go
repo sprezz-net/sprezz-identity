@@ -307,7 +307,7 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_Success(t *testing
 	var defaultPart int64 = 1
 	storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(&model.Tenant{ID: tenantID, DefaultPartition: &defaultPart}, nil)
 	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{provider}, nil)
-	storage.GetUserProfileByIdentifierMock.Expect(context.Background(), tenantID, providerID, "john_doe").Return(profile, nil)
+	storage.GetUserProfileByIdentifierMock.Expect(context.Background(), tenantID, int64(1), providerID, "john_doe").Return(profile, nil)
 	storage.GetUserProfileByIDMock.Expect(context.Background(), tenantID, userProfileID).Return(profile, nil)
 	storage.GetIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{provider}, nil)
 	storage.GetIdentityByProfileAndProviderMock.Expect(context.Background(), userProfileID, providerID).Return(identity, nil)
@@ -381,7 +381,7 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_Failure(t *testing
 	var defaultPart int64 = 1
 	storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(&model.Tenant{ID: tenantID, DefaultPartition: &defaultPart}, nil)
 	storage.GetEnabledIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{provider}, nil)
-	storage.GetUserProfileByIdentifierMock.Expect(context.Background(), tenantID, providerID, "john_doe").Return(profile, nil)
+	storage.GetUserProfileByIdentifierMock.Expect(context.Background(), tenantID, int64(1), providerID, "john_doe").Return(profile, nil)
 	storage.GetUserProfileByIDMock.Expect(context.Background(), tenantID, userProfileID).Return(profile, nil)
 	storage.GetIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{provider}, nil)
 	storage.GetIdentityByProfileAndProviderMock.Expect(context.Background(), userProfileID, providerID).Return(identity, nil)

@@ -31,10 +31,12 @@ type Storage interface {
 	GetAllTenants(ctx context.Context) ([]model.Tenant, error)
 	CreateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) error
 	GetEnabledIdentityProviders(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProvider, error)
-	GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.UUID, providerID uuid.UUID, identifier string) (*model.UserProfile, error)
+	GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.UUID, partitionID int64, providerID uuid.UUID, identifier string) (*model.UserProfile, error)
 	GetUserProfileByID(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.UserProfile, error)
 	GetPasswordCredential(ctx context.Context, userProfileID uuid.UUID, providerID uuid.UUID) (*model.PasswordCredential, error)
 	GetIdentityByProfileAndProvider(ctx context.Context, userProfileID uuid.UUID, providerID uuid.UUID) (*model.UserIdentity, error)
+	GetIdentityByProviderAndExternalID(ctx context.Context, providerID uuid.UUID, externalID string) (*model.UserIdentity, error)
+	FindProfileByEmail(ctx context.Context, partitionID int64, email string) (*model.UserProfile, error)
 	SaveUserProfile(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) error
 	SavePasswordCredential(ctx context.Context, credential model.PasswordCredential) error
 	UpsertIdentity(ctx context.Context, identity model.UserIdentity) error
@@ -81,4 +83,5 @@ var (
 	ErrUserProfileAlreadyExists = errors.New("user profile with this identifier already exists")
 	ErrEmailAlreadyExists       = errors.New("email address already in use")
 	ErrUsernameAlreadyExists    = errors.New("username already in use")
+	ErrExternalEmailNotVerified = errors.New("external email not verified")
 )

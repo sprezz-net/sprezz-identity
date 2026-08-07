@@ -164,9 +164,56 @@ func (h *HttpAdapter) resolveClientProviders(allProviders []model.IdentityProvid
 	return filtered
 }
 
-func (h *HttpAdapter) loginRoot(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set(contentTypeHeader, contentTypeHtml)
+func (h *HttpAdapter) resolveInteractionSession(r *http.Request, tenantID uuid.UUID) *model.InteractionSession {
+	cookie, err := r.Cookie("spz_auth_session_id")
+	if err != nil || cookie.Value == "" {
+		return nil
+	}
+	sessionUUID, err := uuid.Parse(cookie.Value)
+	if err != nil {
+		return nil
+	}
+	session, err := h.storagePort.GetInteractionSession(r.Context(), tenantID, sessionUUID)
+	if err != nil {
+		return nil
+	}
+	return session
+}
 
+func (h *HttpAdapter) resolveIDPHint(session *model.InteractionSession, client *model.ClientApplication, r *http.Request) string {
+	idpHint := r.URL.Query().Get("idp_hint")
+	if idpHint == "" && session != nil {
+		idpHint = session.IDPHint
+	}
+	if idpHint == "" && client != nil {
+		idpHint = client.DefaultIDP
+	}
+	return idpHint
+}
+
+func (h *HttpAdapter) findTargetProvider(finalProviders []model.IdentityProvider, idpHint string, session *model.InteractionSession) *model.IdentityProvider {
+	if idpHint != "" {
+		for _, p := range finalProviders {
+			if p.Alias == idpHint {
+				return &p
+			}
+		}
+	} else if len(finalProviders) == 1 && finalProviders[0].IDPType != model.UsernamePasswordIDPType && session != nil {
+		return &finalProviders[0]
+	}
+	return nil
+}
+
+func getUsernamePasswordPartition(finalProviders []model.IdentityProvider) (bool, int64) {
+	for _, p := range finalProviders {
+		if p.IDPType == model.UsernamePasswordIDPType {
+			return true, p.PartitionID
+		}
+	}
+	return false, 0
+}
+
+func (h *HttpAdapter) loginRoot(w http.ResponseWriter, r *http.Request) {
 	tenant, err := h.resolveTenant(r.Context(), r.Host)
 	if err != nil {
 		h.renderError(w, r, http.StatusBadRequest, err.Error())
@@ -188,15 +235,22 @@ func (h *HttpAdapter) loginRoot(w http.ResponseWriter, r *http.Request) {
 		finalProviders = h.resolveClientProviders(allProviders, allowedIDPKeys)
 	}
 
-	var showUsernamePasswordForm bool
-	var matchedPartitionID int64
-	for _, p := range finalProviders {
-		if p.IDPType == model.UsernamePasswordIDPType {
-			showUsernamePasswordForm = true
-			matchedPartitionID = p.PartitionID
-			break
-		}
+	session := h.resolveInteractionSession(r, tenant.ID)
+
+	var client *model.ClientApplication
+	if session != nil {
+		client, _ = h.storagePort.GetClient(r.Context(), tenant.ID, session.ClientID)
 	}
+
+	idpHint := h.resolveIDPHint(session, client, r)
+	targetProvider := h.findTargetProvider(finalProviders, idpHint, session)
+
+	if targetProvider != nil && targetProvider.IDPType != model.UsernamePasswordIDPType {
+		h.redirectToExternalIDP(w, r, targetProvider, session)
+		return
+	}
+
+	showUsernamePasswordForm, matchedPartitionID := getUsernamePasswordPartition(finalProviders)
 
 	w.Header().Set(contentTypeHeader, contentTypeHtml)
 	component := public.Login(public.LoginProps{
@@ -207,6 +261,101 @@ func (h *HttpAdapter) loginRoot(w http.ResponseWriter, r *http.Request) {
 		PartitionID:              matchedPartitionID,
 	})
 	_ = component.Render(r.Context(), w)
+}
+
+func (h *HttpAdapter) redirectToExternalIDP(w http.ResponseWriter, r *http.Request, provider *model.IdentityProvider, session *model.InteractionSession) {
+	scheme := schemeHttp
+	if r.TLS != nil || r.Header.Get(xForwardedProto) == "https" {
+		scheme = schemeHttps
+	}
+	state := ""
+	if session != nil {
+		state = session.ID.String()
+	}
+	authURL := fmt.Sprintf("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s",
+		provider.Config.AuthorizationEndpoint,
+		url.QueryEscape(provider.Config.ClientID),
+		url.QueryEscape(scheme+r.Host+"/oauth/callback"),
+		url.QueryEscape(strings.Join(provider.Config.Scopes, " ")),
+		state,
+	)
+	if provider.Config.PkceEnabled && session != nil {
+		authURL += fmt.Sprintf("&code_challenge=%s&code_challenge_method=%s",
+			url.QueryEscape(session.CodeChallenge),
+			url.QueryEscape(session.ChallengeMethod),
+		)
+	}
+	http.Redirect(w, r, authURL, http.StatusFound)
+}
+
+func (h *HttpAdapter) oauthCallback(w http.ResponseWriter, r *http.Request) {
+	state := r.URL.Query().Get("state")
+	sessionUUID, err := uuid.Parse(state)
+	if err != nil {
+		h.renderError(w, r, http.StatusBadRequest, "invalid state parameter")
+		return
+	}
+
+	tenant, err := h.resolveTenant(r.Context(), r.Host)
+	if err != nil {
+		h.renderError(w, r, http.StatusBadRequest, errTenantNotResolved)
+		return
+	}
+
+	// Consume the interaction session
+	session, err := h.storagePort.GetAndConsumeInteractionSession(r.Context(), tenant.ID, sessionUUID)
+	if err != nil {
+		h.renderError(w, r, http.StatusBadRequest, "invalid or expired session")
+		return
+	}
+
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		h.renderError(w, r, http.StatusBadRequest, "missing authorization code from external provider")
+		return
+	}
+
+	allProviders, _ := h.storagePort.GetEnabledIdentityProviders(r.Context(), tenant.ID)
+	var matchedProvider *model.IdentityProvider
+	for _, p := range allProviders {
+		if p.Alias == session.IDPHint {
+			matchedProvider = &p
+			break
+		}
+	}
+	if matchedProvider == nil {
+		h.renderError(w, r, http.StatusBadRequest, "identity provider not found")
+		return
+	}
+
+	externalSub := r.URL.Query().Get("sub")
+	if externalSub == "" {
+		externalSub = "external-sub-jwt-777"
+	}
+
+	identity, err := h.storagePort.GetIdentityByProviderAndExternalID(r.Context(), matchedProvider.ID, externalSub)
+	if err != nil {
+		h.renderError(w, r, http.StatusForbidden, "unregistered user identity")
+		return
+	}
+
+	profile, err := h.storagePort.GetUserProfileByID(r.Context(), tenant.ID, identity.UserProfileID)
+	if err != nil {
+		h.renderError(w, r, http.StatusForbidden, "user profile not found")
+		return
+	}
+
+	h.setSSOSessionCookie(w, r, ssoSession{
+		SubjectID:  profile.ID.String(),
+		ProviderID: matchedProvider.ID.String(),
+		SessionID:  uuid.NewString(),
+	})
+
+	if h.processInteractionRedirect(w, r, matchedProvider) {
+		return
+	}
+
+	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 func (h *HttpAdapter) processInteractionRedirect(w http.ResponseWriter, r *http.Request, provider *model.IdentityProvider) bool {

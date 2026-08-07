@@ -627,6 +627,7 @@ func (s *PostgresStorage) GetIdentityProviderByType(ctx context.Context, tenantI
 		Alias:       alias,
 		Name:        name,
 		PartitionID: partitionID,
+		IssuerURL:   providerCfg.Issuer,
 		Config:      providerCfg,
 		CreatedAt:   parsedCreatedAt,
 		UpdatedAt:   parsedUpdatedAt,
@@ -687,6 +688,58 @@ func (s *PostgresStorage) SavePasswordCredential(ctx context.Context, credential
 	return nil
 }
 
+func scanIdentityProviderRow(row pgx.Row, tenantID uuid.UUID) (model.IdentityProvider, error) {
+	var providerID pgtype.UUID
+	var idpType string
+	var enabled bool
+	var alias string
+	var configJSON []byte
+	var name string
+	var partitionID int64
+	var createdAt pgtype.Timestamptz
+	var updatedAt pgtype.Timestamptz
+
+	if err := row.Scan(&providerID, &idpType, &enabled, &alias, &configJSON, &name, &partitionID, &createdAt, &updatedAt); err != nil {
+		return model.IdentityProvider{}, fmt.Errorf("scan identity provider: %w", err)
+	}
+
+	providerUUID, err := pgUUIDToUUID(providerID)
+	if err != nil {
+		return model.IdentityProvider{}, fmt.Errorf("parse provider UUID: %w", err)
+	}
+
+	parsedCreatedAt, err := pgTimestamptzToTime(createdAt)
+	if err != nil {
+		return model.IdentityProvider{}, fmt.Errorf("parse created_at: %w", err)
+	}
+
+	parsedUpdatedAt, err := pgTimestamptzToTime(updatedAt)
+	if err != nil {
+		return model.IdentityProvider{}, fmt.Errorf("parse updated_at: %w", err)
+	}
+
+	providerCfg := model.IdentityProviderConfig{}
+	if len(configJSON) > 0 {
+		if err := json.Unmarshal(configJSON, &providerCfg); err != nil {
+			return model.IdentityProvider{}, fmt.Errorf("unmarshal provider config: %w", err)
+		}
+	}
+
+	return model.IdentityProvider{
+		ID:          providerUUID,
+		TenantID:    tenantID,
+		IDPType:     idpType,
+		Enabled:     enabled,
+		Alias:       alias,
+		Name:        name,
+		PartitionID: partitionID,
+		IssuerURL:   providerCfg.Issuer,
+		Config:      providerCfg,
+		CreatedAt:   parsedCreatedAt,
+		UpdatedAt:   parsedUpdatedAt,
+	}, nil
+}
+
 func (s *PostgresStorage) GetEnabledIdentityProviders(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProvider, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT ip.id, ip.idp_type, ip.enabled, ip.alias_name, ip.config, ip.name, ip.partition_id, ip.created_at, ip.updated_at
@@ -702,48 +755,11 @@ func (s *PostgresStorage) GetEnabledIdentityProviders(ctx context.Context, tenan
 
 	providers := make([]model.IdentityProvider, 0)
 	for rows.Next() {
-		var providerID pgtype.UUID
-		var idpType string
-		var enabled bool
-		var alias string
-		var configJSON []byte
-		var name string
-		var partitionID int64
-		var createdAt pgtype.Timestamptz
-		var updatedAt pgtype.Timestamptz
-		if err := rows.Scan(&providerID, &idpType, &enabled, &alias, &configJSON, &name, &partitionID, &createdAt, &updatedAt); err != nil {
-			return nil, fmt.Errorf("scan identity provider: %w", err)
-		}
-		providerUUID, err := pgUUIDToUUID(providerID)
+		p, err := scanIdentityProviderRow(rows, tenantID)
 		if err != nil {
-			return nil, fmt.Errorf("parse provider UUID: %w", err)
+			return nil, err
 		}
-		parsedCreatedAt, err := pgTimestamptzToTime(createdAt)
-		if err != nil {
-			return nil, fmt.Errorf("parse created_at: %w", err)
-		}
-		parsedUpdatedAt, err := pgTimestamptzToTime(updatedAt)
-		if err != nil {
-			return nil, fmt.Errorf("parse updated_at: %w", err)
-		}
-		providerCfg := model.IdentityProviderConfig{}
-		if len(configJSON) > 0 {
-			if err := json.Unmarshal(configJSON, &providerCfg); err != nil {
-				return nil, fmt.Errorf("unmarshal provider config: %w", err)
-			}
-		}
-		providers = append(providers, model.IdentityProvider{
-			ID:          providerUUID,
-			TenantID:    tenantID,
-			IDPType:     idpType,
-			Enabled:     enabled,
-			Alias:       alias,
-			Name:        name,
-			PartitionID: partitionID,
-			Config:      providerCfg,
-			CreatedAt:   parsedCreatedAt,
-			UpdatedAt:   parsedUpdatedAt,
-		})
+		providers = append(providers, p)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate identity providers: %w", err)
@@ -776,7 +792,7 @@ func (s *PostgresStorage) getUsernameField(ctx context.Context, tenantID uuid.UU
 	return "preferredUsername", nil
 }
 
-func (s *PostgresStorage) GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.UUID, providerID uuid.UUID, identifier string) (*model.UserProfile, error) {
+func (s *PostgresStorage) GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.UUID, partitionID int64, providerID uuid.UUID, identifier string) (*model.UserProfile, error) {
 	usernameField, err := s.getUsernameField(ctx, tenantID, providerID)
 	if err != nil {
 		return nil, err
@@ -788,7 +804,7 @@ func (s *PostgresStorage) GetUserProfileByIdentifier(ctx context.Context, tenant
 			SELECT id, preferred_username, name, email, email_verified, partition_id, created_at, updated_at
 			FROM user_profiles
 			WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
-			  AND partition_id = (SELECT partition_id FROM identity_providers WHERE id = $3::uuid)
+			  AND partition_id = $3
 			  AND email = $2
 		`
 	} else {
@@ -796,12 +812,12 @@ func (s *PostgresStorage) GetUserProfileByIdentifier(ctx context.Context, tenant
 			SELECT id, preferred_username, name, email, email_verified, partition_id, created_at, updated_at
 			FROM user_profiles
 			WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
-			  AND partition_id = (SELECT partition_id FROM identity_providers WHERE id = $3::uuid)
+			  AND partition_id = $3
 			  AND preferred_username = $2
 		`
 	}
 
-	row := s.pool.QueryRow(ctx, query, toPGUUID(tenantID), identifier, toPGUUID(providerID))
+	row := s.pool.QueryRow(ctx, query, toPGUUID(tenantID), identifier, partitionID)
 	profile, err := scanUserProfileRow(row, tenantID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -938,6 +954,115 @@ func (s *PostgresStorage) GetIdentityByProfileAndProvider(ctx context.Context, u
 		FailedVerificationCount:   failedVerificationCount,
 		Blocked:                   blocked,
 		CoupledAt:                 coupledTime,
+	}, nil
+}
+
+func (s *PostgresStorage) GetIdentityByProviderAndExternalID(ctx context.Context, providerID uuid.UUID, externalID string) (*model.UserIdentity, error) {
+	var id, userProfileID pgtype.UUID
+	var externalIdentityID string
+	var loginCount int
+	var lastLoginAt pgtype.Timestamptz
+	var lastVerificationAttempt pgtype.Timestamptz
+	var failedVerificationCount int
+	var blocked bool
+	var coupledAt pgtype.Timestamptz
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, user_profile_id, external_identity_id, login_count, last_login_at, last_verification_attempt, failed_verification_count, blocked, coupled_at
+		FROM identities
+		WHERE identity_provider_id = $1::uuid AND external_identity_id = $2
+	`, toPGUUID(providerID), externalID).Scan(&id, &userProfileID, &externalIdentityID, &loginCount, &lastLoginAt, &lastVerificationAttempt, &failedVerificationCount, &blocked, &coupledAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("identity not found for external id %s: %w", externalID, port.ErrIdentityNotFound)
+		}
+		return nil, fmt.Errorf("get identity by provider and external id: %w", err)
+	}
+
+	identityUUID, err := pgUUIDToUUID(id)
+	if err != nil {
+		return nil, fmt.Errorf("parse identity UUID: %w", err)
+	}
+	upUUID, err := pgUUIDToUUID(userProfileID)
+	if err != nil {
+		return nil, fmt.Errorf("parse user profile UUID: %w", err)
+	}
+	lastLoginTime, err := pgTimestamptzToTime(lastLoginAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse last login time: %w", err)
+	}
+	coupledTime, err := pgTimestamptzToTime(coupledAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse coupled time: %w", err)
+	}
+	var parsedAttempt time.Time
+	if lastVerificationAttempt.Valid {
+		parsedAttempt, _ = pgTimestamptzToTime(lastVerificationAttempt)
+	}
+
+	return &model.UserIdentity{
+		ID:                        identityUUID,
+		UserProfileID:             upUUID,
+		IdentityProviderID:        providerID,
+		ExternalIdentityID:        externalIdentityID,
+		LoginCount:                loginCount,
+		LastLoginAt:               lastLoginTime,
+		LastVerificationAttemptAt: parsedAttempt,
+		FailedVerificationCount:   failedVerificationCount,
+		Blocked:                   blocked,
+		CoupledAt:                 coupledTime,
+	}, nil
+}
+
+func (s *PostgresStorage) FindProfileByEmail(ctx context.Context, partitionID int64, email string) (*model.UserProfile, error) {
+	query := `
+		SELECT id, tenant_id, preferred_username, name, email, email_verified, partition_id, created_at, updated_at
+		FROM user_profiles
+		WHERE partition_id = $1 AND email = $2
+	`
+	var id, tenantID pgtype.UUID
+	var preferredUsername string
+	var name string
+	var emailVal string
+	var emailVerified bool
+	var partID int64
+	var createdAt, updatedAt pgtype.Timestamptz
+
+	err := s.pool.QueryRow(ctx, query, partitionID, email).Scan(&id, &tenantID, &preferredUsername, &name, &emailVal, &emailVerified, &partID, &createdAt, &updatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("user profile not found for email %s: %w", email, port.ErrUserProfileNotFound)
+		}
+		return nil, fmt.Errorf("find user profile by email: %w", err)
+	}
+
+	parsedID, err := pgUUIDToUUID(id)
+	if err != nil {
+		return nil, err
+	}
+	parsedTenantID, err := pgUUIDToUUID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	parsedCreatedAt, err := pgTimestamptzToTime(createdAt)
+	if err != nil {
+		return nil, err
+	}
+	parsedUpdatedAt, err := pgTimestamptzToTime(updatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.UserProfile{
+		ID:                parsedID,
+		TenantID:          parsedTenantID,
+		PreferredUsername: preferredUsername,
+		Name:              name,
+		Email:             emailVal,
+		EmailVerified:     emailVerified,
+		PartitionID:       partID,
+		CreatedAt:         parsedCreatedAt,
+		UpdatedAt:         parsedUpdatedAt,
 	}, nil
 }
 
@@ -1297,36 +1422,11 @@ func (s *PostgresStorage) GetIdentityProviders(ctx context.Context, tenantID uui
 
 	var providers []model.IdentityProvider
 	for rows.Next() {
-		var id pgtype.UUID
-		var idpType string
-		var enabled bool
-		var aliasName string
-		var configJSON []byte
-		var name string
-		var partitionID int64
-		var createdAt, updatedAt pgtype.Timestamptz
-		if err := rows.Scan(&id, &idpType, &enabled, &aliasName, &configJSON, &name, &partitionID, &createdAt, &updatedAt); err != nil {
+		p, err := scanIdentityProviderRow(rows, tenantID)
+		if err != nil {
 			return nil, err
 		}
-		parsedID, _ := pgUUIDToUUID(id)
-		parsedCreatedAt, _ := pgTimestamptzToTime(createdAt)
-		parsedUpdatedAt, _ := pgTimestamptzToTime(updatedAt)
-		var config model.IdentityProviderConfig
-		if len(configJSON) > 0 {
-			_ = json.Unmarshal(configJSON, &config)
-		}
-		providers = append(providers, model.IdentityProvider{
-			ID:          parsedID,
-			TenantID:    tenantID,
-			IDPType:     idpType,
-			Enabled:     enabled,
-			Alias:       aliasName,
-			Name:        name,
-			PartitionID: partitionID,
-			Config:      config,
-			CreatedAt:   parsedCreatedAt,
-			UpdatedAt:   parsedUpdatedAt,
-		})
+		providers = append(providers, p)
 	}
 	return providers, nil
 }

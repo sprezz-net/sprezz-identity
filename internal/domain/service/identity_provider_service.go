@@ -101,7 +101,7 @@ func (s *IdentityProviderService) AuthenticateUsernamePassword(ctx context.Conte
 		return nil, fmt.Errorf("identity provider %s is not configured for tenant", model.UsernamePasswordIDPType)
 	}
 
-	profile, err := s.storage.GetUserProfileByIdentifier(ctx, tenantID, provider.ID, username)
+	profile, err := s.storage.GetUserProfileByIdentifier(ctx, tenantID, resolvedPartitionID, provider.ID, username)
 	if err != nil {
 		return nil, errors.New("invalid username or password")
 	}
