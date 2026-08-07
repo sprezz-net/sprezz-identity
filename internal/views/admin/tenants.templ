@@ -82,13 +82,12 @@ templ TenantsContent(props TenantsPageProps) {
 				<!-- Left: Tenant list -->
 				<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
 					<div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-						<h3 class="font-bold text-gray-800">System Tenants</h3>
 						<button
 							hx-get="/admin/tenants/new?modal=true"
 							hx-target="#modal-container"
 							class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm"
 						>
-							+ Create Tenant
+							+ Add Tenant
 						</button>
 					</div>
 					<div class="overflow-x-auto">

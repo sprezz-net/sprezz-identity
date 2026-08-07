@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
@@ -392,5 +393,78 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_Failure(t *testing
 	_, err := service.AuthenticateUsernamePassword(context.Background(), tenantID, 0, "john_doe", "WrongPass")
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestNormalizeFederatedClaims(t *testing.T) {
+	tests := []struct {
+		name        string
+		upstreamAMR []string
+		upstreamACR string
+		defaultAAL  int
+		acrToAalMap map[string]int
+		amrToAalMap map[string]int
+		want        SprezzAssuranceClaims
+	}{
+		{
+			name:        "Fallback Baseline Single-Factor",
+			upstreamAMR: []string{"pwd"},
+			upstreamACR: "",
+			defaultAAL:  1,
+			want: SprezzAssuranceClaims{
+				AMR: []string{"federated"},
+				ACR: "urn:sprezz:assurance:aal1",
+			},
+		},
+		{
+			name:        "Standard Entra ID MFA Auto-Detection",
+			upstreamAMR: []string{"pwd", "mfa"},
+			upstreamACR: "",
+			defaultAAL:  1,
+			want: SprezzAssuranceClaims{
+				AMR: []string{"federated", "mfa"},
+				ACR: "urn:sprezz:assurance:aal2",
+			},
+		},
+		{
+			name:        "Biometric Fingerprint (fpt) maps to AAL2 by default spec",
+			upstreamAMR: []string{"pwd", "fpt"},
+			upstreamACR: "",
+			defaultAAL:  1,
+			want: SprezzAssuranceClaims{
+				AMR: []string{"federated", "mfa"},
+				ACR: "urn:sprezz:assurance:aal2",
+			},
+		},
+		{
+			name:        "Smartcard (sc) escalates to AAL3 via fallback spec",
+			upstreamAMR: []string{"sc"},
+			upstreamACR: "",
+			defaultAAL:  1,
+			want: SprezzAssuranceClaims{
+				AMR: []string{"federated", "hwk"},
+				ACR: "urn:sprezz:assurance:aal3",
+			},
+		},
+		{
+			name:        "Custom Administrative AMR grid override takes precedent",
+			upstreamAMR: []string{"pwd", "proprietary_code"},
+			upstreamACR: "",
+			defaultAAL:  1,
+			amrToAalMap: map[string]int{"proprietary_code": 3},
+			want: SprezzAssuranceClaims{
+				AMR: []string{"federated", "hwk"},
+				ACR: "urn:sprezz:assurance:aal3",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NormalizeFederatedClaims(tt.upstreamAMR, tt.upstreamACR, tt.defaultAAL, tt.acrToAalMap, tt.amrToAalMap)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NormalizeFederatedClaims() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

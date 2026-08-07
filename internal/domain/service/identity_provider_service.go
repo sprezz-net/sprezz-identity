@@ -2,12 +2,17 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"time"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
+	"sprezz-identity/internal/pkg/httpclient"
 
 	"github.com/alexedwards/argon2id"
 	"github.com/google/uuid"
@@ -302,4 +307,149 @@ func (s *IdentityProviderService) UpdateIdentityProvider(ctx context.Context, te
 	}
 
 	return &provider, nil
+}
+
+func (s *IdentityProviderService) DiscoverOIDC(ctx context.Context, endpoint string) (string, error) {
+	if endpoint == "" {
+		return "", errors.New("discovery endpoint is required")
+	}
+	client := httpclient.New()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", fmt.Errorf("create request: %w", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("execute request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("discovery endpoint returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read response: %w", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return "", fmt.Errorf("invalid json response from discovery endpoint: %w", err)
+	}
+
+	return string(body), nil
+}
+
+func (s *IdentityProviderService) ResolveFederatedLevels(config model.IdentityProviderConfig, externalAcr string, externalAmrs []string) (int, int) {
+	ial := config.IAL
+	if ial < 1 {
+		ial = 1
+	}
+
+	highestAAL := 1
+
+	if config.AcrToAAL != nil && externalAcr != "" {
+		if mappedAAL, exists := config.AcrToAAL[externalAcr]; exists && mappedAAL >= 1 && mappedAAL <= 4 {
+			if mappedAAL > highestAAL {
+				highestAAL = mappedAAL
+			}
+		}
+	}
+
+	if config.AmrToAAL != nil {
+		for _, amr := range externalAmrs {
+			if mappedAAL, exists := config.AmrToAAL[amr]; exists && mappedAAL >= 1 && mappedAAL <= 4 {
+				if mappedAAL > highestAAL {
+					highestAAL = mappedAAL
+				}
+			}
+		}
+	}
+
+	return highestAAL, ial
+}
+
+func (s *IdentityProviderService) NormalizeFederatedAmr(reachedAAL int) string {
+	switch reachedAAL {
+	case 2:
+		return "federated mfa"
+	case 3, 4:
+		return "federated hwk"
+	default:
+		return "federated"
+	}
+}
+
+type SprezzAssuranceClaims struct {
+	AMR []string `json:"amr"`
+	ACR string   `json:"acr"`
+}
+
+// NormalizeFederatedClaims translates upstream factors and configuration parameters into Sprezz token standards
+func NormalizeFederatedClaims(upstreamAMR []string, upstreamACR string, defaultAAL int, acrToAalMap map[string]int, amrToAalMap map[string]int) SprezzAssuranceClaims {
+	// 1. Establish initial baseline AAL fallback
+	resolvedAAL := defaultAAL
+	if resolvedAAL < 1 {
+		resolvedAAL = 1 // Safe absolute lower boundary
+	}
+
+	// Lowercase upstream AMR strings for O(1) map matching checks
+	amrMap := make(map[string]bool)
+	for _, val := range upstreamAMR {
+		amrMap[strings.ToLower(strings.TrimSpace(val))] = true
+	}
+
+	// 2. Step A: Check administrative ACR Mapping Grid first (highest priority)
+	if upstreamACR != "" && acrToAalMap != nil {
+		if mappedAAL, exists := acrToAalMap[upstreamACR]; exists && mappedAAL > 0 {
+			resolvedAAL = mappedAAL
+		}
+	}
+
+	// 3. Step B: Evaluate via custom/standard administrative AMR maps
+	if amrToAalMap != nil {
+		highestAMRMapped := 0
+		for factor := range amrMap {
+			if level, exists := amrToAalMap[factor]; exists && level > highestAMRMapped {
+				highestAMRMapped = level
+			}
+		}
+		if highestAMRMapped > 0 {
+			resolvedAAL = highestAMRMapped
+		}
+	}
+
+	// 4. Step C: Hardcoded Spec Fallback (RFC 8176) if no explicit custom admin map hit
+	if (upstreamACR == "" || acrToAalMap[upstreamACR] == 0) && len(amrToAalMap) == 0 {
+		// Evaluate strict Level 3 Hardware isolation
+		if amrMap["hwk"] || amrMap["fido"] || amrMap["userpresence"] || amrMap["sc"] {
+			resolvedAAL = 3
+		} else if amrMap["mfa"] || amrMap["otp"] || amrMap["sms"] || amrMap["pin"] ||
+			amrMap["face"] || amrMap["fpt"] || amrMap["swk"] || amrMap["pop"] || amrMap["user"] {
+			// Standard Multi-factor / Cryptographic software context
+			resolvedAAL = 2
+		}
+	}
+
+	// 5. Compile Outbound Token Claims Structure
+	var outboundAMR []string
+	var outboundACR string
+
+	switch resolvedAAL {
+	case 3:
+		outboundAMR = []string{"federated", "hwk"}
+		outboundACR = "urn:sprezz:assurance:aal3"
+	case 2:
+		outboundAMR = []string{"federated", "mfa"}
+		outboundACR = "urn:sprezz:assurance:aal2"
+	default:
+		outboundAMR = []string{"federated"}
+		outboundACR = "urn:sprezz:assurance:aal1"
+	}
+
+	return SprezzAssuranceClaims{
+		AMR: outboundAMR,
+		ACR: outboundACR,
+	}
 }

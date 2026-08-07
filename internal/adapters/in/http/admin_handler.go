@@ -898,6 +898,21 @@ func (h *HttpAdapter) adminEditIDPForm(w http.ResponseWriter, r *http.Request) {
 	_ = component.Render(r.Context(), w)
 }
 
+func (h *HttpAdapter) adminDiscoverIDP(w http.ResponseWriter, r *http.Request) {
+	urlStr := r.URL.Query().Get("url")
+	if urlStr == "" {
+		http.Error(w, "missing url parameter", http.StatusBadRequest)
+		return
+	}
+	result, err := h.idpService.DiscoverOIDC(r.Context(), urlStr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(result))
+}
+
 func (h *HttpAdapter) hasDuplicateUsernamePasswordIDP(r *http.Request, tenantID uuid.UUID, idpUUID uuid.UUID, isEdit bool) bool {
 	existing, err := h.idpService.GetIdentityProviders(r.Context(), tenantID)
 	if err != nil {
@@ -911,15 +926,48 @@ func (h *HttpAdapter) hasDuplicateUsernamePasswordIDP(r *http.Request, tenantID 
 	return false
 }
 
+func parseFormSlice(form url.Values, key string) []string {
+	vals := form[key]
+	var result []string
+	for _, val := range vals {
+		val = strings.TrimSpace(val)
+		if val == "" {
+			continue
+		}
+		if strings.Contains(val, ",") {
+			parts := strings.Split(val, ",")
+			for _, part := range parts {
+				p := strings.TrimSpace(part)
+				if p != "" {
+					result = append(result, p)
+				}
+			}
+		} else {
+			result = append(result, val)
+		}
+	}
+	if result == nil {
+		return []string{}
+	}
+	return result
+}
+
 func (h *HttpAdapter) adminSaveIDP(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
 	id := r.FormValue("id")
 	idpType := r.FormValue("idp_type")
 	alias := r.FormValue("alias")
+	name := r.FormValue("name")
 	enabled := r.FormValue("enabled") == "true"
 	usernameField := r.FormValue("username_field")
 	ialStr := r.FormValue("ial")
 	aalStr := r.FormValue("aal")
+
+	partitionIDStr := r.FormValue("partition_id")
+	var partitionID int64
+	if partitionIDStr != "" {
+		_, _ = fmt.Sscanf(partitionIDStr, "%d", &partitionID)
+	}
 
 	var ial, aal int
 	_, _ = fmt.Sscanf(ialStr, "%d", &ial)
@@ -947,11 +995,13 @@ func (h *HttpAdapter) adminSaveIDP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	provider := model.IdentityProvider{
-		ID:       idpUUID,
-		TenantID: tenant.ID,
-		IDPType:  idpType,
-		Alias:    alias,
-		Enabled:  enabled,
+		ID:          idpUUID,
+		TenantID:    tenant.ID,
+		IDPType:     idpType,
+		Alias:       alias,
+		Name:        name,
+		PartitionID: partitionID,
+		Enabled:     enabled,
 		Config: model.IdentityProviderConfig{
 			UsernameField: usernameField,
 			IAL:           ial,
@@ -959,13 +1009,76 @@ func (h *HttpAdapter) adminSaveIDP(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	if idpType == "oidc" {
+		provider.Config.DiscoveryEndpoint = r.FormValue("discovery_endpoint")
+		provider.Config.Issuer = r.FormValue("issuer")
+		provider.Config.ClientID = r.FormValue("client_id")
+		provider.Config.ClientSecret = r.FormValue("client_secret")
+		provider.Config.AuthenticationMethod = r.FormValue("authentication_method")
+		provider.Config.PkceEnabled = r.FormValue("pkce_enabled") == "true"
+		provider.Config.ParEnabled = r.FormValue("par_enabled") == "true"
+		provider.Config.SLOEnabled = r.FormValue("slo_enabled") == "true"
+		provider.Config.Scopes = parseFormSlice(r.Form, "scopes")
+		provider.Config.Claims = parseFormSlice(r.Form, "claims")
+		provider.Config.ACRValues = parseFormSlice(r.Form, "acr_values")
+		provider.Config.DomainAliases = parseFormSlice(r.Form, "domain_aliases")
+		provider.Config.UserIdentifierClaim = r.FormValue("user_identifier_claim")
+		provider.Config.DiscoveryResult = r.FormValue("discovery_result")
+
+		provider.Config.AcrToAAL = make(map[string]int)
+		for formKey, formValues := range r.Form {
+			if strings.HasPrefix(formKey, "acr_to_aal[") && strings.HasSuffix(formKey, "]") {
+				acrClaim := formKey[len("acr_to_aal[") : len(formKey)-1]
+				if len(formValues) > 0 && formValues[0] != "" {
+					var targetAAL int
+					if _, err := fmt.Sscanf(formValues[0], "%d", &targetAAL); err == nil && targetAAL > 0 {
+						provider.Config.AcrToAAL[acrClaim] = targetAAL
+					}
+				}
+			}
+		}
+
+		provider.Config.AmrToAAL = make(map[string]int)
+		standardAMRs := []string{"pwd", "mfa", "hwk", "otp", "sms"}
+		for _, amr := range standardAMRs {
+			formKey := fmt.Sprintf("amr_to_aal[%s]", amr)
+			if val := r.FormValue(formKey); val != "" {
+				var targetAAL int
+				if _, err := fmt.Sscanf(val, "%d", &targetAAL); err == nil && targetAAL > 0 {
+					provider.Config.AmrToAAL[amr] = targetAAL
+				}
+			}
+		}
+
+		customAMRKeys := r.Form["custom_amr_keys"]
+		customAMRValues := r.Form["custom_amr_values"]
+		if len(customAMRKeys) == len(customAMRValues) {
+			for i, key := range customAMRKeys {
+				trimmedKey := strings.TrimSpace(key)
+				if trimmedKey == "" {
+					continue
+				}
+				var targetAAL int
+				if _, err := fmt.Sscanf(customAMRValues[i], "%d", &targetAAL); err == nil && targetAAL > 0 {
+					provider.Config.AmrToAAL[trimmedKey] = targetAAL
+				}
+			}
+		}
+	}
+
 	if len(errs) > 0 {
+		partitions, err := h.storagePort.GetPartitions(r.Context(), tenant.ID)
+		if err != nil {
+			h.renderError(w, r, http.StatusInternalServerError, err.Error())
+			return
+		}
 		w.Header().Set(contentTypeHeader, contentTypeHtml)
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		component := admin.IDPForm(admin.IDPFormProps{
-			Provider: provider,
-			Errors:   errs,
-			IsEdit:   isEdit,
+			Provider:   provider,
+			Partitions: partitions,
+			Errors:     errs,
+			IsEdit:     isEdit,
 		})
 		_ = component.Render(r.Context(), w)
 		return

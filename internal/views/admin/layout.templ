@@ -3,6 +3,7 @@ package admin
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sprezz-identity/internal/domain/model"
 )
 
@@ -308,6 +309,292 @@ templ AdminLayout(props AdminLayoutProps) {
 					handleIdpChange(count) { this.idpCount = count; },
 					handleRtrChange(checked) { this.enforceRtr = checked; }
 				}));
+
+				Alpine.data('oidcFormManager', (initialIdpType, initialAlias, initialName, initialConfig) => {
+					let cfg = {};
+					try {
+						cfg = JSON.parse(initialConfig) || {};
+					} catch(e) {}
+
+					return {
+						idpType: initialIdpType || 'username-password',
+						alias: initialAlias || '',
+						name: initialName || '',
+
+						discoveryEndpoint: cfg.discovery_endpoint || '',
+						issuer: cfg.issuer || '',
+						discoveryResult: null,
+						discoveryRaw: cfg.discovery_result || '',
+						discoveryError: '',
+						isDiscovering: false,
+
+						clientID: cfg.client_id || '',
+						clientSecret: cfg.client_secret || '',
+						authMethod: cfg.authentication_method || 'client_secret_basic',
+
+						pkceEnabled: !!cfg.pkce_enabled,
+						pkceLocked: false,
+
+						parEnabled: !!cfg.par_enabled,
+						parLocked: false,
+						parEnforced: false,
+
+						sloEnabled: !!cfg.slo_enabled,
+						sloSupported: false,
+
+						selectedScopes: cfg.scopes || [],
+						selectedAcrValues: cfg.acr_values || [],
+						selectedClaims: cfg.claims || [],
+						selectedDomainAliases: cfg.domain_aliases || [],
+						userIdentifierClaim: cfg.user_identifier_claim || 'sub',
+
+						discoveredScopes: [],
+						discoveredAcrValues: [],
+
+						ial: cfg.ial || 1,
+						aal: cfg.aal || 1,
+						acrToAAL: cfg.acr_to_aal || {},
+						amrToAAL: cfg.amr_to_aal && Object.keys(cfg.amr_to_aal).length > 0 ? cfg.amr_to_aal : {
+							pwd: 1,
+							mfa: 2,
+							otp: 2,
+							sms: 2,
+							hwk: 3
+						},
+						customAmrs: Object.keys(cfg.amr_to_aal || {})
+							.filter(k => !['pwd', 'mfa', 'otp', 'sms', 'hwk'].includes(k))
+							.map(k => ({ key: k, value: String(cfg.amr_to_aal[k]) })) || [],
+
+						init() {
+							if (this.discoveryRaw) {
+								try {
+									const result = JSON.parse(this.discoveryRaw);
+									this.applyDiscoveryPayload(result);
+								} catch(e) {}
+							}
+							this.syncComputedRules();
+						},
+
+						handleIdpTypeChange(val) {
+							this.idpType = val;
+							if (val === 'oidc' && !this.alias) {
+								this.alias = 'oidc';
+							}
+						},
+
+						handleAuthMethodChange(val) {
+							this.authMethod = val;
+							this.syncComputedRules();
+						},
+
+						handlePkceChange(checked) {
+							if (!this.pkceLocked) {
+								this.pkceEnabled = checked;
+							}
+						},
+
+						handleParChange(checked) {
+							if (!this.parLocked) {
+								this.parEnabled = checked;
+							}
+						},
+
+						handleSloChange(checked) {
+							this.sloEnabled = checked;
+						},
+
+						toggleScope(scope) {
+							if (this.selectedScopes.includes(scope)) {
+								this.selectedScopes = this.selectedScopes.filter(s => s !== scope);
+							} else {
+								this.selectedScopes.push(scope);
+							}
+						},
+
+						toggleAcr(acr) {
+							if (this.selectedAcrValues.includes(acr)) {
+								this.selectedAcrValues = this.selectedAcrValues.filter(a => a !== acr);
+								delete this.acrToAAL[acr];
+							} else {
+								this.selectedAcrValues.push(acr);
+								this.acrToAAL[acr] = '';
+							}
+						},
+
+						addCustomAmr() {
+							this.customAmrs.push({ key: '', value: '' });
+						},
+
+						removeCustomAmr(index) {
+							this.customAmrs.splice(index, 1);
+						},
+
+						getAcrValuesForLevel(level) {
+							if (!this.discoveryResult || !this.discoveryResult.acr_values_supported) {
+								return [];
+							}
+
+							// Filter out values matching the current tier level block index
+							let filtered = this.discoveryResult.acr_values_supported.filter(acr => {
+								// Your existing structural regex or string-matching rules to allocate levels
+								if (level === 1) return acr.endsWith(':1') || acr.includes('level1') || acr === 'urn:sprezz:assurance:aal1';
+								if (level === 2) return acr.endsWith(':2') || acr.includes('level2') || acr === 'urn:sprezz:assurance:aal2';
+								if (level === 3) return acr.endsWith(':3') || acr.includes('level3') || acr === 'urn:sprezz:assurance:aal3';
+								if (level === 4) return acr.endsWith(':4') || acr.includes('level4') || acr === 'urn:sprezz:assurance:aal4';
+								return checkAcrLevelAllocationRule(acr, level);
+							});
+
+							// Alphabetically sort the resulting array strings for grid-scanning consistency
+							return filtered.sort((a, b) => {
+								let labelA = this.formatAcrLabel(a);
+								let labelB = this.formatAcrLabel(b);
+								return labelA.localeCompare(labelB);
+							});
+						},
+
+						formatAcrLabel(acr) {
+							if (!acr) return '';
+							// Split safely by standard URI/URN delimiters
+							let uriParts = acr.split(/[:/]/).filter(p => {
+								let l = p.trim().toLowerCase();
+								return l !== '' && l !== 'urn' && l !== 'http' && l !== 'https' && l !== 'oidc';
+							});
+							if (uriParts.length === 0) return acr;
+
+							// Slice down to the final two structural segments
+							let activeSegments = uriParts.slice(-2);
+
+							let finalBlocks = activeSegments.map(seg => {
+								// Tokenize internal snake_case text items
+								let subTokens = seg.split('_').filter(t => t.trim() !== '');
+								let cleanTokens = subTokens.map(tok => {
+									let t = tok.trim();
+									if (t.length > 3 && !/\d/.test(t)) {
+										return t.substring(0, 3);
+									}
+									return t;
+								});
+								return cleanTokens.join('_');
+							});
+
+							if (finalBlocks.length === 1) {
+								return finalBlocks[0];
+							}
+							return finalBlocks[0] + ' : ' + finalBlocks[1];
+						},
+
+						discoverEndpoint() {
+							const urlStr = this.discoveryEndpoint.trim();
+							if (!urlStr) {
+								this.discoveryError = 'Please enter a discovery endpoint URL';
+								return;
+							}
+							try {
+								new URL(urlStr);
+							} catch (e) {
+								this.discoveryError = 'Invalid discovery URL format';
+								return;
+							}
+							this.discoveryError = '';
+							this.isDiscovering = true;
+
+							window.fetch('/admin/idps/discover?url=' + encodeURIComponent(urlStr))
+								.then(r => {
+									if (!r.ok) {
+										throw new Error('Failed to fetch well-known configuration');
+									}
+									return r.json();
+								})
+								.then(data => {
+									this.isDiscovering = false;
+									this.discoveryResult = data;
+									this.discoveryRaw = JSON.stringify(data);
+
+									if (data.issuer) {
+										this.issuer = data.issuer;
+									}
+
+									this.applyDiscoveryPayload(data);
+								})
+								.catch(err => {
+									this.isDiscovering = false;
+									this.discoveryError = err.message || 'Failed to discover provider metadata';
+								});
+						},
+
+						applyDiscoveryPayload(data) {
+							this.discoveryResult = data;
+
+							if (data.scopes_supported) {
+								this.discoveredScopes = data.scopes_supported;
+							} else {
+								this.discoveredScopes = ['openid', 'profile', 'email', 'offline_access'];
+							}
+
+							if (data.acr_values_supported) {
+								this.discoveredAcrValues = data.acr_values_supported;
+							} else {
+								this.discoveredAcrValues = [];
+							}
+
+							const supportedAuth = data.token_endpoint_auth_methods_supported || [];
+							if (supportedAuth.length > 0 && !supportedAuth.includes(this.authMethod)) {
+								if (supportedAuth.includes('client_secret_basic')) {
+									this.authMethod = 'client_secret_basic';
+								} else if (supportedAuth.includes('client_secret_post')) {
+									this.authMethod = 'client_secret_post';
+								} else if (supportedAuth.includes('none')) {
+									this.authMethod = 'none';
+								} else {
+									this.authMethod = supportedAuth[0];
+								}
+							}
+
+							this.syncComputedRules();
+						},
+
+						syncComputedRules() {
+							let codeChallengeSupported = false;
+							if (this.discoveryResult && this.discoveryResult.code_challenge_methods_supported) {
+								codeChallengeSupported = this.discoveryResult.code_challenge_methods_supported.includes('S256');
+							}
+
+							if (this.authMethod === 'none') {
+								this.pkceEnabled = true;
+								this.pkceLocked = true;
+							} else {
+								this.pkceLocked = !codeChallengeSupported;
+								if (this.pkceLocked) {
+									this.pkceEnabled = codeChallengeSupported;
+								}
+							}
+
+							let parSupported = false;
+							if (this.discoveryResult && this.discoveryResult.pushed_authorization_request_endpoint) {
+								parSupported = true;
+							}
+
+							if (this.discoveryResult && this.discoveryResult.require_pushed_authorization_requests === true) {
+								this.parEnabled = true;
+								this.parLocked = true;
+								this.parEnforced = true;
+							} else {
+								this.parLocked = !parSupported;
+								this.parEnforced = false;
+								if (this.parLocked) {
+									this.parEnabled = false;
+								}
+							}
+
+							this.sloSupported = false;
+							if (this.discoveryResult) {
+								if (this.discoveryResult.end_session_endpoint || this.discoveryResult.backchannel_logout_supported === true) {
+									this.sloSupported = true;
+								}
+							}
+						}
+					};
+				});
 
 				Alpine.data('idpRouter', (initialAllowed, availablePool, initialDefaultIdp) => ({
 					allowedIds: initialAllowed || [],
@@ -707,7 +994,7 @@ templ Modal(title, fetchUrl string) {
 		@keydown.escape.window="close()"
 	>
 		<div
-			class="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col transform transition-all"
+			class={ "bg-white rounded-xl shadow-xl w-full overflow-hidden flex flex-col transform transition-all", templ.KV("max-w-4xl", strings.Contains(fetchUrl, "/idps")), templ.KV("max-w-lg", !strings.Contains(fetchUrl, "/idps")) }
 			x-transition:enter="transition ease-out duration-200"
 			x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
 			x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"

@@ -208,6 +208,7 @@ func (h *HttpAdapter) registerRoutes() {
 		r.Delete("/clients/{id}", h.adminDeleteClient)
 
 		r.Get("/idps", h.adminIDPsPage)
+		r.Get("/idps/discover", h.adminDiscoverIDP)
 		r.Get("/idps/new", h.adminNewIDPForm)
 		r.Get("/idps/edit", h.adminEditIDPForm)
 		r.Post("/idps", h.adminSaveIDP)

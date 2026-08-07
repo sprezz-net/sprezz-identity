@@ -23,13 +23,12 @@ templ ClientsContent(props ClientsPageProps) {
 
 		<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
 			<div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-				<h3 class="font-bold text-gray-800">OIDC Applications</h3>
 				<button
 					hx-get="/admin/clients/new?modal=true"
 					hx-target="#modal-container"
 					class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm"
 				>
-					+ New Application
+					+ Add Application
 				</button>
 			</div>
 			<div class="overflow-x-auto">
@@ -148,6 +147,14 @@ templ ClientIdentitySection(props ClientFormProps) {
 
 		@InputField("Application Name", "client_name", "text", props.Client.ClientName, props.Errors["client_name"])
 
+		<div>
+			<label class="block text-sm font-medium text-slate-700 mb-1">Application Type</label>
+			<select name="client_type" x-model="clientType" @change="handleClientType($el.value)" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+				<option value="confidential">Confidential (Web Apps / Servers)</option>
+				<option value="public">Public (Native / Single Page Apps)</option>
+			</select>
+		</div>
+
 		if props.IsEdit {
 			<input type="hidden" name="id" value={ props.Client.ID }/>
 			<input type="hidden" name="client_id" value={ props.Client.ClientID }/>
@@ -163,7 +170,7 @@ templ ClientIdentitySection(props ClientFormProps) {
 						type="text"
 						name="client_id"
 						x-model="value"
-						placeholder="Enter custom Client ID or generate one"
+						placeholder="Enter Client ID or generate one"
 						pattern="^[a-zA-Z0-9\-_\.~]+$"
 						title="Only RFC 3986 unreserved characters allowed (A-Z, a-z, 0-9, -, _, ., ~)"
 						class="flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono"
@@ -174,20 +181,12 @@ templ ClientIdentitySection(props ClientFormProps) {
 						@click="generate()"
 						class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm font-semibold transition cursor-pointer"
 					>
-						Generate ID
+						Generate
 					</button>
 				</div>
 				<p class="text-xs text-slate-500 mt-1">Unique identifier. Restricted to unreserved characters (RFC 3986 Section 2.3).</p>
 			</div>
 		}
-
-		<div>
-			<label class="block text-sm font-medium text-slate-700 mb-1">Client Type</label>
-			<select name="client_type" x-model="clientType" @change="handleClientType($el.value)" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-				<option value="confidential">Confidential (Web Apps / Servers)</option>
-				<option value="public">Public (Native / Single Page Apps)</option>
-			</select>
-		</div>
 
 		<!-- Client Secret (Only visible for Confidential) -->
 		<div x-show="clientType === 'confidential'" x-transition class="pt-2">
@@ -201,14 +200,14 @@ templ ClientIdentitySection(props ClientFormProps) {
 				</div>
 			} else {
 				<div x-data="idSecretGenerator('')">
-					<label class="block text-sm font-medium text-slate-700 mb-1">Initial Client Secret</label>
+					<label class="block text-sm font-medium text-slate-700 mb-1">Client Secret</label>
 					<div class="flex space-x-2">
 						<div class="relative flex-1">
 							<input
 								:type="showSecret ? 'text' : 'password'"
 								name="client_secret"
 								x-model="value"
-								placeholder="Enter custom secret or generate one"
+								placeholder="Enter Client Secret or generate one"
 								pattern="^[a-zA-Z0-9\-_\.~]+$"
 								title="Only RFC 3986 unreserved characters allowed (A-Z, a-z, 0-9, -, _, ., ~)"
 								class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono"
@@ -270,7 +269,7 @@ templ ClientGrantTypesSection() {
 templ ClientSecuritySection(props ClientFormProps) {
 	<div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-6">
 		@TagListManager(TagManagerProps{
-			Label:       "OAuth Scopes",
+			Label:       "Scopes",
 			InputName:   "scopes",
 			InitialTags: props.Client.AllowedScopes,
 			Placeholder: "e.g. read:orders",
@@ -279,7 +278,7 @@ templ ClientSecuritySection(props ClientFormProps) {
 		})
 
 		@TagListManager(TagManagerProps{
-			Label:       "Token Audiences (aud)",
+			Label:       "Audiences",
 			InputName:   "audiences",
 			InitialTags: props.Client.AllowedAudiences,
 			Placeholder: "e.g. https://example.com",
@@ -420,6 +419,10 @@ templ ClientIdpRoutingSection(props ClientFormProps) {
 				}
 			</div>
 		</div>
+		<!-- Guard Warning -->
+		<div x-show="isInvalidState" x-transition class="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg font-medium">
+			⚠️ Attention: You must select at least one Identity Provider (or Local Accounts) to save changes.
+		</div>
 
 		<!-- Dynamic Dropdown Filter -->
 		<div class="space-y-2 max-w-md pt-4 border-t border-gray-100">
@@ -435,11 +438,6 @@ templ ClientIdpRoutingSection(props ClientFormProps) {
 					<option :value="item.id" x-text="item.name" :selected="item.id === defaultId"></option>
 				</template>
 			</select>
-		</div>
-
-		<!-- Guard Warning -->
-		<div x-show="isInvalidState" x-transition class="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg font-medium">
-			⚠️ Attention: You must select at least one Identity Provider (or Local Accounts) to save changes.
 		</div>
 	</div>
 }
