@@ -3,62 +3,8 @@ package admin
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sprezz-identity/internal/domain/model"
 )
-
-func cleanAcrLabel(acr string) string {
-	if acr == "" {
-		return ""
-	}
-	// Split by standard URI/URN delimiters
-	var uriParts []string
-	for _, p := range strings.FieldsFunc(acr, func(r rune) bool { return r == ':' || r == '/' }) {
-		trimmed := strings.TrimSpace(p)
-		if trimmed != "" {
-			// Skip generic top-level protocol namespaces
-			l := strings.ToLower(trimmed)
-			if l == "urn" || l == "http" || l == "https" || l == "oidc" {
-				continue
-			}
-			uriParts = append(uriParts, trimmed)
-		}
-	}
-	if len(uriParts) == 0 {
-		return acr
-	}
-
-	// Process up to the final two active URI segments
-	startIdx := 0
-	if len(uriParts) > 2 {
-		startIdx = len(uriParts) - 2
-	}
-	activeSegments := uriParts[startIdx:]
-
-	var finalBlocks []string
-	for _, seg := range activeSegments {
-		// Split sub-tokens by underscores to protect internal text compounds
-		subTokens := strings.Split(seg, "_")
-		var cleanTokens []string
-		for _, tok := range subTokens {
-			t := strings.TrimSpace(tok)
-			if t == "" {
-				continue
-			}
-			// Semicolons guard numeric parameters; slice text components to 3 characters
-			if len(t) > 3 && !strings.ContainsAny(t, "0123456789") {
-				t = t[:3]
-			}
-			cleanTokens = append(cleanTokens, t)
-		}
-		finalBlocks = append(finalBlocks, strings.Join(cleanTokens, "_"))
-	}
-
-	if len(finalBlocks) == 1 {
-		return finalBlocks[0]
-	}
-	return fmt.Sprintf("%s : %s", finalBlocks[0], finalBlocks[1])
-}
 
 type IDPsPageProps struct {
 	ActiveTenant      model.Tenant
@@ -424,20 +370,20 @@ templ IDPForm(props IDPFormProps) {
 
 			<!-- Authentication Level Matrix Selector -->
 			<div class="mt-4">
-				<label class="block text-xs font-bold text-slate-500 mb-1.5">Requested Authentication Levels (ACR) and Mapping</label>
+				<label class="block text-xs font-bold text-slate-500 mb-1.5">Requested Authentication Levels (ACR)</label>
 				<template x-for="acr in selectedAcrValues" :key="acr">
 					<input type="hidden" name="acr_values" :value="acr" />
 				</template>
-				<div class="grid grid-cols-1 sm:grid-cols-4 gap-4 p-4 border border-slate-200 bg-slate-50 rounded-xl">
+				<div class="grid grid-cols-1 sm:grid-cols-4 gap-4 p-4 border border-slate-200 bg-slate-50 rounded-xl items-stretch min-h-[240px]">
 					<!-- Level 1 -->
 					<div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full">
-						<span class="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">Map to Level 1 (Low)</span>
-						<div class="flex-1 flex flex-col gap-1.5 overflow-y-auto max-h-36">
+						<span class="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">Map to AAL 1 (Low)</span>
+						<div class="w-full h-40 space-y-1.5 overflow-y-auto pr-0.5">
 							<template x-for="acr in getAcrValuesForLevel(1)" :key="acr">
 								<button
 									type="button"
 									@click="toggleAcr(acr)"
-									class="px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer"
+									class="w-full h-7 flex items-center px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer"
 									:class="selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'"
 									:title="acr"
 								>
@@ -452,13 +398,13 @@ templ IDPForm(props IDPFormProps) {
 
 					<!-- Level 2 -->
 					<div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full">
-						<span class="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">Map to Level 2 (Medium)</span>
-						<div class="flex-1 flex flex-col gap-1.5 overflow-y-auto max-h-36">
+						<span class="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">Map to AAL 2 (Medium)</span>
+						<div class="w-full h-40 space-y-1.5 overflow-y-auto pr-0.5">
 							<template x-for="acr in getAcrValuesForLevel(2)" :key="acr">
 								<button
 									type="button"
 									@click="toggleAcr(acr)"
-									class="px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer"
+									class="w-full h-7 flex items-center px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer"
 									:class="selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'"
 									:title="acr"
 								>
@@ -473,13 +419,13 @@ templ IDPForm(props IDPFormProps) {
 
 					<!-- Level 3 -->
 					<div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full">
-						<span class="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">Map to Level 3 (High)</span>
-						<div class="flex-1 flex flex-col gap-1.5 overflow-y-auto max-h-36">
+						<span class="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">Map to AAL 3 (High)</span>
+						<div class="w-full h-40 space-y-1.5 overflow-y-auto pr-0.5">
 							<template x-for="acr in getAcrValuesForLevel(3)" :key="acr">
 								<button
 									type="button"
 									@click="toggleAcr(acr)"
-									class="px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer"
+									class="w-full h-7 flex items-center px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer"
 									:class="selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'"
 									:title="acr"
 								>
@@ -492,22 +438,22 @@ templ IDPForm(props IDPFormProps) {
 						</div>
 					</div>
 
-					<!-- Level 4 / Custom -->
+					<!-- Unmapped -->
 					<div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full">
-						<span class="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">Map to Level 4</span>
-						<div class="flex-1 flex flex-col gap-1.5 overflow-y-auto max-h-36">
-							<template x-for="acr in getAcrValuesForLevel(4)" :key="acr">
+						<span class="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">Unmapped</span>
+						<div class="w-full h-40 space-y-1.5 overflow-y-auto pr-0.5">
+							<template x-for="acr in getAcrValuesForLevel(0)" :key="acr">
 								<button
 									type="button"
 									@click="toggleAcr(acr)"
-									class="px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer"
+									class="w-full h-7 flex items-center px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer"
 									:class="selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'"
 									:title="acr"
 								>
 									<span x-text="formatAcrLabel(acr)"></span>
 								</button>
 							</template>
-							<template x-if="getAcrValuesForLevel(4).length === 0">
+							<template x-if="getAcrValuesForLevel(0).length === 0">
 								<span class="text-[10px] text-slate-400 italic">None</span>
 							</template>
 						</div>
@@ -518,47 +464,89 @@ templ IDPForm(props IDPFormProps) {
 
 		<!-- Assurance Levels & Security Factor Mapping Card -->
 		<div x-show="idpType === 'oidc' && issuer" class="space-y-6 border-t border-slate-200 pt-5" style="display: none;">
-			<h4 class="text-sm font-bold text-slate-800 uppercase tracking-wide">Assurance Levels & Security Mapping</h4>
+			<h4 class="text-sm font-bold text-slate-800 uppercase tracking-wide">Assurance Levels & System Mapping</h4>
 			<p class="text-xs text-slate-500">Translate incoming external federated token contexts into internal security metrics.</p>
 
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 				<div>
-					<label class="block text-xs font-bold text-slate-500 mb-1">Identity Assurance Level (IAL)</label>
-					<select name="ial" x-model="ial" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-xs">
-						<option value="1">IAL 1 (Self-asserted)</option>
-						<option value="2">IAL 2 (Remote Verified)</option>
-						<option value="3">IAL 3 (In-person Verified)</option>
-						<option value="4">IAL 4 (High-Trust Verified)</option>
+					<label class="block text-xs font-bold text-slate-500 mb-1">Fallback Authentication Assurance Level (AAL)</label>
+					<select name="aal" x-model="aal" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-xs">
+						<option value="1">AAL 1 (Single Factor)</option>
+						<option value="2">AAL 2 (Multi Factor)</option>
+						<option value="3">AAL 3 (High Security)</option>
 					</select>
 				</div>
 				<div>
-					<label class="block text-xs font-bold text-slate-500 mb-1">Unmapped Authentication Assurance Level (AAL)</label>
-					<select name="aal" x-model="aal" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-xs">
-						<option value="1">AAL 1 (Password Fallback)</option>
-						<option value="2">AAL 2 (MFA Fallback)</option>
-						<option value="3">AAL 3 (Hardware Fallback)</option>
-						<option value="4">AAL 4 (High-Isolation Fallback)</option>
+					<label class="block text-xs font-bold text-slate-500 mb-1">Fallback Identity Assurance Level (IAL)</label>
+					<select name="ial" x-model="ial" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-xs">
+						<option value="1">IAL 1 (Self-asserted)</option>
+						<option value="2">IAL 2 (Verified)</option>
+						<option value="3">IAL 3 (High-Trust Verified)</option>
 					</select>
 				</div>
 			</div>
+
+			<!-- Dynamic Tuple Processing Matrix Grid Interface -->
 			<div class="pt-4 border-t border-slate-100" x-show="selectedAcrValues.length > 0">
-				<h5 class="text-xs font-bold text-slate-500 mb-2">Dynamic ACR-to-AAL Mapping Grid</h5>
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-4 border border-slate-200 rounded-xl max-h-48 overflow-y-auto">
-					<template x-for="acr in selectedAcrValues" :key="acr">
-						<div class="flex items-center justify-between gap-4 py-1.5 border-b border-slate-200 last:border-0">
-							<span class="font-mono text-xs text-slate-700 truncate" x-text="formatAcrLabel(acr)"></span>
-							<div class="flex items-center gap-2">
-								<input type="hidden" :name="'acr_to_aal[' + acr + ']'" :value="acrToAAL[acr] || '1'" />
-								<select :value="acrToAAL[acr] || '1'" @change="acrToAAL[acr] = $el.value" class="px-2 py-1 text-xs border border-slate-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500">
-									<option value="1">AAL 1</option>
-									<option value="2">AAL 2</option>
-									<option value="3">AAL 3</option>
-								</select>
+				<h5 class="text-xs font-bold text-slate-500 mb-3">ACR Value Mapping Matrix (AAL & IAL system mappings)</h5>
+
+				<div class="bg-slate-50 p-4 border border-slate-200 rounded-xl space-y-2">
+					<!-- Static Header Row: Clears out repetitive inline label junk -->
+					<div class="hidden sm:flex items-center gap-4 px-3 pb-1 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+						<div class="flex-1">Upstream ACR Claim</div>
+						<div class="w-40 text-left pl-1">AAL System Assignment</div>
+						<div class="w-40 text-left pl-1">IAL System Assignment</div>
+					</div>
+
+					<!-- Scrollable Row Loop Container -->
+					<div class="max-h-64 overflow-y-auto space-y-2 pr-1">
+						<template x-for="acr in selectedAcrValues" :key="acr">
+							<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-2 bg-white px-3 rounded-lg border border-slate-200/60 shadow-sm hover:border-slate-300/80 transition-colors">
+
+								<!-- Left Column: Raw clean text block -->
+								<div class="flex-1 min-w-0 flex flex-col justify-center">
+									<span class="font-mono text-xs font-bold text-slate-800 truncate" x-text="formatAcrLabel(acr)"></span>
+									<span class="text-[9px] text-slate-400 font-mono truncate mt-0.5" :title="acr" x-text="acr"></span>
+								</div>
+
+								<!-- Right Configuration Dropdown Selectors Grid Row -->
+								<div class="flex items-center gap-4 flex-shrink-0">
+									<!-- AAL Field -->
+									<div class="w-40">
+										<input type="hidden" :name="'acr_to_tuple[' + acr + '][aal]'" :value="acrToTuple[acr] ? acrToTuple[acr].aal : '0'" />
+										<select
+											:value="acrToTuple[acr] ? acrToTuple[acr].aal : '0'"
+											@change="if(!acrToTuple[acr]) acrToTuple[acr] = {aal:'0', ial:'0'}; acrToTuple[acr].aal = $el.value"
+											class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-md bg-white font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm cursor-pointer"
+										>
+											<option value="0">Unmapped</option>
+											<option value="1">AAL 1</option>
+											<option value="2">AAL 2</option>
+											<option value="3">AAL 3</option>
+										</select>
+									</div>
+
+									<!-- IAL Field -->
+									<div class="w-40">
+										<input type="hidden" :name="'acr_to_tuple[' + acr + '][ial]'" :value="acrToTuple[acr] ? acrToTuple[acr].ial : '0'" />
+										<select
+											:value="acrToTuple[acr] ? acrToTuple[acr].ial : '0'"
+											@change="if(!acrToTuple[acr]) acrToTuple[acr] = {aal:'0', ial:'0'}; acrToTuple[acr].ial = $el.value"
+											class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-md bg-white font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm cursor-pointer"
+										>
+											<option value="0">Unmapped</option>
+											<option value="1">IAL 1</option>
+											<option value="2">IAL 2</option>
+											<option value="3">IAL 3</option>
+										</select>
+									</div>
+								</div>
 							</div>
-						</div>
-					</template>
+						</template>
+					</div>
 				</div>
 			</div>
+
 			<div class="pt-4 border-t border-slate-100">
 				<h5 class="text-xs font-bold text-slate-500 mb-2">Standard AMR Mappings</h5>
 				<div class="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-slate-50 p-3 border border-slate-200 rounded-xl">

@@ -353,25 +353,51 @@ templ AdminLayout(props AdminLayoutProps) {
 
 						ial: cfg.ial || 1,
 						aal: cfg.aal || 1,
-						acrToAAL: cfg.acr_to_aal || {},
+
+						// Advanced Multi-Dimensional Mapping Grid Store
+						// Schema: { "raw_acr": { aal: number, ial: number } }
+						acrToTuple: cfg.acr_to_tuple || {},
+
 						amrToAAL: cfg.amr_to_aal && Object.keys(cfg.amr_to_aal).length > 0 ? cfg.amr_to_aal : {
-							pwd: 1,
-							mfa: 2,
-							otp: 2,
-							sms: 2,
-							hwk: 3
+							pwd: 1, mfa: 2, otp: 2, sms: 2, hwk: 3
 						},
 						customAmrs: Object.keys(cfg.amr_to_aal || {})
 							.filter(k => !['pwd', 'mfa', 'otp', 'sms', 'hwk'].includes(k))
 							.map(k => ({ key: k, value: String(cfg.amr_to_aal[k]) })) || [],
 
-						init() {
+							init() {
 							if (this.discoveryRaw) {
 								try {
 									const result = JSON.parse(this.discoveryRaw);
 									this.applyDiscoveryPayload(result);
 								} catch(e) {}
 							}
+
+							// 1. Enforce strict Type-Sanitization on stored configurations
+							if (this.acrToTuple) {
+								Object.keys(this.acrToTuple).forEach(key => {
+									if (this.acrToTuple[key]) {
+										this.acrToTuple[key].aal = String(this.acrToTuple[key].aal ?? '0');
+										this.acrToTuple[key].ial = String(this.acrToTuple[key].ial ?? '0');
+									}
+								});
+							} else {
+								this.acrToTuple = {};
+							}
+
+							// 2. Prefill tuple configurations cleanly for any remaining elements
+							if (this.selectedAcrValues && this.selectedAcrValues.length > 0) {
+								this.selectedAcrValues.forEach(acr => {
+									if (!this.acrToTuple[acr]) {
+										let meta = this.resolveAcrMetadata(acr);
+										this.acrToTuple[acr] = {
+											aal: String(meta.aal),
+											ial: String(meta.ial)
+										};
+									}
+								});
+							}
+
 							this.syncComputedRules();
 						},
 
@@ -414,10 +440,22 @@ templ AdminLayout(props AdminLayoutProps) {
 						toggleAcr(acr) {
 							if (this.selectedAcrValues.includes(acr)) {
 								this.selectedAcrValues = this.selectedAcrValues.filter(a => a !== acr);
-								delete this.acrToAAL[acr];
+								if (this.acrToTuple && this.acrToTuple[acr]) {
+									delete this.acrToTuple[acr];
+								}
 							} else {
 								this.selectedAcrValues.push(acr);
-								this.acrToAAL[acr] = '';
+
+								if (!this.acrToTuple) {
+									this.acrToTuple = {};
+								}
+
+								// Resolve suggestions and mount immediately as String values to prevent select dropouts
+								let meta = this.resolveAcrMetadata(acr);
+								this.acrToTuple[acr] = {
+									aal: String(meta.aal),
+									ial: String(meta.ial)
+								};
 							}
 						},
 
@@ -429,58 +467,77 @@ templ AdminLayout(props AdminLayoutProps) {
 							this.customAmrs.splice(index, 1);
 						},
 
-						getAcrValuesForLevel(level) {
+						resolveAcrMetadata(acr) {
+							if (!acr) return { label: '', aal: 0, ial: 0 };
+
+							let lower = acr.toLowerCase();
+							const replacements = [
+								{ old: 'authentication_level', new: 'aal' },
+								{ old: 'identification_level', new: 'ial' },
+								{ old: 'authentication', new: 'auth' },
+								{ old: 'identification', new: 'iden' },
+								{ old: 'username-password', new: 'pwd' },
+								{ old: 'password', new: 'pwd' },
+								{ old: 'multifactor', new: 'mfa' },
+								{ old: 'one_factor', new: '1fa' },
+								{ old: 'two_factor', new: '2fa' }
+							];
+
+							replacements.forEach(r => {
+								lower = lower.split(r.old).join(r.new);
+							});
+
+							// Extract Right-Most 11 Characters for the Display Tag
+							let label = lower;
+							if (lower.length > 11) {
+								label = lower.substring(lower.length - 11);
+							}
+
+							// Determine Security Buckets
+							let aal = 0;
+							let ial = 0;
+
+							// Evaluate AAL metrics
+							if (lower.includes('aal:3') || lower.includes('aal3') || lower.includes('aal:4') || lower.includes('aal4') || lower.includes('loa-3')) {
+								aal = 3;
+							} else if (lower.includes('aal:2') || lower.includes('aal2') || lower.includes('mfa') || lower.includes('2fa') || lower.includes('loa-2')) {
+								aal = 2;
+							} else if (lower.includes('aal:1') || lower.includes('aal1') || lower.includes('pwd') || lower.includes('1fa') || lower.includes('loa-1')) {
+								aal = 1;
+							}
+
+							// Evaluate IAL metrics
+							if (lower.includes('ial:3') || lower.includes('ial3') || lower.includes('ial:4') || lower.includes('ial4')) {
+								ial = 3;
+							} else if (lower.includes('ial:2') || lower.includes('ial2')) {
+								ial = 2;
+							} else if (lower.includes('ial:1') || lower.includes('ial1')) {
+								ial = 1;
+							}
+
+							return { label, aal, ial };
+						},
+
+						// Core Pillar Slicing Routine using the dynamic target AAL column values
+						getAcrValuesForLevel(aalTargetColumn) {
 							if (!this.discoveryResult || !this.discoveryResult.acr_values_supported) {
 								return [];
 							}
 
-							// Filter out values matching the current tier level block index
 							let filtered = this.discoveryResult.acr_values_supported.filter(acr => {
-								// Your existing structural regex or string-matching rules to allocate levels
-								if (level === 1) return acr.endsWith(':1') || acr.includes('level1') || acr === 'urn:sprezz:assurance:aal1';
-								if (level === 2) return acr.endsWith(':2') || acr.includes('level2') || acr === 'urn:sprezz:assurance:aal2';
-								if (level === 3) return acr.endsWith(':3') || acr.includes('level3') || acr === 'urn:sprezz:assurance:aal3';
-								if (level === 4) return acr.endsWith(':4') || acr.includes('level4') || acr === 'urn:sprezz:assurance:aal4';
-								return checkAcrLevelAllocationRule(acr, level);
+								let meta = this.resolveAcrMetadata(acr);
+								return String(meta.aal) === String(aalTargetColumn);
 							});
 
-							// Alphabetically sort the resulting array strings for grid-scanning consistency
 							return filtered.sort((a, b) => {
-								let labelA = this.formatAcrLabel(a);
-								let labelB = this.formatAcrLabel(b);
+								let labelA = this.resolveAcrMetadata(a).label;
+								let labelB = this.resolveAcrMetadata(b).label;
 								return labelA.localeCompare(labelB);
 							});
 						},
 
 						formatAcrLabel(acr) {
-							if (!acr) return '';
-							// Split safely by standard URI/URN delimiters
-							let uriParts = acr.split(/[:/]/).filter(p => {
-								let l = p.trim().toLowerCase();
-								return l !== '' && l !== 'urn' && l !== 'http' && l !== 'https' && l !== 'oidc';
-							});
-							if (uriParts.length === 0) return acr;
-
-							// Slice down to the final two structural segments
-							let activeSegments = uriParts.slice(-2);
-
-							let finalBlocks = activeSegments.map(seg => {
-								// Tokenize internal snake_case text items
-								let subTokens = seg.split('_').filter(t => t.trim() !== '');
-								let cleanTokens = subTokens.map(tok => {
-									let t = tok.trim();
-									if (t.length > 3 && !/\d/.test(t)) {
-										return t.substring(0, 3);
-									}
-									return t;
-								});
-								return cleanTokens.join('_');
-							});
-
-							if (finalBlocks.length === 1) {
-								return finalBlocks[0];
-							}
-							return finalBlocks[0] + ' : ' + finalBlocks[1];
+							return this.resolveAcrMetadata(acr).label;
 						},
 
 						discoverEndpoint() {
@@ -533,8 +590,21 @@ templ AdminLayout(props AdminLayoutProps) {
 
 							if (data.acr_values_supported) {
 								this.discoveredAcrValues = data.acr_values_supported;
+								
+								// Filter out any selected items that are no longer offered by the upstream IDP
+								this.selectedAcrValues = this.selectedAcrValues.filter(acr => {
+									const staysSelected = this.discoveredAcrValues.includes(acr);
+
+									// Garbage collect its independent system tuple configurations mapping if it was dropped
+									if (!staysSelected && this.acrToTuple && this.acrToTuple[acr]) {
+										delete this.acrToTuple[acr];
+									}
+									return staysSelected;
+								});
 							} else {
 								this.discoveredAcrValues = [];
+								this.selectedAcrValues = [];
+								this.acrToTuple = {};
 							}
 
 							const supportedAuth = data.token_endpoint_auth_methods_supported || [];

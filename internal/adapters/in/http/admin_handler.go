@@ -1025,19 +1025,51 @@ func (h *HttpAdapter) adminSaveIDP(w http.ResponseWriter, r *http.Request) {
 		provider.Config.UserIdentifierClaim = r.FormValue("user_identifier_claim")
 		provider.Config.DiscoveryResult = r.FormValue("discovery_result")
 
-		provider.Config.AcrToAAL = make(map[string]int)
+		// Initialize the new single unified multi-dimensional Tuple map
+		provider.Config.AcrToTuple = make(map[string]model.AcrTuple)
+
+		// Dynamic multi-key grid form binding logic loop
 		for formKey, formValues := range r.Form {
-			if strings.HasPrefix(formKey, "acr_to_aal[") && strings.HasSuffix(formKey, "]") {
-				acrClaim := formKey[len("acr_to_aal[") : len(formKey)-1]
-				if len(formValues) > 0 && formValues[0] != "" {
-					var targetAAL int
-					if _, err := fmt.Sscanf(formValues[0], "%d", &targetAAL); err == nil && targetAAL > 0 {
-						provider.Config.AcrToAAL[acrClaim] = targetAAL
-					}
+			if len(formValues) == 0 || formValues[0] == "" {
+				continue
+			}
+
+			// Capture matching nested form field keys: "acr_to_tuple[raw_acr][aal]" or "acr_to_tuple[raw_acr][ial]"
+			if strings.HasPrefix(formKey, "acr_to_tuple[") && strings.HasSuffix(formKey, "]") {
+				// Strip external wrappers to isolate inner string parameters
+				innerPath := formKey[len("acr_to_tuple[") : len(formKey)-1]
+
+				// Separate raw_acr payload from vector target identifiers by isolating sub-bracket boundaries
+				splitIdx := strings.LastIndex(innerPath, "][")
+				if splitIdx == -1 {
+					continue
 				}
+
+				rawAcrKey := innerPath[:splitIdx]
+				tupleField := innerPath[splitIdx+2:] // Yields exactly "aal" or "ial"
+
+				var levelVal int
+				if _, err := fmt.Sscanf(formValues[0], "%d", &levelVal); err != nil {
+					continue
+				}
+
+				// Fetch existing tuple or create a fresh zero-initialized coordinates pair
+				currentTuple := provider.Config.AcrToTuple[rawAcrKey]
+
+				// Apply targeted modifications dynamically across independent system metrics
+				switch tupleField {
+				case "aal":
+					currentTuple.AAL = levelVal
+				case "ial":
+					currentTuple.IAL = levelVal
+				}
+
+				// Persist modification shifts back into the structural configuration map
+				provider.Config.AcrToTuple[rawAcrKey] = currentTuple
 			}
 		}
 
+		// Keep existing AMR factor parsing configurations unchanged
 		provider.Config.AmrToAAL = make(map[string]int)
 		standardAMRs := []string{"pwd", "mfa", "hwk", "otp", "sms"}
 		for _, amr := range standardAMRs {

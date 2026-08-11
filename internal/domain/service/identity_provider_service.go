@@ -342,32 +342,49 @@ func (s *IdentityProviderService) DiscoverOIDC(ctx context.Context, endpoint str
 }
 
 func (s *IdentityProviderService) ResolveFederatedLevels(config model.IdentityProviderConfig, externalAcr string, externalAmrs []string) (int, int) {
-	ial := config.IAL
-	if ial < 1 {
-		ial = 1
+	// 1. Establish initial system baselines from Identity Provider Defaults
+	resolvedAAL := config.AAL
+	if resolvedAAL < 1 {
+		resolvedAAL = 1 // Safe minimal structural floor
 	}
 
-	highestAAL := 1
+	resolvedIAL := config.IAL
+	if resolvedIAL < 1 {
+		resolvedIAL = 1 // Safe minimal structural floor
+	}
 
-	if config.AcrToAAL != nil && externalAcr != "" {
-		if mappedAAL, exists := config.AcrToAAL[externalAcr]; exists && mappedAAL >= 1 && mappedAAL <= 4 {
-			if mappedAAL > highestAAL {
-				highestAAL = mappedAAL
+	// 2. Process multi-dimensional Tuple matches if an external ACR is present
+	if externalAcr != "" && config.AcrToTuple != nil {
+		if tuple, exists := config.AcrToTuple[externalAcr]; exists {
+			// If AAL is mapped (> 0), apply it; if 0 (unmapped), leave it as the IDP default
+			if tuple.AAL >= 1 && tuple.AAL <= 3 {
+				resolvedAAL = tuple.AAL
+			}
+			// If IAL is mapped (> 0), apply it; if 0 (unmapped), leave it as the IDP default
+			if tuple.IAL >= 1 && tuple.IAL <= 3 {
+				resolvedIAL = tuple.IAL
 			}
 		}
 	}
 
+	// 3. Process traditional AMR adjustments against AAL if mapped
 	if config.AmrToAAL != nil {
+		highestAMRMapped := 0
 		for _, amr := range externalAmrs {
-			if mappedAAL, exists := config.AmrToAAL[amr]; exists && mappedAAL >= 1 && mappedAAL <= 4 {
-				if mappedAAL > highestAAL {
-					highestAAL = mappedAAL
-				}
+			cleanAmr := strings.ToLower(strings.TrimSpace(amr))
+			if level, exists := config.AmrToAAL[cleanAmr]; exists && level > highestAMRMapped {
+				highestAMRMapped = level
+			}
+		}
+		// AMR map values override if they exceed baseline thresholds
+		if highestAMRMapped >= 1 && highestAMRMapped <= 3 {
+			if highestAMRMapped > resolvedAAL {
+				resolvedAAL = highestAMRMapped
 			}
 		}
 	}
 
-	return highestAAL, ial
+	return resolvedAAL, resolvedIAL
 }
 
 func (s *IdentityProviderService) NormalizeFederatedAmr(reachedAAL int) string {
@@ -387,7 +404,7 @@ type SprezzAssuranceClaims struct {
 }
 
 // NormalizeFederatedClaims translates upstream factors and configuration parameters into Sprezz token standards
-func NormalizeFederatedClaims(upstreamAMR []string, upstreamACR string, defaultAAL int, acrToAalMap map[string]int, amrToAalMap map[string]int) SprezzAssuranceClaims {
+func NormalizeFederatedClaims(upstreamAMR []string, upstreamACR string, defaultAAL int, acrToTupleMap map[string]model.AcrTuple, amrToAalMap map[string]int) SprezzAssuranceClaims {
 	// 1. Establish initial baseline AAL fallback
 	resolvedAAL := defaultAAL
 	if resolvedAAL < 1 {
@@ -400,10 +417,10 @@ func NormalizeFederatedClaims(upstreamAMR []string, upstreamACR string, defaultA
 		amrMap[strings.ToLower(strings.TrimSpace(val))] = true
 	}
 
-	// 2. Step A: Check administrative ACR Mapping Grid first (highest priority)
-	if upstreamACR != "" && acrToAalMap != nil {
-		if mappedAAL, exists := acrToAalMap[upstreamACR]; exists && mappedAAL > 0 {
-			resolvedAAL = mappedAAL
+	// 2. Step A: Check administrative ACR Tuple Matrix first (highest priority)
+	if upstreamACR != "" && acrToTupleMap != nil {
+		if tuple, exists := acrToTupleMap[upstreamACR]; exists && tuple.AAL > 0 {
+			resolvedAAL = tuple.AAL
 		}
 	}
 
@@ -421,7 +438,14 @@ func NormalizeFederatedClaims(upstreamAMR []string, upstreamACR string, defaultA
 	}
 
 	// 4. Step C: Hardcoded Spec Fallback (RFC 8176) if no explicit custom admin map hit
-	if (upstreamACR == "" || acrToAalMap[upstreamACR] == 0) && len(amrToAalMap) == 0 {
+	hasAcrMapping := false
+	if upstreamACR != "" && acrToTupleMap != nil {
+		if tuple, exists := acrToTupleMap[upstreamACR]; exists && tuple.AAL > 0 {
+			hasAcrMapping = true
+		}
+	}
+
+	if !hasAcrMapping && len(amrToAalMap) == 0 {
 		// Evaluate strict Level 3 Hardware isolation
 		if amrMap["hwk"] || amrMap["fido"] || amrMap["userpresence"] || amrMap["sc"] {
 			resolvedAAL = 3

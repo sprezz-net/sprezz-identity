@@ -12,61 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sprezz-identity/internal/domain/model"
-	"strings"
 )
-
-func cleanAcrLabel(acr string) string {
-	if acr == "" {
-		return ""
-	}
-	// Split by standard URI/URN delimiters
-	var uriParts []string
-	for _, p := range strings.FieldsFunc(acr, func(r rune) bool { return r == ':' || r == '/' }) {
-		trimmed := strings.TrimSpace(p)
-		if trimmed != "" {
-			// Skip generic top-level protocol namespaces
-			l := strings.ToLower(trimmed)
-			if l == "urn" || l == "http" || l == "https" || l == "oidc" {
-				continue
-			}
-			uriParts = append(uriParts, trimmed)
-		}
-	}
-	if len(uriParts) == 0 {
-		return acr
-	}
-
-	// Process up to the final two active URI segments
-	startIdx := 0
-	if len(uriParts) > 2 {
-		startIdx = len(uriParts) - 2
-	}
-	activeSegments := uriParts[startIdx:]
-
-	var finalBlocks []string
-	for _, seg := range activeSegments {
-		// Split sub-tokens by underscores to protect internal text compounds
-		subTokens := strings.Split(seg, "_")
-		var cleanTokens []string
-		for _, tok := range subTokens {
-			t := strings.TrimSpace(tok)
-			if t == "" {
-				continue
-			}
-			// Semicolons guard numeric parameters; slice text components to 3 characters
-			if len(t) > 3 && !strings.ContainsAny(t, "0123456789") {
-				t = t[:3]
-			}
-			cleanTokens = append(cleanTokens, t)
-		}
-		finalBlocks = append(finalBlocks, strings.Join(cleanTokens, "_"))
-	}
-
-	if len(finalBlocks) == 1 {
-		return finalBlocks[0]
-	}
-	return fmt.Sprintf("%s : %s", finalBlocks[0], finalBlocks[1])
-}
 
 type IDPsPageProps struct {
 	ActiveTenant      model.Tenant
@@ -114,7 +60,7 @@ func IDPsContent(props IDPsPageProps) templ.Component {
 			var templ_7745c5c3_Var2 string
 			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(props.Msg)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 80, Col: 15}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 26, Col: 15}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 			if templ_7745c5c3_Err != nil {
@@ -137,7 +83,7 @@ func IDPsContent(props IDPsPageProps) templ.Component {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", part.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 96, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 42, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 			if templ_7745c5c3_Err != nil {
@@ -161,7 +107,7 @@ func IDPsContent(props IDPsPageProps) templ.Component {
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(part.AliasName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 98, Col: 25}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 44, Col: 25}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -190,7 +136,7 @@ func IDPsContent(props IDPsPageProps) templ.Component {
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/admin/idps/edit?id=%s&modal=true", p.ID.String()))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 129, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 75, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 			if templ_7745c5c3_Err != nil {
@@ -203,7 +149,7 @@ func IDPsContent(props IDPsPageProps) templ.Component {
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(p.Alias)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 132, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 78, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -216,7 +162,7 @@ func IDPsContent(props IDPsPageProps) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(p.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 133, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 79, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -229,7 +175,7 @@ func IDPsContent(props IDPsPageProps) templ.Component {
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(p.IDPType)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 134, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 80, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -257,7 +203,7 @@ func IDPsContent(props IDPsPageProps) templ.Component {
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/admin/idps/edit?id=%s&modal=true", p.ID.String()))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 144, Col: 82}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 90, Col: 82}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 			if templ_7745c5c3_Err != nil {
@@ -270,7 +216,7 @@ func IDPsContent(props IDPsPageProps) templ.Component {
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/admin/idps/%s", p.ID.String()))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 152, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 98, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 			if templ_7745c5c3_Err != nil {
@@ -283,7 +229,7 @@ func IDPsContent(props IDPsPageProps) templ.Component {
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("Are you sure you want to delete identity provider '%s'?", p.Alias))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 153, Col: 102}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 99, Col: 102}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 			if templ_7745c5c3_Err != nil {
@@ -384,7 +330,7 @@ func IDPForm(props IDPFormProps) templ.Component {
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(props.Provider.IDPType)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 189, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 135, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 		if templ_7745c5c3_Err != nil {
@@ -397,7 +343,7 @@ func IDPForm(props IDPFormProps) templ.Component {
 		var templ_7745c5c3_Var16 string
 		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(props.Provider.Alias)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 190, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 136, Col: 35}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 		if templ_7745c5c3_Err != nil {
@@ -410,7 +356,7 @@ func IDPForm(props IDPFormProps) templ.Component {
 		var templ_7745c5c3_Var17 string
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(props.Provider.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 191, Col: 33}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 137, Col: 33}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 		if templ_7745c5c3_Err != nil {
@@ -423,7 +369,7 @@ func IDPForm(props IDPFormProps) templ.Component {
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(getProviderConfigJSON(props.Provider))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 192, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 138, Col: 53}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 		if templ_7745c5c3_Err != nil {
@@ -441,7 +387,7 @@ func IDPForm(props IDPFormProps) templ.Component {
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(props.Provider.ID.String())
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 197, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 143, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 			if templ_7745c5c3_Err != nil {
@@ -454,7 +400,7 @@ func IDPForm(props IDPFormProps) templ.Component {
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(props.Provider.IDPType))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 198, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 144, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 			if templ_7745c5c3_Err != nil {
@@ -467,7 +413,7 @@ func IDPForm(props IDPFormProps) templ.Component {
 			var templ_7745c5c3_Var21 string
 			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(props.Provider.IDPType)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 201, Col: 145}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 147, Col: 145}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 			if templ_7745c5c3_Err != nil {
@@ -512,7 +458,7 @@ func IDPForm(props IDPFormProps) templ.Component {
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%t", props.IsEdit))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 225, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 171, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 		if templ_7745c5c3_Err != nil {
@@ -530,7 +476,7 @@ func IDPForm(props IDPFormProps) templ.Component {
 			var templ_7745c5c3_Var25 string
 			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(props.Errors["alias"])
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 228, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 174, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 			if templ_7745c5c3_Err != nil {
@@ -553,7 +499,7 @@ func IDPForm(props IDPFormProps) templ.Component {
 			var templ_7745c5c3_Var26 string
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", part.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 247, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 193, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 			if templ_7745c5c3_Err != nil {
@@ -577,7 +523,7 @@ func IDPForm(props IDPFormProps) templ.Component {
 				var templ_7745c5c3_Var27 string
 				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(part.AliasName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 249, Col: 24}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/idps.templ`, Line: 195, Col: 24}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 				if templ_7745c5c3_Err != nil {
@@ -704,7 +650,7 @@ func IDPForm(props IDPFormProps) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, ">AAL 4 (High-Isolation)</option></select></div></div></div><!-- Federated OIDC Metadata Discovery Block --><div x-show=\"idpType === 'oidc'\" class=\"border-t border-slate-200 pt-5 space-y-4\" style=\"display: none;\"><h4 class=\"text-sm font-bold text-slate-800 uppercase tracking-wide\">Federation Metadata & Discovery</h4><div class=\"bg-slate-50/50 p-4 border border-slate-200 rounded-xl space-y-3\"><div><label class=\"block text-xs font-bold text-slate-500 mb-1\">Well-Known Discovery Endpoint URL</label><div class=\"flex space-x-2\"><input type=\"url\" name=\"discovery_endpoint\" x-model=\"discoveryEndpoint\" placeholder=\"https://example.com\" class=\"flex-1 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-blue-500\"> <button type=\"button\" @click=\"discoverEndpoint()\" :disabled=\"isDiscovering\" class=\"px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-xs font-semibold transition cursor-pointer\"><span x-text=\"isDiscovering ? 'Connecting...' : 'Fetch Metadata'\"></span></button></div><p x-show=\"discoveryError\" class=\"text-xs text-red-500 mt-1\" x-text=\"discoveryError\" style=\"display: none;\"></p></div><div class=\"grid grid-cols-1 md:grid-cols-2 gap-4 pt-1.5\"><div><span class=\"block text-[10px] font-bold text-slate-400 uppercase tracking-wide\">Discovered Verified Issuer</span> <input type=\"hidden\" name=\"issuer\" :value=\"issuer\"> <input type=\"hidden\" name=\"discovery_result\" :value=\"discoveryRaw\"><div class=\"font-mono text-xs text-slate-700 mt-1 select-all bg-white p-2 border border-slate-200 rounded-lg truncate\" x-text=\"issuer || 'Discovery context empty'\"></div></div><div><span class=\"block text-[10px] font-bold text-slate-400 uppercase tracking-wide\">Client Authentication Protocol</span> <select name=\"authentication_method\" x-model=\"authMethod\" @change=\"handleAuthMethodChange($el.value)\" class=\"w-full mt-1 px-3 py-1.5 border border-slate-300 rounded-lg bg-white text-xs focus:ring-2 focus:ring-blue-500\"><template x-if=\"!discoveryResult || (discoveryResult.token_endpoint_auth_methods_supported && discoveryResult.token_endpoint_auth_methods_supported.includes('client_secret_basic'))\"><option value=\"client_secret_basic\">Client Secret Basic (Default)</option></template><template x-if=\"!discoveryResult || (discoveryResult.token_endpoint_auth_methods_supported && discoveryResult.token_endpoint_auth_methods_supported.includes('client_secret_post'))\"><option value=\"client_secret_post\">Client Secret Post</option></template><template x-if=\"!discoveryResult || (discoveryResult.token_endpoint_auth_methods_supported && discoveryResult.token_endpoint_auth_methods_supported.includes('none'))\"><option value=\"none\">Public Client (No Secret / Mandatory PKCE)</option></template></select></div></div></div><!-- Credentials Row Placement side-by-side --><div class=\"grid grid-cols-1 md:grid-cols-2 gap-4\"><div><label class=\"block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1\">Client ID</label> <input type=\"text\" name=\"client_id\" x-model=\"clientID\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500\"></div><div x-show=\"authMethod !== 'none'\"><label class=\"block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1\">Client Secret Token</label> <input type=\"password\" name=\"client_secret\" x-model=\"clientSecret\" :required=\"authMethod !== 'none'\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500\"></div></div><!-- Advanced Capabilities side-by-side check rows layout --><div class=\"grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-3 border border-slate-200 rounded-xl\"><div class=\"flex items-start gap-2.5 p-1\"><input type=\"checkbox\" id=\"pkce_enabled\" name=\"pkce_enabled\" value=\"true\" x-model=\"pkceEnabled\" @change=\"handlePkceChange($el.checked)\" :disabled=\"pkceLocked\" class=\"h-4 w-4 text-blue-600 rounded mt-0.5\"><div><label for=\"pkce_enabled\" class=\"text-xs font-bold text-slate-800 block\">Enforce PKCE</label> <span class=\"text-[10px] text-slate-400 block mt-0.5\">Mandates secure challenge signatures.</span></div></div><div class=\"flex items-start gap-2.5 p-1\"><input type=\"checkbox\" id=\"par_enabled\" name=\"par_enabled\" value=\"true\" x-model=\"parEnabled\" @change=\"handleParChange($el.checked)\" :disabled=\"parLocked\" class=\"h-4 w-4 text-blue-600 rounded mt-0.5\"><div><label for=\"par_enabled\" class=\"text-xs font-bold text-slate-800 flex items-center gap-1\">Enable PAR Mode <span x-show=\"parEnforced\" class=\"text-[9px] px-1 bg-amber-100 text-amber-800 rounded font-bold border border-amber-200\">Enforced</span></label> <span class=\"text-[10px] text-slate-400 block mt-0.5\">Dispatches auth attributes out-of-band.</span></div></div><div class=\"flex items-start gap-2.5 p-1\" x-show=\"sloSupported || sloEnabled\"><input type=\"checkbox\" id=\"slo_enabled\" name=\"slo_enabled\" value=\"true\" x-model=\"sloEnabled\" @change=\"handleSloChange($el.checked)\" class=\"h-4 w-4 text-blue-600 rounded mt-0.5\"><div><label for=\"slo_enabled\" class=\"text-xs font-bold text-slate-800 block\">Federated SLO</label> <span class=\"text-[10px] text-slate-400 block mt-0.5\">Coordinates cluster sign-out syncs.</span></div></div></div></div><!-- Scope & Assurance Capabilities --><div x-show=\"idpType === 'oidc' && issuer\" class=\"space-y-4 border-t border-slate-200 pt-5\" style=\"display: none;\"><h4 class=\"text-sm font-bold text-slate-800 uppercase tracking-wide\">Scope & Assurance Capabilities</h4><!-- Scopes Selector --><div><label class=\"block text-xs font-bold text-slate-500 mb-1.5\">Requested Scopes</label><template x-for=\"scope in selectedScopes\" :key=\"scope\"><input type=\"hidden\" name=\"scopes\" :value=\"scope\"></template><div class=\"flex flex-wrap gap-1.5 p-3 border border-slate-200 bg-slate-50 rounded-xl min-h-[50px]\"><template x-if=\"discoveredScopes.length === 0\"><span class=\"text-xs text-slate-400\">Discover well-known endpoint to fetch supported scopes</span></template><template x-for=\"scope in discoveredScopes\" :key=\"scope\"><button type=\"button\" @click=\"toggleScope(scope)\" class=\"px-2.5 py-1 rounded-lg text-xs font-semibold border font-mono transition-all duration-150 cursor-pointer\" :class=\"selectedScopes.includes(scope) ? 'bg-blue-600 border-blue-700 text-white shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'\"><span x-text=\"scope\"></span></button></template></div></div><!-- Authentication Level Matrix Selector --><div class=\"mt-4\"><label class=\"block text-xs font-bold text-slate-500 mb-1.5\">Requested Authentication Levels (ACR) and Mapping</label><template x-for=\"acr in selectedAcrValues\" :key=\"acr\"><input type=\"hidden\" name=\"acr_values\" :value=\"acr\"></template><div class=\"grid grid-cols-1 sm:grid-cols-4 gap-4 p-4 border border-slate-200 bg-slate-50 rounded-xl\"><!-- Level 1 --><div class=\"bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full\"><span class=\"text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2\">Map to Level 1 (Low)</span><div class=\"flex-1 flex flex-col gap-1.5 overflow-y-auto max-h-36\"><template x-for=\"acr in getAcrValuesForLevel(1)\" :key=\"acr\"><button type=\"button\" @click=\"toggleAcr(acr)\" class=\"px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer\" :class=\"selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'\" :title=\"acr\"><span x-text=\"formatAcrLabel(acr)\"></span></button></template><template x-if=\"getAcrValuesForLevel(1).length === 0\"><span class=\"text-[10px] text-slate-400 italic\">None</span></template></div></div><!-- Level 2 --><div class=\"bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full\"><span class=\"text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2\">Map to Level 2 (Medium)</span><div class=\"flex-1 flex flex-col gap-1.5 overflow-y-auto max-h-36\"><template x-for=\"acr in getAcrValuesForLevel(2)\" :key=\"acr\"><button type=\"button\" @click=\"toggleAcr(acr)\" class=\"px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer\" :class=\"selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'\" :title=\"acr\"><span x-text=\"formatAcrLabel(acr)\"></span></button></template><template x-if=\"getAcrValuesForLevel(2).length === 0\"><span class=\"text-[10px] text-slate-400 italic\">None</span></template></div></div><!-- Level 3 --><div class=\"bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full\"><span class=\"text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2\">Map to Level 3 (High)</span><div class=\"flex-1 flex flex-col gap-1.5 overflow-y-auto max-h-36\"><template x-for=\"acr in getAcrValuesForLevel(3)\" :key=\"acr\"><button type=\"button\" @click=\"toggleAcr(acr)\" class=\"px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer\" :class=\"selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'\" :title=\"acr\"><span x-text=\"formatAcrLabel(acr)\"></span></button></template><template x-if=\"getAcrValuesForLevel(3).length === 0\"><span class=\"text-[10px] text-slate-400 italic\">None</span></template></div></div><!-- Level 4 / Custom --><div class=\"bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full\"><span class=\"text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2\">Map to Level 4</span><div class=\"flex-1 flex flex-col gap-1.5 overflow-y-auto max-h-36\"><template x-for=\"acr in getAcrValuesForLevel(4)\" :key=\"acr\"><button type=\"button\" @click=\"toggleAcr(acr)\" class=\"px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer\" :class=\"selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'\" :title=\"acr\"><span x-text=\"formatAcrLabel(acr)\"></span></button></template><template x-if=\"getAcrValuesForLevel(4).length === 0\"><span class=\"text-[10px] text-slate-400 italic\">None</span></template></div></div></div></div></div><!-- Assurance Levels & Security Factor Mapping Card --><div x-show=\"idpType === 'oidc' && issuer\" class=\"space-y-6 border-t border-slate-200 pt-5\" style=\"display: none;\"><h4 class=\"text-sm font-bold text-slate-800 uppercase tracking-wide\">Assurance Levels & Security Mapping</h4><p class=\"text-xs text-slate-500\">Translate incoming external federated token contexts into internal security metrics.</p><div class=\"grid grid-cols-1 md:grid-cols-2 gap-4\"><div><label class=\"block text-xs font-bold text-slate-500 mb-1\">Identity Assurance Level (IAL)</label> <select name=\"ial\" x-model=\"ial\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-xs\"><option value=\"1\">IAL 1 (Self-asserted)</option> <option value=\"2\">IAL 2 (Remote Verified)</option> <option value=\"3\">IAL 3 (In-person Verified)</option> <option value=\"4\">IAL 4 (High-Trust Verified)</option></select></div><div><label class=\"block text-xs font-bold text-slate-500 mb-1\">Unmapped Authentication Assurance Level (AAL)</label> <select name=\"aal\" x-model=\"aal\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-xs\"><option value=\"1\">AAL 1 (Password Fallback)</option> <option value=\"2\">AAL 2 (MFA Fallback)</option> <option value=\"3\">AAL 3 (Hardware Fallback)</option> <option value=\"4\">AAL 4 (High-Isolation Fallback)</option></select></div></div><div class=\"pt-4 border-t border-slate-100\" x-show=\"selectedAcrValues.length > 0\"><h5 class=\"text-xs font-bold text-slate-500 mb-2\">Dynamic ACR-to-AAL Mapping Grid</h5><div class=\"grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-4 border border-slate-200 rounded-xl max-h-48 overflow-y-auto\"><template x-for=\"acr in selectedAcrValues\" :key=\"acr\"><div class=\"flex items-center justify-between gap-4 py-1.5 border-b border-slate-200 last:border-0\"><span class=\"font-mono text-xs text-slate-700 truncate\" x-text=\"formatAcrLabel(acr)\"></span><div class=\"flex items-center gap-2\"><input type=\"hidden\" :name=\"'acr_to_aal[' + acr + ']'\" :value=\"acrToAAL[acr] || '1'\"> <select :value=\"acrToAAL[acr] || '1'\" @change=\"acrToAAL[acr] = $el.value\" class=\"px-2 py-1 text-xs border border-slate-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500\"><option value=\"1\">AAL 1</option> <option value=\"2\">AAL 2</option> <option value=\"3\">AAL 3</option></select></div></div></template></div></div><div class=\"pt-4 border-t border-slate-100\"><h5 class=\"text-xs font-bold text-slate-500 mb-2\">Standard AMR Mappings</h5><div class=\"grid grid-cols-2 sm:grid-cols-5 gap-3 bg-slate-50 p-3 border border-slate-200 rounded-xl\"><template x-for=\"factor in ['pwd', 'mfa', 'otp', 'sms', 'hwk']\" :key=\"factor\"><div class=\"flex flex-col gap-1 bg-white p-2 rounded-lg border border-slate-200 shadow-sm\"><span class=\"font-mono text-[10px] font-bold text-slate-500 uppercase\" x-text=\"factor\"></span> <select :name=\"'amr_to_aal[' + factor + ']'\" x-model=\"amrToAAL[factor]\" class=\"w-full px-1.5 py-1 text-xs border border-slate-300 rounded bg-white focus:ring-2 focus:ring-blue-500\"><option value=\"1\">AAL 1</option> <option value=\"2\">AAL 2</option> <option value=\"3\">AAL 3</option></select></div></template></div></div><div class=\"pt-4 border-t border-slate-100\"><div class=\"flex items-center justify-between mb-2\"><h5 class=\"text-xs font-bold text-slate-500\">Custom AMR Mappings</h5><button type=\"button\" @click=\"addCustomAmr()\" class=\"px-2.5 py-1 text-xs bg-slate-900 text-white rounded-lg shadow-sm font-medium transition cursor-pointer hover:bg-slate-800\">+ Add Row</button></div><div class=\"space-y-2\"><template x-for=\"(item, index) in customAmrs\" :key=\"index\"><div class=\"flex items-center gap-3 bg-slate-50 p-2 border border-slate-200 rounded-lg\"><input type=\"text\" name=\"custom_amr_keys\" x-model=\"item.key\" placeholder=\"e.g. face, pin\" class=\"flex-1 px-3 py-1.5 text-xs border border-slate-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 font-mono\" required> <select name=\"custom_amr_values\" x-model=\"item.value\" class=\"px-2 py-1.5 text-xs border border-slate-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500\"><option value=\"1\">AAL 1</option> <option value=\"2\">AAL 2</option> <option value=\"3\">AAL 3</option></select> <button type=\"button\" @click=\"removeCustomAmr(index)\" class=\"text-red-500 hover:text-red-700 font-bold px-3 py-1.5 text-sm focus:outline-none\">✕</button></div></template></div></div></div><!-- Identity Claim Resolution Card --><div x-show=\"idpType === 'oidc' && issuer\" class=\"space-y-4 border-t border-slate-200 pt-5\" style=\"display: none;\"><h4 class=\"text-sm font-bold text-slate-800 uppercase tracking-wide\">Identity Claim Resolution</h4><div class=\"grid grid-cols-1 md:grid-cols-2 gap-4\"><div><label class=\"block text-xs font-bold text-slate-500 mb-1\">User Identifier Claim</label> <input type=\"text\" name=\"user_identifier_claim\" x-model=\"userIdentifierClaim\" placeholder=\"sub or email\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm\"><p class=\"text-[10px] text-slate-400 mt-1\">Configures which parsed ID token claim matches the unique local account (commonly 'sub' or 'email').</p></div></div></div><!-- Form Buttons Card --><div class=\"flex justify-end space-x-3 pt-4 border-t border-slate-200\"><button type=\"button\" class=\"px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition cursor-pointer\" @click=\"isOpen = false\">Cancel</button> <button type=\"submit\" class=\"px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition cursor-pointer\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, ">AAL 4 (High-Isolation)</option></select></div></div></div><!-- Federated OIDC Metadata Discovery Block --><div x-show=\"idpType === 'oidc'\" class=\"border-t border-slate-200 pt-5 space-y-4\" style=\"display: none;\"><h4 class=\"text-sm font-bold text-slate-800 uppercase tracking-wide\">Federation Metadata & Discovery</h4><div class=\"bg-slate-50/50 p-4 border border-slate-200 rounded-xl space-y-3\"><div><label class=\"block text-xs font-bold text-slate-500 mb-1\">Well-Known Discovery Endpoint URL</label><div class=\"flex space-x-2\"><input type=\"url\" name=\"discovery_endpoint\" x-model=\"discoveryEndpoint\" placeholder=\"https://example.com\" class=\"flex-1 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-blue-500\"> <button type=\"button\" @click=\"discoverEndpoint()\" :disabled=\"isDiscovering\" class=\"px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-xs font-semibold transition cursor-pointer\"><span x-text=\"isDiscovering ? 'Connecting...' : 'Fetch Metadata'\"></span></button></div><p x-show=\"discoveryError\" class=\"text-xs text-red-500 mt-1\" x-text=\"discoveryError\" style=\"display: none;\"></p></div><div class=\"grid grid-cols-1 md:grid-cols-2 gap-4 pt-1.5\"><div><span class=\"block text-[10px] font-bold text-slate-400 uppercase tracking-wide\">Discovered Verified Issuer</span> <input type=\"hidden\" name=\"issuer\" :value=\"issuer\"> <input type=\"hidden\" name=\"discovery_result\" :value=\"discoveryRaw\"><div class=\"font-mono text-xs text-slate-700 mt-1 select-all bg-white p-2 border border-slate-200 rounded-lg truncate\" x-text=\"issuer || 'Discovery context empty'\"></div></div><div><span class=\"block text-[10px] font-bold text-slate-400 uppercase tracking-wide\">Client Authentication Protocol</span> <select name=\"authentication_method\" x-model=\"authMethod\" @change=\"handleAuthMethodChange($el.value)\" class=\"w-full mt-1 px-3 py-1.5 border border-slate-300 rounded-lg bg-white text-xs focus:ring-2 focus:ring-blue-500\"><template x-if=\"!discoveryResult || (discoveryResult.token_endpoint_auth_methods_supported && discoveryResult.token_endpoint_auth_methods_supported.includes('client_secret_basic'))\"><option value=\"client_secret_basic\">Client Secret Basic (Default)</option></template><template x-if=\"!discoveryResult || (discoveryResult.token_endpoint_auth_methods_supported && discoveryResult.token_endpoint_auth_methods_supported.includes('client_secret_post'))\"><option value=\"client_secret_post\">Client Secret Post</option></template><template x-if=\"!discoveryResult || (discoveryResult.token_endpoint_auth_methods_supported && discoveryResult.token_endpoint_auth_methods_supported.includes('none'))\"><option value=\"none\">Public Client (No Secret / Mandatory PKCE)</option></template></select></div></div></div><!-- Credentials Row Placement side-by-side --><div class=\"grid grid-cols-1 md:grid-cols-2 gap-4\"><div><label class=\"block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1\">Client ID</label> <input type=\"text\" name=\"client_id\" x-model=\"clientID\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500\"></div><div x-show=\"authMethod !== 'none'\"><label class=\"block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1\">Client Secret Token</label> <input type=\"password\" name=\"client_secret\" x-model=\"clientSecret\" :required=\"authMethod !== 'none'\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500\"></div></div><!-- Advanced Capabilities side-by-side check rows layout --><div class=\"grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-3 border border-slate-200 rounded-xl\"><div class=\"flex items-start gap-2.5 p-1\"><input type=\"checkbox\" id=\"pkce_enabled\" name=\"pkce_enabled\" value=\"true\" x-model=\"pkceEnabled\" @change=\"handlePkceChange($el.checked)\" :disabled=\"pkceLocked\" class=\"h-4 w-4 text-blue-600 rounded mt-0.5\"><div><label for=\"pkce_enabled\" class=\"text-xs font-bold text-slate-800 block\">Enforce PKCE</label> <span class=\"text-[10px] text-slate-400 block mt-0.5\">Mandates secure challenge signatures.</span></div></div><div class=\"flex items-start gap-2.5 p-1\"><input type=\"checkbox\" id=\"par_enabled\" name=\"par_enabled\" value=\"true\" x-model=\"parEnabled\" @change=\"handleParChange($el.checked)\" :disabled=\"parLocked\" class=\"h-4 w-4 text-blue-600 rounded mt-0.5\"><div><label for=\"par_enabled\" class=\"text-xs font-bold text-slate-800 flex items-center gap-1\">Enable PAR Mode <span x-show=\"parEnforced\" class=\"text-[9px] px-1 bg-amber-100 text-amber-800 rounded font-bold border border-amber-200\">Enforced</span></label> <span class=\"text-[10px] text-slate-400 block mt-0.5\">Dispatches auth attributes out-of-band.</span></div></div><div class=\"flex items-start gap-2.5 p-1\" x-show=\"sloSupported || sloEnabled\"><input type=\"checkbox\" id=\"slo_enabled\" name=\"slo_enabled\" value=\"true\" x-model=\"sloEnabled\" @change=\"handleSloChange($el.checked)\" class=\"h-4 w-4 text-blue-600 rounded mt-0.5\"><div><label for=\"slo_enabled\" class=\"text-xs font-bold text-slate-800 block\">Federated SLO</label> <span class=\"text-[10px] text-slate-400 block mt-0.5\">Coordinates cluster sign-out syncs.</span></div></div></div></div><!-- Scope & Assurance Capabilities --><div x-show=\"idpType === 'oidc' && issuer\" class=\"space-y-4 border-t border-slate-200 pt-5\" style=\"display: none;\"><h4 class=\"text-sm font-bold text-slate-800 uppercase tracking-wide\">Scope & Assurance Capabilities</h4><!-- Scopes Selector --><div><label class=\"block text-xs font-bold text-slate-500 mb-1.5\">Requested Scopes</label><template x-for=\"scope in selectedScopes\" :key=\"scope\"><input type=\"hidden\" name=\"scopes\" :value=\"scope\"></template><div class=\"flex flex-wrap gap-1.5 p-3 border border-slate-200 bg-slate-50 rounded-xl min-h-[50px]\"><template x-if=\"discoveredScopes.length === 0\"><span class=\"text-xs text-slate-400\">Discover well-known endpoint to fetch supported scopes</span></template><template x-for=\"scope in discoveredScopes\" :key=\"scope\"><button type=\"button\" @click=\"toggleScope(scope)\" class=\"px-2.5 py-1 rounded-lg text-xs font-semibold border font-mono transition-all duration-150 cursor-pointer\" :class=\"selectedScopes.includes(scope) ? 'bg-blue-600 border-blue-700 text-white shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'\"><span x-text=\"scope\"></span></button></template></div></div><!-- Authentication Level Matrix Selector --><div class=\"mt-4\"><label class=\"block text-xs font-bold text-slate-500 mb-1.5\">Requested Authentication Levels (ACR)</label><template x-for=\"acr in selectedAcrValues\" :key=\"acr\"><input type=\"hidden\" name=\"acr_values\" :value=\"acr\"></template><div class=\"grid grid-cols-1 sm:grid-cols-4 gap-4 p-4 border border-slate-200 bg-slate-50 rounded-xl items-stretch min-h-[240px]\"><!-- Level 1 --><div class=\"bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full\"><span class=\"text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2\">Map to AAL 1 (Low)</span><div class=\"w-full h-40 space-y-1.5 overflow-y-auto pr-0.5\"><template x-for=\"acr in getAcrValuesForLevel(1)\" :key=\"acr\"><button type=\"button\" @click=\"toggleAcr(acr)\" class=\"w-full h-7 flex items-center px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer\" :class=\"selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'\" :title=\"acr\"><span x-text=\"formatAcrLabel(acr)\"></span></button></template><template x-if=\"getAcrValuesForLevel(1).length === 0\"><span class=\"text-[10px] text-slate-400 italic\">None</span></template></div></div><!-- Level 2 --><div class=\"bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full\"><span class=\"text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2\">Map to AAL 2 (Medium)</span><div class=\"w-full h-40 space-y-1.5 overflow-y-auto pr-0.5\"><template x-for=\"acr in getAcrValuesForLevel(2)\" :key=\"acr\"><button type=\"button\" @click=\"toggleAcr(acr)\" class=\"w-full h-7 flex items-center px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer\" :class=\"selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'\" :title=\"acr\"><span x-text=\"formatAcrLabel(acr)\"></span></button></template><template x-if=\"getAcrValuesForLevel(2).length === 0\"><span class=\"text-[10px] text-slate-400 italic\">None</span></template></div></div><!-- Level 3 --><div class=\"bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full\"><span class=\"text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2\">Map to AAL 3 (High)</span><div class=\"w-full h-40 space-y-1.5 overflow-y-auto pr-0.5\"><template x-for=\"acr in getAcrValuesForLevel(3)\" :key=\"acr\"><button type=\"button\" @click=\"toggleAcr(acr)\" class=\"w-full h-7 flex items-center px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer\" :class=\"selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'\" :title=\"acr\"><span x-text=\"formatAcrLabel(acr)\"></span></button></template><template x-if=\"getAcrValuesForLevel(3).length === 0\"><span class=\"text-[10px] text-slate-400 italic\">None</span></template></div></div><!-- Unmapped --><div class=\"bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full\"><span class=\"text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2\">Unmapped</span><div class=\"w-full h-40 space-y-1.5 overflow-y-auto pr-0.5\"><template x-for=\"acr in getAcrValuesForLevel(0)\" :key=\"acr\"><button type=\"button\" @click=\"toggleAcr(acr)\" class=\"w-full h-7 flex items-center px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer\" :class=\"selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'\" :title=\"acr\"><span x-text=\"formatAcrLabel(acr)\"></span></button></template><template x-if=\"getAcrValuesForLevel(0).length === 0\"><span class=\"text-[10px] text-slate-400 italic\">None</span></template></div></div></div></div></div><!-- Assurance Levels & Security Factor Mapping Card --><div x-show=\"idpType === 'oidc' && issuer\" class=\"space-y-6 border-t border-slate-200 pt-5\" style=\"display: none;\"><h4 class=\"text-sm font-bold text-slate-800 uppercase tracking-wide\">Assurance Levels & System Mapping</h4><p class=\"text-xs text-slate-500\">Translate incoming external federated token contexts into internal security metrics.</p><div class=\"grid grid-cols-1 md:grid-cols-2 gap-4\"><div><label class=\"block text-xs font-bold text-slate-500 mb-1\">Fallback Authentication Assurance Level (AAL)</label> <select name=\"aal\" x-model=\"aal\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-xs\"><option value=\"1\">AAL 1 (Single Factor)</option> <option value=\"2\">AAL 2 (Multi Factor)</option> <option value=\"3\">AAL 3 (High Security)</option></select></div><div><label class=\"block text-xs font-bold text-slate-500 mb-1\">Fallback Identity Assurance Level (IAL)</label> <select name=\"ial\" x-model=\"ial\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-xs\"><option value=\"1\">IAL 1 (Self-asserted)</option> <option value=\"2\">IAL 2 (Verified)</option> <option value=\"3\">IAL 3 (High-Trust Verified)</option></select></div></div><!-- Dynamic Tuple Processing Matrix Grid Interface --><div class=\"pt-4 border-t border-slate-100\" x-show=\"selectedAcrValues.length > 0\"><h5 class=\"text-xs font-bold text-slate-500 mb-3\">ACR Value Mapping Matrix (AAL & IAL system mappings)</h5><div class=\"bg-slate-50 p-4 border border-slate-200 rounded-xl space-y-2\"><!-- Static Header Row: Clears out repetitive inline label junk --><div class=\"hidden sm:flex items-center gap-4 px-3 pb-1 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-400\"><div class=\"flex-1\">Upstream ACR Claim</div><div class=\"w-40 text-left pl-1\">AAL System Assignment</div><div class=\"w-40 text-left pl-1\">IAL System Assignment</div></div><!-- Scrollable Row Loop Container --><div class=\"max-h-64 overflow-y-auto space-y-2 pr-1\"><template x-for=\"acr in selectedAcrValues\" :key=\"acr\"><div class=\"flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-2 bg-white px-3 rounded-lg border border-slate-200/60 shadow-sm hover:border-slate-300/80 transition-colors\"><!-- Left Column: Raw clean text block --><div class=\"flex-1 min-w-0 flex flex-col justify-center\"><span class=\"font-mono text-xs font-bold text-slate-800 truncate\" x-text=\"formatAcrLabel(acr)\"></span> <span class=\"text-[9px] text-slate-400 font-mono truncate mt-0.5\" :title=\"acr\" x-text=\"acr\"></span></div><!-- Right Configuration Dropdown Selectors Grid Row --><div class=\"flex items-center gap-4 flex-shrink-0\"><!-- AAL Field --><div class=\"w-40\"><input type=\"hidden\" :name=\"'acr_to_tuple[' + acr + '][aal]'\" :value=\"acrToTuple[acr] ? acrToTuple[acr].aal : '0'\"> <select :value=\"acrToTuple[acr] ? acrToTuple[acr].aal : '0'\" @change=\"if(!acrToTuple[acr]) acrToTuple[acr] = {aal:'0', ial:'0'}; acrToTuple[acr].aal = $el.value\" class=\"w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-md bg-white font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm cursor-pointer\"><option value=\"0\">Unmapped</option> <option value=\"1\">AAL 1</option> <option value=\"2\">AAL 2</option> <option value=\"3\">AAL 3</option></select></div><!-- IAL Field --><div class=\"w-40\"><input type=\"hidden\" :name=\"'acr_to_tuple[' + acr + '][ial]'\" :value=\"acrToTuple[acr] ? acrToTuple[acr].ial : '0'\"> <select :value=\"acrToTuple[acr] ? acrToTuple[acr].ial : '0'\" @change=\"if(!acrToTuple[acr]) acrToTuple[acr] = {aal:'0', ial:'0'}; acrToTuple[acr].ial = $el.value\" class=\"w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-md bg-white font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm cursor-pointer\"><option value=\"0\">Unmapped</option> <option value=\"1\">IAL 1</option> <option value=\"2\">IAL 2</option> <option value=\"3\">IAL 3</option></select></div></div></div></template></div></div></div><div class=\"pt-4 border-t border-slate-100\"><h5 class=\"text-xs font-bold text-slate-500 mb-2\">Standard AMR Mappings</h5><div class=\"grid grid-cols-2 sm:grid-cols-5 gap-3 bg-slate-50 p-3 border border-slate-200 rounded-xl\"><template x-for=\"factor in ['pwd', 'mfa', 'otp', 'sms', 'hwk']\" :key=\"factor\"><div class=\"flex flex-col gap-1 bg-white p-2 rounded-lg border border-slate-200 shadow-sm\"><span class=\"font-mono text-[10px] font-bold text-slate-500 uppercase\" x-text=\"factor\"></span> <select :name=\"'amr_to_aal[' + factor + ']'\" x-model=\"amrToAAL[factor]\" class=\"w-full px-1.5 py-1 text-xs border border-slate-300 rounded bg-white focus:ring-2 focus:ring-blue-500\"><option value=\"1\">AAL 1</option> <option value=\"2\">AAL 2</option> <option value=\"3\">AAL 3</option></select></div></template></div></div><div class=\"pt-4 border-t border-slate-100\"><div class=\"flex items-center justify-between mb-2\"><h5 class=\"text-xs font-bold text-slate-500\">Custom AMR Mappings</h5><button type=\"button\" @click=\"addCustomAmr()\" class=\"px-2.5 py-1 text-xs bg-slate-900 text-white rounded-lg shadow-sm font-medium transition cursor-pointer hover:bg-slate-800\">+ Add Row</button></div><div class=\"space-y-2\"><template x-for=\"(item, index) in customAmrs\" :key=\"index\"><div class=\"flex items-center gap-3 bg-slate-50 p-2 border border-slate-200 rounded-lg\"><input type=\"text\" name=\"custom_amr_keys\" x-model=\"item.key\" placeholder=\"e.g. face, pin\" class=\"flex-1 px-3 py-1.5 text-xs border border-slate-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 font-mono\" required> <select name=\"custom_amr_values\" x-model=\"item.value\" class=\"px-2 py-1.5 text-xs border border-slate-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500\"><option value=\"1\">AAL 1</option> <option value=\"2\">AAL 2</option> <option value=\"3\">AAL 3</option></select> <button type=\"button\" @click=\"removeCustomAmr(index)\" class=\"text-red-500 hover:text-red-700 font-bold px-3 py-1.5 text-sm focus:outline-none\">✕</button></div></template></div></div></div><!-- Identity Claim Resolution Card --><div x-show=\"idpType === 'oidc' && issuer\" class=\"space-y-4 border-t border-slate-200 pt-5\" style=\"display: none;\"><h4 class=\"text-sm font-bold text-slate-800 uppercase tracking-wide\">Identity Claim Resolution</h4><div class=\"grid grid-cols-1 md:grid-cols-2 gap-4\"><div><label class=\"block text-xs font-bold text-slate-500 mb-1\">User Identifier Claim</label> <input type=\"text\" name=\"user_identifier_claim\" x-model=\"userIdentifierClaim\" placeholder=\"sub or email\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm\"><p class=\"text-[10px] text-slate-400 mt-1\">Configures which parsed ID token claim matches the unique local account (commonly 'sub' or 'email').</p></div></div></div><!-- Form Buttons Card --><div class=\"flex justify-end space-x-3 pt-4 border-t border-slate-200\"><button type=\"button\" class=\"px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition cursor-pointer\" @click=\"isOpen = false\">Cancel</button> <button type=\"submit\" class=\"px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition cursor-pointer\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -32,6 +32,12 @@ type IdentityProvider struct {
 	UpdatedAt   time.Time
 }
 
+// AcrTuple represents the multi-dimensional security assurance capabilities for a given claim
+type AcrTuple struct {
+	AAL int `json:"aal"`
+	IAL int `json:"ial"`
+}
+
 type IdentityProviderConfig struct {
 	UsernameField              string `json:"username_field"`
 	IAL                        int    `json:"ial"`
@@ -41,27 +47,27 @@ type IdentityProviderConfig struct {
 	PasswordBlockedTime        int    `json:"password_blocked_time"` // In seconds
 
 	// OIDC-specific configurations
-	DiscoveryEndpoint           string         `json:"discovery_endpoint,omitempty"`
-	Issuer                      string         `json:"issuer,omitempty"`
-	AuthorizationEndpoint       string         `json:"authorization_endpoint,omitempty"`
-	TokenEndpoint               string         `json:"token_endpoint,omitempty"`
-	UserinfoEndpoint            string         `json:"userinfo_endpoint,omitempty"`
-	JwksURI                     string         `json:"jwks_uri,omitempty"`
-	PushedAuthorizationEndpoint string         `json:"pushed_authorization_request_endpoint,omitempty"`
-	ClientID                    string         `json:"client_id,omitempty"`
-	ClientSecret                string         `json:"client_secret,omitempty"`
-	AuthenticationMethod        string         `json:"authentication_method,omitempty"`
-	PkceEnabled                 bool           `json:"pkce_enabled,omitempty"`
-	ParEnabled                  bool           `json:"par_enabled,omitempty"`
-	SLOEnabled                  bool           `json:"slo_enabled,omitempty"`
-	Scopes                      []string       `json:"scopes,omitempty"`
-	Claims                      []string       `json:"claims,omitempty"`
-	ACRValues                   []string       `json:"acr_values,omitempty"`
-	DomainAliases               []string       `json:"domain_aliases,omitempty"`
-	UserIdentifierClaim         string         `json:"user_identifier_claim,omitempty"`
-	DiscoveryResult             string         `json:"discovery_result,omitempty"`
-	AcrToAAL                    map[string]int `json:"acr_to_aal,omitempty"`
-	AmrToAAL                    map[string]int `json:"amr_to_aal,omitempty"`
+	DiscoveryEndpoint           string              `json:"discovery_endpoint,omitempty"`
+	Issuer                      string              `json:"issuer,omitempty"`
+	AuthorizationEndpoint       string              `json:"authorization_endpoint,omitempty"`
+	TokenEndpoint               string              `json:"token_endpoint,omitempty"`
+	UserinfoEndpoint            string              `json:"userinfo_endpoint,omitempty"`
+	JwksURI                     string              `json:"jwks_uri,omitempty"`
+	PushedAuthorizationEndpoint string              `json:"pushed_authorization_request_endpoint,omitempty"`
+	ClientID                    string              `json:"client_id,omitempty"`
+	ClientSecret                string              `json:"client_secret,omitempty"`
+	AuthenticationMethod        string              `json:"authentication_method,omitempty"`
+	PkceEnabled                 bool                `json:"pkce_enabled,omitempty"`
+	ParEnabled                  bool                `json:"par_enabled,omitempty"`
+	SLOEnabled                  bool                `json:"slo_enabled,omitempty"`
+	Scopes                      []string            `json:"scopes,omitempty"`
+	Claims                      []string            `json:"claims,omitempty"`
+	ACRValues                   []string            `json:"acr_values,omitempty"`
+	DomainAliases               []string            `json:"domain_aliases,omitempty"`
+	UserIdentifierClaim         string              `json:"user_identifier_claim,omitempty"`
+	DiscoveryResult             string              `json:"discovery_result,omitempty"`
+	AcrToTuple                  map[string]AcrTuple `json:"acr_to_tuple,omitempty"`
+	AmrToAAL                    map[string]int      `json:"amr_to_aal,omitempty"`
 }
 
 type UserIdentity struct {

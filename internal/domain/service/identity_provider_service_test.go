@@ -398,13 +398,13 @@ func TestIdentityProviderService_AuthenticateUsernamePassword_Failure(t *testing
 
 func TestNormalizeFederatedClaims(t *testing.T) {
 	tests := []struct {
-		name        string
-		upstreamAMR []string
-		upstreamACR string
-		defaultAAL  int
-		acrToAalMap map[string]int
-		amrToAalMap map[string]int
-		want        SprezzAssuranceClaims
+		name          string
+		upstreamAMR   []string
+		upstreamACR   string
+		defaultAAL    int
+		acrToTupleMap map[string]model.AcrTuple
+		amrToAalMap   map[string]int
+		want          SprezzAssuranceClaims
 	}{
 		{
 			name:        "Fallback Baseline Single-Factor",
@@ -417,33 +417,39 @@ func TestNormalizeFederatedClaims(t *testing.T) {
 			},
 		},
 		{
-			name:        "Standard Entra ID MFA Auto-Detection",
+			name:        "Dynamic Tuple Matrix match overrides default parameters",
+			upstreamAMR: []string{"pwd"},
+			upstreamACR: "urn:example:high_assurance",
+			defaultAAL:  1,
+			acrToTupleMap: map[string]model.AcrTuple{
+				"urn:example:high_assurance": {AAL: 3, IAL: 2},
+			},
+			want: SprezzAssuranceClaims{
+				AMR: []string{"federated", "hwk"},
+				ACR: "urn:sprezz:assurance:aal3",
+			},
+		},
+		{
+			name:        "Level 0 inside Tuple defaults back to baseline",
+			upstreamAMR: []string{"pwd"},
+			upstreamACR: "urn:example:unmapped",
+			defaultAAL:  2,
+			acrToTupleMap: map[string]model.AcrTuple{
+				"urn:example:unmapped": {AAL: 0, IAL: 1}, // AAL 0 means unmapped/none
+			},
+			want: SprezzAssuranceClaims{
+				AMR: []string{"federated", "mfa"},
+				ACR: "urn:sprezz:assurance:aal2",
+			},
+		},
+		{
+			name:        "Standard Entra ID MFA Auto-Detection Fallback Spec",
 			upstreamAMR: []string{"pwd", "mfa"},
 			upstreamACR: "",
 			defaultAAL:  1,
 			want: SprezzAssuranceClaims{
 				AMR: []string{"federated", "mfa"},
 				ACR: "urn:sprezz:assurance:aal2",
-			},
-		},
-		{
-			name:        "Biometric Fingerprint (fpt) maps to AAL2 by default spec",
-			upstreamAMR: []string{"pwd", "fpt"},
-			upstreamACR: "",
-			defaultAAL:  1,
-			want: SprezzAssuranceClaims{
-				AMR: []string{"federated", "mfa"},
-				ACR: "urn:sprezz:assurance:aal2",
-			},
-		},
-		{
-			name:        "Smartcard (sc) escalates to AAL3 via fallback spec",
-			upstreamAMR: []string{"sc"},
-			upstreamACR: "",
-			defaultAAL:  1,
-			want: SprezzAssuranceClaims{
-				AMR: []string{"federated", "hwk"},
-				ACR: "urn:sprezz:assurance:aal3",
 			},
 		},
 		{
@@ -461,9 +467,91 @@ func TestNormalizeFederatedClaims(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NormalizeFederatedClaims(tt.upstreamAMR, tt.upstreamACR, tt.defaultAAL, tt.acrToAalMap, tt.amrToAalMap)
+			got := NormalizeFederatedClaims(tt.upstreamAMR, tt.upstreamACR, tt.defaultAAL, tt.acrToTupleMap, tt.amrToAalMap)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("NormalizeFederatedClaims() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIdentityProviderService_ResolveFederatedLevels(t *testing.T) {
+	tests := []struct {
+		name         string
+		config       model.IdentityProviderConfig
+		externalAcr  string
+		externalAmrs []string
+		wantAAL      int
+		wantIAL      int
+	}{
+		{
+			name: "Perfect Match with AAL and IAL presence combined",
+			config: model.IdentityProviderConfig{
+				AAL: 1,
+				IAL: 1,
+				AcrToTuple: map[string]model.AcrTuple{
+					"urn:example:secure": {AAL: 3, IAL: 2},
+				},
+			},
+			externalAcr: "urn:example:secure",
+			wantAAL:     3,
+			wantIAL:     2,
+		},
+		{
+			name: "Level 0 De-escalation triggers Fallback to IDP configuration defaults",
+			config: model.IdentityProviderConfig{
+				AAL: 2,
+				IAL: 3,
+				AcrToTuple: map[string]model.AcrTuple{
+					"urn:example:unmapped": {AAL: 0, IAL: 0}, // 0 represents unmapped
+				},
+			},
+			externalAcr: "urn:example:unmapped",
+			wantAAL:     2, // falls back to config.AAL
+			wantIAL:     3, // falls back to config.IAL
+		},
+		{
+			name: "Partial Tuple Mapping leaves unmapped component as default",
+			config: model.IdentityProviderConfig{
+				AAL: 1,
+				IAL: 2,
+				AcrToTuple: map[string]model.AcrTuple{
+					"urn:example:aalonly": {AAL: 3, IAL: 0},
+				},
+			},
+			externalAcr: "urn:example:aalonly",
+			wantAAL:     3, // Overridden by tuple map
+			wantIAL:     2, // 0 leaves it as config.IAL
+		},
+		{
+			name: "AMR evaluation overrides AAL baseline when higher",
+			config: model.IdentityProviderConfig{
+				AAL: 1,
+				IAL: 1,
+				AcrToTuple: map[string]model.AcrTuple{
+					"urn:example:low": {AAL: 1, IAL: 1},
+				},
+				AmrToAAL: map[string]int{
+					"mfa": 2,
+				},
+			},
+			externalAcr:  "urn:example:low",
+			externalAmrs: []string{"mfa"},
+			wantAAL:      2, // Escalated by AMR check rule
+			wantIAL:      1,
+		},
+	}
+
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	clock := portmock.NewMockClock(time.Now())
+	service := NewIdentityProviderService(storage, clock)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotAAL, gotIAL := service.ResolveFederatedLevels(tt.config, tt.externalAcr, tt.externalAmrs)
+			if gotAAL != tt.wantAAL || gotIAL != tt.wantIAL {
+				t.Errorf("ResolveFederatedLevels() = (aal: %d, ial: %d), want (aal: %d, ial: %d)", gotAAL, gotIAL, tt.wantAAL, tt.wantIAL)
 			}
 		})
 	}
