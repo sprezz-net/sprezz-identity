@@ -346,11 +346,69 @@ func TestHttpAdapter_TenantMiddleware_ResolutionFailure(t *testing.T) {
 	}
 }
 
+type handlerMockStorage struct {
+	*portmock.StorageMock
+	deks   map[uuid.UUID][]byte
+	nonces map[uuid.UUID][]byte
+	keys   map[uuid.UUID][]model.SigningKey
+}
+
+func (m *handlerMockStorage) GetTenantDEK(ctx context.Context, tenantUUID uuid.UUID) ([]byte, []byte, error) {
+	return m.deks[tenantUUID], m.nonces[tenantUUID], nil
+}
+
+func (m *handlerMockStorage) InsertTenantDEK(ctx context.Context, tenantUUID uuid.UUID, encryptedDEK, nonce []byte) error {
+	m.deks[tenantUUID] = encryptedDEK
+	m.nonces[tenantUUID] = nonce
+	return nil
+}
+
+func (m *handlerMockStorage) GetActiveSigningKeys(ctx context.Context, tenantUUID uuid.UUID) ([]model.SigningKey, error) {
+	return m.keys[tenantUUID], nil
+}
+
+func (m *handlerMockStorage) GetActiveVerificationKeys(ctx context.Context, tenantUUID uuid.UUID) ([]model.SigningKey, error) {
+	return m.keys[tenantUUID], nil
+}
+
+func (m *handlerMockStorage) InsertSigningKey(ctx context.Context, tenantUUID uuid.UUID, key model.SigningKey, encryptedPrivateKey, nonce []byte) (string, error) {
+	if key.Kid == "" {
+		key.Kid = uuid.New().String()
+	}
+	key.RawEncryptedPrivateKey = encryptedPrivateKey
+	key.CryptoNonce = nonce
+	m.keys[tenantUUID] = append(m.keys[tenantUUID], key)
+	return key.Kid, nil
+}
+
+func (m *handlerMockStorage) RotateSigningKeys(ctx context.Context, tenantUUID uuid.UUID) error {
+	m.keys[tenantUUID] = nil
+	return nil
+}
+
 func TestHttpAdapter_JWKS_CacheControl(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
 	auth := portmock.NewAuthMock(ctrl)
-	crypto := jwtcrypto.NewJWTSigner()
+
+	tenantID := uuid.New()
+	storage.ResolveTenantByDomainMock.Expect(minimock.AnyContext, "test.com").Return(&model.Tenant{
+		ID:       tenantID,
+		Domain:   "test.com",
+		IsActive: true,
+	}, nil)
+
+	mockStore := &handlerMockStorage{
+		StorageMock: storage,
+		deks:        make(map[uuid.UUID][]byte),
+		nonces:      make(map[uuid.UUID][]byte),
+		keys:        make(map[uuid.UUID][]model.SigningKey),
+	}
+
+	crypto, err := jwtcrypto.NewJWTSigner(mockStore, "01234567890123456789012345678901")
+	if err != nil {
+		t.Fatalf("failed to create signer: %v", err)
+	}
 
 	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
 

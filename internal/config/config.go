@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
@@ -31,6 +32,7 @@ type Config struct {
 	Database       DatabaseConfig       `yaml:"database"`
 	IdentityServer IdentityServerConfig `yaml:"identity_server"`
 	DatabaseURL    string               `env:"DATABASE_URL"`
+	MasterKey      string               `yaml:"master_key" env:"SPREZZ_MASTER_KEY"`
 }
 
 // GetDSN dynamically builds the connection string or prioritizes a raw DATABASE_URL override.
@@ -85,6 +87,19 @@ func LoadConfig() (*Config, error) {
 	// 4. Assert core cryptographic safety rules established in the Sprezz-IDP spec.
 	if cfg.Database.Password == "" && cfg.DatabaseURL == "" {
 		return nil, fmt.Errorf("invalid configuration: either POSTGRES_PASSWORD or DATABASE_URL must be explicitly set")
+	}
+
+	if cfg.MasterKey == "" {
+		return nil, fmt.Errorf("invalid configuration: SPREZZ_MASTER_KEY must be set")
+	}
+	var rawKey []byte
+	if decoded, err := hex.DecodeString(cfg.MasterKey); err == nil && len(decoded) == 32 {
+		rawKey = decoded
+	} else {
+		rawKey = []byte(cfg.MasterKey)
+	}
+	if len(rawKey) != 32 {
+		return nil, fmt.Errorf("invalid configuration: SPREZZ_MASTER_KEY length is invalid (%d bytes). Must be exactly 32 bytes or 32-byte hex for AES-256 envelope operations", len(rawKey))
 	}
 
 	return &cfg, nil

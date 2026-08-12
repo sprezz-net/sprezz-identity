@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -9,10 +10,11 @@ import (
 	"sprezz-identity/internal/domain/model"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 func TestJWTSigner_SignAccessToken_Success(t *testing.T) {
-	signer := NewJWTSigner()
+	signer := newTestSigner(t)
 
 	claims := model.TokenClaims{
 		TokenID:   "token-123",
@@ -77,7 +79,7 @@ func TestJWTSigner_SignAccessToken_Success(t *testing.T) {
 }
 
 func TestJWTSigner_SignAccessToken_ES256_Success(t *testing.T) {
-	signer := NewJWTSigner()
+	signer := newTestSigner(t)
 
 	claims := model.TokenClaims{
 		TokenID:   "token-es256-123",
@@ -114,7 +116,7 @@ func TestJWTSigner_SignAccessToken_ES256_Success(t *testing.T) {
 }
 
 func TestJWTSigner_SignAccessToken_UnsupportedAlg(t *testing.T) {
-	signer := NewJWTSigner()
+	signer := newTestSigner(t)
 	claims := model.TokenClaims{}
 
 	_, err := signer.SignAccessToken(claims, "HS256")
@@ -124,7 +126,7 @@ func TestJWTSigner_SignAccessToken_UnsupportedAlg(t *testing.T) {
 }
 
 func TestJWTSigner_SignIDToken_Success(t *testing.T) {
-	signer := NewJWTSigner()
+	signer := newTestSigner(t)
 
 	claims := model.OIDCTokenClaims{
 		TokenID:   "id-token-123",
@@ -157,7 +159,7 @@ func TestJWTSigner_SignIDToken_Success(t *testing.T) {
 }
 
 func TestJWTSigner_SignIDToken_ES256_Success(t *testing.T) {
-	signer := NewJWTSigner()
+	signer := newTestSigner(t)
 
 	claims := model.OIDCTokenClaims{
 		TokenID:   "id-token-es256",
@@ -191,7 +193,7 @@ func TestJWTSigner_SignIDToken_ES256_Success(t *testing.T) {
 }
 
 func TestJWTSigner_SignIDToken_UnsupportedAlg(t *testing.T) {
-	signer := NewJWTSigner()
+	signer := newTestSigner(t)
 	claims := model.OIDCTokenClaims{}
 
 	_, err := signer.SignIDToken(claims, "HS256")
@@ -201,7 +203,7 @@ func TestJWTSigner_SignIDToken_UnsupportedAlg(t *testing.T) {
 }
 
 func TestJWTSigner_MarshalJWKSet(t *testing.T) {
-	signer := NewJWTSigner()
+	signer := newTestSigner(t)
 
 	domain := "test-tenant.com"
 	jsonStr, err := signer.MarshalJWKSet(domain)
@@ -235,7 +237,7 @@ func TestJWTSigner_MarshalJWKSet(t *testing.T) {
 }
 
 func TestJWTSigner_SignLogoutToken_Success(t *testing.T) {
-	signer := NewJWTSigner()
+	signer := newTestSigner(t)
 
 	claims := model.LogoutTokenClaims{
 		TokenID:  "logout-token-123",
@@ -256,7 +258,7 @@ func TestJWTSigner_SignLogoutToken_Success(t *testing.T) {
 }
 
 func TestJWTSigner_SignLogoutToken_ES256_Success(t *testing.T) {
-	signer := NewJWTSigner()
+	signer := newTestSigner(t)
 
 	claims := model.LogoutTokenClaims{
 		TokenID:  "logout-token-es",
@@ -282,7 +284,7 @@ func TestJWTSigner_SignLogoutToken_ES256_Success(t *testing.T) {
 }
 
 func TestJWTSigner_SignLogoutToken_UnsupportedAlg(t *testing.T) {
-	signer := NewJWTSigner()
+	signer := newTestSigner(t)
 	claims := model.LogoutTokenClaims{}
 
 	_, err := signer.SignLogoutToken(claims, "HS256")
@@ -292,7 +294,7 @@ func TestJWTSigner_SignLogoutToken_UnsupportedAlg(t *testing.T) {
 }
 
 func TestJWTSigner_VerifyToken_Success(t *testing.T) {
-	signer := NewJWTSigner()
+	signer := newTestSigner(t)
 
 	claims := model.TokenClaims{
 		TokenID:   "token-123",
@@ -321,7 +323,7 @@ func TestJWTSigner_VerifyToken_Success(t *testing.T) {
 }
 
 func TestJWTSigner_VerifyToken_Failures(t *testing.T) {
-	signer := NewJWTSigner()
+	signer := newTestSigner(t)
 
 	// 1. Mismatched method: HMAC token
 	tokenHMAC := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"sub": "test"})
@@ -365,7 +367,7 @@ func TestJWTSigner_VerifyToken_Failures(t *testing.T) {
 	}
 
 	// 4. Unknown key / Key not found for kid
-	signerEmpty := NewJWTSigner()
+	signerEmpty := newTestSigner(t)
 	tokenWithKid := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{"sub": "user-sub"})
 	tokenWithKid.Header["kid"] = "unknown-kid"
 	tokenStrWithKid, _ := tokenWithKid.SignedString(privateKey)
@@ -376,7 +378,7 @@ func TestJWTSigner_VerifyToken_Failures(t *testing.T) {
 }
 
 func TestJWTSigner_IssuerFallbackAndEmpty(t *testing.T) {
-	signer := NewJWTSigner()
+	signer := newTestSigner(t)
 
 	// 1. SignAccessToken with empty Issuer
 	claimsAccess := model.TokenClaims{
@@ -451,7 +453,7 @@ func getKidByKty(jwks []map[string]any, kty string) string {
 }
 
 func TestJWTSigner_RotateKeys(t *testing.T) {
-	signer := NewJWTSigner()
+	signer := newTestSigner(t)
 	domain := "test-tenant.com"
 
 	// 1. Initialize keyring
@@ -486,7 +488,7 @@ func TestJWTSigner_RotateKeys(t *testing.T) {
 }
 
 func TestJWTSigner_RotateKeys_NoDowntime(t *testing.T) {
-	signer := NewJWTSigner()
+	signer := newTestSigner(t)
 	domain := "test-tenant.com"
 	issuer := "https://" + domain
 
@@ -537,4 +539,88 @@ func TestJWTSigner_RotateKeys_NoDowntime(t *testing.T) {
 	if claimsVerified2["jti"] != "token-2" {
 		t.Errorf("expected token-2, got %v", claimsVerified2["jti"])
 	}
+}
+
+type mockStorage struct {
+	deks    map[uuid.UUID][]byte
+	nonces  map[uuid.UUID][]byte
+	keys    map[uuid.UUID][]model.SigningKey
+	tenants map[string]*model.Tenant
+}
+
+func newMockStorage() *mockStorage {
+	tID := uuid.New()
+	return &mockStorage{
+		deks:   make(map[uuid.UUID][]byte),
+		nonces: make(map[uuid.UUID][]byte),
+		keys:   make(map[uuid.UUID][]model.SigningKey),
+		tenants: map[string]*model.Tenant{
+			"auth.example.com": {
+				ID:       tID,
+				Domain:   "auth.example.com",
+				IsActive: true,
+			},
+			"test-tenant.com": {
+				ID:       tID,
+				Domain:   "test-tenant.com",
+				IsActive: true,
+			},
+			"default": {
+				ID:       tID,
+				Domain:   "default",
+				IsActive: true,
+			},
+		},
+	}
+}
+
+func (m *mockStorage) GetTenantDEK(ctx context.Context, tenantUUID uuid.UUID) ([]byte, []byte, error) {
+	return m.deks[tenantUUID], m.nonces[tenantUUID], nil
+}
+
+func (m *mockStorage) InsertTenantDEK(ctx context.Context, tenantUUID uuid.UUID, encryptedDEK, nonce []byte) error {
+	m.deks[tenantUUID] = encryptedDEK
+	m.nonces[tenantUUID] = nonce
+	return nil
+}
+
+func (m *mockStorage) GetActiveSigningKeys(ctx context.Context, tenantUUID uuid.UUID) ([]model.SigningKey, error) {
+	return m.keys[tenantUUID], nil
+}
+
+func (m *mockStorage) GetActiveVerificationKeys(ctx context.Context, tenantUUID uuid.UUID) ([]model.SigningKey, error) {
+	return m.keys[tenantUUID], nil
+}
+
+func (m *mockStorage) InsertSigningKey(ctx context.Context, tenantUUID uuid.UUID, key model.SigningKey, encryptedPrivateKey, nonce []byte) (string, error) {
+	if key.Kid == "" {
+		key.Kid = uuid.New().String()
+	}
+	key.RawEncryptedPrivateKey = encryptedPrivateKey
+	key.CryptoNonce = nonce
+	m.keys[tenantUUID] = append(m.keys[tenantUUID], key)
+	return key.Kid, nil
+}
+
+func (m *mockStorage) RotateSigningKeys(ctx context.Context, tenantUUID uuid.UUID) error {
+	m.keys[tenantUUID] = nil
+	return nil
+}
+
+func (m *mockStorage) ResolveTenantByDomain(ctx context.Context, domain string) (*model.Tenant, error) {
+	t, ok := m.tenants[domain]
+	if !ok {
+		for _, v := range m.tenants {
+			return v, nil
+		}
+	}
+	return t, nil
+}
+
+func newTestSigner(t *testing.T) *JWTSigner {
+	signer, err := NewJWTSigner(newMockStorage(), "01234567890123456789012345678901")
+	if err != nil {
+		t.Fatalf("failed to create signer: %v", err)
+	}
+	return signer
 }

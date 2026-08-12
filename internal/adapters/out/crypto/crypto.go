@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -9,12 +10,15 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	"sprezz-identity/internal/adapters/out/state"
 	"sprezz-identity/internal/domain/model"
+	"sprezz-identity/internal/domain/port"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -27,15 +31,86 @@ type tenantKeyring struct {
 	JWKS       []map[string]any
 }
 
-type JWTSigner struct {
-	mu       sync.RWMutex
-	keyrings map[string]*tenantKeyring
+type Storage interface {
+	port.CryptoStorage
+	ResolveTenantByDomain(ctx context.Context, domain string) (*model.Tenant, error)
 }
 
-func NewJWTSigner() *JWTSigner {
-	return &JWTSigner{
-		keyrings: make(map[string]*tenantKeyring),
+type JWTSigner struct {
+	mu        sync.RWMutex
+	keyrings  map[string]*tenantKeyring
+	storage   Storage
+	masterKey string
+}
+
+// Ensure JWTSigner strictly satisfies port.Crypto at compile time.
+var _ port.Crypto = (*JWTSigner)(nil)
+
+func NewJWTSigner(storage Storage, masterKey string) (*JWTSigner, error) {
+	if masterKey == "" {
+		return nil, errors.New("SPREZZ_MASTER_KEY must not be empty")
 	}
+	return &JWTSigner{
+		keyrings:  make(map[string]*tenantKeyring),
+		storage:   storage,
+		masterKey: masterKey,
+	}, nil
+}
+
+// --- Cryptographic Envelope Utilities ---
+
+func (s *JWTSigner) encrypt(plaintext, key []byte) ([]byte, []byte, error) {
+	plaintextB64 := base64.StdEncoding.EncodeToString(plaintext)
+	passphrase := base64.StdEncoding.EncodeToString(key)
+	encB64, err := state.EncryptAESGCM(plaintextB64, passphrase)
+	if err != nil {
+		return nil, nil, err
+	}
+	data, err := base64.StdEncoding.DecodeString(encB64)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(data) < 12 {
+		return nil, nil, fmt.Errorf("invalid ciphertext from EncryptAESGCM")
+	}
+	return data[12:], data[:12], nil
+}
+
+func (s *JWTSigner) decrypt(ciphertext, key, nonce []byte) ([]byte, error) {
+	combined := append(nonce, ciphertext...)
+	combinedB64 := base64.StdEncoding.EncodeToString(combined)
+	passphrase := base64.StdEncoding.EncodeToString(key)
+	decB64, err := state.DecryptAESGCM(combinedB64, passphrase)
+	if err != nil {
+		return nil, err
+	}
+	return base64.StdEncoding.DecodeString(decB64)
+}
+
+func (s *JWTSigner) encryptDEK(plainDEK []byte) ([]byte, []byte, error) {
+	plainDEKB64 := base64.StdEncoding.EncodeToString(plainDEK)
+	encB64, err := state.EncryptAESGCM(plainDEKB64, s.masterKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	data, err := base64.StdEncoding.DecodeString(encB64)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(data) < 12 {
+		return nil, nil, fmt.Errorf("invalid ciphertext for DEK encryption")
+	}
+	return data[12:], data[:12], nil
+}
+
+func (s *JWTSigner) decryptDEK(encDEK, nonce []byte) ([]byte, error) {
+	combined := append(nonce, encDEK...)
+	combinedB64 := base64.StdEncoding.EncodeToString(combined)
+	decB64, err := state.DecryptAESGCM(combinedB64, s.masterKey)
+	if err != nil {
+		return nil, err
+	}
+	return base64.StdEncoding.DecodeString(decB64)
 }
 
 func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
@@ -55,8 +130,10 @@ func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.Signatur
 		return "", err
 	}
 
+	s.mu.RLock()
 	kid := keyring.ActiveKids[alg]
 	privateKey := keyring.Keys[kid]
+	s.mu.RUnlock()
 
 	audClaim := any(claims.ClientID)
 	if len(claims.Audiences) > 0 {
@@ -115,8 +192,10 @@ func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.Signatur
 		return "", err
 	}
 
+	s.mu.RLock()
 	kid := keyring.ActiveKids[alg]
 	privateKey := keyring.Keys[kid]
+	s.mu.RUnlock()
 
 	mapClaims := jwt.MapClaims{
 		"iss":       issuer,
@@ -168,8 +247,10 @@ func (s *JWTSigner) SignLogoutToken(claims model.LogoutTokenClaims, alg model.Si
 		return "", err
 	}
 
+	s.mu.RLock()
 	kid := keyring.ActiveKids[alg]
 	privateKey := keyring.Keys[kid]
+	s.mu.RUnlock()
 
 	var method jwt.SigningMethod
 	if alg == model.AlgES256 {
@@ -278,6 +359,21 @@ func (s *JWTSigner) RotateKeys(tenant string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	ctx := context.Background()
+	tenantModel, err := s.storage.ResolveTenantByDomain(ctx, tenant)
+	if err != nil {
+		return fmt.Errorf("resolve tenant by domain: %w", err)
+	}
+
+	encDEK, nonceDEK, err := s.storage.GetTenantDEK(ctx, tenantModel.ID)
+	if err != nil {
+		return fmt.Errorf("get tenant DEK: %w", err)
+	}
+	rawDEK, err := s.decryptDEK(encDEK, nonceDEK)
+	if err != nil {
+		return fmt.Errorf("decrypt tenant DEK: %w", err)
+	}
+
 	keyring, ok := s.keyrings[tenant]
 	if !ok {
 		return fmt.Errorf("tenant %s keyring not initialized", tenant)
@@ -302,6 +398,48 @@ func (s *JWTSigner) RotateKeys(tenant string) error {
 	}
 
 	ecJwk := s.buildECJWK(ecKid, newECKey)
+
+	pkcs8Rsa, err := x509.MarshalPKCS8PrivateKey(newRSKey)
+	if err != nil {
+		return fmt.Errorf("rotate keys: marshal rsa private key: %w", err)
+	}
+	pkcs8Ec, err := x509.MarshalPKCS8PrivateKey(newECKey)
+	if err != nil {
+		return fmt.Errorf("rotate keys: marshal ecdsa private key: %w", err)
+	}
+
+	encRsa, nonceRsa, err := s.encrypt(pkcs8Rsa, rawDEK)
+	if err != nil {
+		return fmt.Errorf("rotate keys: encrypt rsa private key: %w", err)
+	}
+	encEc, nonceEc, err := s.encrypt(pkcs8Ec, rawDEK)
+	if err != nil {
+		return fmt.Errorf("rotate keys: encrypt ecdsa private key: %w", err)
+	}
+
+	// Demote active signing keys to verification-only
+	if err := s.storage.RotateSigningKeys(ctx, tenantModel.ID); err != nil {
+		return fmt.Errorf("rotate keys: demote active keys: %w", err)
+	}
+
+	// Insert new keys as active signing keys
+	_, err = s.storage.InsertSigningKey(ctx, tenantModel.ID, model.SigningKey{
+		Kid:       rsaKid,
+		Algorithm: string(model.AlgRS256),
+		PublicJWK: rsaJwk,
+	}, encRsa, nonceRsa)
+	if err != nil {
+		return fmt.Errorf("rotate keys: insert new rsa signing key: %w", err)
+	}
+
+	_, err = s.storage.InsertSigningKey(ctx, tenantModel.ID, model.SigningKey{
+		Kid:       ecKid,
+		Algorithm: string(model.AlgES256),
+		PublicJWK: ecJwk,
+	}, encEc, nonceEc)
+	if err != nil {
+		return fmt.Errorf("rotate keys: insert new ecdsa signing key: %w", err)
+	}
 
 	keyring.ActiveKids[model.AlgRS256] = rsaKid
 	keyring.ActiveKids[model.AlgES256] = ecKid
@@ -378,6 +516,54 @@ func (s *JWTSigner) getOrCreateKeyring(tenant string, issuer string) (*tenantKey
 		return keyring, nil
 	}
 
+	ctx := context.Background()
+	tenantModel, err := s.storage.ResolveTenantByDomain(ctx, tenant)
+	if err != nil {
+		return nil, fmt.Errorf("resolve tenant by domain: %w", err)
+	}
+
+	rawDEK, err := s.resolveOrCreateDEK(ctx, tenantModel)
+	if err != nil {
+		return nil, err
+	}
+
+	activeKeys, err := s.storage.GetActiveSigningKeys(ctx, tenantModel.ID)
+	if err != nil {
+		return nil, fmt.Errorf("get active signing keys: %w", err)
+	}
+
+	if len(activeKeys) == 0 {
+		return s.bootstrapKeyring(ctx, tenant, issuer, tenantModel, rawDEK)
+	}
+
+	return s.loadKeyringFromDB(ctx, tenant, tenantModel, rawDEK, activeKeys)
+}
+
+func (s *JWTSigner) resolveOrCreateDEK(ctx context.Context, tenantModel *model.Tenant) ([]byte, error) {
+	encDEK, nonceDEK, err := s.storage.GetTenantDEK(ctx, tenantModel.ID)
+	if err == nil && len(encDEK) > 0 {
+		rawDEK, err := s.decryptDEK(encDEK, nonceDEK)
+		if err != nil {
+			return nil, fmt.Errorf("decrypt tenant DEK: %w", err)
+		}
+		return rawDEK, nil
+	}
+
+	rawDEK := make([]byte, 32)
+	if _, err := rand.Read(rawDEK); err != nil {
+		return nil, fmt.Errorf("generate random DEK: %w", err)
+	}
+	encryptedDEK, nonce, err := s.encryptDEK(rawDEK)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt tenant DEK: %w", err)
+	}
+	if err := s.storage.InsertTenantDEK(ctx, tenantModel.ID, encryptedDEK, nonce); err != nil {
+		return nil, fmt.Errorf("insert tenant DEK: %w", err)
+	}
+	return rawDEK, nil
+}
+
+func (s *JWTSigner) bootstrapKeyring(ctx context.Context, tenant, issuer string, tenantModel *model.Tenant, rawDEK []byte) (*tenantKeyring, error) {
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, fmt.Errorf("generate tenant rsa key: %w", err)
@@ -398,6 +584,42 @@ func (s *JWTSigner) getOrCreateKeyring(tenant string, issuer string) (*tenantKey
 
 	ecJwk := s.buildECJWK(ecKid, ecKey)
 
+	pkcs8Rsa, err := x509.MarshalPKCS8PrivateKey(rsaKey)
+	if err != nil {
+		return nil, err
+	}
+	pkcs8Ec, err := x509.MarshalPKCS8PrivateKey(ecKey)
+	if err != nil {
+		return nil, err
+	}
+
+	encRsa, nonceRsa, err := s.encrypt(pkcs8Rsa, rawDEK)
+	if err != nil {
+		return nil, err
+	}
+	encEc, nonceEc, err := s.encrypt(pkcs8Ec, rawDEK)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.storage.InsertSigningKey(ctx, tenantModel.ID, model.SigningKey{
+		Kid:       rsaKid,
+		Algorithm: string(model.AlgRS256),
+		PublicJWK: rsaJwk,
+	}, encRsa, nonceRsa)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.storage.InsertSigningKey(ctx, tenantModel.ID, model.SigningKey{
+		Kid:       ecKid,
+		Algorithm: string(model.AlgES256),
+		PublicJWK: ecJwk,
+	}, encEc, nonceEc)
+	if err != nil {
+		return nil, err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if existing, exists := s.keyrings[tenant]; exists {
@@ -417,4 +639,62 @@ func (s *JWTSigner) getOrCreateKeyring(tenant string, issuer string) (*tenantKey
 	}
 	s.keyrings[tenant] = newKeyring
 	return newKeyring, nil
+}
+
+func (s *JWTSigner) loadKeyringFromDB(ctx context.Context, tenant string, tenantModel *model.Tenant, rawDEK []byte, activeKeys []model.SigningKey) (*tenantKeyring, error) {
+	keysMap := make(map[string]any)
+	activeKids := make(map[model.SignatureAlgorithm]string)
+	var jwks []map[string]any
+
+	for _, k := range activeKeys {
+		decryptedPriv, err := s.decrypt(k.RawEncryptedPrivateKey, rawDEK, k.CryptoNonce)
+		if err != nil {
+			return nil, fmt.Errorf("decrypt private key %s: %w", k.Kid, err)
+		}
+
+		parsedKey, err := x509.ParsePKCS8PrivateKey(decryptedPriv)
+		if err != nil {
+			return nil, fmt.Errorf("parse decrypted private key: %w", err)
+		}
+
+		keysMap[k.Kid] = parsedKey
+		alg := model.SignatureAlgorithm(k.Algorithm)
+		activeKids[alg] = k.Kid
+		jwks = append(jwks, k.PublicJWK)
+	}
+
+	verKeys, err := s.storage.GetActiveVerificationKeys(ctx, tenantModel.ID)
+	if err == nil {
+		jwks = mergeVerificationKeys(jwks, verKeys)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if existing, exists := s.keyrings[tenant]; exists {
+		return existing, nil
+	}
+
+	newKeyring := &tenantKeyring{
+		ActiveKids: activeKids,
+		Keys:       keysMap,
+		JWKS:       jwks,
+	}
+	s.keyrings[tenant] = newKeyring
+	return newKeyring, nil
+}
+
+func mergeVerificationKeys(jwks []map[string]any, verKeys []model.SigningKey) []map[string]any {
+	for _, k := range verKeys {
+		alreadyIn := false
+		for _, j := range jwks {
+			if j["kid"] == k.Kid {
+				alreadyIn = true
+				break
+			}
+		}
+		if !alreadyIn {
+			jwks = append(jwks, k.PublicJWK)
+		}
+	}
+	return jwks
 }

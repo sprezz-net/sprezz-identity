@@ -13,14 +13,16 @@ import (
 )
 
 const createTenant = `-- name: CreateTenant :execresult
-INSERT INTO tenants (tenant_uuid, name, domain_name, is_active, created_at, config, default_partition)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO tenants (tenant_uuid, name, domain_name, is_active, created_at, config, default_partition, encrypted_dek, dek_nonce)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (tenant_uuid) DO UPDATE SET
     name = EXCLUDED.name,
     domain_name = EXCLUDED.domain_name,
     is_active = EXCLUDED.is_active,
     config = EXCLUDED.config,
-    default_partition = EXCLUDED.default_partition
+    default_partition = EXCLUDED.default_partition,
+    encrypted_dek = COALESCE(EXCLUDED.encrypted_dek, tenants.encrypted_dek),
+    dek_nonce = COALESCE(EXCLUDED.dek_nonce, tenants.dek_nonce)
 `
 
 type CreateTenantParams struct {
@@ -31,6 +33,8 @@ type CreateTenantParams struct {
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	Config           []byte             `json:"config"`
 	DefaultPartition *int64             `json:"default_partition"`
+	EncryptedDek     []byte             `json:"encrypted_dek"`
+	DekNonce         []byte             `json:"dek_nonce"`
 }
 
 func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (pgconn.CommandTag, error) {
@@ -42,11 +46,13 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (pgc
 		arg.CreatedAt,
 		arg.Config,
 		arg.DefaultPartition,
+		arg.EncryptedDek,
+		arg.DekNonce,
 	)
 }
 
 const resolveTenantByDomain = `-- name: ResolveTenantByDomain :one
-SELECT tenant_uuid, name, domain_name, is_active, created_at, config, default_partition, updated_at
+SELECT tenant_uuid, name, domain_name, is_active, created_at, config, default_partition, updated_at, encrypted_dek, dek_nonce
 FROM tenants
 WHERE domain_name = $1
 LIMIT 1
@@ -61,6 +67,8 @@ type ResolveTenantByDomainRow struct {
 	Config           []byte             `json:"config"`
 	DefaultPartition *int64             `json:"default_partition"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	EncryptedDek     []byte             `json:"encrypted_dek"`
+	DekNonce         []byte             `json:"dek_nonce"`
 }
 
 func (q *Queries) ResolveTenantByDomain(ctx context.Context, domainName string) (ResolveTenantByDomainRow, error) {
@@ -75,12 +83,14 @@ func (q *Queries) ResolveTenantByDomain(ctx context.Context, domainName string) 
 		&i.Config,
 		&i.DefaultPartition,
 		&i.UpdatedAt,
+		&i.EncryptedDek,
+		&i.DekNonce,
 	)
 	return i, err
 }
 
 const resolveTenantByUUID = `-- name: ResolveTenantByUUID :one
-SELECT tenant_uuid, name, domain_name, is_active, created_at, config, default_partition, updated_at
+SELECT tenant_uuid, name, domain_name, is_active, created_at, config, default_partition, updated_at, encrypted_dek, dek_nonce
 FROM tenants
 WHERE tenant_uuid = $1
 LIMIT 1
@@ -95,6 +105,8 @@ type ResolveTenantByUUIDRow struct {
 	Config           []byte             `json:"config"`
 	DefaultPartition *int64             `json:"default_partition"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	EncryptedDek     []byte             `json:"encrypted_dek"`
+	DekNonce         []byte             `json:"dek_nonce"`
 }
 
 func (q *Queries) ResolveTenantByUUID(ctx context.Context, tenantUuid pgtype.UUID) (ResolveTenantByUUIDRow, error) {
@@ -109,6 +121,28 @@ func (q *Queries) ResolveTenantByUUID(ctx context.Context, tenantUuid pgtype.UUI
 		&i.Config,
 		&i.DefaultPartition,
 		&i.UpdatedAt,
+		&i.EncryptedDek,
+		&i.DekNonce,
 	)
 	return i, err
+}
+
+const updateTenantDEK = `-- name: UpdateTenantDEK :exec
+UPDATE tenants
+SET
+    encrypted_dek = $2,
+    dek_nonce = $3,
+    updated_at = NOW()
+WHERE tenant_uuid = $1
+`
+
+type UpdateTenantDEKParams struct {
+	TenantUuid   pgtype.UUID `json:"tenant_uuid"`
+	EncryptedDek []byte      `json:"encrypted_dek"`
+	DekNonce     []byte      `json:"dek_nonce"`
+}
+
+func (q *Queries) UpdateTenantDEK(ctx context.Context, arg UpdateTenantDEKParams) error {
+	_, err := q.db.Exec(ctx, updateTenantDEK, arg.TenantUuid, arg.EncryptedDek, arg.DekNonce)
+	return err
 }

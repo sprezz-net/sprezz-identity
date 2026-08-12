@@ -19,6 +19,7 @@ import (
 	"sprezz-identity/internal/adapters/out/state"
 	"sprezz-identity/internal/config"
 	"sprezz-identity/internal/domain/model"
+	"sprezz-identity/internal/domain/port"
 	"sprezz-identity/internal/domain/service"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -31,7 +32,6 @@ type dependencies struct {
 
 func main() {
 	log.Println("Starting Sprezz Identity server...")
-
 	deps := initDependencies()
 
 	logLevel := slog.LevelInfo
@@ -49,7 +49,10 @@ func main() {
 		log.Fatalf("Admin tenant bootstrap failed: %v", err)
 	}
 
-	signer := jwtcrypto.NewJWTSigner()
+	signer, err := jwtcrypto.NewJWTSigner(deps.storage, deps.cfg.MasterKey)
+	if err != nil {
+		log.Fatalf("Failed to initialize cryptographic boundaries: %v", err)
+	}
 
 	// Start the background token and session pruning worker (15-Minute Ticks)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -57,8 +60,7 @@ func main() {
 	startTokenPruningWorker(ctx, deps.storage, deps.cfg.IdentityServer.TokenPruningInterval)
 	startKeyRotationWorker(ctx, signer, deps.cfg.IdentityServer.AdminTenantDomain, deps.cfg.IdentityServer.KeyRotationInterval)
 
-	masterKey := os.Getenv("SPREZZ_MASTER_KEY")
-	decryptedSecret := loadOrInitializeAdminSecret(deps, adminTenant, masterKey)
+	decryptedSecret := loadOrInitializeAdminSecret(deps, adminTenant, deps.cfg.MasterKey)
 
 	var ephemeralStore *state.EphemeralStore
 	if decryptedSecret != "" {
@@ -131,7 +133,7 @@ func startTokenPruningWorker(ctx context.Context, storage *postgres.PostgresStor
 	}()
 }
 
-func startKeyRotationWorker(ctx context.Context, signer *jwtcrypto.JWTSigner, domain string, interval time.Duration) {
+func startKeyRotationWorker(ctx context.Context, signer port.Crypto, domain string, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	go func() {
 		log.Printf("Starting background key rotation worker (interval: %v)...", interval)

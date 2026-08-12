@@ -164,6 +164,21 @@ type Tenant struct {
 	Config           []byte             `json:"config"`
 	DefaultPartition *int64             `json:"default_partition"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	EncryptedDek     []byte             `json:"encrypted_dek"`
+	DekNonce         []byte             `json:"dek_nonce"`
+}
+
+type TenantSigningKey struct {
+	ID                   pgtype.UUID      `json:"id"`
+	TenantID             int32            `json:"tenant_id"`
+	Kid                  string           `json:"kid"`
+	Algorithm            string           `json:"algorithm"`
+	EncryptedPrivateKey  []byte           `json:"encrypted_private_key"`
+	PublicJwkJson        string           `json:"public_jwk_json"`
+	Nonce                []byte           `json:"nonce"`
+	IsActiveSigning      bool             `json:"is_active_signing"`
+	IsActiveVerification bool             `json:"is_active_verification"`
+	CreatedAt            pgtype.Timestamp `json:"created_at"`
 }
 
 type UserProfile struct {

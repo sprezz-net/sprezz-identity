@@ -1754,3 +1754,131 @@ func (s *PostgresStorage) GetPartitionByID(ctx context.Context, id int64) (*mode
 		AliasName: row.AliasName,
 	}, nil
 }
+
+// Ensure PostgresStorage strictly satisfies the CryptoStorage driven port at compile time.
+var _ port.CryptoStorage = (*PostgresStorage)(nil)
+
+// GetTenantDEK extracts the envelope encryption metadata directly from the tenants row.
+func (s *PostgresStorage) GetTenantDEK(ctx context.Context, tenantUUID uuid.UUID) ([]byte, []byte, error) {
+	row, err := s.queries.ResolveTenantByUUID(ctx, toPGUUID(tenantUUID)) // Wrapped with toPGUUID
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, fmt.Errorf("tenant metadata not found: %w", err)
+		}
+		return nil, nil, err
+	}
+	return row.EncryptedDek, row.DekNonce, nil
+}
+
+// InsertTenantDEK provisions the dynamic 32-byte key wrapper for an existing tenant record.
+func (s *PostgresStorage) InsertTenantDEK(ctx context.Context, tenantUUID uuid.UUID, encryptedDEK, nonce []byte) error {
+	return s.queries.UpdateTenantDEK(ctx, sqlcdb.UpdateTenantDEKParams{ // Swapped to sqlcdb.
+		TenantUuid:   toPGUUID(tenantUUID),
+		EncryptedDek: encryptedDEK,
+		DekNonce:     nonce,
+	})
+}
+
+// GetActiveSigningKeys loads all private keys currently required to sign tokens.
+func (s *PostgresStorage) GetActiveSigningKeys(ctx context.Context, tenantUUID uuid.UUID) ([]model.SigningKey, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT
+			id AS kid,
+			algorithm,
+			encrypted_private_key,
+			public_jwk_json,
+			nonce
+		FROM tenant_signing_keys
+		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
+		  AND is_active_signing = TRUE
+	`, toPGUUID(tenantUUID))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var keys []model.SigningKey
+	for rows.Next() {
+		var kid pgtype.UUID
+		var algorithm string
+		var encryptedPrivateKey []byte
+		var publicJwkJson string
+		var nonce []byte
+
+		if err := rows.Scan(&kid, &algorithm, &encryptedPrivateKey, &publicJwkJson, &nonce); err != nil {
+			return nil, err
+		}
+
+		var jwk map[string]any
+		if err := json.Unmarshal([]byte(publicJwkJson), &jwk); err != nil {
+			return nil, fmt.Errorf("failed to parse stored public jwk: %w", err)
+		}
+
+		keys = append(keys, model.SigningKey{
+			Kid:                    kid.String(),
+			Algorithm:              algorithm,
+			PublicJWK:              jwk,
+			RawEncryptedPrivateKey: encryptedPrivateKey,
+			CryptoNonce:            nonce,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return keys, nil
+}
+
+// GetActiveVerificationKeys streams all valid verification public targets without decrypting anything.
+func (s *PostgresStorage) GetActiveVerificationKeys(ctx context.Context, tenantUUID uuid.UUID) ([]model.SigningKey, error) {
+	rows, err := s.queries.GetActiveVerificationKeys(ctx, toPGUUID(tenantUUID)) // Wrapped with toPGUUID
+	if err != nil {
+		return nil, err
+	}
+
+	var keys []model.SigningKey
+	for _, row := range rows {
+		var jwk map[string]any
+		if err := json.Unmarshal([]byte(row.PublicJwkJson), &jwk); err != nil {
+			return nil, fmt.Errorf("malformed public key array: %w", err)
+		}
+
+		keys = append(keys, model.SigningKey{
+			Kid:       row.Kid.String(),
+			Algorithm: row.Algorithm,
+			PublicJWK: jwk,
+		})
+	}
+	return keys, nil
+}
+
+// InsertSigningKey commits a key asset to the database, capturing the generated UUIDv7.
+func (s *PostgresStorage) InsertSigningKey(ctx context.Context, tenantUUID uuid.UUID, key model.SigningKey, encryptedPrivateKey, nonce []byte) (string, error) {
+	jwkBytes, err := json.Marshal(key.PublicJWK)
+	if err != nil {
+		return "", err
+	}
+
+	// Insert the record. Postgres 18 automatically computes the UUIDv7 primary key.
+	generatedID, err := s.queries.InsertSigningKey(ctx, sqlcdb.InsertSigningKeyParams{ // Swapped to sqlcdb.
+		TenantUuid:           toPGUUID(tenantUUID),
+		Kid:                  key.Kid,
+		Algorithm:            key.Algorithm,
+		EncryptedPrivateKey:  encryptedPrivateKey,
+		PublicJwkJson:        string(jwkBytes),
+		Nonce:                nonce,
+		IsActiveSigning:      true,
+		IsActiveVerification: true,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return generatedID.String(), nil
+}
+
+// RotateSigningKeys demotes all active signing keys for the tenant to verification-only.
+func (s *PostgresStorage) RotateSigningKeys(ctx context.Context, tenantUUID uuid.UUID) error {
+	return s.queries.RotateSigningKeysTransaction(ctx, toPGUUID(tenantUUID))
+}

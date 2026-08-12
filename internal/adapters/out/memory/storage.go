@@ -27,6 +27,9 @@ type Storage struct {
 	dpopProofs          map[string]time.Time
 	refreshTokens       map[string]model.RefreshToken
 	partitions          map[string]map[int64]model.Partition
+	deks                map[uuid.UUID][]byte
+	nonces              map[uuid.UUID][]byte
+	signingKeys         map[uuid.UUID][]model.SigningKey
 }
 
 func NewStorage() *Storage {
@@ -44,6 +47,9 @@ func NewStorage() *Storage {
 		dpopProofs:          make(map[string]time.Time),
 		refreshTokens:       make(map[string]model.RefreshToken),
 		partitions:          make(map[string]map[int64]model.Partition),
+		deks:                make(map[uuid.UUID][]byte),
+		nonces:              make(map[uuid.UUID][]byte),
+		signingKeys:         make(map[uuid.UUID][]model.SigningKey),
 	}
 }
 
@@ -586,4 +592,50 @@ func (s *Storage) GetPartitionByID(ctx context.Context, id int64) (*model.Partit
 		}
 	}
 	return nil, port.ErrPartitionNotFound
+}
+
+// Ensure Storage satisfies port.CryptoStorage interface.
+var _ port.CryptoStorage = (*Storage)(nil)
+
+func (s *Storage) GetTenantDEK(ctx context.Context, tenantUUID uuid.UUID) ([]byte, []byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.deks[tenantUUID], s.nonces[tenantUUID], nil
+}
+
+func (s *Storage) InsertTenantDEK(ctx context.Context, tenantUUID uuid.UUID, encryptedDEK, nonce []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.deks[tenantUUID] = encryptedDEK
+	s.nonces[tenantUUID] = nonce
+	return nil
+}
+
+func (s *Storage) GetActiveSigningKeys(ctx context.Context, tenantUUID uuid.UUID) ([]model.SigningKey, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.signingKeys[tenantUUID], nil
+}
+
+func (s *Storage) GetActiveVerificationKeys(ctx context.Context, tenantUUID uuid.UUID) ([]model.SigningKey, error) {
+	return s.GetActiveSigningKeys(ctx, tenantUUID)
+}
+
+func (s *Storage) InsertSigningKey(ctx context.Context, tenantUUID uuid.UUID, key model.SigningKey, encryptedPrivateKey, nonce []byte) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if key.Kid == "" {
+		key.Kid = uuid.New().String()
+	}
+	key.RawEncryptedPrivateKey = encryptedPrivateKey
+	key.CryptoNonce = nonce
+	s.signingKeys[tenantUUID] = append(s.signingKeys[tenantUUID], key)
+	return key.Kid, nil
+}
+
+func (s *Storage) RotateSigningKeys(ctx context.Context, tenantUUID uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.signingKeys[tenantUUID] = nil
+	return nil
 }
