@@ -6,12 +6,14 @@
 
 # Go binaries & build artifacts
 /sprezz-identity
+/main
 __*
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
+*.timestamp
 
 # Test artifacts
 *.test
