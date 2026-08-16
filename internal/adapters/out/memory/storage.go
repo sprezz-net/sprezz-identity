@@ -30,9 +30,10 @@ type Storage struct {
 	deks                map[uuid.UUID][]byte
 	nonces              map[uuid.UUID][]byte
 	signingKeys         map[uuid.UUID][]model.SigningKey
+	appEnv              string
 }
 
-func NewStorage() *Storage {
+func NewStorage(appEnv string) *Storage {
 	return &Storage{
 		tenants:             make(map[string]*model.Tenant),
 		clients:             make(map[string]map[string]model.ClientApplication),
@@ -50,6 +51,7 @@ func NewStorage() *Storage {
 		deks:                make(map[uuid.UUID][]byte),
 		nonces:              make(map[uuid.UUID][]byte),
 		signingKeys:         make(map[uuid.UUID][]model.SigningKey),
+		appEnv:              appEnv,
 	}
 }
 
@@ -68,6 +70,12 @@ func (s *Storage) ResolveTenantByID(ctx context.Context, tenantID uuid.UUID) (*m
 			}
 			if clone.Config.RedirectWhitelist == nil {
 				clone.Config.RedirectWhitelist = []string{}
+			}
+			if clone.Scheme == "" {
+				clone.Scheme = model.SchemeHttps
+				if s.appEnv == "local" {
+					clone.Scheme = model.SchemeHttp
+				}
 			}
 			return &clone, nil
 		}
@@ -335,6 +343,12 @@ func (s *Storage) ResolveTenantByDomain(ctx context.Context, domain string) (*mo
 	if clone.Config.RedirectWhitelist == nil {
 		clone.Config.RedirectWhitelist = []string{}
 	}
+	if clone.Scheme == "" {
+		clone.Scheme = model.SchemeHttps
+		if s.appEnv == "local" {
+			clone.Scheme = model.SchemeHttp
+		}
+	}
 	return &clone, nil
 }
 
@@ -347,6 +361,12 @@ func (s *Storage) CreateTenant(ctx context.Context, tenant model.Tenant) error {
 		}
 	}
 	s.tenants[tenant.Domain] = &tenant
+	if tenant.Scheme == "" {
+		tenant.Scheme = model.SchemeHttps
+		if s.appEnv == "local" {
+			tenant.Scheme = model.SchemeHttp
+		}
+	}
 	return nil
 }
 

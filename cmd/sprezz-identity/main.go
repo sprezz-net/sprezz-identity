@@ -43,13 +43,13 @@ func main() {
 	})))
 	sysClock := clock.NewSystemClock()
 
-	bootstrap := service.NewTenantBootstrapService(deps.storage, sysClock)
+	bootstrap := service.NewTenantBootstrapService(deps.storage, sysClock, deps.cfg.AppEnv)
 	adminTenant, err := bootstrap.BootstrapAdminTenant(context.Background(), deps.cfg.IdentityServer.AdminTenantDomain)
 	if err != nil {
 		log.Fatalf("Admin tenant bootstrap failed: %v", err)
 	}
 
-	signer, err := jwtcrypto.NewJWTSigner(deps.storage, deps.cfg.MasterKey)
+	signer, err := jwtcrypto.NewJWTSigner(deps.storage, sysClock, deps.cfg.MasterKey)
 	if err != nil {
 		log.Fatalf("Failed to initialize cryptographic boundaries: %v", err)
 	}
@@ -74,7 +74,7 @@ func main() {
 
 	notifier := logout.NewLogoutHttpClient()
 	oauthService := service.NewOAuthService(deps.storage, signer, nil, notifier, sysClock)
-	handler := httpadapter.NewHttpAdapter(oauthService, deps.storage, signer, sysClock, ephemeralStore)
+	handler := httpadapter.NewHttpAdapter(oauthService, deps.storage, signer, sysClock, deps.cfg.AppEnv, deps.cfg.IdentityServer.AdminTenantDomain, ephemeralStore)
 	server := &http.Server{
 		Addr:    ":" + deps.cfg.Port,
 		Handler: handler.Router(),
@@ -141,7 +141,7 @@ func startKeyRotationWorker(ctx context.Context, signer port.Crypto, domain stri
 			select {
 			case <-ticker.C:
 				log.Printf("Triggering periodic cryptographic key rotation for tenant: %s", domain)
-				if err := signer.RotateKeys(domain); err != nil {
+				if err := signer.RotateKeys(ctx, domain); err != nil {
 					log.Printf("Error during background key rotation: %v", err)
 				} else {
 					log.Printf("Cryptographic keys successfully rotated for tenant: %s. New active key is published to JWKS.", domain)
@@ -192,6 +192,6 @@ func initDependencies() *dependencies {
 
 	return &dependencies{
 		cfg:     cfg,
-		storage: postgres.NewPostgresStorage(db),
+		storage: postgres.NewPostgresStorage(db, cfg.AppEnv),
 	}
 }

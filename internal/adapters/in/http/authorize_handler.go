@@ -246,7 +246,7 @@ func (h *HttpAdapter) loginRoot(w http.ResponseWriter, r *http.Request) {
 	targetProvider := h.findTargetProvider(finalProviders, idpHint, session)
 
 	if targetProvider != nil && targetProvider.IDPType != model.UsernamePasswordIDPType {
-		h.redirectToExternalIDP(w, r, targetProvider, session)
+		h.redirectToExternalIDP(w, r, tenant, targetProvider, session)
 		return
 	}
 
@@ -263,11 +263,7 @@ func (h *HttpAdapter) loginRoot(w http.ResponseWriter, r *http.Request) {
 	_ = component.Render(r.Context(), w)
 }
 
-func (h *HttpAdapter) redirectToExternalIDP(w http.ResponseWriter, r *http.Request, provider *model.IdentityProvider, session *model.InteractionSession) {
-	scheme := schemeHttp
-	if r.TLS != nil || r.Header.Get(xForwardedProto) == "https" {
-		scheme = schemeHttps
-	}
+func (h *HttpAdapter) redirectToExternalIDP(w http.ResponseWriter, r *http.Request, tenant *model.Tenant, provider *model.IdentityProvider, session *model.InteractionSession) {
 	state := ""
 	if session != nil {
 		state = session.ID.String()
@@ -275,7 +271,7 @@ func (h *HttpAdapter) redirectToExternalIDP(w http.ResponseWriter, r *http.Reque
 	authURL := fmt.Sprintf("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s",
 		provider.Config.AuthorizationEndpoint,
 		url.QueryEscape(provider.Config.ClientID),
-		url.QueryEscape(scheme+r.Host+"/oauth/callback"),
+		url.QueryEscape(tenant.GetBaseURL()+"/oauth/callback"),
 		url.QueryEscape(strings.Join(provider.Config.Scopes, " ")),
 		state,
 	)
@@ -584,7 +580,7 @@ func (h *HttpAdapter) handleAuthenticatedAuthorize(w http.ResponseWriter, r *htt
 	if state != "" {
 		redirectURL += "&state=" + url.QueryEscape(state)
 	}
-	issuer := schemeHttps + r.Host
+	issuer := tenant.GetBaseURL()
 	redirectURL += "&iss=" + url.QueryEscape(issuer)
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }

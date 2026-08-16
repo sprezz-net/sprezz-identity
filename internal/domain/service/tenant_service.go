@@ -11,12 +11,15 @@ import (
 )
 
 type TenantService struct {
-	storage port.Storage
-	clock   port.Clock
+	storage     port.Storage
+	clock       port.Clock
+	idpService  *IdentityProviderService
+	appEnv      string
+	adminDomain string
 }
 
-func NewTenantService(storage port.Storage, cl port.Clock) *TenantService {
-	return &TenantService{storage: storage, clock: cl}
+func NewTenantService(storage port.Storage, cl port.Clock, idpService *IdentityProviderService, appEnv string, adminDomain string) *TenantService {
+	return &TenantService{storage: storage, clock: cl, idpService: idpService, appEnv: appEnv, adminDomain: adminDomain}
 }
 
 func (s *TenantService) CreateTenant(ctx context.Context, name, domain string) (*model.Tenant, error) {
@@ -27,17 +30,25 @@ func (s *TenantService) CreateTenant(ctx context.Context, name, domain string) (
 		return nil, fmt.Errorf("canonical domain is required")
 	}
 
+	scheme := model.SchemeHttps
+	if s.appEnv == "local" {
+		// Allow to listen on localhost for local development on non-secure port
+		scheme = model.SchemeHttp
+	}
+
+	baseURL := scheme + "://" + domain
 	newTenant := model.Tenant{
 		ID:        uuid.New(),
 		Name:      name,
 		Domain:    domain,
+		Scheme:    scheme,
 		IsActive:  true,
 		CreatedAt: s.clock.Now(),
 		Config: model.TenantConfig{
 			PredefinedScopes:    []string{"openid", "profile", "email", "offline_access"},
 			PredefinedAudiences: []string{},
-			DefaultRedirectURI:  "http://" + domain,
-			RedirectWhitelist:   []string{"http://" + domain, "https://" + domain},
+			DefaultRedirectURI:  baseURL,
+			RedirectWhitelist:   []string{baseURL},
 			ACRToLevels: map[string]model.Levels{
 				"aal1": {AAL: 1},
 				"ial1": {IAL: 1},
@@ -46,23 +57,56 @@ func (s *TenantService) CreateTenant(ctx context.Context, name, domain string) (
 		},
 	}
 
+	// 1. Persist the new tenant first to get the ID for partition creation
 	if err := s.storage.CreateTenant(ctx, newTenant); err != nil {
 		return nil, err
 	}
 
+	// 2. Provision the default partition (Left completely clean, no default IDPs)
 	p1, err := s.storage.CreatePartition(ctx, newTenant.ID, newTenant.Name, "default")
 	if err != nil {
 		return nil, fmt.Errorf("create default partition: %w", err)
 	}
 
-	_, err = s.storage.CreatePartition(ctx, newTenant.ID, "Sprezz Admin", "sprezz_admin")
+	// 3. Provision the administrative partition
+	p2, err := s.storage.CreatePartition(ctx, newTenant.ID, "Sprezz Admin", "sprezz_admin")
 	if err != nil {
 		return nil, fmt.Errorf("create sprezz admin partition: %w", err)
 	}
 
+	// 4. Link back the root default reference to the base tenant context
 	newTenant.DefaultPartition = &p1.ID
 	if err := s.storage.CreateTenant(ctx, newTenant); err != nil {
 		return nil, fmt.Errorf("update tenant default partition: %w", err)
+	}
+
+	// 5. Secure the admin partition with an OIDC identity provider pointing to the root admin domain
+	adminIssuerURL := scheme + s.adminDomain
+	adminDiscoveryEndpoint := adminIssuerURL + "/.well-known/openid-configuration"
+
+	idpConfig := model.IdentityProviderConfig{
+		Issuer:            adminIssuerURL,
+		DiscoveryEndpoint: adminDiscoveryEndpoint,
+		DCRMode:           model.DCRModeAuthenticated,
+		Scopes:            []string{"openid", "profile", "email"},
+	}
+
+	idp := model.IdentityProvider{
+		ID:          uuid.New(),
+		TenantID:    newTenant.ID,
+		IDPType:     model.OpenIDConnectIDPType,
+		Enabled:     true,
+		Alias:       "admin-sso",
+		Name:        "Administrative SSO",
+		PartitionID: p2.ID,
+		IssuerURL:   adminIssuerURL,
+		Config:      idpConfig,
+	}
+
+	// 6. Call the Identity Provider domain service to register the OIDC link safely
+	_, err = s.idpService.CreateIdentityProvider(ctx, newTenant.ID, idp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to broker secure administrative idp configuration: %w", err)
 	}
 
 	return &newTenant, nil
@@ -82,10 +126,21 @@ func (s *TenantService) ToggleSignup(ctx context.Context, id uuid.UUID) (*model.
 		return nil, err
 	}
 
+	// 1. Toggle state within the domain boundary
 	tenant.Config.AllowSignup = !tenant.Config.AllowSignup
 
+	// 2. Persist the updated configuration first
+	// We can update tenant by calling CreateTenant since ON CONFLICT (tenant_uuid) DO UPDATE is used
 	if err := s.storage.CreateTenant(ctx, *tenant); err != nil {
 		return nil, err
+	}
+
+	// 3. Conditional Side-Effect: Only purge tokens if this is the Administrative Tenant
+	// and signup is being closed (e.g., initial setup is complete).
+	if tenant.Name == "Administrative Tenant" && !tenant.Config.AllowSignup {
+		if err := s.storage.PurgeTenantSessionsAndTokens(ctx, tenant.ID); err != nil {
+			return tenant, fmt.Errorf("tenant updated, but failed to purge admin bootstrap sessions: %w", err)
+		}
 	}
 
 	return tenant, nil

@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	jwtcrypto "sprezz-identity/internal/adapters/out/crypto"
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
 	"sprezz-identity/internal/domain/service"
@@ -40,8 +39,6 @@ const (
 	contentTypeHeader   = "Content-Type"
 	contentTypeJSON     = "application/json"
 	contentTypeHtml     = "text/html; charset=utf-8"
-	schemeHttps         = model.SchemeHttps
-	schemeHttp          = model.SchemeHttp
 	errInvalidDPoP      = "invalid DPoP proof: "
 	errClientAuthFailed = "client authentication failed"
 	xForwardedProto     = "X-Forwarded-Proto"
@@ -58,6 +55,7 @@ type HttpAdapter struct {
 	authPort           port.Auth
 	storagePort        port.Storage
 	cryptoPort         port.Crypto
+	clockPort          port.Clock
 	idpService         *service.IdentityProviderService
 	signupService      *service.UserRegistrationService
 	oauthValidator     *service.OAuthValidatorService
@@ -66,6 +64,8 @@ type HttpAdapter struct {
 	userProfileService *service.UserProfileService
 	router             chi.Router
 	adminState         port.AdminState
+	appEnv             string
+	adminDomain        string
 }
 
 type registerRequest struct {
@@ -99,23 +99,27 @@ func ClientFromContext(ctx context.Context) (*model.ClientApplication, bool) {
 	return client, ok
 }
 
-func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock, as ...port.AdminState) *HttpAdapter {
+func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock, appEnv string, adminDomain string, as ...port.AdminState) *HttpAdapter {
 	var adminState port.AdminState
 	if len(as) > 0 {
 		adminState = as[0]
 	}
+	idpService := service.NewIdentityProviderService(s, cl)
 	h := &HttpAdapter{
 		authPort:           a,
 		storagePort:        s,
 		cryptoPort:         c,
-		idpService:         service.NewIdentityProviderService(s, cl),
+		clockPort:          cl,
+		idpService:         idpService,
 		signupService:      service.NewUserRegistrationService(s),
 		oauthValidator:     service.NewOAuthValidatorService(),
-		tenantService:      service.NewTenantService(s, cl),
+		tenantService:      service.NewTenantService(s, cl, idpService, appEnv, adminDomain),
 		clientService:      service.NewClientService(s),
 		userProfileService: service.NewUserProfileService(s),
 		router:             chi.NewRouter(),
 		adminState:         adminState,
+		appEnv:             appEnv,
+		adminDomain:        adminDomain,
 	}
 	h.router.Use(h.cspMiddleware)
 	h.router.Use(h.tenantMiddleware)
@@ -243,7 +247,7 @@ func (h *HttpAdapter) registerRoutes() {
 	})
 }
 
-func (h *HttpAdapter) getDiscoveryMetadata(r *http.Request, tenant *model.Tenant, isOIDC bool) map[string]any {
+func (h *HttpAdapter) getDiscoveryMetadata(tenant *model.Tenant, isOIDC bool) map[string]any {
 	scopesSupported := tenant.Config.PredefinedScopes
 	if len(scopesSupported) == 0 {
 		scopesSupported = []string{"openid", "profile", "email", "offline_access"}
@@ -255,7 +259,7 @@ func (h *HttpAdapter) getDiscoveryMetadata(r *http.Request, tenant *model.Tenant
 	}
 	sort.Strings(acrValues)
 
-	issuer := schemeHttps + r.Host
+	issuer := tenant.GetBaseURL()
 	meta := map[string]any{
 		"issuer":                                issuer,
 		"jwks_uri":                              issuer + routeKeys,
@@ -300,7 +304,7 @@ func (h *HttpAdapter) openIDConfiguration(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	metadata := h.getDiscoveryMetadata(r, tenant, true)
+	metadata := h.getDiscoveryMetadata(tenant, true)
 	respondJSON(w, http.StatusOK, metadata)
 }
 
@@ -311,21 +315,25 @@ func (h *HttpAdapter) oauthAuthorizationServer(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	metadata := h.getDiscoveryMetadata(r, tenant, false)
+	metadata := h.getDiscoveryMetadata(tenant, false)
 	respondJSON(w, http.StatusOK, metadata)
 }
 
 func (h *HttpAdapter) jwks(w http.ResponseWriter, r *http.Request) {
-	signer, ok := h.cryptoPort.(*jwtcrypto.JWTSigner)
-	if !ok {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "jwks signer unavailable"})
-		return
+	// 1. Resolve environment scheme dynamically based on your app configuration state
+	scheme := "https"
+	if h.appEnv == "local" {
+		scheme = "http"
 	}
-	body, err := signer.MarshalJWKSet(r.Host)
+
+	// 2. Call your abstract port interface directly (No downcasting, no implementation leaking!)
+	body, err := h.cryptoPort.MarshalJWKSet(r.Context(), r.Host, scheme)
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to serialize tenant keyset"})
 		return
 	}
+
+	// 3. Render clean cache-controlled public headers
 	w.Header().Set(contentTypeHeader, contentTypeJSON)
 	w.Header().Set("Cache-Control", "public, max-age=600, stale-while-revalidate=86400")
 	_, _ = w.Write([]byte(body))

@@ -132,8 +132,15 @@ func TestHttpAdapter_DPoPProofValidation_Success_OKP(t *testing.T) {
 	auth := portmock.NewAuthMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 
+	tenantID := uuid.New()
+	tenant := &model.Tenant{
+		ID:     tenantID,
+		Domain: "test.com",
+		Scheme: "https",
+	}
+
 	privateKey, jwkMap := generateDPoPTestKeyOKP(t)
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	jti := "jti-okp-1"
 	proof := mintDPoPProofForTestOKP(t, privateKey, jwkMap, "POST", "https://test.com/oauth/token", jti, time.Now())
@@ -154,7 +161,7 @@ func TestHttpAdapter_DPoPProofValidation_Success_OKP(t *testing.T) {
 		return nil
 	})
 
-	jkt, err := adapter.validateDPoPProof(req)
+	jkt, err := adapter.validateDPoPProof(req, tenant)
 	if err != nil {
 		t.Fatalf("expected successful EdDSA/OKP validation, got: %v", err)
 	}
@@ -169,8 +176,15 @@ func TestHttpAdapter_DPoPProofValidation_Success_EC(t *testing.T) {
 	auth := portmock.NewAuthMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 
+	tenantID := uuid.New()
+	tenant := &model.Tenant{
+		ID:     tenantID,
+		Domain: "test.com",
+		Scheme: "https",
+	}
+
 	privateKey, jwkMap := generateDPoPTestKeyEC(t)
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	jti := "jti-ec-1"
 	proof := mintDPoPProofForTestEC(t, privateKey, jwkMap, "POST", "https://test.com/oauth/token", jti, time.Now())
@@ -191,7 +205,7 @@ func TestHttpAdapter_DPoPProofValidation_Success_EC(t *testing.T) {
 		return nil
 	})
 
-	jkt, err := adapter.validateDPoPProof(req)
+	jkt, err := adapter.validateDPoPProof(req, tenant)
 	if err != nil {
 		t.Fatalf("expected successful EC validation, got: %v", err)
 	}
@@ -206,8 +220,15 @@ func TestHttpAdapter_DPoPProofValidation_Success(t *testing.T) {
 	auth := portmock.NewAuthMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 
+	tenantID := uuid.New()
+	tenant := &model.Tenant{
+		ID:     tenantID,
+		Domain: "test.com",
+		Scheme: "https",
+	}
+
 	privateKey, jwkMap := generateDPoPTestKey(t)
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	jti := "jti-1"
 	proof := mintDPoPProofForTest(t, privateKey, jwkMap, "POST", "https://test.com/oauth/token", jti, time.Now())
@@ -228,7 +249,7 @@ func TestHttpAdapter_DPoPProofValidation_Success(t *testing.T) {
 		return nil
 	})
 
-	jkt, err := adapter.validateDPoPProof(req)
+	jkt, err := adapter.validateDPoPProof(req, tenant)
 	if err != nil {
 		t.Fatalf("expected successful validation, got: %v", err)
 	}
@@ -243,8 +264,15 @@ func TestHttpAdapter_DPoPProofValidation_Expired(t *testing.T) {
 	auth := portmock.NewAuthMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 
+	tenantID := uuid.New()
+	tenant := &model.Tenant{
+		ID:     tenantID,
+		Domain: "test.com",
+		Scheme: "https",
+	}
+
 	privateKey, jwkMap := generateDPoPTestKey(t)
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	jti := "jti-2"
 	proof := mintDPoPProofForTest(t, privateKey, jwkMap, "POST", "https://test.com/oauth/token", jti, time.Now().Add(-5*time.Minute))
@@ -252,7 +280,7 @@ func TestHttpAdapter_DPoPProofValidation_Expired(t *testing.T) {
 	req.Host = "test.com"
 	req.Header.Set("DPoP", proof)
 
-	_, err := adapter.validateDPoPProof(req)
+	_, err := adapter.validateDPoPProof(req, tenant)
 	if err == nil || !strings.Contains(err.Error(), "expired") {
 		t.Errorf("expected expired proof error, got: %v", err)
 	}
@@ -264,8 +292,15 @@ func TestHttpAdapter_DPoPProofValidation_Replay(t *testing.T) {
 	auth := portmock.NewAuthMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 
+	tenantID := uuid.New()
+	tenant := &model.Tenant{
+		ID:     tenantID,
+		Domain: "test.com",
+		Scheme: "https",
+	}
+
 	privateKey, jwkMap := generateDPoPTestKey(t)
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	jti := "jti-3"
 	proof := mintDPoPProofForTest(t, privateKey, jwkMap, "POST", "https://test.com/oauth/token", jti, time.Now())
@@ -280,7 +315,7 @@ func TestHttpAdapter_DPoPProofValidation_Replay(t *testing.T) {
 		return true, nil
 	})
 
-	_, err := adapter.validateDPoPProof(req)
+	_, err := adapter.validateDPoPProof(req, tenant)
 	if err == nil || !strings.Contains(err.Error(), "already been used") {
 		t.Errorf("expected already used error, got: %v", err)
 	}
@@ -292,8 +327,15 @@ func TestHttpAdapter_DPoPProofValidation_HtmMismatch(t *testing.T) {
 	auth := portmock.NewAuthMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 
+	tenantID := uuid.New()
+	tenant := &model.Tenant{
+		ID:     tenantID,
+		Domain: "test.com",
+		Scheme: "https",
+	}
+
 	privateKey, jwkMap := generateDPoPTestKey(t)
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	jti := "jti-4"
 	proof := mintDPoPProofForTest(t, privateKey, jwkMap, "GET", "https://test.com/oauth/token", jti, time.Now())
@@ -301,7 +343,7 @@ func TestHttpAdapter_DPoPProofValidation_HtmMismatch(t *testing.T) {
 	req.Host = "test.com"
 	req.Header.Set("DPoP", proof)
 
-	_, err := adapter.validateDPoPProof(req)
+	_, err := adapter.validateDPoPProof(req, tenant)
 	if err == nil || !strings.Contains(err.Error(), "htm mismatch") {
 		t.Errorf("expected htm mismatch error, got: %v", err)
 	}
@@ -314,7 +356,7 @@ func TestHttpAdapter_Token_ClientCredentials_Success(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 	secret := "supersecret"
 	client := &model.ClientApplication{
 		ID:                  uuid.NewString(),
@@ -332,11 +374,11 @@ func TestHttpAdapter_Token_ClientCredentials_Success(t *testing.T) {
 	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
 		return client, nil
 	})
-	crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+	crypto.SignAccessTokenMock.Set(func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
 		return "mock-access-token", nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", bytes.NewBufferString("grant_type=client_credentials&client_id=cc-client&client_secret=supersecret"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -375,7 +417,7 @@ func TestHttpAdapter_Token_AuthCodeExchange_Success(t *testing.T) {
 		}, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", bytes.NewBufferString("grant_type=authorization_code&client_id=ac-client&code=code123&code_verifier=verifier123"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -405,7 +447,7 @@ func TestHttpAdapter_Token_InvalidGrantType(t *testing.T) {
 		return tenant, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", bytes.NewBufferString("grant_type=invalid_grant"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -444,11 +486,11 @@ func TestHttpAdapter_Token_ClientCredentials_BasicAuth(t *testing.T) {
 	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
 		return client, nil
 	})
-	crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+	crypto.SignAccessTokenMock.Set(func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
 		return "mock-access-token-basic", nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", bytes.NewBufferString("grant_type=client_credentials"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -496,7 +538,7 @@ func TestHttpAdapter_Introspect_BasicAuth(t *testing.T) {
 		}, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/introspect", bytes.NewBufferString("token=some-token"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -547,7 +589,7 @@ func TestHttpAdapter_Token_TokenExchange_Success(t *testing.T) {
 		}, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", bytes.NewBufferString("grant_type=urn:ietf:params:oauth:grant-type:token-exchange&client_id=public-client&subject_token=some-ext-token-123&subject_token_type=urn:ietf:params:oauth:token-type:jwt"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -600,7 +642,7 @@ func TestHttpAdapter_Introspect_Post(t *testing.T) {
 		}, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/introspect", bytes.NewBufferString("client_id=test-client&client_secret=clientsecret&token=some-token"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -627,7 +669,7 @@ func TestHttpAdapter_Introspect_None_Unauthorized(t *testing.T) {
 		return tenant, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/introspect", bytes.NewBufferString("token=some-token"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -671,7 +713,7 @@ func TestHttpAdapter_Token_RefreshToken_None_Success(t *testing.T) {
 		}, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", bytes.NewBufferString("grant_type=refresh_token&client_id=public-client&refresh_token=rt-123"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")

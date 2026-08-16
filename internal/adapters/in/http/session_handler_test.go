@@ -47,7 +47,7 @@ func TestHttpAdapter_UserInfo_Success(t *testing.T) {
 		EmailVerified:     true,
 	}, nil)
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodGet, "/oauth/userinfo", nil)
 	req.Header.Set("Authorization", "Bearer token123")
@@ -94,7 +94,7 @@ func TestHttpAdapter_UserInfo_POST_Success(t *testing.T) {
 		EmailVerified:     true,
 	}, nil)
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	// Verifies that OIDC-compliant POST method for UserInfo behaves identically to GET
 	req := httptest.NewRequest(http.MethodPost, "/oauth/userinfo", nil)
@@ -124,7 +124,7 @@ func TestHttpAdapter_UserInfo_Unauthorized(t *testing.T) {
 		return nil, jwt.ErrSignatureInvalid
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodGet, "/oauth/userinfo", nil)
 	req.Header.Set("Authorization", "Bearer badtoken")
@@ -172,7 +172,7 @@ func TestHttpAdapter_Revoke_Success(t *testing.T) {
 		return nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/revoke", bytes.NewBufferString("client_id=test-client&client_secret=clientsecret&token=token-to-revoke"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -218,7 +218,7 @@ func TestHttpAdapter_Introspect_Success(t *testing.T) {
 		}, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/introspect", bytes.NewBufferString("client_id=test-client&client_secret=clientsecret&token=token-to-introspect"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -276,7 +276,7 @@ func TestHttpAdapter_PAR_Success(t *testing.T) {
 		return nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/par", bytes.NewBufferString("client_id=test-client&client_secret=clientsecret&redirect_uri=https://test.com/callback&scope=openid"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -312,7 +312,7 @@ func TestHttpAdapter_Logout_Redirect(t *testing.T) {
 		return nil, nil // no frontchannel URLs
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodGet, "/oauth/logout?post_logout_redirect_uri=https://test.com/logged-out", nil)
 	req.Host = "test.com"
@@ -360,7 +360,7 @@ func TestHttpAdapter_Logout_ValidPostLogoutRedirectURI(t *testing.T) {
 		return nil, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	// Use valid SSO cookie that identifies test-client as sso.ProviderID
 	req := httptest.NewRequest(http.MethodGet, "/oauth/logout?post_logout_redirect_uri=https://test.com/logged-out", nil)
@@ -405,7 +405,7 @@ func TestHttpAdapter_Revoke_MissingToken(t *testing.T) {
 		return client, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/revoke", bytes.NewBufferString("client_id=test-client&client_secret=clientsecret"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -442,7 +442,7 @@ func TestHttpAdapter_Introspect_MissingToken(t *testing.T) {
 		return client, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/introspect", bytes.NewBufferString("client_id=test-client&client_secret=clientsecret"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -479,7 +479,7 @@ func TestHttpAdapter_PAR_MissingRedirectURI(t *testing.T) {
 		return client, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/par", bytes.NewBufferString("client_id=test-client&client_secret=clientsecret"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -516,7 +516,7 @@ func TestHttpAdapter_ClientAuthMiddleware_Failure_InvalidSecret(t *testing.T) {
 		return client, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	// Call introspect with wrong secret
 	req := httptest.NewRequest(http.MethodPost, "/oauth/introspect", bytes.NewBufferString("client_id=test-client&client_secret=wrongsecret&token=dummy"))
@@ -544,7 +544,7 @@ func TestHttpAdapter_ClientAuthMiddleware_Failure_MissingCredentials(t *testing.
 		return tenant, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	// Call revoke with no client_id / secret
 	req := httptest.NewRequest(http.MethodPost, "/oauth/revoke", bytes.NewBufferString("token=dummy"))
@@ -578,7 +578,7 @@ func TestHttpAdapter_WebLogout_Success(t *testing.T) {
 		return nil, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodGet, routeWebLogout, nil)
 	req.Host = "test.com"

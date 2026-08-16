@@ -6,6 +6,15 @@ import (
 	"github.com/google/uuid"
 )
 
+type DCRMode string
+
+const (
+	DCRModeOff               DCRMode = "off"
+	DCRModePublic            DCRMode = "public"
+	DCRModeSoftwareStatement DCRMode = "software_statement"
+	DCRModeAuthenticated     DCRMode = "authenticated"
+)
+
 type Tenant struct {
 	ID               uuid.UUID
 	Name             string
@@ -15,6 +24,11 @@ type Tenant struct {
 	Config           TenantConfig
 	DefaultPartition *int64
 	UpdatedAt        time.Time
+	Scheme           string
+}
+
+func (t Tenant) GetBaseURL() string {
+	return t.Scheme + "://" + t.Domain
 }
 
 type Levels struct {
@@ -37,6 +51,7 @@ type TenantConfig struct {
 	NameAAL              int               `json:"name_aal,omitempty"`
 	EmailAAL             int               `json:"email_aal,omitempty"`
 	PasswordAAL          int               `json:"password_aal,omitempty"`
+	DCRMode              DCRMode           `json:"dcr_mode,omitempty"`
 }
 
 func (tc TenantConfig) GetDefaultAAL() int {

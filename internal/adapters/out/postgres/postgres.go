@@ -20,12 +20,14 @@ import (
 type PostgresStorage struct {
 	pool    *pgxpool.Pool
 	queries *sqlcdb.Queries
+	appEnv  string
 }
 
-func NewPostgresStorage(pool *pgxpool.Pool) *PostgresStorage {
+func NewPostgresStorage(pool *pgxpool.Pool, appEnv string) *PostgresStorage {
 	return &PostgresStorage{
 		pool:    pool,
 		queries: sqlcdb.New(pool),
+		appEnv:  appEnv,
 	}
 }
 
@@ -398,6 +400,11 @@ func (s *PostgresStorage) ResolveTenantByDomain(ctx context.Context, domain stri
 		}
 	}
 
+	scheme := model.SchemeHttps
+	if s.appEnv == "local" {
+		scheme = model.SchemeHttp
+	}
+
 	return &model.Tenant{
 		ID:               tenantID,
 		Name:             row.Name,
@@ -407,6 +414,7 @@ func (s *PostgresStorage) ResolveTenantByDomain(ctx context.Context, domain stri
 		Config:           cfg,
 		DefaultPartition: row.DefaultPartition,
 		UpdatedAt:        updatedAt,
+		Scheme:           scheme,
 	}, nil
 }
 
@@ -441,6 +449,11 @@ func (s *PostgresStorage) ResolveTenantByID(ctx context.Context, tenantID uuid.U
 		}
 	}
 
+	scheme := "https"
+	if s.appEnv == "local" {
+		scheme = "http"
+	}
+
 	return &model.Tenant{
 		ID:               resolvedID,
 		Name:             row.Name,
@@ -450,6 +463,7 @@ func (s *PostgresStorage) ResolveTenantByID(ctx context.Context, tenantID uuid.U
 		Config:           cfg,
 		DefaultPartition: row.DefaultPartition,
 		UpdatedAt:        updatedAt,
+		Scheme:           scheme,
 	}, nil
 }
 
@@ -513,12 +527,18 @@ func (s *PostgresStorage) GetAllTenants(ctx context.Context) ([]model.Tenant, er
 	}
 	defer rows.Close()
 
+	scheme := model.SchemeHttps
+	if s.appEnv == "local" {
+		scheme = model.SchemeHttp
+	}
+
 	var tenants []model.Tenant
 	for rows.Next() {
 		tenant, err := scanTenantRow(rows)
 		if err != nil {
 			return nil, err
 		}
+		tenant.Scheme = scheme
 		tenants = append(tenants, tenant)
 	}
 

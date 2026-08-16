@@ -86,13 +86,13 @@ func TestOAuthService_ExchangeCodeForTokensMintsTokens(t *testing.T) {
 	storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(tenant, nil)
 	storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(client, nil)
 	storage.GetAndConsumeAuthSessionMock.Expect(context.Background(), tenantID, code).Return(authSession, nil)
-	crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+	crypto.SignAccessTokenMock.Set(func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
 		if len(claims.Audiences) != 1 || claims.Audiences[0] != "https://api.example.com/resource" {
 			t.Errorf("expected audience [\"https://api.example.com/resource\"], got %v", claims.Audiences)
 		}
 		return "access-token", nil
 	})
-	crypto.SignIDTokenMock.Set(func(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
+	crypto.SignIDTokenMock.Set(func(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
 		return "id-token", nil
 	})
 
@@ -315,7 +315,7 @@ func TestOAuthService_ExchangeCodeForTokens_Errors(t *testing.T) {
 		storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(&model.ClientApplication{Algorithm: model.AlgRS256}, nil)
 		storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(&model.Tenant{Domain: "example.com"}, nil)
 		storage.GetAndConsumeAuthSessionMock.Expect(context.Background(), tenantID, code).Return(&model.AuthorizationCodeSession{}, nil)
-		crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+		crypto.SignAccessTokenMock.Set(func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
 			return "", errors.New("sign error")
 		})
 
@@ -335,10 +335,10 @@ func TestOAuthService_ExchangeCodeForTokens_Errors(t *testing.T) {
 		storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(&model.ClientApplication{Algorithm: model.AlgRS256}, nil)
 		storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(&model.Tenant{Domain: "example.com"}, nil)
 		storage.GetAndConsumeAuthSessionMock.Expect(context.Background(), tenantID, code).Return(&model.AuthorizationCodeSession{}, nil)
-		crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+		crypto.SignAccessTokenMock.Set(func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
 			return "access-token", nil
 		})
-		crypto.SignIDTokenMock.Set(func(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
+		crypto.SignIDTokenMock.Set(func(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
 			return "", errors.New("sign error")
 		})
 
@@ -360,6 +360,12 @@ func TestOAuthService_ProcessLogout(t *testing.T) {
 	subject := "sub"
 	clientID := "client-id"
 
+	tenant := &model.Tenant{
+		ID:     tenantID,
+		Domain: "example.com",
+		Scheme: "https",
+	}
+
 	client := model.ClientApplication{
 		ID:                    uuid.NewString(),
 		TenantID:              tenantID,
@@ -370,8 +376,9 @@ func TestOAuthService_ProcessLogout(t *testing.T) {
 	}
 
 	storage.RevokeSessionMock.Expect(context.Background(), tenantID, subject, clientID).Return(nil)
+	storage.ResolveTenantByIDMock.Expect(context.Background(), tenantID).Return(tenant, nil)
 	storage.GetClientsByTenantMock.Expect(context.Background(), tenantID).Return([]model.ClientApplication{client}, nil)
-	crypto.SignLogoutTokenMock.Set(func(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (string, error) {
+	crypto.SignLogoutTokenMock.Set(func(ctx context.Context, claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (string, error) {
 		return "logout-token", nil
 	})
 	notifier.SendBackChannelLogoutMock.Set(func(ctx context.Context, logoutURI string, logoutToken string) error {
@@ -471,13 +478,13 @@ func TestOAuthService_ExchangeCodeForTokens_DPoP(t *testing.T) {
 	storage.GetClientMock.Expect(context.Background(), tenantID, clientID).Return(client, nil)
 	storage.GetAndConsumeAuthSessionMock.Expect(context.Background(), tenantID, code).Return(authSession, nil)
 
-	crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+	crypto.SignAccessTokenMock.Set(func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
 		if claims.DPoPHash != dpopJKT {
 			t.Errorf("expected DPoPHash %s, got %s", dpopJKT, claims.DPoPHash)
 		}
 		return "dpop-access-token", nil
 	})
-	crypto.SignIDTokenMock.Set(func(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
+	crypto.SignIDTokenMock.Set(func(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
 		return "id-token", nil
 	})
 
@@ -539,7 +546,7 @@ func TestOAuthService_ExchangeRefreshTokenForTokens_Success(t *testing.T) {
 		return nil
 	})
 
-	crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+	crypto.SignAccessTokenMock.Set(func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
 		return "new-access-token", nil
 	})
 
@@ -657,10 +664,10 @@ func TestOAuthService_ExchangeExternalToken_Legacy_Success(t *testing.T) {
 		return nil
 	})
 
-	crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+	crypto.SignAccessTokenMock.Set(func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
 		return "native-access-token", nil
 	})
-	crypto.SignIDTokenMock.Set(func(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
+	crypto.SignIDTokenMock.Set(func(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
 		return "native-id-token", nil
 	})
 
@@ -742,10 +749,10 @@ func TestOAuthService_ExchangeExternalToken_JWT_Success(t *testing.T) {
 		return nil
 	})
 
-	crypto.SignAccessTokenMock.Set(func(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+	crypto.SignAccessTokenMock.Set(func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
 		return "native-access-token-jwt", nil
 	})
-	crypto.SignIDTokenMock.Set(func(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
+	crypto.SignIDTokenMock.Set(func(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
 		return "native-id-token-jwt", nil
 	})
 

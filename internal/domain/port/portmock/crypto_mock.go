@@ -5,6 +5,7 @@ package portmock
 //go:generate minimock -i sprezz-identity/internal/domain/port.Crypto -o crypto_mock.go -n CryptoMock -p portmock
 
 import (
+	"context"
 	"sprezz-identity/internal/domain/model"
 	"sync"
 	mm_atomic "sync/atomic"
@@ -18,30 +19,37 @@ type CryptoMock struct {
 	t          minimock.Tester
 	finishOnce sync.Once
 
-	funcRotateKeys          func(tenant string) (err error)
+	funcMarshalJWKSet          func(ctx context.Context, domain string, scheme string) (s1 string, err error)
+	funcMarshalJWKSetOrigin    string
+	inspectFuncMarshalJWKSet   func(ctx context.Context, domain string, scheme string)
+	afterMarshalJWKSetCounter  uint64
+	beforeMarshalJWKSetCounter uint64
+	MarshalJWKSetMock          mCryptoMockMarshalJWKSet
+
+	funcRotateKeys          func(ctx context.Context, domain string) (err error)
 	funcRotateKeysOrigin    string
-	inspectFuncRotateKeys   func(tenant string)
+	inspectFuncRotateKeys   func(ctx context.Context, domain string)
 	afterRotateKeysCounter  uint64
 	beforeRotateKeysCounter uint64
 	RotateKeysMock          mCryptoMockRotateKeys
 
-	funcSignAccessToken          func(claims model.TokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)
+	funcSignAccessToken          func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)
 	funcSignAccessTokenOrigin    string
-	inspectFuncSignAccessToken   func(claims model.TokenClaims, alg model.SignatureAlgorithm)
+	inspectFuncSignAccessToken   func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm)
 	afterSignAccessTokenCounter  uint64
 	beforeSignAccessTokenCounter uint64
 	SignAccessTokenMock          mCryptoMockSignAccessToken
 
-	funcSignIDToken          func(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)
+	funcSignIDToken          func(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)
 	funcSignIDTokenOrigin    string
-	inspectFuncSignIDToken   func(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm)
+	inspectFuncSignIDToken   func(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm)
 	afterSignIDTokenCounter  uint64
 	beforeSignIDTokenCounter uint64
 	SignIDTokenMock          mCryptoMockSignIDToken
 
-	funcSignLogoutToken          func(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)
+	funcSignLogoutToken          func(ctx context.Context, claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)
 	funcSignLogoutTokenOrigin    string
-	inspectFuncSignLogoutToken   func(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm)
+	inspectFuncSignLogoutToken   func(ctx context.Context, claims model.LogoutTokenClaims, alg model.SignatureAlgorithm)
 	afterSignLogoutTokenCounter  uint64
 	beforeSignLogoutTokenCounter uint64
 	SignLogoutTokenMock          mCryptoMockSignLogoutToken
@@ -62,6 +70,9 @@ func NewCryptoMock(t minimock.Tester) *CryptoMock {
 		controller.RegisterMocker(m)
 	}
 
+	m.MarshalJWKSetMock = mCryptoMockMarshalJWKSet{mock: m}
+	m.MarshalJWKSetMock.callArgs = []*CryptoMockMarshalJWKSetParams{}
+
 	m.RotateKeysMock = mCryptoMockRotateKeys{mock: m}
 	m.RotateKeysMock.callArgs = []*CryptoMockRotateKeysParams{}
 
@@ -80,6 +91,380 @@ func NewCryptoMock(t minimock.Tester) *CryptoMock {
 	t.Cleanup(m.MinimockFinish)
 
 	return m
+}
+
+type mCryptoMockMarshalJWKSet struct {
+	optional           bool
+	mock               *CryptoMock
+	defaultExpectation *CryptoMockMarshalJWKSetExpectation
+	expectations       []*CryptoMockMarshalJWKSetExpectation
+
+	callArgs []*CryptoMockMarshalJWKSetParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// CryptoMockMarshalJWKSetExpectation specifies expectation struct of the Crypto.MarshalJWKSet
+type CryptoMockMarshalJWKSetExpectation struct {
+	mock               *CryptoMock
+	params             *CryptoMockMarshalJWKSetParams
+	paramPtrs          *CryptoMockMarshalJWKSetParamPtrs
+	expectationOrigins CryptoMockMarshalJWKSetExpectationOrigins
+	results            *CryptoMockMarshalJWKSetResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// CryptoMockMarshalJWKSetParams contains parameters of the Crypto.MarshalJWKSet
+type CryptoMockMarshalJWKSetParams struct {
+	ctx    context.Context
+	domain string
+	scheme string
+}
+
+// CryptoMockMarshalJWKSetParamPtrs contains pointers to parameters of the Crypto.MarshalJWKSet
+type CryptoMockMarshalJWKSetParamPtrs struct {
+	ctx    *context.Context
+	domain *string
+	scheme *string
+}
+
+// CryptoMockMarshalJWKSetResults contains results of the Crypto.MarshalJWKSet
+type CryptoMockMarshalJWKSetResults struct {
+	s1  string
+	err error
+}
+
+// CryptoMockMarshalJWKSetOrigins contains origins of expectations of the Crypto.MarshalJWKSet
+type CryptoMockMarshalJWKSetExpectationOrigins struct {
+	origin       string
+	originCtx    string
+	originDomain string
+	originScheme string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmMarshalJWKSet *mCryptoMockMarshalJWKSet) Optional() *mCryptoMockMarshalJWKSet {
+	mmMarshalJWKSet.optional = true
+	return mmMarshalJWKSet
+}
+
+// Expect sets up expected params for Crypto.MarshalJWKSet
+func (mmMarshalJWKSet *mCryptoMockMarshalJWKSet) Expect(ctx context.Context, domain string, scheme string) *mCryptoMockMarshalJWKSet {
+	if mmMarshalJWKSet.mock.funcMarshalJWKSet != nil {
+		mmMarshalJWKSet.mock.t.Fatalf("CryptoMock.MarshalJWKSet mock is already set by Set")
+	}
+
+	if mmMarshalJWKSet.defaultExpectation == nil {
+		mmMarshalJWKSet.defaultExpectation = &CryptoMockMarshalJWKSetExpectation{}
+	}
+
+	if mmMarshalJWKSet.defaultExpectation.paramPtrs != nil {
+		mmMarshalJWKSet.mock.t.Fatalf("CryptoMock.MarshalJWKSet mock is already set by ExpectParams functions")
+	}
+
+	mmMarshalJWKSet.defaultExpectation.params = &CryptoMockMarshalJWKSetParams{ctx, domain, scheme}
+	mmMarshalJWKSet.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmMarshalJWKSet.expectations {
+		if minimock.Equal(e.params, mmMarshalJWKSet.defaultExpectation.params) {
+			mmMarshalJWKSet.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmMarshalJWKSet.defaultExpectation.params)
+		}
+	}
+
+	return mmMarshalJWKSet
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Crypto.MarshalJWKSet
+func (mmMarshalJWKSet *mCryptoMockMarshalJWKSet) ExpectCtxParam1(ctx context.Context) *mCryptoMockMarshalJWKSet {
+	if mmMarshalJWKSet.mock.funcMarshalJWKSet != nil {
+		mmMarshalJWKSet.mock.t.Fatalf("CryptoMock.MarshalJWKSet mock is already set by Set")
+	}
+
+	if mmMarshalJWKSet.defaultExpectation == nil {
+		mmMarshalJWKSet.defaultExpectation = &CryptoMockMarshalJWKSetExpectation{}
+	}
+
+	if mmMarshalJWKSet.defaultExpectation.params != nil {
+		mmMarshalJWKSet.mock.t.Fatalf("CryptoMock.MarshalJWKSet mock is already set by Expect")
+	}
+
+	if mmMarshalJWKSet.defaultExpectation.paramPtrs == nil {
+		mmMarshalJWKSet.defaultExpectation.paramPtrs = &CryptoMockMarshalJWKSetParamPtrs{}
+	}
+	mmMarshalJWKSet.defaultExpectation.paramPtrs.ctx = &ctx
+	mmMarshalJWKSet.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmMarshalJWKSet
+}
+
+// ExpectDomainParam2 sets up expected param domain for Crypto.MarshalJWKSet
+func (mmMarshalJWKSet *mCryptoMockMarshalJWKSet) ExpectDomainParam2(domain string) *mCryptoMockMarshalJWKSet {
+	if mmMarshalJWKSet.mock.funcMarshalJWKSet != nil {
+		mmMarshalJWKSet.mock.t.Fatalf("CryptoMock.MarshalJWKSet mock is already set by Set")
+	}
+
+	if mmMarshalJWKSet.defaultExpectation == nil {
+		mmMarshalJWKSet.defaultExpectation = &CryptoMockMarshalJWKSetExpectation{}
+	}
+
+	if mmMarshalJWKSet.defaultExpectation.params != nil {
+		mmMarshalJWKSet.mock.t.Fatalf("CryptoMock.MarshalJWKSet mock is already set by Expect")
+	}
+
+	if mmMarshalJWKSet.defaultExpectation.paramPtrs == nil {
+		mmMarshalJWKSet.defaultExpectation.paramPtrs = &CryptoMockMarshalJWKSetParamPtrs{}
+	}
+	mmMarshalJWKSet.defaultExpectation.paramPtrs.domain = &domain
+	mmMarshalJWKSet.defaultExpectation.expectationOrigins.originDomain = minimock.CallerInfo(1)
+
+	return mmMarshalJWKSet
+}
+
+// ExpectSchemeParam3 sets up expected param scheme for Crypto.MarshalJWKSet
+func (mmMarshalJWKSet *mCryptoMockMarshalJWKSet) ExpectSchemeParam3(scheme string) *mCryptoMockMarshalJWKSet {
+	if mmMarshalJWKSet.mock.funcMarshalJWKSet != nil {
+		mmMarshalJWKSet.mock.t.Fatalf("CryptoMock.MarshalJWKSet mock is already set by Set")
+	}
+
+	if mmMarshalJWKSet.defaultExpectation == nil {
+		mmMarshalJWKSet.defaultExpectation = &CryptoMockMarshalJWKSetExpectation{}
+	}
+
+	if mmMarshalJWKSet.defaultExpectation.params != nil {
+		mmMarshalJWKSet.mock.t.Fatalf("CryptoMock.MarshalJWKSet mock is already set by Expect")
+	}
+
+	if mmMarshalJWKSet.defaultExpectation.paramPtrs == nil {
+		mmMarshalJWKSet.defaultExpectation.paramPtrs = &CryptoMockMarshalJWKSetParamPtrs{}
+	}
+	mmMarshalJWKSet.defaultExpectation.paramPtrs.scheme = &scheme
+	mmMarshalJWKSet.defaultExpectation.expectationOrigins.originScheme = minimock.CallerInfo(1)
+
+	return mmMarshalJWKSet
+}
+
+// Inspect accepts an inspector function that has same arguments as the Crypto.MarshalJWKSet
+func (mmMarshalJWKSet *mCryptoMockMarshalJWKSet) Inspect(f func(ctx context.Context, domain string, scheme string)) *mCryptoMockMarshalJWKSet {
+	if mmMarshalJWKSet.mock.inspectFuncMarshalJWKSet != nil {
+		mmMarshalJWKSet.mock.t.Fatalf("Inspect function is already set for CryptoMock.MarshalJWKSet")
+	}
+
+	mmMarshalJWKSet.mock.inspectFuncMarshalJWKSet = f
+
+	return mmMarshalJWKSet
+}
+
+// Return sets up results that will be returned by Crypto.MarshalJWKSet
+func (mmMarshalJWKSet *mCryptoMockMarshalJWKSet) Return(s1 string, err error) *CryptoMock {
+	if mmMarshalJWKSet.mock.funcMarshalJWKSet != nil {
+		mmMarshalJWKSet.mock.t.Fatalf("CryptoMock.MarshalJWKSet mock is already set by Set")
+	}
+
+	if mmMarshalJWKSet.defaultExpectation == nil {
+		mmMarshalJWKSet.defaultExpectation = &CryptoMockMarshalJWKSetExpectation{mock: mmMarshalJWKSet.mock}
+	}
+	mmMarshalJWKSet.defaultExpectation.results = &CryptoMockMarshalJWKSetResults{s1, err}
+	mmMarshalJWKSet.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmMarshalJWKSet.mock
+}
+
+// Set uses given function f to mock the Crypto.MarshalJWKSet method
+func (mmMarshalJWKSet *mCryptoMockMarshalJWKSet) Set(f func(ctx context.Context, domain string, scheme string) (s1 string, err error)) *CryptoMock {
+	if mmMarshalJWKSet.defaultExpectation != nil {
+		mmMarshalJWKSet.mock.t.Fatalf("Default expectation is already set for the Crypto.MarshalJWKSet method")
+	}
+
+	if len(mmMarshalJWKSet.expectations) > 0 {
+		mmMarshalJWKSet.mock.t.Fatalf("Some expectations are already set for the Crypto.MarshalJWKSet method")
+	}
+
+	mmMarshalJWKSet.mock.funcMarshalJWKSet = f
+	mmMarshalJWKSet.mock.funcMarshalJWKSetOrigin = minimock.CallerInfo(1)
+	return mmMarshalJWKSet.mock
+}
+
+// When sets expectation for the Crypto.MarshalJWKSet which will trigger the result defined by the following
+// Then helper
+func (mmMarshalJWKSet *mCryptoMockMarshalJWKSet) When(ctx context.Context, domain string, scheme string) *CryptoMockMarshalJWKSetExpectation {
+	if mmMarshalJWKSet.mock.funcMarshalJWKSet != nil {
+		mmMarshalJWKSet.mock.t.Fatalf("CryptoMock.MarshalJWKSet mock is already set by Set")
+	}
+
+	expectation := &CryptoMockMarshalJWKSetExpectation{
+		mock:               mmMarshalJWKSet.mock,
+		params:             &CryptoMockMarshalJWKSetParams{ctx, domain, scheme},
+		expectationOrigins: CryptoMockMarshalJWKSetExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmMarshalJWKSet.expectations = append(mmMarshalJWKSet.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Crypto.MarshalJWKSet return parameters for the expectation previously defined by the When method
+func (e *CryptoMockMarshalJWKSetExpectation) Then(s1 string, err error) *CryptoMock {
+	e.results = &CryptoMockMarshalJWKSetResults{s1, err}
+	return e.mock
+}
+
+// Times sets number of times Crypto.MarshalJWKSet should be invoked
+func (mmMarshalJWKSet *mCryptoMockMarshalJWKSet) Times(n uint64) *mCryptoMockMarshalJWKSet {
+	if n == 0 {
+		mmMarshalJWKSet.mock.t.Fatalf("Times of CryptoMock.MarshalJWKSet mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmMarshalJWKSet.expectedInvocations, n)
+	mmMarshalJWKSet.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmMarshalJWKSet
+}
+
+func (mmMarshalJWKSet *mCryptoMockMarshalJWKSet) invocationsDone() bool {
+	if len(mmMarshalJWKSet.expectations) == 0 && mmMarshalJWKSet.defaultExpectation == nil && mmMarshalJWKSet.mock.funcMarshalJWKSet == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmMarshalJWKSet.mock.afterMarshalJWKSetCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmMarshalJWKSet.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// MarshalJWKSet implements mm_port.Crypto
+func (mmMarshalJWKSet *CryptoMock) MarshalJWKSet(ctx context.Context, domain string, scheme string) (s1 string, err error) {
+	mm_atomic.AddUint64(&mmMarshalJWKSet.beforeMarshalJWKSetCounter, 1)
+	defer mm_atomic.AddUint64(&mmMarshalJWKSet.afterMarshalJWKSetCounter, 1)
+
+	mmMarshalJWKSet.t.Helper()
+
+	if mmMarshalJWKSet.inspectFuncMarshalJWKSet != nil {
+		mmMarshalJWKSet.inspectFuncMarshalJWKSet(ctx, domain, scheme)
+	}
+
+	mm_params := CryptoMockMarshalJWKSetParams{ctx, domain, scheme}
+
+	// Record call args
+	mmMarshalJWKSet.MarshalJWKSetMock.mutex.Lock()
+	mmMarshalJWKSet.MarshalJWKSetMock.callArgs = append(mmMarshalJWKSet.MarshalJWKSetMock.callArgs, &mm_params)
+	mmMarshalJWKSet.MarshalJWKSetMock.mutex.Unlock()
+
+	for _, e := range mmMarshalJWKSet.MarshalJWKSetMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.s1, e.results.err
+		}
+	}
+
+	if mmMarshalJWKSet.MarshalJWKSetMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmMarshalJWKSet.MarshalJWKSetMock.defaultExpectation.Counter, 1)
+		mm_want := mmMarshalJWKSet.MarshalJWKSetMock.defaultExpectation.params
+		mm_want_ptrs := mmMarshalJWKSet.MarshalJWKSetMock.defaultExpectation.paramPtrs
+
+		mm_got := CryptoMockMarshalJWKSetParams{ctx, domain, scheme}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmMarshalJWKSet.t.Errorf("CryptoMock.MarshalJWKSet got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmMarshalJWKSet.MarshalJWKSetMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.domain != nil && !minimock.Equal(*mm_want_ptrs.domain, mm_got.domain) {
+				mmMarshalJWKSet.t.Errorf("CryptoMock.MarshalJWKSet got unexpected parameter domain, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmMarshalJWKSet.MarshalJWKSetMock.defaultExpectation.expectationOrigins.originDomain, *mm_want_ptrs.domain, mm_got.domain, minimock.Diff(*mm_want_ptrs.domain, mm_got.domain))
+			}
+
+			if mm_want_ptrs.scheme != nil && !minimock.Equal(*mm_want_ptrs.scheme, mm_got.scheme) {
+				mmMarshalJWKSet.t.Errorf("CryptoMock.MarshalJWKSet got unexpected parameter scheme, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmMarshalJWKSet.MarshalJWKSetMock.defaultExpectation.expectationOrigins.originScheme, *mm_want_ptrs.scheme, mm_got.scheme, minimock.Diff(*mm_want_ptrs.scheme, mm_got.scheme))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmMarshalJWKSet.t.Errorf("CryptoMock.MarshalJWKSet got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmMarshalJWKSet.MarshalJWKSetMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmMarshalJWKSet.MarshalJWKSetMock.defaultExpectation.results
+		if mm_results == nil {
+			mmMarshalJWKSet.t.Fatal("No results are set for the CryptoMock.MarshalJWKSet")
+		}
+		return (*mm_results).s1, (*mm_results).err
+	}
+	if mmMarshalJWKSet.funcMarshalJWKSet != nil {
+		return mmMarshalJWKSet.funcMarshalJWKSet(ctx, domain, scheme)
+	}
+	mmMarshalJWKSet.t.Fatalf("Unexpected call to CryptoMock.MarshalJWKSet. %v %v %v", ctx, domain, scheme)
+	return
+}
+
+// MarshalJWKSetAfterCounter returns a count of finished CryptoMock.MarshalJWKSet invocations
+func (mmMarshalJWKSet *CryptoMock) MarshalJWKSetAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmMarshalJWKSet.afterMarshalJWKSetCounter)
+}
+
+// MarshalJWKSetBeforeCounter returns a count of CryptoMock.MarshalJWKSet invocations
+func (mmMarshalJWKSet *CryptoMock) MarshalJWKSetBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmMarshalJWKSet.beforeMarshalJWKSetCounter)
+}
+
+// Calls returns a list of arguments used in each call to CryptoMock.MarshalJWKSet.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmMarshalJWKSet *mCryptoMockMarshalJWKSet) Calls() []*CryptoMockMarshalJWKSetParams {
+	mmMarshalJWKSet.mutex.RLock()
+
+	argCopy := make([]*CryptoMockMarshalJWKSetParams, len(mmMarshalJWKSet.callArgs))
+	copy(argCopy, mmMarshalJWKSet.callArgs)
+
+	mmMarshalJWKSet.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockMarshalJWKSetDone returns true if the count of the MarshalJWKSet invocations corresponds
+// the number of defined expectations
+func (m *CryptoMock) MinimockMarshalJWKSetDone() bool {
+	if m.MarshalJWKSetMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.MarshalJWKSetMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.MarshalJWKSetMock.invocationsDone()
+}
+
+// MinimockMarshalJWKSetInspect logs each unmet expectation
+func (m *CryptoMock) MinimockMarshalJWKSetInspect() {
+	for _, e := range m.MarshalJWKSetMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to CryptoMock.MarshalJWKSet at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterMarshalJWKSetCounter := mm_atomic.LoadUint64(&m.afterMarshalJWKSetCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.MarshalJWKSetMock.defaultExpectation != nil && afterMarshalJWKSetCounter < 1 {
+		if m.MarshalJWKSetMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to CryptoMock.MarshalJWKSet at\n%s", m.MarshalJWKSetMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to CryptoMock.MarshalJWKSet at\n%s with params: %#v", m.MarshalJWKSetMock.defaultExpectation.expectationOrigins.origin, *m.MarshalJWKSetMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcMarshalJWKSet != nil && afterMarshalJWKSetCounter < 1 {
+		m.t.Errorf("Expected call to CryptoMock.MarshalJWKSet at\n%s", m.funcMarshalJWKSetOrigin)
+	}
+
+	if !m.MarshalJWKSetMock.invocationsDone() && afterMarshalJWKSetCounter > 0 {
+		m.t.Errorf("Expected %d calls to CryptoMock.MarshalJWKSet at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.MarshalJWKSetMock.expectedInvocations), m.MarshalJWKSetMock.expectedInvocationsOrigin, afterMarshalJWKSetCounter)
+	}
 }
 
 type mCryptoMockRotateKeys struct {
@@ -108,12 +493,14 @@ type CryptoMockRotateKeysExpectation struct {
 
 // CryptoMockRotateKeysParams contains parameters of the Crypto.RotateKeys
 type CryptoMockRotateKeysParams struct {
-	tenant string
+	ctx    context.Context
+	domain string
 }
 
 // CryptoMockRotateKeysParamPtrs contains pointers to parameters of the Crypto.RotateKeys
 type CryptoMockRotateKeysParamPtrs struct {
-	tenant *string
+	ctx    *context.Context
+	domain *string
 }
 
 // CryptoMockRotateKeysResults contains results of the Crypto.RotateKeys
@@ -124,7 +511,8 @@ type CryptoMockRotateKeysResults struct {
 // CryptoMockRotateKeysOrigins contains origins of expectations of the Crypto.RotateKeys
 type CryptoMockRotateKeysExpectationOrigins struct {
 	origin       string
-	originTenant string
+	originCtx    string
+	originDomain string
 }
 
 // Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
@@ -138,7 +526,7 @@ func (mmRotateKeys *mCryptoMockRotateKeys) Optional() *mCryptoMockRotateKeys {
 }
 
 // Expect sets up expected params for Crypto.RotateKeys
-func (mmRotateKeys *mCryptoMockRotateKeys) Expect(tenant string) *mCryptoMockRotateKeys {
+func (mmRotateKeys *mCryptoMockRotateKeys) Expect(ctx context.Context, domain string) *mCryptoMockRotateKeys {
 	if mmRotateKeys.mock.funcRotateKeys != nil {
 		mmRotateKeys.mock.t.Fatalf("CryptoMock.RotateKeys mock is already set by Set")
 	}
@@ -151,7 +539,7 @@ func (mmRotateKeys *mCryptoMockRotateKeys) Expect(tenant string) *mCryptoMockRot
 		mmRotateKeys.mock.t.Fatalf("CryptoMock.RotateKeys mock is already set by ExpectParams functions")
 	}
 
-	mmRotateKeys.defaultExpectation.params = &CryptoMockRotateKeysParams{tenant}
+	mmRotateKeys.defaultExpectation.params = &CryptoMockRotateKeysParams{ctx, domain}
 	mmRotateKeys.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmRotateKeys.expectations {
 		if minimock.Equal(e.params, mmRotateKeys.defaultExpectation.params) {
@@ -162,8 +550,8 @@ func (mmRotateKeys *mCryptoMockRotateKeys) Expect(tenant string) *mCryptoMockRot
 	return mmRotateKeys
 }
 
-// ExpectTenantParam1 sets up expected param tenant for Crypto.RotateKeys
-func (mmRotateKeys *mCryptoMockRotateKeys) ExpectTenantParam1(tenant string) *mCryptoMockRotateKeys {
+// ExpectCtxParam1 sets up expected param ctx for Crypto.RotateKeys
+func (mmRotateKeys *mCryptoMockRotateKeys) ExpectCtxParam1(ctx context.Context) *mCryptoMockRotateKeys {
 	if mmRotateKeys.mock.funcRotateKeys != nil {
 		mmRotateKeys.mock.t.Fatalf("CryptoMock.RotateKeys mock is already set by Set")
 	}
@@ -179,14 +567,37 @@ func (mmRotateKeys *mCryptoMockRotateKeys) ExpectTenantParam1(tenant string) *mC
 	if mmRotateKeys.defaultExpectation.paramPtrs == nil {
 		mmRotateKeys.defaultExpectation.paramPtrs = &CryptoMockRotateKeysParamPtrs{}
 	}
-	mmRotateKeys.defaultExpectation.paramPtrs.tenant = &tenant
-	mmRotateKeys.defaultExpectation.expectationOrigins.originTenant = minimock.CallerInfo(1)
+	mmRotateKeys.defaultExpectation.paramPtrs.ctx = &ctx
+	mmRotateKeys.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmRotateKeys
+}
+
+// ExpectDomainParam2 sets up expected param domain for Crypto.RotateKeys
+func (mmRotateKeys *mCryptoMockRotateKeys) ExpectDomainParam2(domain string) *mCryptoMockRotateKeys {
+	if mmRotateKeys.mock.funcRotateKeys != nil {
+		mmRotateKeys.mock.t.Fatalf("CryptoMock.RotateKeys mock is already set by Set")
+	}
+
+	if mmRotateKeys.defaultExpectation == nil {
+		mmRotateKeys.defaultExpectation = &CryptoMockRotateKeysExpectation{}
+	}
+
+	if mmRotateKeys.defaultExpectation.params != nil {
+		mmRotateKeys.mock.t.Fatalf("CryptoMock.RotateKeys mock is already set by Expect")
+	}
+
+	if mmRotateKeys.defaultExpectation.paramPtrs == nil {
+		mmRotateKeys.defaultExpectation.paramPtrs = &CryptoMockRotateKeysParamPtrs{}
+	}
+	mmRotateKeys.defaultExpectation.paramPtrs.domain = &domain
+	mmRotateKeys.defaultExpectation.expectationOrigins.originDomain = minimock.CallerInfo(1)
 
 	return mmRotateKeys
 }
 
 // Inspect accepts an inspector function that has same arguments as the Crypto.RotateKeys
-func (mmRotateKeys *mCryptoMockRotateKeys) Inspect(f func(tenant string)) *mCryptoMockRotateKeys {
+func (mmRotateKeys *mCryptoMockRotateKeys) Inspect(f func(ctx context.Context, domain string)) *mCryptoMockRotateKeys {
 	if mmRotateKeys.mock.inspectFuncRotateKeys != nil {
 		mmRotateKeys.mock.t.Fatalf("Inspect function is already set for CryptoMock.RotateKeys")
 	}
@@ -211,7 +622,7 @@ func (mmRotateKeys *mCryptoMockRotateKeys) Return(err error) *CryptoMock {
 }
 
 // Set uses given function f to mock the Crypto.RotateKeys method
-func (mmRotateKeys *mCryptoMockRotateKeys) Set(f func(tenant string) (err error)) *CryptoMock {
+func (mmRotateKeys *mCryptoMockRotateKeys) Set(f func(ctx context.Context, domain string) (err error)) *CryptoMock {
 	if mmRotateKeys.defaultExpectation != nil {
 		mmRotateKeys.mock.t.Fatalf("Default expectation is already set for the Crypto.RotateKeys method")
 	}
@@ -227,14 +638,14 @@ func (mmRotateKeys *mCryptoMockRotateKeys) Set(f func(tenant string) (err error)
 
 // When sets expectation for the Crypto.RotateKeys which will trigger the result defined by the following
 // Then helper
-func (mmRotateKeys *mCryptoMockRotateKeys) When(tenant string) *CryptoMockRotateKeysExpectation {
+func (mmRotateKeys *mCryptoMockRotateKeys) When(ctx context.Context, domain string) *CryptoMockRotateKeysExpectation {
 	if mmRotateKeys.mock.funcRotateKeys != nil {
 		mmRotateKeys.mock.t.Fatalf("CryptoMock.RotateKeys mock is already set by Set")
 	}
 
 	expectation := &CryptoMockRotateKeysExpectation{
 		mock:               mmRotateKeys.mock,
-		params:             &CryptoMockRotateKeysParams{tenant},
+		params:             &CryptoMockRotateKeysParams{ctx, domain},
 		expectationOrigins: CryptoMockRotateKeysExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmRotateKeys.expectations = append(mmRotateKeys.expectations, expectation)
@@ -269,17 +680,17 @@ func (mmRotateKeys *mCryptoMockRotateKeys) invocationsDone() bool {
 }
 
 // RotateKeys implements mm_port.Crypto
-func (mmRotateKeys *CryptoMock) RotateKeys(tenant string) (err error) {
+func (mmRotateKeys *CryptoMock) RotateKeys(ctx context.Context, domain string) (err error) {
 	mm_atomic.AddUint64(&mmRotateKeys.beforeRotateKeysCounter, 1)
 	defer mm_atomic.AddUint64(&mmRotateKeys.afterRotateKeysCounter, 1)
 
 	mmRotateKeys.t.Helper()
 
 	if mmRotateKeys.inspectFuncRotateKeys != nil {
-		mmRotateKeys.inspectFuncRotateKeys(tenant)
+		mmRotateKeys.inspectFuncRotateKeys(ctx, domain)
 	}
 
-	mm_params := CryptoMockRotateKeysParams{tenant}
+	mm_params := CryptoMockRotateKeysParams{ctx, domain}
 
 	// Record call args
 	mmRotateKeys.RotateKeysMock.mutex.Lock()
@@ -298,13 +709,18 @@ func (mmRotateKeys *CryptoMock) RotateKeys(tenant string) (err error) {
 		mm_want := mmRotateKeys.RotateKeysMock.defaultExpectation.params
 		mm_want_ptrs := mmRotateKeys.RotateKeysMock.defaultExpectation.paramPtrs
 
-		mm_got := CryptoMockRotateKeysParams{tenant}
+		mm_got := CryptoMockRotateKeysParams{ctx, domain}
 
 		if mm_want_ptrs != nil {
 
-			if mm_want_ptrs.tenant != nil && !minimock.Equal(*mm_want_ptrs.tenant, mm_got.tenant) {
-				mmRotateKeys.t.Errorf("CryptoMock.RotateKeys got unexpected parameter tenant, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmRotateKeys.RotateKeysMock.defaultExpectation.expectationOrigins.originTenant, *mm_want_ptrs.tenant, mm_got.tenant, minimock.Diff(*mm_want_ptrs.tenant, mm_got.tenant))
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmRotateKeys.t.Errorf("CryptoMock.RotateKeys got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRotateKeys.RotateKeysMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.domain != nil && !minimock.Equal(*mm_want_ptrs.domain, mm_got.domain) {
+				mmRotateKeys.t.Errorf("CryptoMock.RotateKeys got unexpected parameter domain, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRotateKeys.RotateKeysMock.defaultExpectation.expectationOrigins.originDomain, *mm_want_ptrs.domain, mm_got.domain, minimock.Diff(*mm_want_ptrs.domain, mm_got.domain))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
@@ -319,9 +735,9 @@ func (mmRotateKeys *CryptoMock) RotateKeys(tenant string) (err error) {
 		return (*mm_results).err
 	}
 	if mmRotateKeys.funcRotateKeys != nil {
-		return mmRotateKeys.funcRotateKeys(tenant)
+		return mmRotateKeys.funcRotateKeys(ctx, domain)
 	}
-	mmRotateKeys.t.Fatalf("Unexpected call to CryptoMock.RotateKeys. %v", tenant)
+	mmRotateKeys.t.Fatalf("Unexpected call to CryptoMock.RotateKeys. %v %v", ctx, domain)
 	return
 }
 
@@ -419,12 +835,14 @@ type CryptoMockSignAccessTokenExpectation struct {
 
 // CryptoMockSignAccessTokenParams contains parameters of the Crypto.SignAccessToken
 type CryptoMockSignAccessTokenParams struct {
+	ctx    context.Context
 	claims model.TokenClaims
 	alg    model.SignatureAlgorithm
 }
 
 // CryptoMockSignAccessTokenParamPtrs contains pointers to parameters of the Crypto.SignAccessToken
 type CryptoMockSignAccessTokenParamPtrs struct {
+	ctx    *context.Context
 	claims *model.TokenClaims
 	alg    *model.SignatureAlgorithm
 }
@@ -438,6 +856,7 @@ type CryptoMockSignAccessTokenResults struct {
 // CryptoMockSignAccessTokenOrigins contains origins of expectations of the Crypto.SignAccessToken
 type CryptoMockSignAccessTokenExpectationOrigins struct {
 	origin       string
+	originCtx    string
 	originClaims string
 	originAlg    string
 }
@@ -453,7 +872,7 @@ func (mmSignAccessToken *mCryptoMockSignAccessToken) Optional() *mCryptoMockSign
 }
 
 // Expect sets up expected params for Crypto.SignAccessToken
-func (mmSignAccessToken *mCryptoMockSignAccessToken) Expect(claims model.TokenClaims, alg model.SignatureAlgorithm) *mCryptoMockSignAccessToken {
+func (mmSignAccessToken *mCryptoMockSignAccessToken) Expect(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) *mCryptoMockSignAccessToken {
 	if mmSignAccessToken.mock.funcSignAccessToken != nil {
 		mmSignAccessToken.mock.t.Fatalf("CryptoMock.SignAccessToken mock is already set by Set")
 	}
@@ -466,7 +885,7 @@ func (mmSignAccessToken *mCryptoMockSignAccessToken) Expect(claims model.TokenCl
 		mmSignAccessToken.mock.t.Fatalf("CryptoMock.SignAccessToken mock is already set by ExpectParams functions")
 	}
 
-	mmSignAccessToken.defaultExpectation.params = &CryptoMockSignAccessTokenParams{claims, alg}
+	mmSignAccessToken.defaultExpectation.params = &CryptoMockSignAccessTokenParams{ctx, claims, alg}
 	mmSignAccessToken.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmSignAccessToken.expectations {
 		if minimock.Equal(e.params, mmSignAccessToken.defaultExpectation.params) {
@@ -477,8 +896,31 @@ func (mmSignAccessToken *mCryptoMockSignAccessToken) Expect(claims model.TokenCl
 	return mmSignAccessToken
 }
 
-// ExpectClaimsParam1 sets up expected param claims for Crypto.SignAccessToken
-func (mmSignAccessToken *mCryptoMockSignAccessToken) ExpectClaimsParam1(claims model.TokenClaims) *mCryptoMockSignAccessToken {
+// ExpectCtxParam1 sets up expected param ctx for Crypto.SignAccessToken
+func (mmSignAccessToken *mCryptoMockSignAccessToken) ExpectCtxParam1(ctx context.Context) *mCryptoMockSignAccessToken {
+	if mmSignAccessToken.mock.funcSignAccessToken != nil {
+		mmSignAccessToken.mock.t.Fatalf("CryptoMock.SignAccessToken mock is already set by Set")
+	}
+
+	if mmSignAccessToken.defaultExpectation == nil {
+		mmSignAccessToken.defaultExpectation = &CryptoMockSignAccessTokenExpectation{}
+	}
+
+	if mmSignAccessToken.defaultExpectation.params != nil {
+		mmSignAccessToken.mock.t.Fatalf("CryptoMock.SignAccessToken mock is already set by Expect")
+	}
+
+	if mmSignAccessToken.defaultExpectation.paramPtrs == nil {
+		mmSignAccessToken.defaultExpectation.paramPtrs = &CryptoMockSignAccessTokenParamPtrs{}
+	}
+	mmSignAccessToken.defaultExpectation.paramPtrs.ctx = &ctx
+	mmSignAccessToken.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmSignAccessToken
+}
+
+// ExpectClaimsParam2 sets up expected param claims for Crypto.SignAccessToken
+func (mmSignAccessToken *mCryptoMockSignAccessToken) ExpectClaimsParam2(claims model.TokenClaims) *mCryptoMockSignAccessToken {
 	if mmSignAccessToken.mock.funcSignAccessToken != nil {
 		mmSignAccessToken.mock.t.Fatalf("CryptoMock.SignAccessToken mock is already set by Set")
 	}
@@ -500,8 +942,8 @@ func (mmSignAccessToken *mCryptoMockSignAccessToken) ExpectClaimsParam1(claims m
 	return mmSignAccessToken
 }
 
-// ExpectAlgParam2 sets up expected param alg for Crypto.SignAccessToken
-func (mmSignAccessToken *mCryptoMockSignAccessToken) ExpectAlgParam2(alg model.SignatureAlgorithm) *mCryptoMockSignAccessToken {
+// ExpectAlgParam3 sets up expected param alg for Crypto.SignAccessToken
+func (mmSignAccessToken *mCryptoMockSignAccessToken) ExpectAlgParam3(alg model.SignatureAlgorithm) *mCryptoMockSignAccessToken {
 	if mmSignAccessToken.mock.funcSignAccessToken != nil {
 		mmSignAccessToken.mock.t.Fatalf("CryptoMock.SignAccessToken mock is already set by Set")
 	}
@@ -524,7 +966,7 @@ func (mmSignAccessToken *mCryptoMockSignAccessToken) ExpectAlgParam2(alg model.S
 }
 
 // Inspect accepts an inspector function that has same arguments as the Crypto.SignAccessToken
-func (mmSignAccessToken *mCryptoMockSignAccessToken) Inspect(f func(claims model.TokenClaims, alg model.SignatureAlgorithm)) *mCryptoMockSignAccessToken {
+func (mmSignAccessToken *mCryptoMockSignAccessToken) Inspect(f func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm)) *mCryptoMockSignAccessToken {
 	if mmSignAccessToken.mock.inspectFuncSignAccessToken != nil {
 		mmSignAccessToken.mock.t.Fatalf("Inspect function is already set for CryptoMock.SignAccessToken")
 	}
@@ -549,7 +991,7 @@ func (mmSignAccessToken *mCryptoMockSignAccessToken) Return(s1 string, err error
 }
 
 // Set uses given function f to mock the Crypto.SignAccessToken method
-func (mmSignAccessToken *mCryptoMockSignAccessToken) Set(f func(claims model.TokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)) *CryptoMock {
+func (mmSignAccessToken *mCryptoMockSignAccessToken) Set(f func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)) *CryptoMock {
 	if mmSignAccessToken.defaultExpectation != nil {
 		mmSignAccessToken.mock.t.Fatalf("Default expectation is already set for the Crypto.SignAccessToken method")
 	}
@@ -565,14 +1007,14 @@ func (mmSignAccessToken *mCryptoMockSignAccessToken) Set(f func(claims model.Tok
 
 // When sets expectation for the Crypto.SignAccessToken which will trigger the result defined by the following
 // Then helper
-func (mmSignAccessToken *mCryptoMockSignAccessToken) When(claims model.TokenClaims, alg model.SignatureAlgorithm) *CryptoMockSignAccessTokenExpectation {
+func (mmSignAccessToken *mCryptoMockSignAccessToken) When(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) *CryptoMockSignAccessTokenExpectation {
 	if mmSignAccessToken.mock.funcSignAccessToken != nil {
 		mmSignAccessToken.mock.t.Fatalf("CryptoMock.SignAccessToken mock is already set by Set")
 	}
 
 	expectation := &CryptoMockSignAccessTokenExpectation{
 		mock:               mmSignAccessToken.mock,
-		params:             &CryptoMockSignAccessTokenParams{claims, alg},
+		params:             &CryptoMockSignAccessTokenParams{ctx, claims, alg},
 		expectationOrigins: CryptoMockSignAccessTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmSignAccessToken.expectations = append(mmSignAccessToken.expectations, expectation)
@@ -607,17 +1049,17 @@ func (mmSignAccessToken *mCryptoMockSignAccessToken) invocationsDone() bool {
 }
 
 // SignAccessToken implements mm_port.Crypto
-func (mmSignAccessToken *CryptoMock) SignAccessToken(claims model.TokenClaims, alg model.SignatureAlgorithm) (s1 string, err error) {
+func (mmSignAccessToken *CryptoMock) SignAccessToken(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (s1 string, err error) {
 	mm_atomic.AddUint64(&mmSignAccessToken.beforeSignAccessTokenCounter, 1)
 	defer mm_atomic.AddUint64(&mmSignAccessToken.afterSignAccessTokenCounter, 1)
 
 	mmSignAccessToken.t.Helper()
 
 	if mmSignAccessToken.inspectFuncSignAccessToken != nil {
-		mmSignAccessToken.inspectFuncSignAccessToken(claims, alg)
+		mmSignAccessToken.inspectFuncSignAccessToken(ctx, claims, alg)
 	}
 
-	mm_params := CryptoMockSignAccessTokenParams{claims, alg}
+	mm_params := CryptoMockSignAccessTokenParams{ctx, claims, alg}
 
 	// Record call args
 	mmSignAccessToken.SignAccessTokenMock.mutex.Lock()
@@ -636,9 +1078,14 @@ func (mmSignAccessToken *CryptoMock) SignAccessToken(claims model.TokenClaims, a
 		mm_want := mmSignAccessToken.SignAccessTokenMock.defaultExpectation.params
 		mm_want_ptrs := mmSignAccessToken.SignAccessTokenMock.defaultExpectation.paramPtrs
 
-		mm_got := CryptoMockSignAccessTokenParams{claims, alg}
+		mm_got := CryptoMockSignAccessTokenParams{ctx, claims, alg}
 
 		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmSignAccessToken.t.Errorf("CryptoMock.SignAccessToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSignAccessToken.SignAccessTokenMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
 
 			if mm_want_ptrs.claims != nil && !minimock.Equal(*mm_want_ptrs.claims, mm_got.claims) {
 				mmSignAccessToken.t.Errorf("CryptoMock.SignAccessToken got unexpected parameter claims, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
@@ -662,9 +1109,9 @@ func (mmSignAccessToken *CryptoMock) SignAccessToken(claims model.TokenClaims, a
 		return (*mm_results).s1, (*mm_results).err
 	}
 	if mmSignAccessToken.funcSignAccessToken != nil {
-		return mmSignAccessToken.funcSignAccessToken(claims, alg)
+		return mmSignAccessToken.funcSignAccessToken(ctx, claims, alg)
 	}
-	mmSignAccessToken.t.Fatalf("Unexpected call to CryptoMock.SignAccessToken. %v %v", claims, alg)
+	mmSignAccessToken.t.Fatalf("Unexpected call to CryptoMock.SignAccessToken. %v %v %v", ctx, claims, alg)
 	return
 }
 
@@ -762,12 +1209,14 @@ type CryptoMockSignIDTokenExpectation struct {
 
 // CryptoMockSignIDTokenParams contains parameters of the Crypto.SignIDToken
 type CryptoMockSignIDTokenParams struct {
+	ctx    context.Context
 	claims model.OIDCTokenClaims
 	alg    model.SignatureAlgorithm
 }
 
 // CryptoMockSignIDTokenParamPtrs contains pointers to parameters of the Crypto.SignIDToken
 type CryptoMockSignIDTokenParamPtrs struct {
+	ctx    *context.Context
 	claims *model.OIDCTokenClaims
 	alg    *model.SignatureAlgorithm
 }
@@ -781,6 +1230,7 @@ type CryptoMockSignIDTokenResults struct {
 // CryptoMockSignIDTokenOrigins contains origins of expectations of the Crypto.SignIDToken
 type CryptoMockSignIDTokenExpectationOrigins struct {
 	origin       string
+	originCtx    string
 	originClaims string
 	originAlg    string
 }
@@ -796,7 +1246,7 @@ func (mmSignIDToken *mCryptoMockSignIDToken) Optional() *mCryptoMockSignIDToken 
 }
 
 // Expect sets up expected params for Crypto.SignIDToken
-func (mmSignIDToken *mCryptoMockSignIDToken) Expect(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) *mCryptoMockSignIDToken {
+func (mmSignIDToken *mCryptoMockSignIDToken) Expect(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) *mCryptoMockSignIDToken {
 	if mmSignIDToken.mock.funcSignIDToken != nil {
 		mmSignIDToken.mock.t.Fatalf("CryptoMock.SignIDToken mock is already set by Set")
 	}
@@ -809,7 +1259,7 @@ func (mmSignIDToken *mCryptoMockSignIDToken) Expect(claims model.OIDCTokenClaims
 		mmSignIDToken.mock.t.Fatalf("CryptoMock.SignIDToken mock is already set by ExpectParams functions")
 	}
 
-	mmSignIDToken.defaultExpectation.params = &CryptoMockSignIDTokenParams{claims, alg}
+	mmSignIDToken.defaultExpectation.params = &CryptoMockSignIDTokenParams{ctx, claims, alg}
 	mmSignIDToken.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmSignIDToken.expectations {
 		if minimock.Equal(e.params, mmSignIDToken.defaultExpectation.params) {
@@ -820,8 +1270,31 @@ func (mmSignIDToken *mCryptoMockSignIDToken) Expect(claims model.OIDCTokenClaims
 	return mmSignIDToken
 }
 
-// ExpectClaimsParam1 sets up expected param claims for Crypto.SignIDToken
-func (mmSignIDToken *mCryptoMockSignIDToken) ExpectClaimsParam1(claims model.OIDCTokenClaims) *mCryptoMockSignIDToken {
+// ExpectCtxParam1 sets up expected param ctx for Crypto.SignIDToken
+func (mmSignIDToken *mCryptoMockSignIDToken) ExpectCtxParam1(ctx context.Context) *mCryptoMockSignIDToken {
+	if mmSignIDToken.mock.funcSignIDToken != nil {
+		mmSignIDToken.mock.t.Fatalf("CryptoMock.SignIDToken mock is already set by Set")
+	}
+
+	if mmSignIDToken.defaultExpectation == nil {
+		mmSignIDToken.defaultExpectation = &CryptoMockSignIDTokenExpectation{}
+	}
+
+	if mmSignIDToken.defaultExpectation.params != nil {
+		mmSignIDToken.mock.t.Fatalf("CryptoMock.SignIDToken mock is already set by Expect")
+	}
+
+	if mmSignIDToken.defaultExpectation.paramPtrs == nil {
+		mmSignIDToken.defaultExpectation.paramPtrs = &CryptoMockSignIDTokenParamPtrs{}
+	}
+	mmSignIDToken.defaultExpectation.paramPtrs.ctx = &ctx
+	mmSignIDToken.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmSignIDToken
+}
+
+// ExpectClaimsParam2 sets up expected param claims for Crypto.SignIDToken
+func (mmSignIDToken *mCryptoMockSignIDToken) ExpectClaimsParam2(claims model.OIDCTokenClaims) *mCryptoMockSignIDToken {
 	if mmSignIDToken.mock.funcSignIDToken != nil {
 		mmSignIDToken.mock.t.Fatalf("CryptoMock.SignIDToken mock is already set by Set")
 	}
@@ -843,8 +1316,8 @@ func (mmSignIDToken *mCryptoMockSignIDToken) ExpectClaimsParam1(claims model.OID
 	return mmSignIDToken
 }
 
-// ExpectAlgParam2 sets up expected param alg for Crypto.SignIDToken
-func (mmSignIDToken *mCryptoMockSignIDToken) ExpectAlgParam2(alg model.SignatureAlgorithm) *mCryptoMockSignIDToken {
+// ExpectAlgParam3 sets up expected param alg for Crypto.SignIDToken
+func (mmSignIDToken *mCryptoMockSignIDToken) ExpectAlgParam3(alg model.SignatureAlgorithm) *mCryptoMockSignIDToken {
 	if mmSignIDToken.mock.funcSignIDToken != nil {
 		mmSignIDToken.mock.t.Fatalf("CryptoMock.SignIDToken mock is already set by Set")
 	}
@@ -867,7 +1340,7 @@ func (mmSignIDToken *mCryptoMockSignIDToken) ExpectAlgParam2(alg model.Signature
 }
 
 // Inspect accepts an inspector function that has same arguments as the Crypto.SignIDToken
-func (mmSignIDToken *mCryptoMockSignIDToken) Inspect(f func(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm)) *mCryptoMockSignIDToken {
+func (mmSignIDToken *mCryptoMockSignIDToken) Inspect(f func(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm)) *mCryptoMockSignIDToken {
 	if mmSignIDToken.mock.inspectFuncSignIDToken != nil {
 		mmSignIDToken.mock.t.Fatalf("Inspect function is already set for CryptoMock.SignIDToken")
 	}
@@ -892,7 +1365,7 @@ func (mmSignIDToken *mCryptoMockSignIDToken) Return(s1 string, err error) *Crypt
 }
 
 // Set uses given function f to mock the Crypto.SignIDToken method
-func (mmSignIDToken *mCryptoMockSignIDToken) Set(f func(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)) *CryptoMock {
+func (mmSignIDToken *mCryptoMockSignIDToken) Set(f func(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)) *CryptoMock {
 	if mmSignIDToken.defaultExpectation != nil {
 		mmSignIDToken.mock.t.Fatalf("Default expectation is already set for the Crypto.SignIDToken method")
 	}
@@ -908,14 +1381,14 @@ func (mmSignIDToken *mCryptoMockSignIDToken) Set(f func(claims model.OIDCTokenCl
 
 // When sets expectation for the Crypto.SignIDToken which will trigger the result defined by the following
 // Then helper
-func (mmSignIDToken *mCryptoMockSignIDToken) When(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) *CryptoMockSignIDTokenExpectation {
+func (mmSignIDToken *mCryptoMockSignIDToken) When(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) *CryptoMockSignIDTokenExpectation {
 	if mmSignIDToken.mock.funcSignIDToken != nil {
 		mmSignIDToken.mock.t.Fatalf("CryptoMock.SignIDToken mock is already set by Set")
 	}
 
 	expectation := &CryptoMockSignIDTokenExpectation{
 		mock:               mmSignIDToken.mock,
-		params:             &CryptoMockSignIDTokenParams{claims, alg},
+		params:             &CryptoMockSignIDTokenParams{ctx, claims, alg},
 		expectationOrigins: CryptoMockSignIDTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmSignIDToken.expectations = append(mmSignIDToken.expectations, expectation)
@@ -950,17 +1423,17 @@ func (mmSignIDToken *mCryptoMockSignIDToken) invocationsDone() bool {
 }
 
 // SignIDToken implements mm_port.Crypto
-func (mmSignIDToken *CryptoMock) SignIDToken(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error) {
+func (mmSignIDToken *CryptoMock) SignIDToken(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error) {
 	mm_atomic.AddUint64(&mmSignIDToken.beforeSignIDTokenCounter, 1)
 	defer mm_atomic.AddUint64(&mmSignIDToken.afterSignIDTokenCounter, 1)
 
 	mmSignIDToken.t.Helper()
 
 	if mmSignIDToken.inspectFuncSignIDToken != nil {
-		mmSignIDToken.inspectFuncSignIDToken(claims, alg)
+		mmSignIDToken.inspectFuncSignIDToken(ctx, claims, alg)
 	}
 
-	mm_params := CryptoMockSignIDTokenParams{claims, alg}
+	mm_params := CryptoMockSignIDTokenParams{ctx, claims, alg}
 
 	// Record call args
 	mmSignIDToken.SignIDTokenMock.mutex.Lock()
@@ -979,9 +1452,14 @@ func (mmSignIDToken *CryptoMock) SignIDToken(claims model.OIDCTokenClaims, alg m
 		mm_want := mmSignIDToken.SignIDTokenMock.defaultExpectation.params
 		mm_want_ptrs := mmSignIDToken.SignIDTokenMock.defaultExpectation.paramPtrs
 
-		mm_got := CryptoMockSignIDTokenParams{claims, alg}
+		mm_got := CryptoMockSignIDTokenParams{ctx, claims, alg}
 
 		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmSignIDToken.t.Errorf("CryptoMock.SignIDToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSignIDToken.SignIDTokenMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
 
 			if mm_want_ptrs.claims != nil && !minimock.Equal(*mm_want_ptrs.claims, mm_got.claims) {
 				mmSignIDToken.t.Errorf("CryptoMock.SignIDToken got unexpected parameter claims, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
@@ -1005,9 +1483,9 @@ func (mmSignIDToken *CryptoMock) SignIDToken(claims model.OIDCTokenClaims, alg m
 		return (*mm_results).s1, (*mm_results).err
 	}
 	if mmSignIDToken.funcSignIDToken != nil {
-		return mmSignIDToken.funcSignIDToken(claims, alg)
+		return mmSignIDToken.funcSignIDToken(ctx, claims, alg)
 	}
-	mmSignIDToken.t.Fatalf("Unexpected call to CryptoMock.SignIDToken. %v %v", claims, alg)
+	mmSignIDToken.t.Fatalf("Unexpected call to CryptoMock.SignIDToken. %v %v %v", ctx, claims, alg)
 	return
 }
 
@@ -1105,12 +1583,14 @@ type CryptoMockSignLogoutTokenExpectation struct {
 
 // CryptoMockSignLogoutTokenParams contains parameters of the Crypto.SignLogoutToken
 type CryptoMockSignLogoutTokenParams struct {
+	ctx    context.Context
 	claims model.LogoutTokenClaims
 	alg    model.SignatureAlgorithm
 }
 
 // CryptoMockSignLogoutTokenParamPtrs contains pointers to parameters of the Crypto.SignLogoutToken
 type CryptoMockSignLogoutTokenParamPtrs struct {
+	ctx    *context.Context
 	claims *model.LogoutTokenClaims
 	alg    *model.SignatureAlgorithm
 }
@@ -1124,6 +1604,7 @@ type CryptoMockSignLogoutTokenResults struct {
 // CryptoMockSignLogoutTokenOrigins contains origins of expectations of the Crypto.SignLogoutToken
 type CryptoMockSignLogoutTokenExpectationOrigins struct {
 	origin       string
+	originCtx    string
 	originClaims string
 	originAlg    string
 }
@@ -1139,7 +1620,7 @@ func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Optional() *mCryptoMockSign
 }
 
 // Expect sets up expected params for Crypto.SignLogoutToken
-func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Expect(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) *mCryptoMockSignLogoutToken {
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Expect(ctx context.Context, claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) *mCryptoMockSignLogoutToken {
 	if mmSignLogoutToken.mock.funcSignLogoutToken != nil {
 		mmSignLogoutToken.mock.t.Fatalf("CryptoMock.SignLogoutToken mock is already set by Set")
 	}
@@ -1152,7 +1633,7 @@ func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Expect(claims model.LogoutT
 		mmSignLogoutToken.mock.t.Fatalf("CryptoMock.SignLogoutToken mock is already set by ExpectParams functions")
 	}
 
-	mmSignLogoutToken.defaultExpectation.params = &CryptoMockSignLogoutTokenParams{claims, alg}
+	mmSignLogoutToken.defaultExpectation.params = &CryptoMockSignLogoutTokenParams{ctx, claims, alg}
 	mmSignLogoutToken.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmSignLogoutToken.expectations {
 		if minimock.Equal(e.params, mmSignLogoutToken.defaultExpectation.params) {
@@ -1163,8 +1644,31 @@ func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Expect(claims model.LogoutT
 	return mmSignLogoutToken
 }
 
-// ExpectClaimsParam1 sets up expected param claims for Crypto.SignLogoutToken
-func (mmSignLogoutToken *mCryptoMockSignLogoutToken) ExpectClaimsParam1(claims model.LogoutTokenClaims) *mCryptoMockSignLogoutToken {
+// ExpectCtxParam1 sets up expected param ctx for Crypto.SignLogoutToken
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) ExpectCtxParam1(ctx context.Context) *mCryptoMockSignLogoutToken {
+	if mmSignLogoutToken.mock.funcSignLogoutToken != nil {
+		mmSignLogoutToken.mock.t.Fatalf("CryptoMock.SignLogoutToken mock is already set by Set")
+	}
+
+	if mmSignLogoutToken.defaultExpectation == nil {
+		mmSignLogoutToken.defaultExpectation = &CryptoMockSignLogoutTokenExpectation{}
+	}
+
+	if mmSignLogoutToken.defaultExpectation.params != nil {
+		mmSignLogoutToken.mock.t.Fatalf("CryptoMock.SignLogoutToken mock is already set by Expect")
+	}
+
+	if mmSignLogoutToken.defaultExpectation.paramPtrs == nil {
+		mmSignLogoutToken.defaultExpectation.paramPtrs = &CryptoMockSignLogoutTokenParamPtrs{}
+	}
+	mmSignLogoutToken.defaultExpectation.paramPtrs.ctx = &ctx
+	mmSignLogoutToken.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmSignLogoutToken
+}
+
+// ExpectClaimsParam2 sets up expected param claims for Crypto.SignLogoutToken
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) ExpectClaimsParam2(claims model.LogoutTokenClaims) *mCryptoMockSignLogoutToken {
 	if mmSignLogoutToken.mock.funcSignLogoutToken != nil {
 		mmSignLogoutToken.mock.t.Fatalf("CryptoMock.SignLogoutToken mock is already set by Set")
 	}
@@ -1186,8 +1690,8 @@ func (mmSignLogoutToken *mCryptoMockSignLogoutToken) ExpectClaimsParam1(claims m
 	return mmSignLogoutToken
 }
 
-// ExpectAlgParam2 sets up expected param alg for Crypto.SignLogoutToken
-func (mmSignLogoutToken *mCryptoMockSignLogoutToken) ExpectAlgParam2(alg model.SignatureAlgorithm) *mCryptoMockSignLogoutToken {
+// ExpectAlgParam3 sets up expected param alg for Crypto.SignLogoutToken
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) ExpectAlgParam3(alg model.SignatureAlgorithm) *mCryptoMockSignLogoutToken {
 	if mmSignLogoutToken.mock.funcSignLogoutToken != nil {
 		mmSignLogoutToken.mock.t.Fatalf("CryptoMock.SignLogoutToken mock is already set by Set")
 	}
@@ -1210,7 +1714,7 @@ func (mmSignLogoutToken *mCryptoMockSignLogoutToken) ExpectAlgParam2(alg model.S
 }
 
 // Inspect accepts an inspector function that has same arguments as the Crypto.SignLogoutToken
-func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Inspect(f func(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm)) *mCryptoMockSignLogoutToken {
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Inspect(f func(ctx context.Context, claims model.LogoutTokenClaims, alg model.SignatureAlgorithm)) *mCryptoMockSignLogoutToken {
 	if mmSignLogoutToken.mock.inspectFuncSignLogoutToken != nil {
 		mmSignLogoutToken.mock.t.Fatalf("Inspect function is already set for CryptoMock.SignLogoutToken")
 	}
@@ -1235,7 +1739,7 @@ func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Return(s1 string, err error
 }
 
 // Set uses given function f to mock the Crypto.SignLogoutToken method
-func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Set(f func(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)) *CryptoMock {
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Set(f func(ctx context.Context, claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)) *CryptoMock {
 	if mmSignLogoutToken.defaultExpectation != nil {
 		mmSignLogoutToken.mock.t.Fatalf("Default expectation is already set for the Crypto.SignLogoutToken method")
 	}
@@ -1251,14 +1755,14 @@ func (mmSignLogoutToken *mCryptoMockSignLogoutToken) Set(f func(claims model.Log
 
 // When sets expectation for the Crypto.SignLogoutToken which will trigger the result defined by the following
 // Then helper
-func (mmSignLogoutToken *mCryptoMockSignLogoutToken) When(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) *CryptoMockSignLogoutTokenExpectation {
+func (mmSignLogoutToken *mCryptoMockSignLogoutToken) When(ctx context.Context, claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) *CryptoMockSignLogoutTokenExpectation {
 	if mmSignLogoutToken.mock.funcSignLogoutToken != nil {
 		mmSignLogoutToken.mock.t.Fatalf("CryptoMock.SignLogoutToken mock is already set by Set")
 	}
 
 	expectation := &CryptoMockSignLogoutTokenExpectation{
 		mock:               mmSignLogoutToken.mock,
-		params:             &CryptoMockSignLogoutTokenParams{claims, alg},
+		params:             &CryptoMockSignLogoutTokenParams{ctx, claims, alg},
 		expectationOrigins: CryptoMockSignLogoutTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmSignLogoutToken.expectations = append(mmSignLogoutToken.expectations, expectation)
@@ -1293,17 +1797,17 @@ func (mmSignLogoutToken *mCryptoMockSignLogoutToken) invocationsDone() bool {
 }
 
 // SignLogoutToken implements mm_port.Crypto
-func (mmSignLogoutToken *CryptoMock) SignLogoutToken(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error) {
+func (mmSignLogoutToken *CryptoMock) SignLogoutToken(ctx context.Context, claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error) {
 	mm_atomic.AddUint64(&mmSignLogoutToken.beforeSignLogoutTokenCounter, 1)
 	defer mm_atomic.AddUint64(&mmSignLogoutToken.afterSignLogoutTokenCounter, 1)
 
 	mmSignLogoutToken.t.Helper()
 
 	if mmSignLogoutToken.inspectFuncSignLogoutToken != nil {
-		mmSignLogoutToken.inspectFuncSignLogoutToken(claims, alg)
+		mmSignLogoutToken.inspectFuncSignLogoutToken(ctx, claims, alg)
 	}
 
-	mm_params := CryptoMockSignLogoutTokenParams{claims, alg}
+	mm_params := CryptoMockSignLogoutTokenParams{ctx, claims, alg}
 
 	// Record call args
 	mmSignLogoutToken.SignLogoutTokenMock.mutex.Lock()
@@ -1322,9 +1826,14 @@ func (mmSignLogoutToken *CryptoMock) SignLogoutToken(claims model.LogoutTokenCla
 		mm_want := mmSignLogoutToken.SignLogoutTokenMock.defaultExpectation.params
 		mm_want_ptrs := mmSignLogoutToken.SignLogoutTokenMock.defaultExpectation.paramPtrs
 
-		mm_got := CryptoMockSignLogoutTokenParams{claims, alg}
+		mm_got := CryptoMockSignLogoutTokenParams{ctx, claims, alg}
 
 		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmSignLogoutToken.t.Errorf("CryptoMock.SignLogoutToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSignLogoutToken.SignLogoutTokenMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
 
 			if mm_want_ptrs.claims != nil && !minimock.Equal(*mm_want_ptrs.claims, mm_got.claims) {
 				mmSignLogoutToken.t.Errorf("CryptoMock.SignLogoutToken got unexpected parameter claims, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
@@ -1348,9 +1857,9 @@ func (mmSignLogoutToken *CryptoMock) SignLogoutToken(claims model.LogoutTokenCla
 		return (*mm_results).s1, (*mm_results).err
 	}
 	if mmSignLogoutToken.funcSignLogoutToken != nil {
-		return mmSignLogoutToken.funcSignLogoutToken(claims, alg)
+		return mmSignLogoutToken.funcSignLogoutToken(ctx, claims, alg)
 	}
-	mmSignLogoutToken.t.Fatalf("Unexpected call to CryptoMock.SignLogoutToken. %v %v", claims, alg)
+	mmSignLogoutToken.t.Fatalf("Unexpected call to CryptoMock.SignLogoutToken. %v %v %v", ctx, claims, alg)
 	return
 }
 
@@ -1738,6 +2247,8 @@ func (m *CryptoMock) MinimockVerifyTokenInspect() {
 func (m *CryptoMock) MinimockFinish() {
 	m.finishOnce.Do(func() {
 		if !m.minimockDone() {
+			m.MinimockMarshalJWKSetInspect()
+
 			m.MinimockRotateKeysInspect()
 
 			m.MinimockSignAccessTokenInspect()
@@ -1770,6 +2281,7 @@ func (m *CryptoMock) MinimockWait(timeout mm_time.Duration) {
 func (m *CryptoMock) minimockDone() bool {
 	done := true
 	return done &&
+		m.MinimockMarshalJWKSetDone() &&
 		m.MinimockRotateKeysDone() &&
 		m.MinimockSignAccessTokenDone() &&
 		m.MinimockSignIDTokenDone() &&

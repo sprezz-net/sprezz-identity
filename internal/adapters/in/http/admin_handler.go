@@ -70,11 +70,11 @@ func (h *HttpAdapter) adminDashboardView(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *HttpAdapter) initiateAdminOIDC(w http.ResponseWriter, r *http.Request) {
-	scheme := schemeHttp
+	scheme := model.SchemeHttp
 	if r.TLS != nil || r.Header.Get(xForwardedProto) == "https" {
-		scheme = schemeHttps
+		scheme = model.SchemeHttps
 	}
-	redirectURI := scheme + r.Host + "/admin/callback"
+	redirectURI := scheme + "://" + r.Host + "/admin/callback"
 	state := uuid.NewString()
 
 	verifier, challenge, err := generateRandomVerifier()
@@ -135,11 +135,11 @@ func (h *HttpAdapter) adminCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scheme := schemeHttp
+	scheme := model.SchemeHttp
 	if r.TLS != nil || r.Header.Get(xForwardedProto) == "https" {
-		scheme = schemeHttps
+		scheme = model.SchemeHttps
 	}
-	redirectURI := scheme + r.Host + "/admin/callback"
+	redirectURI := scheme + "://" + r.Host + "/admin/callback"
 
 	secret := ""
 	if h.adminState != nil {
@@ -155,13 +155,13 @@ func (h *HttpAdapter) adminCallback(w http.ResponseWriter, r *http.Request) {
 	form.Set("code_verifier", verifierCookie.Value)
 	form.Set("redirect_uri", redirectURI)
 
-	tokenURL := scheme + r.Host + "/oauth/token"
+	tokenURL := scheme + "://" + r.Host + "/oauth/token"
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, tokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		h.renderError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(model.HeaderContentType, "application/x-www-form-urlencoded")
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
@@ -231,9 +231,9 @@ func (h *HttpAdapter) adminCreateTenant(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	scheme := schemeHttp
+	scheme := model.SchemeHttp + "://"
 	if r.TLS != nil || r.Header.Get(xForwardedProto) == "https" {
-		scheme = schemeHttps
+		scheme = model.SchemeHttps + "://"
 	}
 
 	newTenant := model.Tenant{
@@ -284,22 +284,9 @@ func (h *HttpAdapter) adminToggleSignup(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	tenant, err := h.storagePort.ResolveTenantByID(r.Context(), tenantID)
+	// Delegate orchestration completely to the domain service
+	tenant, err := h.tenantService.ToggleSignup(r.Context(), tenantID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-
-	// Toggle state
-	tenant.Config.AllowSignup = !tenant.Config.AllowSignup
-
-	if !tenant.Config.AllowSignup {
-		_ = h.storagePort.PurgeTenantSessionsAndTokens(r.Context(), tenant.ID)
-	}
-
-	// Save Tenant configuration (we overwrite by creating on conflict update or resolving then saving)
-	// We can update tenant by calling CreateTenant since ON CONFLICT (tenant_uuid) DO UPDATE is used
-	if err := h.storagePort.CreateTenant(r.Context(), *tenant); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

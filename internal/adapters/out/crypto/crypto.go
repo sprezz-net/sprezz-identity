@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	"sprezz-identity/internal/adapters/out/state"
 	"sprezz-identity/internal/domain/model"
@@ -22,8 +21,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 )
-
-const httpsScheme = "https://"
 
 type tenantKeyring struct {
 	ActiveKids map[model.SignatureAlgorithm]string
@@ -40,19 +37,21 @@ type JWTSigner struct {
 	mu        sync.RWMutex
 	keyrings  map[string]*tenantKeyring
 	storage   Storage
+	clock     port.Clock
 	masterKey string
 }
 
 // Ensure JWTSigner strictly satisfies port.Crypto at compile time.
 var _ port.Crypto = (*JWTSigner)(nil)
 
-func NewJWTSigner(storage Storage, masterKey string) (*JWTSigner, error) {
+func NewJWTSigner(storage Storage, cl port.Clock, masterKey string) (*JWTSigner, error) {
 	if masterKey == "" {
 		return nil, errors.New("SPREZZ_MASTER_KEY must not be empty")
 	}
 	return &JWTSigner{
 		keyrings:  make(map[string]*tenantKeyring),
 		storage:   storage,
+		clock:     cl,
 		masterKey: masterKey,
 	}, nil
 }
@@ -113,19 +112,20 @@ func (s *JWTSigner) decryptDEK(encDEK, nonce []byte) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(decB64)
 }
 
-func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+func (s *JWTSigner) SignAccessToken(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
 	if alg != model.AlgRS256 && alg != model.AlgES256 {
 		return "", fmt.Errorf("unsupported signing algorithm %s", alg)
 	}
 
 	issuer := claims.Issuer
 	if issuer == "" {
-		issuer = httpsScheme + strings.TrimPrefix(claims.TenantID, httpsScheme)
+		return "", errors.New("cannot sign access token: issuer claim is mandatory and cannot be empty")
 	}
 	issuer = strings.TrimSuffix(issuer, "/")
-	tenant := strings.TrimPrefix(issuer, httpsScheme)
+	tenant := strings.TrimPrefix(issuer, model.SchemeHttps+"://")
+	tenant = strings.TrimPrefix(tenant, model.SchemeHttp+"://")
 
-	keyring, err := s.getOrCreateKeyring(tenant, issuer)
+	keyring, err := s.getOrCreateKeyring(ctx, tenant, issuer)
 	if err != nil {
 		return "", err
 	}
@@ -175,19 +175,20 @@ func (s *JWTSigner) SignAccessToken(claims model.TokenClaims, alg model.Signatur
 	return token.SignedString(privateKey)
 }
 
-func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
+func (s *JWTSigner) SignIDToken(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
 	if alg != model.AlgRS256 && alg != model.AlgES256 {
 		return "", fmt.Errorf("unsupported signing algorithm %s", alg)
 	}
 
 	issuer := claims.Issuer
 	if issuer == "" {
-		issuer = httpsScheme + strings.TrimPrefix(claims.TenantID, httpsScheme)
+		return "", errors.New("cannot sign access token: issuer claim is mandatory and cannot be empty")
 	}
 	issuer = strings.TrimSuffix(issuer, "/")
-	tenant := strings.TrimPrefix(issuer, httpsScheme)
+	tenant := strings.TrimPrefix(issuer, model.SchemeHttps+"://")
+	tenant = strings.TrimPrefix(tenant, model.SchemeHttp+"://")
 
-	keyring, err := s.getOrCreateKeyring(tenant, issuer)
+	keyring, err := s.getOrCreateKeyring(ctx, tenant, issuer)
 	if err != nil {
 		return "", err
 	}
@@ -230,19 +231,20 @@ func (s *JWTSigner) SignIDToken(claims model.OIDCTokenClaims, alg model.Signatur
 	return token.SignedString(privateKey)
 }
 
-func (s *JWTSigner) SignLogoutToken(claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (string, error) {
+func (s *JWTSigner) SignLogoutToken(ctx context.Context, claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (string, error) {
 	if alg != model.AlgRS256 && alg != model.AlgES256 {
 		return "", fmt.Errorf("unsupported signing algorithm %s", alg)
 	}
 
 	issuer := claims.Issuer
 	if issuer == "" {
-		issuer = httpsScheme + strings.TrimPrefix(claims.Subject, httpsScheme)
+		return "", errors.New("cannot sign access token: issuer claim is mandatory and cannot be empty")
 	}
 	issuer = strings.TrimSuffix(issuer, "/")
-	tenant := strings.TrimPrefix(issuer, httpsScheme)
+	tenant := strings.TrimPrefix(issuer, model.SchemeHttps+"://")
+	tenant = strings.TrimPrefix(tenant, model.SchemeHttp+"://")
 
-	keyring, err := s.getOrCreateKeyring(tenant, issuer)
+	keyring, err := s.getOrCreateKeyring(ctx, tenant, issuer)
 	if err != nil {
 		return "", err
 	}
@@ -331,9 +333,12 @@ func (s *JWTSigner) VerifyToken(tokenStr string) (map[string]any, error) {
 	return claims, nil
 }
 
-func (s *JWTSigner) JWKSForTenant(domain string) ([]map[string]any, error) {
-	issuer, _ := s.tenantIdentity(domain)
-	keyring, err := s.getOrCreateKeyring(domain, issuer)
+func (s *JWTSigner) JWKSForTenant(ctx context.Context, domain string, scheme string) ([]map[string]any, error) {
+	issuer, _, err := s.tenantIdentity(domain, scheme)
+	if err != nil {
+		return nil, err
+	}
+	keyring, err := s.getOrCreateKeyring(ctx, domain, issuer)
 	if err != nil {
 		return nil, err
 	}
@@ -343,8 +348,8 @@ func (s *JWTSigner) JWKSForTenant(domain string) ([]map[string]any, error) {
 	return keyring.JWKS, nil
 }
 
-func (s *JWTSigner) MarshalJWKSet(tenant string) (string, error) {
-	jwkSet, err := s.JWKSForTenant(tenant)
+func (s *JWTSigner) MarshalJWKSet(ctx context.Context, domain string, scheme string) (string, error) {
+	jwkSet, err := s.JWKSForTenant(ctx, domain, scheme)
 	if err != nil {
 		return "", err
 	}
@@ -355,12 +360,17 @@ func (s *JWTSigner) MarshalJWKSet(tenant string) (string, error) {
 	return string(body), nil
 }
 
-func (s *JWTSigner) RotateKeys(tenant string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *JWTSigner) RotateKeys(ctx context.Context, domain string) error {
+	// 1. FAST READ LOCK: Check memory cache up front without holding up other threads
+	s.mu.RLock()
+	keyring, exists := s.keyrings[domain]
+	s.mu.RUnlock()
+	if !exists {
+		return fmt.Errorf("tenant %s keyring not initialized", domain)
+	}
 
-	ctx := context.Background()
-	tenantModel, err := s.storage.ResolveTenantByDomain(ctx, tenant)
+	// 2. UNLOCKED I/O LOOP: Run all slow database and CPU-heavy cryptography work completely unlocked
+	tenantModel, err := s.storage.ResolveTenantByDomain(ctx, domain)
 	if err != nil {
 		return fmt.Errorf("resolve tenant by domain: %w", err)
 	}
@@ -374,11 +384,6 @@ func (s *JWTSigner) RotateKeys(tenant string) error {
 		return fmt.Errorf("decrypt tenant DEK: %w", err)
 	}
 
-	keyring, ok := s.keyrings[tenant]
-	if !ok {
-		return fmt.Errorf("tenant %s keyring not initialized", tenant)
-	}
-
 	newRSKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return fmt.Errorf("rotate keys: generate rsa key: %w", err)
@@ -389,8 +394,20 @@ func (s *JWTSigner) RotateKeys(tenant string) error {
 		return fmt.Errorf("rotate keys: generate ecdsa key: %w", err)
 	}
 
-	rsaKid := s.tenantKeyID(tenant, model.AlgRS256) + fmt.Sprintf("-%d", time.Now().UnixNano())
-	ecKid := s.tenantKeyID(tenant, model.AlgES256) + fmt.Sprintf("-%d", time.Now().UnixNano())
+	// Calculate unique rotatable Key IDs utilizing your custom clock port
+	nanoSuffix := fmt.Sprintf("-%d", s.clock.Now().UnixNano())
+
+	rsaBase, err := s.tenantKeyID(domain, model.AlgRS256)
+	if err != nil {
+		return fmt.Errorf("failed to compute rsa key identifier: %w", err)
+	}
+	rsaKid := rsaBase + nanoSuffix
+
+	ecBase, err := s.tenantKeyID(domain, model.AlgES256)
+	if err != nil {
+		return fmt.Errorf("failed to compute ec key identifier: %w", err)
+	}
+	ecKid := ecBase + nanoSuffix
 
 	rsaJwk, err := s.buildRSAJWK(rsaKid, newRSKey)
 	if err != nil {
@@ -417,12 +434,11 @@ func (s *JWTSigner) RotateKeys(tenant string) error {
 		return fmt.Errorf("rotate keys: encrypt ecdsa private key: %w", err)
 	}
 
-	// Demote active signing keys to verification-only
+	// Execute database transaction writes completely unlocked
 	if err := s.storage.RotateSigningKeys(ctx, tenantModel.ID); err != nil {
 		return fmt.Errorf("rotate keys: demote active keys: %w", err)
 	}
 
-	// Insert new keys as active signing keys
 	_, err = s.storage.InsertSigningKey(ctx, tenantModel.ID, model.SigningKey{
 		Kid:       rsaKid,
 		Algorithm: string(model.AlgRS256),
@@ -441,6 +457,8 @@ func (s *JWTSigner) RotateKeys(tenant string) error {
 		return fmt.Errorf("rotate keys: insert new ecdsa signing key: %w", err)
 	}
 
+	// 3. FAST WRITE LOCK: Secure a lock *only* at the end for an instant in-memory cache map update
+	s.mu.Lock()
 	keyring.ActiveKids[model.AlgRS256] = rsaKid
 	keyring.ActiveKids[model.AlgES256] = ecKid
 
@@ -448,25 +466,34 @@ func (s *JWTSigner) RotateKeys(tenant string) error {
 	keyring.Keys[ecKid] = newECKey
 
 	keyring.JWKS = append([]map[string]any{rsaJwk, ecJwk}, keyring.JWKS...)
+	s.mu.Unlock()
 
 	return nil
 }
 
-func (s *JWTSigner) tenantIdentity(tenant string) (string, string) {
-	if tenant == "" {
-		tenant = "default"
+func (s *JWTSigner) tenantIdentity(domain string, scheme string) (string, string, error) {
+	if domain == "" {
+		return "", "", errors.New("domain cannot be empty")
 	}
-	issuer := strings.TrimSuffix(httpsScheme+strings.TrimPrefix(tenant, httpsScheme), "/")
-	kid := s.tenantKeyID(issuer, model.AlgRS256)
-	return issuer, kid
+	issuer := strings.TrimSuffix(domain, "/")
+	issuer = strings.TrimPrefix(issuer, model.SchemeHttps+"://")
+	issuer = strings.TrimPrefix(issuer, model.SchemeHttp+"://")
+	issuer = scheme + "://" + issuer
+	kid, err := s.tenantKeyID(issuer, model.AlgRS256)
+	if err != nil {
+		return "", "", err
+	}
+	return issuer, kid, nil
 }
 
-func (s *JWTSigner) tenantKeyID(tenant string, alg model.SignatureAlgorithm) string {
-	if tenant == "" {
-		tenant = "default"
+func (s *JWTSigner) tenantKeyID(domain string, alg model.SignatureAlgorithm) (string, error) {
+	if domain == "" {
+		return "", errors.New("domain cannot be empty")
 	}
-	kidHash := sha256.Sum256(fmt.Appendf(nil, "%s-%s", strings.TrimPrefix(tenant, httpsScheme), alg))
-	return fmt.Sprintf("kid-%s-%x", strings.ToLower(string(alg)), kidHash[:16])
+	domain = strings.TrimPrefix(domain, model.SchemeHttps+"://")
+	domain = strings.TrimPrefix(domain, model.SchemeHttp+"://")
+	kidHash := sha256.Sum256(fmt.Appendf(nil, "%s-%s", domain, alg))
+	return fmt.Sprintf("kid-%s-%x", strings.ToLower(string(alg)), kidHash[:16]), nil
 }
 
 func (s *JWTSigner) buildRSAJWK(kid string, privateKey *rsa.PrivateKey) (map[string]any, error) {
@@ -508,7 +535,7 @@ func (s *JWTSigner) buildECJWK(kid string, privateKey *ecdsa.PrivateKey) map[str
 	}
 }
 
-func (s *JWTSigner) getOrCreateKeyring(tenant string, issuer string) (*tenantKeyring, error) {
+func (s *JWTSigner) getOrCreateKeyring(ctx context.Context, tenant string, issuer string) (*tenantKeyring, error) {
 	s.mu.RLock()
 	keyring, ok := s.keyrings[tenant]
 	s.mu.RUnlock()
@@ -516,7 +543,6 @@ func (s *JWTSigner) getOrCreateKeyring(tenant string, issuer string) (*tenantKey
 		return keyring, nil
 	}
 
-	ctx := context.Background()
 	tenantModel, err := s.storage.ResolveTenantByDomain(ctx, tenant)
 	if err != nil {
 		return nil, fmt.Errorf("resolve tenant by domain: %w", err)
@@ -564,6 +590,15 @@ func (s *JWTSigner) resolveOrCreateDEK(ctx context.Context, tenantModel *model.T
 }
 
 func (s *JWTSigner) bootstrapKeyring(ctx context.Context, tenant, issuer string, tenantModel *model.Tenant, rawDEK []byte) (*tenantKeyring, error) {
+	// 1. FAST MEMORY CHECK: Check if another thread already bootstrapped this tenant
+	s.mu.RLock()
+	existing, exists := s.keyrings[tenant]
+	s.mu.RUnlock()
+	if exists {
+		return existing, nil
+	}
+
+	// 2. UNLOCKED CRYPTO OPERATIONS: Generate keys without blocking other application threads
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, fmt.Errorf("generate tenant rsa key: %w", err)
@@ -574,8 +609,19 @@ func (s *JWTSigner) bootstrapKeyring(ctx context.Context, tenant, issuer string,
 		return nil, fmt.Errorf("generate tenant ecdsa key: %w", err)
 	}
 
-	rsaKid := s.tenantKeyID(issuer, model.AlgRS256)
-	ecKid := s.tenantKeyID(issuer, model.AlgES256)
+	nanoSuffix := fmt.Sprintf("-%d", s.clock.Now().UnixNano())
+
+	rsaBase, err := s.tenantKeyID(issuer, model.AlgRS256)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute rsa key identifier: %w", err)
+	}
+	rsaKid := rsaBase + nanoSuffix
+
+	ecBase, err := s.tenantKeyID(issuer, model.AlgES256)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute ec key identifier: %w", err)
+	}
+	ecKid := ecBase + nanoSuffix
 
 	rsaJwk, err := s.buildRSAJWK(rsaKid, rsaKey)
 	if err != nil {
@@ -602,6 +648,7 @@ func (s *JWTSigner) bootstrapKeyring(ctx context.Context, tenant, issuer string,
 		return nil, err
 	}
 
+	// 3. PERSIST UNLOCKED: Write to DB without holding a global mutex
 	_, err = s.storage.InsertSigningKey(ctx, tenantModel.ID, model.SigningKey{
 		Kid:       rsaKid,
 		Algorithm: string(model.AlgRS256),
@@ -620,9 +667,11 @@ func (s *JWTSigner) bootstrapKeyring(ctx context.Context, tenant, issuer string,
 		return nil, err
 	}
 
+	// 4. CHRONOLOGICAL LOCKING: Lock quickly at the end to save to cache map
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	// Double check memory safety after acquiring write lock
 	if existing, exists := s.keyrings[tenant]; exists {
+		s.mu.Unlock()
 		return existing, nil
 	}
 
@@ -638,6 +687,8 @@ func (s *JWTSigner) bootstrapKeyring(ctx context.Context, tenant, issuer string,
 		JWKS: []map[string]any{rsaJwk, ecJwk},
 	}
 	s.keyrings[tenant] = newKeyring
+	s.mu.Unlock() // Explicit release immediately
+
 	return newKeyring, nil
 }
 

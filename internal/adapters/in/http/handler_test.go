@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"sprezz-identity/internal/adapters/out/clock"
 	jwtcrypto "sprezz-identity/internal/adapters/out/crypto"
@@ -30,6 +31,7 @@ func buildTestAdapter(ctrl *minimock.Controller) (*HttpAdapter, *model.Tenant) {
 		ID:       tenantID,
 		Name:     "test-tenant",
 		Domain:   "test.com",
+		Scheme:   "https",
 		IsActive: true,
 		Config: model.TenantConfig{
 			PredefinedScopes: []string{"openid", "custom-scope"},
@@ -44,7 +46,7 @@ func buildTestAdapter(ctrl *minimock.Controller) (*HttpAdapter, *model.Tenant) {
 		return tenant, nil
 	})
 
-	return NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock()), tenant
+	return NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com"), tenant
 }
 
 func TestHttpAdapter_OpenIDConfiguration_Success(t *testing.T) {
@@ -221,7 +223,7 @@ func runRegisterTestCase(t *testing.T, tt registerTestCase) {
 		})
 	}
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.om")
 
 	payload := registerRequest{
 		ClientName:       "test-app",
@@ -276,7 +278,7 @@ func TestHttpAdapter_CSPNonce(t *testing.T) {
 	auth := portmock.NewAuthMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	// Request 1
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -333,7 +335,7 @@ func TestHttpAdapter_TenantMiddleware_ResolutionFailure(t *testing.T) {
 		return nil, errors.New("unbootstrapped tenant")
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/openid-configuration", nil)
 	req.Host = "unknown.com"
@@ -390,11 +392,13 @@ func TestHttpAdapter_JWKS_CacheControl(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
 	auth := portmock.NewAuthMock(ctrl)
+	clock := portmock.NewMockClock(time.Now())
 
 	tenantID := uuid.New()
 	storage.ResolveTenantByDomainMock.Expect(minimock.AnyContext, "test.com").Return(&model.Tenant{
 		ID:       tenantID,
 		Domain:   "test.com",
+		Scheme:   "https",
 		IsActive: true,
 	}, nil)
 
@@ -405,12 +409,12 @@ func TestHttpAdapter_JWKS_CacheControl(t *testing.T) {
 		keys:        make(map[uuid.UUID][]model.SigningKey),
 	}
 
-	crypto, err := jwtcrypto.NewJWTSigner(mockStore, "01234567890123456789012345678901")
+	crypto, err := jwtcrypto.NewJWTSigner(mockStore, clock, "01234567890123456789012345678901")
 	if err != nil {
 		t.Fatalf("failed to create signer: %v", err)
 	}
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock, "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/jwks.json", nil)
 	req.Host = "test.com"

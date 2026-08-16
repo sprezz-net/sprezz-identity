@@ -9,6 +9,7 @@ import (
 
 const (
 	UsernamePasswordIDPType = "username-password"
+	OpenIDConnectIDPType    = "oidc"
 )
 
 type Partition struct {
@@ -54,9 +55,11 @@ type IdentityProviderConfig struct {
 	UserinfoEndpoint            string              `json:"userinfo_endpoint,omitempty"`
 	JwksURI                     string              `json:"jwks_uri,omitempty"`
 	PushedAuthorizationEndpoint string              `json:"pushed_authorization_request_endpoint,omitempty"`
+	RegistrationEndpoint        string              `json:"registration_endpoint,omitempty"`
 	ClientID                    string              `json:"client_id,omitempty"`
 	ClientSecret                string              `json:"client_secret,omitempty"`
 	AuthenticationMethod        string              `json:"authentication_method,omitempty"`
+	DCRMode                     DCRMode             `json:"dcr_mode,omitempty"`
 	PkceEnabled                 bool                `json:"pkce_enabled,omitempty"`
 	ParEnabled                  bool                `json:"par_enabled,omitempty"`
 	SLOEnabled                  bool                `json:"slo_enabled,omitempty"`

@@ -40,7 +40,7 @@ func TestHttpAdapter_SignUpForm_Success(t *testing.T) {
 	})
 	storage.GetIdentityProviderByTypeMock.Expect(minimock.AnyContext, tenantID, model.UsernamePasswordIDPType).Return(provider, nil)
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodGet, "/sign-up", nil)
 	req.Host = "test.com"
@@ -70,7 +70,7 @@ func TestHttpAdapter_SignUpForm_Forbidden(t *testing.T) {
 	})
 	storage.GetIdentityProviderByTypeMock.Expect(minimock.AnyContext, tenantID, model.UsernamePasswordIDPType).Return(nil, fmt.Errorf("not configured"))
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodGet, "/sign-up", nil)
 	req.Host = "test.com"
@@ -106,7 +106,7 @@ func TestHttpAdapter_SignUpSubmit_PasswordsMismatch(t *testing.T) {
 	})
 	storage.GetIdentityProviderByTypeMock.Expect(minimock.AnyContext, tenantID, model.UsernamePasswordIDPType).Return(provider, nil)
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	body := "name=Test+User&username=testuser&email=test@test.com&password=Password123&confirm_password=different"
 	req := httptest.NewRequest(http.MethodPost, "/sign-up", bytes.NewBufferString(body))

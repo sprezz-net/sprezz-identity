@@ -71,9 +71,9 @@ func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.
 		}
 	}
 
-	issuer := schemeHttps + tenant.Domain
+	issuer := tenant.GetBaseURL()
 	now := s.clock.Now()
-	accessToken, err := s.crypto.SignAccessToken(model.TokenClaims{
+	accessToken, err := s.crypto.SignAccessToken(ctx, model.TokenClaims{
 		TokenID:   uuid.NewString(),
 		Issuer:    issuer,
 		TenantID:  tenantID.String(),
@@ -97,7 +97,7 @@ func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.
 		parsedNonce = uuid.NewString()
 	}
 
-	idToken, err := s.crypto.SignIDToken(model.OIDCTokenClaims{
+	idToken, err := s.crypto.SignIDToken(ctx, model.OIDCTokenClaims{
 		TokenID:   uuid.NewString(),
 		Issuer:    issuer,
 		Subject:   authSession.Subject,
@@ -161,9 +161,9 @@ func (s *OAuthService) ExchangeRefreshTokenForTokens(ctx context.Context, tenant
 
 	if !client.EnforceRTR {
 		now := s.clock.Now()
-		accessToken, err := s.crypto.SignAccessToken(model.TokenClaims{
+		accessToken, err := s.crypto.SignAccessToken(ctx, model.TokenClaims{
 			TokenID:   uuid.NewString(),
-			Issuer:    schemeHttps + tenant.Domain,
+			Issuer:    tenant.GetBaseURL(),
 			TenantID:  tenantID.String(),
 			Subject:   client.ClientID,
 			ClientID:  clientID,
@@ -229,9 +229,9 @@ func (s *OAuthService) ExchangeRefreshTokenForTokens(ctx context.Context, tenant
 		return nil, fmt.Errorf("save new refresh token: %w", err)
 	}
 
-	accessToken, err := s.crypto.SignAccessToken(model.TokenClaims{
+	accessToken, err := s.crypto.SignAccessToken(ctx, model.TokenClaims{
 		TokenID:   uuid.NewString(),
-		Issuer:    schemeHttps + tenant.Domain,
+		Issuer:    tenant.GetBaseURL(),
 		TenantID:  tenantID.String(),
 		Subject:   token.Subject,
 		ClientID:  clientID,
@@ -480,8 +480,8 @@ func (s *OAuthService) coupleUserIdentity(ctx context.Context, profileID uuid.UU
 }
 
 func (s *OAuthService) mintTokensForExchangedUser(ctx context.Context, tenant *model.Tenant, client *model.ClientApplication, profileID string, dpopJKT string, now time.Time) (*model.TokenSetResponse, error) {
-	issuer := schemeHttps + tenant.Domain
-	accessToken, err := s.crypto.SignAccessToken(model.TokenClaims{
+	issuer := tenant.GetBaseURL()
+	accessToken, err := s.crypto.SignAccessToken(ctx, model.TokenClaims{
 		TokenID:   uuid.NewString(),
 		Issuer:    issuer,
 		TenantID:  tenant.ID.String(),
@@ -497,7 +497,7 @@ func (s *OAuthService) mintTokensForExchangedUser(ctx context.Context, tenant *m
 		return nil, fmt.Errorf("mint exchanged access token: %w", err)
 	}
 
-	idToken, err := s.crypto.SignIDToken(model.OIDCTokenClaims{
+	idToken, err := s.crypto.SignIDToken(ctx, model.OIDCTokenClaims{
 		TokenID:   uuid.NewString(),
 		Issuer:    issuer,
 		Subject:   profileID,
@@ -523,14 +523,13 @@ func (s *OAuthService) mintTokensForExchangedUser(ctx context.Context, tenant *m
 		if _, err := rand.Read(bytes); err == nil {
 			refreshTokenVal = base64.RawURLEncoding.EncodeToString(bytes)
 		}
-		familyID := uuid.NewString()
 		_ = s.storage.SaveRefreshToken(ctx, model.RefreshToken{
 			TokenID:       refreshTokenVal,
 			TenantID:      tenant.ID,
 			ClientID:      client.ClientID,
 			Subject:       profileID,
 			Scopes:        client.DefaultScopes,
-			TokenFamilyID: familyID,
+			TokenFamilyID: uuid.NewString(),
 			IsUsed:        false,
 			ExpiresAt:     now.Add(client.RefreshTokenLifetime),
 			CreatedAt:     now,
@@ -549,6 +548,11 @@ func (s *OAuthService) mintTokensForExchangedUser(ctx context.Context, tenant *m
 func (s *OAuthService) ProcessLogout(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) ([]string, error) {
 	_ = s.storage.RevokeSession(ctx, tenantID, subject, clientID)
 
+	tenant, err := s.storage.ResolveTenantByID(ctx, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("resolve tenant: %w", err)
+	}
+
 	clients, err := s.storage.GetClientsByTenant(ctx, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("retrieve tenant clients for logout: %w", err)
@@ -559,9 +563,9 @@ func (s *OAuthService) ProcessLogout(ctx context.Context, tenantID uuid.UUID, su
 
 	for _, client := range clients {
 		if client.BackChannelLogoutURI != "" {
-			logoutToken, err := s.crypto.SignLogoutToken(model.LogoutTokenClaims{
+			logoutToken, err := s.crypto.SignLogoutToken(ctx, model.LogoutTokenClaims{
 				TokenID:  uuid.NewString(),
-				Issuer:   schemeHttps + client.TenantID.String(),
+				Issuer:   tenant.GetBaseURL(),
 				Subject:  subject,
 				Audience: client.ClientID,
 				IssuedAt: now,

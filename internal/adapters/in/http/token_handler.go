@@ -30,7 +30,7 @@ func (h *HttpAdapter) handleAuthorizationCodeGrant(w http.ResponseWriter, r *htt
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "client_id, code and code_verifier are required"})
 		return
 	}
-	dpopJKT, err := h.validateDPoPProof(r)
+	dpopJKT, err := h.validateDPoPProof(r, tenant)
 	if err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": errInvalidDPoP + err.Error()})
 		return
@@ -103,7 +103,7 @@ func (h *HttpAdapter) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	dpopJKT, err := h.validateDPoPProof(r)
+	dpopJKT, err := h.validateDPoPProof(r, tenant)
 	if err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": errInvalidDPoP + err.Error()})
 		return
@@ -126,15 +126,15 @@ func (h *HttpAdapter) handleClientCredentialsGrant(w http.ResponseWriter, r *htt
 	if err != nil {
 		return
 	}
-	dpopJKT, err := h.validateDPoPProof(r)
+	dpopJKT, err := h.validateDPoPProof(r, tenant)
 	if err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": errInvalidDPoP + err.Error()})
 		return
 	}
 	issuedAt := time.Now().UTC()
-	accessToken, err := h.cryptoPort.SignAccessToken(model.TokenClaims{
+	accessToken, err := h.cryptoPort.SignAccessToken(r.Context(), model.TokenClaims{
 		TokenID:   uuid.NewString(),
-		Issuer:    schemeHttps + tenant.Domain,
+		Issuer:    tenant.GetBaseURL(),
 		TenantID:  tenant.ID.String(),
 		Subject:   client.ClientID,
 		ClientID:  client.ClientID,
@@ -218,7 +218,7 @@ func (h *HttpAdapter) handleTokenExchangeGrant(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	dpopJKT, err := h.validateDPoPProof(r)
+	dpopJKT, err := h.validateDPoPProof(r, tenant)
 	if err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": errInvalidDPoP + err.Error()})
 		return
@@ -245,7 +245,13 @@ func (h *HttpAdapter) validateUserInfoDPoP(r *http.Request, claims jwt.MapClaims
 	if !isDPoP {
 		return errors.New("token is DPoP-bound, but Bearer scheme was used")
 	}
-	dpopJKT, err := h.validateDPoPProof(r)
+
+	tenant, ok := TenantFromContext(r.Context())
+	if !ok {
+		return errors.New("failed to resolve tenant context for UserInfo validation")
+	}
+
+	dpopJKT, err := h.validateDPoPProof(r, tenant)
 	if err != nil {
 		return fmt.Errorf("%s%w", errInvalidDPoP, err)
 	}
@@ -394,7 +400,7 @@ func (h *HttpAdapter) parseDPoPPubKey(dpopHeader string) (any, string, error) {
 	}
 }
 
-func (h *HttpAdapter) validateDPoPClaims(r *http.Request, claims jwt.MapClaims) (time.Time, error) {
+func (h *HttpAdapter) validateDPoPClaims(r *http.Request, tenant *model.Tenant, claims jwt.MapClaims) (time.Time, error) {
 	htm, _ := claims["htm"].(string)
 	htu, _ := claims["htu"].(string)
 	jti, _ := claims["jti"].(string)
@@ -404,22 +410,31 @@ func (h *HttpAdapter) validateDPoPClaims(r *http.Request, claims jwt.MapClaims) 
 		return time.Time{}, errors.New("missing mandatory DPoP claims (htm, htu, jti, iat)")
 	}
 
+	// 1. Enforce strict HTTP Method compliance
 	if !strings.EqualFold(htm, r.Method) {
 		return time.Time{}, fmt.Errorf("DPoP htm mismatch: expected %s, got %s", r.Method, htm)
 	}
 
-	reqURL := schemeHttps + r.Host + r.URL.Path
+	// 2. RFC 9449 Guard: Ensure the client sent a full, absolute URL scheme
 	if !strings.HasPrefix(htu, "http://") && !strings.HasPrefix(htu, "https://") {
-		reqURL = r.URL.Path
-	}
-	normHTU := strings.Split(htu, "?")[0]
-	normReq := strings.Split(reqURL, "?")[0]
-	if !strings.HasSuffix(normReq, normHTU) && !strings.HasSuffix(normHTU, normReq) {
-		return time.Time{}, fmt.Errorf("DPoP htu mismatch: expected %s, got %s", normReq, normHTU)
+		return time.Time{}, errors.New("invalid DPoP proof: htu claim must be an absolute URL")
 	}
 
+	// 3. Construct the absolute server endpoint using the trusted Tenant base URL context
+	expectedAbsoluteURL := tenant.GetBaseURL() + r.URL.Path
+
+	// 4. Normalize by stripping any query strings out of both components
+	normHTU := strings.Split(htu, "?")[0]
+	normExpected := strings.Split(expectedAbsoluteURL, "?")[0]
+
+	// 5. Enforce an exact, precise structural equality match (No more generic suffix matching)
+	if !strings.EqualFold(normExpected, normHTU) {
+		return time.Time{}, fmt.Errorf("DPoP htu mismatch: expected absolute target %s, but token was signed for %s", normExpected, normHTU)
+	}
+
+	// 6. Time validation lifecycle check
 	iat := time.Unix(int64(iatVal), 0)
-	now := time.Now()
+	now := h.clockPort.Now() // Using the injected clock port instead of raw time.Now()
 	if iat.Before(now.Add(-2*time.Minute)) || iat.After(now.Add(2*time.Minute)) {
 		return time.Time{}, errors.New("DPoP proof has expired or is in the future")
 	}
@@ -427,7 +442,7 @@ func (h *HttpAdapter) validateDPoPClaims(r *http.Request, claims jwt.MapClaims) 
 	return iat, nil
 }
 
-func (h *HttpAdapter) validateDPoPProof(r *http.Request) (string, error) {
+func (h *HttpAdapter) validateDPoPProof(r *http.Request, tenant *model.Tenant) (string, error) {
 	dpopHeader := r.Header.Get("DPoP")
 	if dpopHeader == "" {
 		return "", nil
@@ -450,7 +465,7 @@ func (h *HttpAdapter) validateDPoPProof(r *http.Request) (string, error) {
 		return "", errors.New("invalid DPoP claims")
 	}
 
-	iat, err := h.validateDPoPClaims(r, claims)
+	iat, err := h.validateDPoPClaims(r, tenant, claims)
 	if err != nil {
 		return "", err
 	}

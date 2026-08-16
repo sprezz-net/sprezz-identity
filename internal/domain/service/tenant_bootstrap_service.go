@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"sprezz-identity/internal/domain/model"
@@ -14,8 +13,6 @@ import (
 )
 
 const (
-	schemeHttp               = model.SchemeHttp
-	schemeHttps              = model.SchemeHttps
 	routeAdmin               = "/admin"
 	routeCallback            = "/admin/callback"
 	usernamePasswordIDPAlias = "username-password"
@@ -26,10 +23,11 @@ const (
 type TenantBootstrapService struct {
 	storage port.Storage
 	clock   port.Clock
+	appEnv  string
 }
 
-func NewTenantBootstrapService(storage port.Storage, cl port.Clock) *TenantBootstrapService {
-	return &TenantBootstrapService{storage: storage, clock: cl}
+func NewTenantBootstrapService(storage port.Storage, cl port.Clock, appEnv string) *TenantBootstrapService {
+	return &TenantBootstrapService{storage: storage, clock: cl, appEnv: appEnv}
 }
 
 func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domain string) (*model.Tenant, error) {
@@ -46,20 +44,17 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 }
 
 func (s *TenantBootstrapService) bootstrapExistingTenant(ctx context.Context, tenant *model.Tenant, domain string) (*model.Tenant, error) {
-	scheme := schemeHttps
-	if domain == "localhost:8100" || strings.HasPrefix(domain, "localhost:") || strings.HasPrefix(domain, "127.0.0.1") {
-		scheme = schemeHttp
-	}
-
-	expectedRedirect := scheme + domain + routeAdmin
+	baseURL := tenant.GetBaseURL()
+	expectedRedirect := baseURL + routeAdmin
 	if tenant.Config.DefaultRedirectURI != expectedRedirect {
 		tenant.Config.DefaultRedirectURI = expectedRedirect
-		tenant.Config.RedirectWhitelist = []string{schemeHttps + domain + routeAdmin, schemeHttp + domain + routeAdmin, schemeHttp + domain + routeCallback, schemeHttps + domain + routeCallback}
+		tenant.Config.RedirectWhitelist = []string{baseURL + routeAdmin, baseURL + routeCallback}
 		if err := s.storage.CreateTenant(ctx, *tenant); err != nil {
 			return nil, err
 		}
 	}
 
+	// Add local username-password identity provider if not present
 	if err := s.ensureDefaultIdentityProvider(ctx, tenant.ID); err != nil {
 		return nil, err
 	}
@@ -72,22 +67,24 @@ func (s *TenantBootstrapService) bootstrapExistingTenant(ctx context.Context, te
 }
 
 func (s *TenantBootstrapService) bootstrapNewTenant(ctx context.Context, domain string) (*model.Tenant, error) {
-	scheme := schemeHttps
-	if domain == "localhost:8100" || strings.HasPrefix(domain, "localhost:") || strings.HasPrefix(domain, "127.0.0.1") {
-		scheme = schemeHttp
+	scheme := model.SchemeHttps
+	if s.appEnv == "local" {
+		// Allow to listen on localhost for local development on non-secure port
+		scheme = model.SchemeHttp
 	}
-
+	baseURL := scheme + "://" + domain
 	newTenant := &model.Tenant{
 		ID:        uuid.New(),
 		Name:      "Administrative Tenant",
 		Domain:    domain,
+		Scheme:    scheme,
 		IsActive:  true,
 		CreatedAt: s.clock.Now(),
 		Config: model.TenantConfig{
 			PredefinedScopes:    []string{"openid", "profile", "email", "offline_access"},
 			PredefinedAudiences: []string{},
-			DefaultRedirectURI:  scheme + domain + routeAdmin,
-			RedirectWhitelist:   []string{schemeHttps + domain + routeAdmin, schemeHttp + domain + routeAdmin, schemeHttp + domain + routeCallback, schemeHttps + domain + routeCallback},
+			DefaultRedirectURI:  baseURL + routeAdmin,
+			RedirectWhitelist:   []string{baseURL + routeAdmin, baseURL + routeCallback},
 			ACRToLevels: map[string]model.Levels{
 				"aal1": {AAL: 1},
 				"ial1": {IAL: 1},
@@ -167,14 +164,20 @@ func (s *TenantBootstrapService) ensureAdminClient(ctx context.Context, tenantID
 		return err
 	}
 
+	scheme := model.SchemeHttps
+	if s.appEnv == "local" {
+		// Allow to listen on localhost for local development on non-secure port
+		scheme = model.SchemeHttp
+	}
+
 	adminClient := model.ClientApplication{
 		ID:                     uuid.New().String(),
 		TenantID:               tenantID,
 		ClientID:               "admin_ui",
 		ClientSecret:           nil,
 		ClientName:             "Admin Interface",
-		RedirectURIs:           []string{schemeHttp + domain + routeCallback, schemeHttps + domain + routeCallback},
-		PostLogoutRedirectURIs: []string{schemeHttp + domain + routeAdmin, schemeHttps + domain + routeAdmin},
+		RedirectURIs:           []string{scheme + domain + routeCallback},
+		PostLogoutRedirectURIs: []string{scheme + domain + routeAdmin},
 		GrantTypes:             []string{"authorization_code"},
 		ResponseTypes:          []string{"code"},
 		Algorithm:              model.AlgRS256,

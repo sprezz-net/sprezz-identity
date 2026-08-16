@@ -1,8 +1,8 @@
 package model
 
 const (
-	SchemeHttp            = "http://"
-	SchemeHttps           = "https://"
+	SchemeHttp            = "http"
+	SchemeHttps           = "https"
 	HeaderContentType     = "Content-Type"
 	HeaderXForwardedProto = "X-Forwarded-Proto"
 	ContentTypeJSON       = "application/json"

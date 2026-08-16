@@ -58,7 +58,7 @@ func TestHttpAdapter_Authorize_PreservesParams(t *testing.T) {
 		return nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?client_id=test-client&redirect_uri=https://test.com/callback&state=state-1234567890-abcdef&nonce=nonce-456&acr_values=acr-silver", nil)
 	req.Host = "test.com"
@@ -87,7 +87,7 @@ func TestHttpAdapter_Authorize_InvalidClient(t *testing.T) {
 		return nil, http.ErrNoCookie // simulate client not found
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?client_id=unknown-client&redirect_uri=https://test.com/callback", nil)
 	req.Host = "test.com"
@@ -128,7 +128,7 @@ func TestHttpAdapter_Authorize_DisallowedRedirectURI(t *testing.T) {
 		return client, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?client_id=test-client&redirect_uri=https://malicious.com/callback", nil)
 	req.Host = "test.com"
@@ -165,7 +165,7 @@ func TestHttpAdapter_Authorize_PARClientIDMismatch(t *testing.T) {
 
 	auth.GetAndConsumePARMock.Expect(minimock.AnyContext, tenantID, reqURI).Return(parReq, nil)
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?request_uri="+reqURI+"&client_id=mismatched-client", nil)
 	req.Host = "test.com"
@@ -192,6 +192,7 @@ func TestHttpAdapter_Authorize_AuthenticatedSSO(t *testing.T) {
 	tenant := &model.Tenant{
 		ID:     tenantID,
 		Domain: "test.com",
+		Scheme: "https",
 		Config: model.TenantConfig{
 			RedirectWhitelist: []string{"https://test.com/callback"},
 		},
@@ -218,7 +219,7 @@ func TestHttpAdapter_Authorize_AuthenticatedSSO(t *testing.T) {
 		return nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?client_id=test-client&redirect_uri=https://test.com/callback&state=state1234567890abcdef", nil)
 	req.Host = "test.com"
@@ -257,7 +258,7 @@ func TestHttpAdapter_Login_Failure(t *testing.T) {
 		return nil, context.DeadlineExceeded
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, routeWebLogin, strings.NewReader("username=admin&password=wrongpassword"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -284,7 +285,7 @@ func TestHttpAdapter_Login_Malformed(t *testing.T) {
 		return tenant, nil
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, routeWebLogin, nil) // no payload, but post
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -349,7 +350,7 @@ func TestHttpAdapter_Authorize_PAR_Validation(t *testing.T) {
 
 			tt.setupMock(auth, tenantID)
 
-			adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock())
+			adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 			req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?request_uri="+tt.requestURI, nil)
 			req.Host = "test.com"

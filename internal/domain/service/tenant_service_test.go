@@ -18,8 +18,9 @@ func TestTenantService_CreateTenant(t *testing.T) {
 	storage := portmock.NewStorageMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
+	idpService := NewIdentityProviderService(storage, clock)
 
-	svc := NewTenantService(storage, clock)
+	svc := NewTenantService(storage, clock, idpService, "unittest", "admin-domain.com")
 
 	storage.CreateTenantMock.Set(func(ctx context.Context, tenant model.Tenant) error {
 		return nil
@@ -27,6 +28,16 @@ func TestTenantService_CreateTenant(t *testing.T) {
 
 	storage.CreatePartitionMock.Set(func(ctx context.Context, tenantID uuid.UUID, name, aliasName string) (*model.Partition, error) {
 		return &model.Partition{ID: 1, TenantID: tenantID, Name: name, AliasName: aliasName}, nil
+	})
+
+	storage.CreateIdentityProviderMock.Set(func(ctx context.Context, tenantID uuid.UUID, idp model.IdentityProvider) error {
+		if idp.Alias != "admin-sso" {
+			t.Errorf("expected provider alias 'admin-sso', got %s", idp.Alias)
+		}
+		if idp.PartitionID != 1 {
+			t.Errorf("expected provider to be bound to partition 1, got %d", idp.PartitionID)
+		}
+		return nil
 	})
 
 	tenant, err := svc.CreateTenant(context.Background(), "My Tenant", "my-tenant.com")
@@ -42,7 +53,11 @@ func TestTenantService_GetTenant(t *testing.T) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
-	svc := NewTenantService(storage, portmock.NewMockClock(time.Now()))
+	now := time.Now()
+	clock := portmock.NewMockClock(now)
+	idpService := NewIdentityProviderService(storage, clock)
+
+	svc := NewTenantService(storage, clock, idpService, "unittest", "admin-domain.com")
 
 	id := uuid.New()
 	storage.ResolveTenantByIDMock.Expect(context.Background(), id).Return(&model.Tenant{ID: id, Name: "Hello"}, nil)
@@ -60,7 +75,11 @@ func TestTenantService_ToggleSignup(t *testing.T) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
-	svc := NewTenantService(storage, portmock.NewMockClock(time.Now()))
+	now := time.Now()
+	clock := portmock.NewMockClock(now)
+	idpService := NewIdentityProviderService(storage, clock)
+
+	svc := NewTenantService(storage, clock, idpService, "unittest", "admin-domain.com")
 
 	id := uuid.New()
 	storage.ResolveTenantByIDMock.Expect(context.Background(), id).Return(&model.Tenant{
@@ -88,7 +107,11 @@ func TestTenantService_UpdateTenant(t *testing.T) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
-	svc := NewTenantService(storage, portmock.NewMockClock(time.Now()))
+	now := time.Now()
+	clock := portmock.NewMockClock(now)
+	idpService := NewIdentityProviderService(storage, clock)
+
+	svc := NewTenantService(storage, clock, idpService, "unittest", "admin-domain.com")
 
 	id := uuid.New()
 	storage.ResolveTenantByIDMock.Expect(context.Background(), id).Return(&model.Tenant{ID: id, Name: "Hello"}, nil)
