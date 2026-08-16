@@ -59,6 +59,7 @@ func (h *HttpAdapter) authenticateClient(w http.ResponseWriter, r *http.Request,
 		return nil, fmt.Errorf("client_id and client_secret are required")
 	}
 
+	// Fetch client application records
 	client, err := h.storagePort.GetClient(r.Context(), tenant.ID, clientID)
 	if err != nil {
 		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
@@ -73,7 +74,14 @@ func (h *HttpAdapter) authenticateClient(w http.ResponseWriter, r *http.Request,
 		return client, nil
 	}
 
-	if client.ClientSecret == nil || subtle.ConstantTimeCompare([]byte(*client.ClientSecret), []byte(clientSecret)) != 1 {
+	if client.ClientSecret == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
+		return nil, fmt.Errorf("%s", errClientAuthFailed)
+	}
+
+	// Authenticate the plain request secret against the database hash using the crypto port
+	matched, err := h.cryptoPort.CompareCredential(*client.ClientSecret, clientSecret)
+	if err != nil || !matched {
 		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
 		return nil, fmt.Errorf("%s", errClientAuthFailed)
 	}

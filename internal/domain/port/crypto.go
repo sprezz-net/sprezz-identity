@@ -15,4 +15,7 @@ type Crypto interface {
 	// Key management
 	RotateKeys(ctx context.Context, domain string) error
 	MarshalJWKSet(ctx context.Context, domain string, scheme string) (string, error)
+	// Argon2id Stateless Helpers
+	HashCredential(secret string) (string, error)
+	CompareCredential(hashedSecret, plainSecret string) (bool, error)
 }

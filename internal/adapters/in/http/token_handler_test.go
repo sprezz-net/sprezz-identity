@@ -358,11 +358,15 @@ func TestHttpAdapter_Token_ClientCredentials_Success(t *testing.T) {
 	tenantID := uuid.New()
 	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 	secret := "supersecret"
+
+	// Use a distinct fake hash string to represent real storage behavior
+	fakeHash := "$argon2id$v=19$m=65536,t=3,p=4$storedsecurecredentialhash"
+
 	client := &model.ClientApplication{
 		ID:                  uuid.NewString(),
 		TenantID:            tenantID,
 		ClientID:            "cc-client",
-		ClientSecret:        &secret,
+		ClientSecret:        &fakeHash,
 		DefaultScopes:       []string{"openid"},
 		AccessTokenLifetime: time.Hour,
 		Algorithm:           model.AlgRS256,
@@ -374,6 +378,8 @@ func TestHttpAdapter_Token_ClientCredentials_Success(t *testing.T) {
 	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
 		return client, nil
 	})
+	// Expect the first parameter to be the database hash, second parameter to be incoming plain-text
+	crypto.CompareCredentialMock.Expect(fakeHash, secret).Return(true, nil)
 	crypto.SignAccessTokenMock.Set(func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
 		return "mock-access-token", nil
 	})
@@ -402,7 +408,7 @@ func TestHttpAdapter_Token_AuthCodeExchange_Success(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 
 	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
 		return tenant, nil
@@ -441,7 +447,7 @@ func TestHttpAdapter_Token_InvalidGrantType(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 
 	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
 		return tenant, nil
@@ -468,13 +474,16 @@ func TestHttpAdapter_Token_ClientCredentials_BasicAuth(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 	secret := "supersecret"
+	// Simulated database password hash representation
+	fakeHash := "$argon2id$v=19$m=65536,t=3,p=4$storedbasicauthsecret"
+
 	client := &model.ClientApplication{
 		ID:                  uuid.NewString(),
 		TenantID:            tenantID,
 		ClientID:            "cc-client",
-		ClientSecret:        &secret,
+		ClientSecret:        &fakeHash,
 		DefaultScopes:       []string{"openid"},
 		AccessTokenLifetime: time.Hour,
 		Algorithm:           model.AlgRS256,
@@ -486,6 +495,8 @@ func TestHttpAdapter_Token_ClientCredentials_BasicAuth(t *testing.T) {
 	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
 		return client, nil
 	})
+	// Expecting database hash as first argument, incoming cleartext secret as the second
+	crypto.CompareCredentialMock.Expect(fakeHash, secret).Return(true, nil)
 	crypto.SignAccessTokenMock.Set(func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
 		return "mock-access-token-basic", nil
 	})
@@ -515,13 +526,16 @@ func TestHttpAdapter_Introspect_BasicAuth(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 	secret := "clientsecret"
+	// Simulated database password hash representation
+	fakeHash := "$argon2id$v=19$m=65536,t=3,p=4$storedintrospectsecret"
+
 	client := &model.ClientApplication{
 		ID:           uuid.NewString(),
 		TenantID:     tenantID,
 		ClientID:     "test-client",
-		ClientSecret: &secret,
+		ClientSecret: &fakeHash,
 	}
 
 	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
@@ -530,6 +544,8 @@ func TestHttpAdapter_Introspect_BasicAuth(t *testing.T) {
 	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
 		return client, nil
 	})
+	// Validate the secret via cryptoPort
+	crypto.CompareCredentialMock.Expect(fakeHash, secret).Return(true, nil)
 	auth.IntrospectTokenMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string, token string) (*model.IntrospectionResponse, error) {
 		return &model.IntrospectionResponse{
 			Active:   true,
@@ -560,7 +576,7 @@ func TestHttpAdapter_Token_TokenExchange_Success(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 	client := &model.ClientApplication{
 		ID:         uuid.NewString(),
 		TenantID:   tenantID,
@@ -619,13 +635,16 @@ func TestHttpAdapter_Introspect_Post(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 	secret := "clientsecret"
+	// Simulated database password hash representation
+	fakeHash := "$argon2id$v=19$m=65536,t=3,p=4$storedpostintrospectsecret"
+
 	client := &model.ClientApplication{
 		ID:           uuid.NewString(),
 		TenantID:     tenantID,
 		ClientID:     "test-client",
-		ClientSecret: &secret,
+		ClientSecret: &fakeHash,
 	}
 
 	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
@@ -634,6 +653,8 @@ func TestHttpAdapter_Introspect_Post(t *testing.T) {
 	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
 		return client, nil
 	})
+	// Validate the secret via cryptoPort
+	crypto.CompareCredentialMock.Expect(fakeHash, secret).Return(true, nil)
 	auth.IntrospectTokenMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string, token string) (*model.IntrospectionResponse, error) {
 		return &model.IntrospectionResponse{
 			Active:   true,
@@ -663,7 +684,7 @@ func TestHttpAdapter_Introspect_None_Unauthorized(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 
 	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
 		return tenant, nil
@@ -690,7 +711,7 @@ func TestHttpAdapter_Token_RefreshToken_None_Success(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 	client := &model.ClientApplication{
 		ID:         uuid.NewString(),
 		TenantID:   tenantID,

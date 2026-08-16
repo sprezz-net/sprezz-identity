@@ -114,7 +114,7 @@ func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock, a
 		signupService:      service.NewUserRegistrationService(s),
 		oauthValidator:     service.NewOAuthValidatorService(),
 		tenantService:      service.NewTenantService(s, cl, idpService, appEnv, adminDomain),
-		clientService:      service.NewClientService(s),
+		clientService:      service.NewClientService(s, c),
 		userProfileService: service.NewUserProfileService(s),
 		router:             chi.NewRouter(),
 		adminState:         adminState,

@@ -19,6 +19,20 @@ type CryptoMock struct {
 	t          minimock.Tester
 	finishOnce sync.Once
 
+	funcCompareCredential          func(hashedSecret string, plainSecret string) (b1 bool, err error)
+	funcCompareCredentialOrigin    string
+	inspectFuncCompareCredential   func(hashedSecret string, plainSecret string)
+	afterCompareCredentialCounter  uint64
+	beforeCompareCredentialCounter uint64
+	CompareCredentialMock          mCryptoMockCompareCredential
+
+	funcHashCredential          func(secret string) (s1 string, err error)
+	funcHashCredentialOrigin    string
+	inspectFuncHashCredential   func(secret string)
+	afterHashCredentialCounter  uint64
+	beforeHashCredentialCounter uint64
+	HashCredentialMock          mCryptoMockHashCredential
+
 	funcMarshalJWKSet          func(ctx context.Context, domain string, scheme string) (s1 string, err error)
 	funcMarshalJWKSetOrigin    string
 	inspectFuncMarshalJWKSet   func(ctx context.Context, domain string, scheme string)
@@ -70,6 +84,12 @@ func NewCryptoMock(t minimock.Tester) *CryptoMock {
 		controller.RegisterMocker(m)
 	}
 
+	m.CompareCredentialMock = mCryptoMockCompareCredential{mock: m}
+	m.CompareCredentialMock.callArgs = []*CryptoMockCompareCredentialParams{}
+
+	m.HashCredentialMock = mCryptoMockHashCredential{mock: m}
+	m.HashCredentialMock.callArgs = []*CryptoMockHashCredentialParams{}
+
 	m.MarshalJWKSetMock = mCryptoMockMarshalJWKSet{mock: m}
 	m.MarshalJWKSetMock.callArgs = []*CryptoMockMarshalJWKSetParams{}
 
@@ -91,6 +111,661 @@ func NewCryptoMock(t minimock.Tester) *CryptoMock {
 	t.Cleanup(m.MinimockFinish)
 
 	return m
+}
+
+type mCryptoMockCompareCredential struct {
+	optional           bool
+	mock               *CryptoMock
+	defaultExpectation *CryptoMockCompareCredentialExpectation
+	expectations       []*CryptoMockCompareCredentialExpectation
+
+	callArgs []*CryptoMockCompareCredentialParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// CryptoMockCompareCredentialExpectation specifies expectation struct of the Crypto.CompareCredential
+type CryptoMockCompareCredentialExpectation struct {
+	mock               *CryptoMock
+	params             *CryptoMockCompareCredentialParams
+	paramPtrs          *CryptoMockCompareCredentialParamPtrs
+	expectationOrigins CryptoMockCompareCredentialExpectationOrigins
+	results            *CryptoMockCompareCredentialResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// CryptoMockCompareCredentialParams contains parameters of the Crypto.CompareCredential
+type CryptoMockCompareCredentialParams struct {
+	hashedSecret string
+	plainSecret  string
+}
+
+// CryptoMockCompareCredentialParamPtrs contains pointers to parameters of the Crypto.CompareCredential
+type CryptoMockCompareCredentialParamPtrs struct {
+	hashedSecret *string
+	plainSecret  *string
+}
+
+// CryptoMockCompareCredentialResults contains results of the Crypto.CompareCredential
+type CryptoMockCompareCredentialResults struct {
+	b1  bool
+	err error
+}
+
+// CryptoMockCompareCredentialOrigins contains origins of expectations of the Crypto.CompareCredential
+type CryptoMockCompareCredentialExpectationOrigins struct {
+	origin             string
+	originHashedSecret string
+	originPlainSecret  string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmCompareCredential *mCryptoMockCompareCredential) Optional() *mCryptoMockCompareCredential {
+	mmCompareCredential.optional = true
+	return mmCompareCredential
+}
+
+// Expect sets up expected params for Crypto.CompareCredential
+func (mmCompareCredential *mCryptoMockCompareCredential) Expect(hashedSecret string, plainSecret string) *mCryptoMockCompareCredential {
+	if mmCompareCredential.mock.funcCompareCredential != nil {
+		mmCompareCredential.mock.t.Fatalf("CryptoMock.CompareCredential mock is already set by Set")
+	}
+
+	if mmCompareCredential.defaultExpectation == nil {
+		mmCompareCredential.defaultExpectation = &CryptoMockCompareCredentialExpectation{}
+	}
+
+	if mmCompareCredential.defaultExpectation.paramPtrs != nil {
+		mmCompareCredential.mock.t.Fatalf("CryptoMock.CompareCredential mock is already set by ExpectParams functions")
+	}
+
+	mmCompareCredential.defaultExpectation.params = &CryptoMockCompareCredentialParams{hashedSecret, plainSecret}
+	mmCompareCredential.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmCompareCredential.expectations {
+		if minimock.Equal(e.params, mmCompareCredential.defaultExpectation.params) {
+			mmCompareCredential.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmCompareCredential.defaultExpectation.params)
+		}
+	}
+
+	return mmCompareCredential
+}
+
+// ExpectHashedSecretParam1 sets up expected param hashedSecret for Crypto.CompareCredential
+func (mmCompareCredential *mCryptoMockCompareCredential) ExpectHashedSecretParam1(hashedSecret string) *mCryptoMockCompareCredential {
+	if mmCompareCredential.mock.funcCompareCredential != nil {
+		mmCompareCredential.mock.t.Fatalf("CryptoMock.CompareCredential mock is already set by Set")
+	}
+
+	if mmCompareCredential.defaultExpectation == nil {
+		mmCompareCredential.defaultExpectation = &CryptoMockCompareCredentialExpectation{}
+	}
+
+	if mmCompareCredential.defaultExpectation.params != nil {
+		mmCompareCredential.mock.t.Fatalf("CryptoMock.CompareCredential mock is already set by Expect")
+	}
+
+	if mmCompareCredential.defaultExpectation.paramPtrs == nil {
+		mmCompareCredential.defaultExpectation.paramPtrs = &CryptoMockCompareCredentialParamPtrs{}
+	}
+	mmCompareCredential.defaultExpectation.paramPtrs.hashedSecret = &hashedSecret
+	mmCompareCredential.defaultExpectation.expectationOrigins.originHashedSecret = minimock.CallerInfo(1)
+
+	return mmCompareCredential
+}
+
+// ExpectPlainSecretParam2 sets up expected param plainSecret for Crypto.CompareCredential
+func (mmCompareCredential *mCryptoMockCompareCredential) ExpectPlainSecretParam2(plainSecret string) *mCryptoMockCompareCredential {
+	if mmCompareCredential.mock.funcCompareCredential != nil {
+		mmCompareCredential.mock.t.Fatalf("CryptoMock.CompareCredential mock is already set by Set")
+	}
+
+	if mmCompareCredential.defaultExpectation == nil {
+		mmCompareCredential.defaultExpectation = &CryptoMockCompareCredentialExpectation{}
+	}
+
+	if mmCompareCredential.defaultExpectation.params != nil {
+		mmCompareCredential.mock.t.Fatalf("CryptoMock.CompareCredential mock is already set by Expect")
+	}
+
+	if mmCompareCredential.defaultExpectation.paramPtrs == nil {
+		mmCompareCredential.defaultExpectation.paramPtrs = &CryptoMockCompareCredentialParamPtrs{}
+	}
+	mmCompareCredential.defaultExpectation.paramPtrs.plainSecret = &plainSecret
+	mmCompareCredential.defaultExpectation.expectationOrigins.originPlainSecret = minimock.CallerInfo(1)
+
+	return mmCompareCredential
+}
+
+// Inspect accepts an inspector function that has same arguments as the Crypto.CompareCredential
+func (mmCompareCredential *mCryptoMockCompareCredential) Inspect(f func(hashedSecret string, plainSecret string)) *mCryptoMockCompareCredential {
+	if mmCompareCredential.mock.inspectFuncCompareCredential != nil {
+		mmCompareCredential.mock.t.Fatalf("Inspect function is already set for CryptoMock.CompareCredential")
+	}
+
+	mmCompareCredential.mock.inspectFuncCompareCredential = f
+
+	return mmCompareCredential
+}
+
+// Return sets up results that will be returned by Crypto.CompareCredential
+func (mmCompareCredential *mCryptoMockCompareCredential) Return(b1 bool, err error) *CryptoMock {
+	if mmCompareCredential.mock.funcCompareCredential != nil {
+		mmCompareCredential.mock.t.Fatalf("CryptoMock.CompareCredential mock is already set by Set")
+	}
+
+	if mmCompareCredential.defaultExpectation == nil {
+		mmCompareCredential.defaultExpectation = &CryptoMockCompareCredentialExpectation{mock: mmCompareCredential.mock}
+	}
+	mmCompareCredential.defaultExpectation.results = &CryptoMockCompareCredentialResults{b1, err}
+	mmCompareCredential.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmCompareCredential.mock
+}
+
+// Set uses given function f to mock the Crypto.CompareCredential method
+func (mmCompareCredential *mCryptoMockCompareCredential) Set(f func(hashedSecret string, plainSecret string) (b1 bool, err error)) *CryptoMock {
+	if mmCompareCredential.defaultExpectation != nil {
+		mmCompareCredential.mock.t.Fatalf("Default expectation is already set for the Crypto.CompareCredential method")
+	}
+
+	if len(mmCompareCredential.expectations) > 0 {
+		mmCompareCredential.mock.t.Fatalf("Some expectations are already set for the Crypto.CompareCredential method")
+	}
+
+	mmCompareCredential.mock.funcCompareCredential = f
+	mmCompareCredential.mock.funcCompareCredentialOrigin = minimock.CallerInfo(1)
+	return mmCompareCredential.mock
+}
+
+// When sets expectation for the Crypto.CompareCredential which will trigger the result defined by the following
+// Then helper
+func (mmCompareCredential *mCryptoMockCompareCredential) When(hashedSecret string, plainSecret string) *CryptoMockCompareCredentialExpectation {
+	if mmCompareCredential.mock.funcCompareCredential != nil {
+		mmCompareCredential.mock.t.Fatalf("CryptoMock.CompareCredential mock is already set by Set")
+	}
+
+	expectation := &CryptoMockCompareCredentialExpectation{
+		mock:               mmCompareCredential.mock,
+		params:             &CryptoMockCompareCredentialParams{hashedSecret, plainSecret},
+		expectationOrigins: CryptoMockCompareCredentialExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmCompareCredential.expectations = append(mmCompareCredential.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Crypto.CompareCredential return parameters for the expectation previously defined by the When method
+func (e *CryptoMockCompareCredentialExpectation) Then(b1 bool, err error) *CryptoMock {
+	e.results = &CryptoMockCompareCredentialResults{b1, err}
+	return e.mock
+}
+
+// Times sets number of times Crypto.CompareCredential should be invoked
+func (mmCompareCredential *mCryptoMockCompareCredential) Times(n uint64) *mCryptoMockCompareCredential {
+	if n == 0 {
+		mmCompareCredential.mock.t.Fatalf("Times of CryptoMock.CompareCredential mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmCompareCredential.expectedInvocations, n)
+	mmCompareCredential.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmCompareCredential
+}
+
+func (mmCompareCredential *mCryptoMockCompareCredential) invocationsDone() bool {
+	if len(mmCompareCredential.expectations) == 0 && mmCompareCredential.defaultExpectation == nil && mmCompareCredential.mock.funcCompareCredential == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmCompareCredential.mock.afterCompareCredentialCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmCompareCredential.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// CompareCredential implements mm_port.Crypto
+func (mmCompareCredential *CryptoMock) CompareCredential(hashedSecret string, plainSecret string) (b1 bool, err error) {
+	mm_atomic.AddUint64(&mmCompareCredential.beforeCompareCredentialCounter, 1)
+	defer mm_atomic.AddUint64(&mmCompareCredential.afterCompareCredentialCounter, 1)
+
+	mmCompareCredential.t.Helper()
+
+	if mmCompareCredential.inspectFuncCompareCredential != nil {
+		mmCompareCredential.inspectFuncCompareCredential(hashedSecret, plainSecret)
+	}
+
+	mm_params := CryptoMockCompareCredentialParams{hashedSecret, plainSecret}
+
+	// Record call args
+	mmCompareCredential.CompareCredentialMock.mutex.Lock()
+	mmCompareCredential.CompareCredentialMock.callArgs = append(mmCompareCredential.CompareCredentialMock.callArgs, &mm_params)
+	mmCompareCredential.CompareCredentialMock.mutex.Unlock()
+
+	for _, e := range mmCompareCredential.CompareCredentialMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.b1, e.results.err
+		}
+	}
+
+	if mmCompareCredential.CompareCredentialMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmCompareCredential.CompareCredentialMock.defaultExpectation.Counter, 1)
+		mm_want := mmCompareCredential.CompareCredentialMock.defaultExpectation.params
+		mm_want_ptrs := mmCompareCredential.CompareCredentialMock.defaultExpectation.paramPtrs
+
+		mm_got := CryptoMockCompareCredentialParams{hashedSecret, plainSecret}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.hashedSecret != nil && !minimock.Equal(*mm_want_ptrs.hashedSecret, mm_got.hashedSecret) {
+				mmCompareCredential.t.Errorf("CryptoMock.CompareCredential got unexpected parameter hashedSecret, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmCompareCredential.CompareCredentialMock.defaultExpectation.expectationOrigins.originHashedSecret, *mm_want_ptrs.hashedSecret, mm_got.hashedSecret, minimock.Diff(*mm_want_ptrs.hashedSecret, mm_got.hashedSecret))
+			}
+
+			if mm_want_ptrs.plainSecret != nil && !minimock.Equal(*mm_want_ptrs.plainSecret, mm_got.plainSecret) {
+				mmCompareCredential.t.Errorf("CryptoMock.CompareCredential got unexpected parameter plainSecret, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmCompareCredential.CompareCredentialMock.defaultExpectation.expectationOrigins.originPlainSecret, *mm_want_ptrs.plainSecret, mm_got.plainSecret, minimock.Diff(*mm_want_ptrs.plainSecret, mm_got.plainSecret))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmCompareCredential.t.Errorf("CryptoMock.CompareCredential got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmCompareCredential.CompareCredentialMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmCompareCredential.CompareCredentialMock.defaultExpectation.results
+		if mm_results == nil {
+			mmCompareCredential.t.Fatal("No results are set for the CryptoMock.CompareCredential")
+		}
+		return (*mm_results).b1, (*mm_results).err
+	}
+	if mmCompareCredential.funcCompareCredential != nil {
+		return mmCompareCredential.funcCompareCredential(hashedSecret, plainSecret)
+	}
+	mmCompareCredential.t.Fatalf("Unexpected call to CryptoMock.CompareCredential. %v %v", hashedSecret, plainSecret)
+	return
+}
+
+// CompareCredentialAfterCounter returns a count of finished CryptoMock.CompareCredential invocations
+func (mmCompareCredential *CryptoMock) CompareCredentialAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmCompareCredential.afterCompareCredentialCounter)
+}
+
+// CompareCredentialBeforeCounter returns a count of CryptoMock.CompareCredential invocations
+func (mmCompareCredential *CryptoMock) CompareCredentialBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmCompareCredential.beforeCompareCredentialCounter)
+}
+
+// Calls returns a list of arguments used in each call to CryptoMock.CompareCredential.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmCompareCredential *mCryptoMockCompareCredential) Calls() []*CryptoMockCompareCredentialParams {
+	mmCompareCredential.mutex.RLock()
+
+	argCopy := make([]*CryptoMockCompareCredentialParams, len(mmCompareCredential.callArgs))
+	copy(argCopy, mmCompareCredential.callArgs)
+
+	mmCompareCredential.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockCompareCredentialDone returns true if the count of the CompareCredential invocations corresponds
+// the number of defined expectations
+func (m *CryptoMock) MinimockCompareCredentialDone() bool {
+	if m.CompareCredentialMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.CompareCredentialMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.CompareCredentialMock.invocationsDone()
+}
+
+// MinimockCompareCredentialInspect logs each unmet expectation
+func (m *CryptoMock) MinimockCompareCredentialInspect() {
+	for _, e := range m.CompareCredentialMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to CryptoMock.CompareCredential at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterCompareCredentialCounter := mm_atomic.LoadUint64(&m.afterCompareCredentialCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.CompareCredentialMock.defaultExpectation != nil && afterCompareCredentialCounter < 1 {
+		if m.CompareCredentialMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to CryptoMock.CompareCredential at\n%s", m.CompareCredentialMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to CryptoMock.CompareCredential at\n%s with params: %#v", m.CompareCredentialMock.defaultExpectation.expectationOrigins.origin, *m.CompareCredentialMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcCompareCredential != nil && afterCompareCredentialCounter < 1 {
+		m.t.Errorf("Expected call to CryptoMock.CompareCredential at\n%s", m.funcCompareCredentialOrigin)
+	}
+
+	if !m.CompareCredentialMock.invocationsDone() && afterCompareCredentialCounter > 0 {
+		m.t.Errorf("Expected %d calls to CryptoMock.CompareCredential at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.CompareCredentialMock.expectedInvocations), m.CompareCredentialMock.expectedInvocationsOrigin, afterCompareCredentialCounter)
+	}
+}
+
+type mCryptoMockHashCredential struct {
+	optional           bool
+	mock               *CryptoMock
+	defaultExpectation *CryptoMockHashCredentialExpectation
+	expectations       []*CryptoMockHashCredentialExpectation
+
+	callArgs []*CryptoMockHashCredentialParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// CryptoMockHashCredentialExpectation specifies expectation struct of the Crypto.HashCredential
+type CryptoMockHashCredentialExpectation struct {
+	mock               *CryptoMock
+	params             *CryptoMockHashCredentialParams
+	paramPtrs          *CryptoMockHashCredentialParamPtrs
+	expectationOrigins CryptoMockHashCredentialExpectationOrigins
+	results            *CryptoMockHashCredentialResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// CryptoMockHashCredentialParams contains parameters of the Crypto.HashCredential
+type CryptoMockHashCredentialParams struct {
+	secret string
+}
+
+// CryptoMockHashCredentialParamPtrs contains pointers to parameters of the Crypto.HashCredential
+type CryptoMockHashCredentialParamPtrs struct {
+	secret *string
+}
+
+// CryptoMockHashCredentialResults contains results of the Crypto.HashCredential
+type CryptoMockHashCredentialResults struct {
+	s1  string
+	err error
+}
+
+// CryptoMockHashCredentialOrigins contains origins of expectations of the Crypto.HashCredential
+type CryptoMockHashCredentialExpectationOrigins struct {
+	origin       string
+	originSecret string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmHashCredential *mCryptoMockHashCredential) Optional() *mCryptoMockHashCredential {
+	mmHashCredential.optional = true
+	return mmHashCredential
+}
+
+// Expect sets up expected params for Crypto.HashCredential
+func (mmHashCredential *mCryptoMockHashCredential) Expect(secret string) *mCryptoMockHashCredential {
+	if mmHashCredential.mock.funcHashCredential != nil {
+		mmHashCredential.mock.t.Fatalf("CryptoMock.HashCredential mock is already set by Set")
+	}
+
+	if mmHashCredential.defaultExpectation == nil {
+		mmHashCredential.defaultExpectation = &CryptoMockHashCredentialExpectation{}
+	}
+
+	if mmHashCredential.defaultExpectation.paramPtrs != nil {
+		mmHashCredential.mock.t.Fatalf("CryptoMock.HashCredential mock is already set by ExpectParams functions")
+	}
+
+	mmHashCredential.defaultExpectation.params = &CryptoMockHashCredentialParams{secret}
+	mmHashCredential.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmHashCredential.expectations {
+		if minimock.Equal(e.params, mmHashCredential.defaultExpectation.params) {
+			mmHashCredential.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmHashCredential.defaultExpectation.params)
+		}
+	}
+
+	return mmHashCredential
+}
+
+// ExpectSecretParam1 sets up expected param secret for Crypto.HashCredential
+func (mmHashCredential *mCryptoMockHashCredential) ExpectSecretParam1(secret string) *mCryptoMockHashCredential {
+	if mmHashCredential.mock.funcHashCredential != nil {
+		mmHashCredential.mock.t.Fatalf("CryptoMock.HashCredential mock is already set by Set")
+	}
+
+	if mmHashCredential.defaultExpectation == nil {
+		mmHashCredential.defaultExpectation = &CryptoMockHashCredentialExpectation{}
+	}
+
+	if mmHashCredential.defaultExpectation.params != nil {
+		mmHashCredential.mock.t.Fatalf("CryptoMock.HashCredential mock is already set by Expect")
+	}
+
+	if mmHashCredential.defaultExpectation.paramPtrs == nil {
+		mmHashCredential.defaultExpectation.paramPtrs = &CryptoMockHashCredentialParamPtrs{}
+	}
+	mmHashCredential.defaultExpectation.paramPtrs.secret = &secret
+	mmHashCredential.defaultExpectation.expectationOrigins.originSecret = minimock.CallerInfo(1)
+
+	return mmHashCredential
+}
+
+// Inspect accepts an inspector function that has same arguments as the Crypto.HashCredential
+func (mmHashCredential *mCryptoMockHashCredential) Inspect(f func(secret string)) *mCryptoMockHashCredential {
+	if mmHashCredential.mock.inspectFuncHashCredential != nil {
+		mmHashCredential.mock.t.Fatalf("Inspect function is already set for CryptoMock.HashCredential")
+	}
+
+	mmHashCredential.mock.inspectFuncHashCredential = f
+
+	return mmHashCredential
+}
+
+// Return sets up results that will be returned by Crypto.HashCredential
+func (mmHashCredential *mCryptoMockHashCredential) Return(s1 string, err error) *CryptoMock {
+	if mmHashCredential.mock.funcHashCredential != nil {
+		mmHashCredential.mock.t.Fatalf("CryptoMock.HashCredential mock is already set by Set")
+	}
+
+	if mmHashCredential.defaultExpectation == nil {
+		mmHashCredential.defaultExpectation = &CryptoMockHashCredentialExpectation{mock: mmHashCredential.mock}
+	}
+	mmHashCredential.defaultExpectation.results = &CryptoMockHashCredentialResults{s1, err}
+	mmHashCredential.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmHashCredential.mock
+}
+
+// Set uses given function f to mock the Crypto.HashCredential method
+func (mmHashCredential *mCryptoMockHashCredential) Set(f func(secret string) (s1 string, err error)) *CryptoMock {
+	if mmHashCredential.defaultExpectation != nil {
+		mmHashCredential.mock.t.Fatalf("Default expectation is already set for the Crypto.HashCredential method")
+	}
+
+	if len(mmHashCredential.expectations) > 0 {
+		mmHashCredential.mock.t.Fatalf("Some expectations are already set for the Crypto.HashCredential method")
+	}
+
+	mmHashCredential.mock.funcHashCredential = f
+	mmHashCredential.mock.funcHashCredentialOrigin = minimock.CallerInfo(1)
+	return mmHashCredential.mock
+}
+
+// When sets expectation for the Crypto.HashCredential which will trigger the result defined by the following
+// Then helper
+func (mmHashCredential *mCryptoMockHashCredential) When(secret string) *CryptoMockHashCredentialExpectation {
+	if mmHashCredential.mock.funcHashCredential != nil {
+		mmHashCredential.mock.t.Fatalf("CryptoMock.HashCredential mock is already set by Set")
+	}
+
+	expectation := &CryptoMockHashCredentialExpectation{
+		mock:               mmHashCredential.mock,
+		params:             &CryptoMockHashCredentialParams{secret},
+		expectationOrigins: CryptoMockHashCredentialExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmHashCredential.expectations = append(mmHashCredential.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Crypto.HashCredential return parameters for the expectation previously defined by the When method
+func (e *CryptoMockHashCredentialExpectation) Then(s1 string, err error) *CryptoMock {
+	e.results = &CryptoMockHashCredentialResults{s1, err}
+	return e.mock
+}
+
+// Times sets number of times Crypto.HashCredential should be invoked
+func (mmHashCredential *mCryptoMockHashCredential) Times(n uint64) *mCryptoMockHashCredential {
+	if n == 0 {
+		mmHashCredential.mock.t.Fatalf("Times of CryptoMock.HashCredential mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmHashCredential.expectedInvocations, n)
+	mmHashCredential.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmHashCredential
+}
+
+func (mmHashCredential *mCryptoMockHashCredential) invocationsDone() bool {
+	if len(mmHashCredential.expectations) == 0 && mmHashCredential.defaultExpectation == nil && mmHashCredential.mock.funcHashCredential == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmHashCredential.mock.afterHashCredentialCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmHashCredential.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// HashCredential implements mm_port.Crypto
+func (mmHashCredential *CryptoMock) HashCredential(secret string) (s1 string, err error) {
+	mm_atomic.AddUint64(&mmHashCredential.beforeHashCredentialCounter, 1)
+	defer mm_atomic.AddUint64(&mmHashCredential.afterHashCredentialCounter, 1)
+
+	mmHashCredential.t.Helper()
+
+	if mmHashCredential.inspectFuncHashCredential != nil {
+		mmHashCredential.inspectFuncHashCredential(secret)
+	}
+
+	mm_params := CryptoMockHashCredentialParams{secret}
+
+	// Record call args
+	mmHashCredential.HashCredentialMock.mutex.Lock()
+	mmHashCredential.HashCredentialMock.callArgs = append(mmHashCredential.HashCredentialMock.callArgs, &mm_params)
+	mmHashCredential.HashCredentialMock.mutex.Unlock()
+
+	for _, e := range mmHashCredential.HashCredentialMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.s1, e.results.err
+		}
+	}
+
+	if mmHashCredential.HashCredentialMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmHashCredential.HashCredentialMock.defaultExpectation.Counter, 1)
+		mm_want := mmHashCredential.HashCredentialMock.defaultExpectation.params
+		mm_want_ptrs := mmHashCredential.HashCredentialMock.defaultExpectation.paramPtrs
+
+		mm_got := CryptoMockHashCredentialParams{secret}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.secret != nil && !minimock.Equal(*mm_want_ptrs.secret, mm_got.secret) {
+				mmHashCredential.t.Errorf("CryptoMock.HashCredential got unexpected parameter secret, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmHashCredential.HashCredentialMock.defaultExpectation.expectationOrigins.originSecret, *mm_want_ptrs.secret, mm_got.secret, minimock.Diff(*mm_want_ptrs.secret, mm_got.secret))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmHashCredential.t.Errorf("CryptoMock.HashCredential got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmHashCredential.HashCredentialMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmHashCredential.HashCredentialMock.defaultExpectation.results
+		if mm_results == nil {
+			mmHashCredential.t.Fatal("No results are set for the CryptoMock.HashCredential")
+		}
+		return (*mm_results).s1, (*mm_results).err
+	}
+	if mmHashCredential.funcHashCredential != nil {
+		return mmHashCredential.funcHashCredential(secret)
+	}
+	mmHashCredential.t.Fatalf("Unexpected call to CryptoMock.HashCredential. %v", secret)
+	return
+}
+
+// HashCredentialAfterCounter returns a count of finished CryptoMock.HashCredential invocations
+func (mmHashCredential *CryptoMock) HashCredentialAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmHashCredential.afterHashCredentialCounter)
+}
+
+// HashCredentialBeforeCounter returns a count of CryptoMock.HashCredential invocations
+func (mmHashCredential *CryptoMock) HashCredentialBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmHashCredential.beforeHashCredentialCounter)
+}
+
+// Calls returns a list of arguments used in each call to CryptoMock.HashCredential.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmHashCredential *mCryptoMockHashCredential) Calls() []*CryptoMockHashCredentialParams {
+	mmHashCredential.mutex.RLock()
+
+	argCopy := make([]*CryptoMockHashCredentialParams, len(mmHashCredential.callArgs))
+	copy(argCopy, mmHashCredential.callArgs)
+
+	mmHashCredential.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockHashCredentialDone returns true if the count of the HashCredential invocations corresponds
+// the number of defined expectations
+func (m *CryptoMock) MinimockHashCredentialDone() bool {
+	if m.HashCredentialMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.HashCredentialMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.HashCredentialMock.invocationsDone()
+}
+
+// MinimockHashCredentialInspect logs each unmet expectation
+func (m *CryptoMock) MinimockHashCredentialInspect() {
+	for _, e := range m.HashCredentialMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to CryptoMock.HashCredential at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterHashCredentialCounter := mm_atomic.LoadUint64(&m.afterHashCredentialCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.HashCredentialMock.defaultExpectation != nil && afterHashCredentialCounter < 1 {
+		if m.HashCredentialMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to CryptoMock.HashCredential at\n%s", m.HashCredentialMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to CryptoMock.HashCredential at\n%s with params: %#v", m.HashCredentialMock.defaultExpectation.expectationOrigins.origin, *m.HashCredentialMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcHashCredential != nil && afterHashCredentialCounter < 1 {
+		m.t.Errorf("Expected call to CryptoMock.HashCredential at\n%s", m.funcHashCredentialOrigin)
+	}
+
+	if !m.HashCredentialMock.invocationsDone() && afterHashCredentialCounter > 0 {
+		m.t.Errorf("Expected %d calls to CryptoMock.HashCredential at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.HashCredentialMock.expectedInvocations), m.HashCredentialMock.expectedInvocationsOrigin, afterHashCredentialCounter)
+	}
 }
 
 type mCryptoMockMarshalJWKSet struct {
@@ -2247,6 +2922,10 @@ func (m *CryptoMock) MinimockVerifyTokenInspect() {
 func (m *CryptoMock) MinimockFinish() {
 	m.finishOnce.Do(func() {
 		if !m.minimockDone() {
+			m.MinimockCompareCredentialInspect()
+
+			m.MinimockHashCredentialInspect()
+
 			m.MinimockMarshalJWKSetInspect()
 
 			m.MinimockRotateKeysInspect()
@@ -2281,6 +2960,8 @@ func (m *CryptoMock) MinimockWait(timeout mm_time.Duration) {
 func (m *CryptoMock) minimockDone() bool {
 	done := true
 	return done &&
+		m.MinimockCompareCredentialDone() &&
+		m.MinimockHashCredentialDone() &&
 		m.MinimockMarshalJWKSetDone() &&
 		m.MinimockRotateKeysDone() &&
 		m.MinimockSignAccessTokenDone() &&

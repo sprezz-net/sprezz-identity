@@ -19,6 +19,7 @@ import (
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
 
+	"github.com/alexedwards/argon2id"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -748,4 +749,23 @@ func mergeVerificationKeys(jwks []map[string]any, verKeys []model.SigningKey) []
 		}
 	}
 	return jwks
+}
+
+// HashCredential wraps the secure cryptographic hashing algorithm
+func (s *JWTSigner) HashCredential(secret string) (string, error) {
+	// Reuses identical default Argon2id parameters (1 iteration, 64MB memory, 4 threads)
+	hash, err := argon2id.CreateHash(secret, argon2id.DefaultParams)
+	if err != nil {
+		return "", err
+	}
+	return hash, nil
+}
+
+// CompareCredential validates incoming client request string metrics
+func (s *JWTSigner) CompareCredential(hashedSecret, plainSecret string) (bool, error) {
+	match, err := argon2id.ComparePasswordAndHash(plainSecret, hashedSecret)
+	if err != nil {
+		return false, err
+	}
+	return match, nil
 }

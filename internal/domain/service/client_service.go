@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 
 	"sprezz-identity/internal/domain/model"
@@ -12,10 +14,14 @@ import (
 
 type ClientService struct {
 	storage port.Storage
+	crypto  port.Crypto
 }
 
-func NewClientService(storage port.Storage) *ClientService {
-	return &ClientService{storage: storage}
+func NewClientService(s port.Storage, c port.Crypto) *ClientService {
+	return &ClientService{
+		storage: s,
+		crypto:  c,
+	}
 }
 
 func (s *ClientService) GetClientsByTenant(ctx context.Context, tenantID uuid.UUID) ([]model.ClientApplication, error) {
@@ -180,4 +186,49 @@ func (s *ClientService) UpdateClient(ctx context.Context, tenantID uuid.UUID, cl
 	}
 
 	return existing, nil
+}
+
+// ResetClientSecret safely handles credential generation and lifecycle rotation.
+func (s *ClientService) ResetClientSecret(ctx context.Context, tenantID uuid.UUID, clientID string) (*model.ClientApplication, string, error) {
+	if tenantID == uuid.Nil {
+		return nil, "", fmt.Errorf("tenant identifier cannot be empty")
+	}
+	if clientID == "" {
+		return nil, "", fmt.Errorf("client identifier cannot be empty")
+	}
+
+	// 1. Fetch the target application using the exact storage port signature contract
+	client, err := s.storage.GetClient(ctx, tenantID, clientID)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to locate client application: %w", err)
+	}
+
+	// 2. Structural Security Guard Rule Check
+	if client.ClientType != model.ClientTypeConfidential {
+		return nil, "", fmt.Errorf("cannot reset secret of a non-confidential client")
+	}
+
+	// 3. Core Domain Logic: Generate a cryptographically secure random base64 secret string
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return nil, "", fmt.Errorf("failed to generate secure random bytes: %w", err)
+	}
+	plainSecret := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(bytes)
+
+	// 4. Hash using default algorithm
+	hashedSecret, err := s.crypto.HashCredential(plainSecret)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to hash credential payload: %w", err)
+	}
+
+	// 5. Update the entity state with the secure hash reference string
+	client.ClientSecret = &hashedSecret
+
+	// 6. Persist the updated state through your outbound repository storage port
+	if err := s.storage.SaveClient(ctx, *client); err != nil {
+		return nil, "", fmt.Errorf("failed to persist updated client credentials: %w", err)
+	}
+
+	// 7. Return the modified client along with the unhashed plain text secret for UI rendering
+	return client, plainSecret, nil
 }

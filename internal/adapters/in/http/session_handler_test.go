@@ -147,6 +147,7 @@ func TestHttpAdapter_Revoke_Success(t *testing.T) {
 	tenant := &model.Tenant{
 		ID:     tenantID,
 		Domain: "test.com",
+		Scheme: "https",
 		Config: model.TenantConfig{
 			RedirectWhitelist: []string{"https://test.com/callback"},
 		},
@@ -165,6 +166,15 @@ func TestHttpAdapter_Revoke_Success(t *testing.T) {
 	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
 		return client, nil
 	})
+
+	// Inject the credential verification mock check matching the production logic
+	crypto.CompareCredentialMock.Set(func(hashedSecret string, plainSecret string) (bool, error) {
+		if hashedSecret != "clientsecret" || plainSecret != "clientsecret" {
+			return false, nil
+		}
+		return true, nil
+	})
+
 	auth.RevokeTokenMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string, token string) error {
 		if token != "token-to-revoke" {
 			t.Errorf("expected token-to-revoke, got %s", token)
@@ -193,7 +203,7 @@ func TestHttpAdapter_Introspect_Success(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 	secret := "clientsecret"
 	client := &model.ClientApplication{
 		ID:           uuid.NewString(),
@@ -207,6 +217,13 @@ func TestHttpAdapter_Introspect_Success(t *testing.T) {
 	})
 	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
 		return client, nil
+	})
+	// Inject the credential verification mock check
+	crypto.CompareCredentialMock.Set(func(hashedSecret string, plainSecret string) (bool, error) {
+		if hashedSecret != "clientsecret" || plainSecret != "clientsecret" {
+			return false, nil
+		}
+		return true, nil
 	})
 	auth.IntrospectTokenMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string, token string) (*model.IntrospectionResponse, error) {
 		return &model.IntrospectionResponse{
@@ -248,6 +265,7 @@ func TestHttpAdapter_PAR_Success(t *testing.T) {
 	tenant := &model.Tenant{
 		ID:     tenantID,
 		Domain: "test.com",
+		Scheme: "https",
 		Config: model.TenantConfig{
 			RedirectWhitelist: []string{"https://test.com/callback"},
 		},
@@ -268,6 +286,13 @@ func TestHttpAdapter_PAR_Success(t *testing.T) {
 	})
 	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
 		return client, nil
+	})
+	// Inject the credential verification mock check
+	crypto.CompareCredentialMock.Set(func(hashedSecret string, plainSecret string) (bool, error) {
+		if hashedSecret != "clientsecret" || plainSecret != "clientsecret" {
+			return false, nil
+		}
+		return true, nil
 	})
 	auth.SavePARMock.Set(func(ctx context.Context, req model.PushedAuthorizationRequest) error {
 		if req.ClientID != "test-client" || req.RedirectURI != "https://test.com/callback" {
@@ -303,7 +328,7 @@ func TestHttpAdapter_Logout_Redirect(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 
 	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
 		return tenant, nil
@@ -339,6 +364,7 @@ func TestHttpAdapter_Logout_ValidPostLogoutRedirectURI(t *testing.T) {
 	tenant := &model.Tenant{
 		ID:     tenantID,
 		Domain: "test.com",
+		Scheme: "https",
 		Config: model.TenantConfig{
 			RedirectWhitelist: []string{"https://test.com/logged-out"},
 		},
@@ -389,7 +415,7 @@ func TestHttpAdapter_Revoke_MissingToken(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 	secret := "clientsecret"
 	client := &model.ClientApplication{
 		ID:           uuid.NewString(),
@@ -404,7 +430,10 @@ func TestHttpAdapter_Revoke_MissingToken(t *testing.T) {
 	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
 		return client, nil
 	})
-
+	// Inject the credential verification mock check
+	crypto.CompareCredentialMock.Set(func(hashedSecret string, plainSecret string) (bool, error) {
+		return true, nil
+	})
 	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/revoke", bytes.NewBufferString("client_id=test-client&client_secret=clientsecret"))
@@ -426,7 +455,7 @@ func TestHttpAdapter_Introspect_MissingToken(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 	secret := "clientsecret"
 	client := &model.ClientApplication{
 		ID:           uuid.NewString(),
@@ -441,7 +470,10 @@ func TestHttpAdapter_Introspect_MissingToken(t *testing.T) {
 	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
 		return client, nil
 	})
-
+	// Inject the credential verification mock check
+	crypto.CompareCredentialMock.Set(func(hashedSecret string, plainSecret string) (bool, error) {
+		return true, nil
+	})
 	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/introspect", bytes.NewBufferString("client_id=test-client&client_secret=clientsecret"))
@@ -463,7 +495,7 @@ func TestHttpAdapter_PAR_MissingRedirectURI(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 	secret := "clientsecret"
 	client := &model.ClientApplication{
 		ID:           uuid.NewString(),
@@ -478,7 +510,10 @@ func TestHttpAdapter_PAR_MissingRedirectURI(t *testing.T) {
 	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
 		return client, nil
 	})
-
+	// Inject the credential verification mock check
+	crypto.CompareCredentialMock.Set(func(hashedSecret string, plainSecret string) (bool, error) {
+		return true, nil
+	})
 	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/par", bytes.NewBufferString("client_id=test-client&client_secret=clientsecret"))
@@ -500,7 +535,7 @@ func TestHttpAdapter_ClientAuthMiddleware_Failure_InvalidSecret(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 	secret := "clientsecret"
 	client := &model.ClientApplication{
 		ID:           uuid.NewString(),
@@ -515,7 +550,14 @@ func TestHttpAdapter_ClientAuthMiddleware_Failure_InvalidSecret(t *testing.T) {
 	storage.GetClientMock.Set(func(ctx context.Context, gotTenantID uuid.UUID, clientID string) (*model.ClientApplication, error) {
 		return client, nil
 	})
-
+	// Inject the failure condition check explicitly.
+	// Since plainSecret arrives as "wrongsecret", the mock returns false to trigger the 401 Unauthorized status path.
+	crypto.CompareCredentialMock.Set(func(hashedSecret string, plainSecret string) (bool, error) {
+		if hashedSecret == "clientsecret" && plainSecret == "wrongsecret" {
+			return false, nil
+		}
+		return true, nil
+	})
 	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
 
 	// Call introspect with wrong secret
@@ -538,7 +580,7 @@ func TestHttpAdapter_ClientAuthMiddleware_Failure_MissingCredentials(t *testing.
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 
 	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
 		return tenant, nil
@@ -566,7 +608,7 @@ func TestHttpAdapter_WebLogout_Success(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
 
 	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
 		return tenant, nil
