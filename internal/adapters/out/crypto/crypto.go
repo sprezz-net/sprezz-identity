@@ -11,6 +11,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,17 +53,53 @@ func NewJWTSigner(storage Storage, cl port.Clock, masterKey string) (*JWTSigner,
 		return nil, errors.New("SPREZZ_MASTER_KEY must not be empty")
 	}
 
-	// Enforce key requirements: AES-GCM requires exactly 16, 24, or 32 bytes keys
 	keyBytes := []byte(masterKey)
-	if len(keyBytes) != 16 && len(keyBytes) != 24 && len(keyBytes) != 32 {
-		return nil, fmt.Errorf("SPREZZ_MASTER_KEY must be exactly 16, 24, or 32 bytes for AES-GCM (current size: %d)", len(keyBytes))
+	keyLen := len(keyBytes)
+
+	// 1. If the raw string is already directly 16, 24, or 32 binary bytes, use it immediately
+	if keyLen == 16 || keyLen == 24 || keyLen == 32 {
+		return &JWTSigner{
+			keyrings:  make(map[string]*tenantKeyring),
+			storage:   storage,
+			clock:     cl,
+			masterKey: keyBytes,
+		}, nil
+	}
+
+	// 2. If it is 64 characters long, it's likely an openssl rand -hex 32 string! Try Hex Decoding.
+	if decodedBytes, err := hex.DecodeString(masterKey); err == nil {
+		decodedLen := len(decodedBytes)
+		if decodedLen == 16 || decodedLen == 24 || decodedLen == 32 {
+			return &JWTSigner{
+				keyrings:  make(map[string]*tenantKeyring),
+				storage:   storage,
+				clock:     cl,
+				masterKey: decodedBytes, // Correctly resolved to 32 pure binary bytes
+			}, nil
+		}
+	}
+
+	// 3. Fallback: Treat as Base64 encoded transport layout string
+	decodedBytes, err := base64.StdEncoding.DecodeString(masterKey)
+	if err != nil {
+		var fallbackErr error
+		decodedBytes, fallbackErr = base64.RawStdEncoding.DecodeString(masterKey)
+		if fallbackErr != nil {
+			return nil, fmt.Errorf("SPREZZ_MASTER_KEY string configuration layout is invalid (size: %d) and cannot be decoded via Hex or Base64 formats", keyLen)
+		}
+	}
+
+	// 4. Enforce strict constraint checking on Base64 payload output data
+	decodedLen := len(decodedBytes)
+	if decodedLen != 16 && decodedLen != 24 && decodedLen != 32 {
+		return nil, fmt.Errorf("decoded SPREZZ_MASTER_KEY must be exactly 16, 24, or 32 binary bytes for AES-GCM (current decoded size: %d)", decodedLen)
 	}
 
 	return &JWTSigner{
 		keyrings:  make(map[string]*tenantKeyring),
 		storage:   storage,
 		clock:     cl,
-		masterKey: keyBytes,
+		masterKey: decodedBytes,
 	}, nil
 }
 
