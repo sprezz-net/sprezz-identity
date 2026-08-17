@@ -5,6 +5,7 @@ COVERAGE_FILE=coverage.out
 
 SQL_QUERIES=$(wildcard internal/adapters/out/postgres/query/*.sql)
 SQL_SCHEMA=$(wildcard internal/adapters/out/postgres/migrations/*.sql)
+SQLC_SOURCES=$(SQL_SCHEMA) $(SQL_QUERIES)
 SQLC_TIMESTAMP=internal/adapters/out/postgres/db/.sqlc.gen.timestamp
 SQLC_CONFIG=sqlc.yaml
 
