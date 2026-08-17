@@ -118,7 +118,7 @@ func (h *HttpAdapter) exchangeUpstreamCode(ctx context.Context, idp *model.Ident
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
 	form.Set("client_id", idp.Config.ClientID)
-	form.Set("redirect_uri", tenant.GetBaseURL()+routeCallback)
+	form.Set("redirect_uri", tenant.GetBaseURI()+routeCallback)
 
 	if handshake.CodeVerifier != "" {
 		form.Set("code_verifier", handshake.CodeVerifier)

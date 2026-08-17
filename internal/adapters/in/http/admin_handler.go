@@ -76,8 +76,8 @@ func (h *HttpAdapter) initiateAdminOIDC(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Dynamic Resolution: Sourced from canonical tenant configuration instead of hardcoded headers
-	tenantBaseURL := tenant.GetBaseURL()
-	redirectURI := tenantBaseURL + routeCallback
+	tenantBaseURI := tenant.GetBaseURI()
+	redirectURI := tenantBaseURI + routeCallback
 
 	providers, err := h.storagePort.GetIdentityProviders(r.Context(), tenant.ID)
 	if err != nil {
@@ -103,7 +103,7 @@ func (h *HttpAdapter) initiateAdminOIDC(w http.ResponseWriter, r *http.Request) 
 	reqCtx := model.OutboundOidcRequest{
 		ClientID:         adminIDP.Config.ClientID,
 		RedirectURI:      redirectURI,
-		TargetURI:        tenantBaseURL + routeAdmin,
+		TargetURI:        tenantBaseURI + routeAdmin,
 		Scopes:           adminIDP.Config.Scopes,
 		IdentityProvider: adminIDP,
 	}

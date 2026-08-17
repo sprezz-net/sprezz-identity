@@ -134,7 +134,7 @@ func (h *HttpAdapter) handleClientCredentialsGrant(w http.ResponseWriter, r *htt
 	issuedAt := time.Now().UTC()
 	accessToken, err := h.cryptoPort.SignAccessToken(r.Context(), model.TokenClaims{
 		TokenID:   uuid.NewString(),
-		Issuer:    tenant.GetBaseURL(),
+		Issuer:    tenant.GetBaseURI(),
 		TenantID:  tenant.ID.String(),
 		Subject:   client.ClientID,
 		ClientID:  client.ClientID,
@@ -421,7 +421,7 @@ func (h *HttpAdapter) validateDPoPClaims(r *http.Request, tenant *model.Tenant, 
 	}
 
 	// 3. Construct the absolute server endpoint using the trusted Tenant base URL context
-	expectedAbsoluteURL := tenant.GetBaseURL() + r.URL.Path
+	expectedAbsoluteURL := tenant.GetBaseURI() + r.URL.Path
 
 	// 4. Normalize by stripping any query strings out of both components
 	normHTU := strings.Split(htu, "?")[0]
