@@ -32,17 +32,17 @@ func (s *OAuthService) BuildOutboundOidcIntent(ctx context.Context, req model.Ou
 	stateToken := base64.RawURLEncoding.EncodeToString(stateBytes)
 
 	cfg := req.IdentityProvider.Config
+	if cfg.AuthorizationEndpoint == "" {
+		return model.OidcLoginIntent{}, model.OutboundHandshakeSession{},
+			errors.New("identity provider configuration contains an invalid authorization endpoint")
+	}
+	authEndpoint := cfg.AuthorizationEndpoint
 
 	var scopesStr string
 	if len(cfg.Scopes) > 0 {
 		scopesStr = strings.Join(cfg.Scopes, "+")
 	} else if len(req.Scopes) > 0 {
 		scopesStr = strings.Join(req.Scopes, "+")
-	}
-
-	authEndpoint := "/oauth/authorize"
-	if cfg.AuthorizationEndpoint != "" {
-		authEndpoint = cfg.AuthorizationEndpoint
 	}
 
 	var codeVerifier, codeChallenge string

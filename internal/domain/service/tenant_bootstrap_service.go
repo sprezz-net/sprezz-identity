@@ -44,7 +44,7 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 }
 
 func (s *TenantBootstrapService) bootstrapExistingTenant(ctx context.Context, tenant *model.Tenant, domain string) (*model.Tenant, error) {
-	baseURL := tenant.GetBaseURL()
+	baseURL := tenant.GetBaseURI()
 	expectedRedirect := baseURL + routeAdmin
 	if tenant.Config.DefaultRedirectURI != expectedRedirect {
 		tenant.Config.DefaultRedirectURI = expectedRedirect

@@ -71,7 +71,7 @@ func (s *OAuthService) ExchangeCodeForTokens(ctx context.Context, tenantID uuid.
 		}
 	}
 
-	issuer := tenant.GetBaseURL()
+	issuer := tenant.GetBaseURI()
 	now := s.clock.Now()
 	accessToken, err := s.crypto.SignAccessToken(ctx, model.TokenClaims{
 		TokenID:   uuid.NewString(),
@@ -163,7 +163,7 @@ func (s *OAuthService) ExchangeRefreshTokenForTokens(ctx context.Context, tenant
 		now := s.clock.Now()
 		accessToken, err := s.crypto.SignAccessToken(ctx, model.TokenClaims{
 			TokenID:   uuid.NewString(),
-			Issuer:    tenant.GetBaseURL(),
+			Issuer:    tenant.GetBaseURI(),
 			TenantID:  tenantID.String(),
 			Subject:   client.ClientID,
 			ClientID:  clientID,
@@ -231,7 +231,7 @@ func (s *OAuthService) ExchangeRefreshTokenForTokens(ctx context.Context, tenant
 
 	accessToken, err := s.crypto.SignAccessToken(ctx, model.TokenClaims{
 		TokenID:   uuid.NewString(),
-		Issuer:    tenant.GetBaseURL(),
+		Issuer:    tenant.GetBaseURI(),
 		TenantID:  tenantID.String(),
 		Subject:   token.Subject,
 		ClientID:  clientID,
@@ -480,7 +480,7 @@ func (s *OAuthService) coupleUserIdentity(ctx context.Context, profileID uuid.UU
 }
 
 func (s *OAuthService) mintTokensForExchangedUser(ctx context.Context, tenant *model.Tenant, client *model.ClientApplication, profileID string, dpopJKT string, now time.Time) (*model.TokenSetResponse, error) {
-	issuer := tenant.GetBaseURL()
+	issuer := tenant.GetBaseURI()
 	accessToken, err := s.crypto.SignAccessToken(ctx, model.TokenClaims{
 		TokenID:   uuid.NewString(),
 		Issuer:    issuer,
@@ -565,7 +565,7 @@ func (s *OAuthService) ProcessLogout(ctx context.Context, tenantID uuid.UUID, su
 		if client.BackChannelLogoutURI != "" {
 			logoutToken, err := s.crypto.SignLogoutToken(ctx, model.LogoutTokenClaims{
 				TokenID:  uuid.NewString(),
-				Issuer:   tenant.GetBaseURL(),
+				Issuer:   tenant.GetBaseURI(),
 				Subject:  subject,
 				Audience: client.ClientID,
 				IssuedAt: now,

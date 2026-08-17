@@ -27,7 +27,7 @@ type Tenant struct {
 	Scheme           string
 }
 
-func (t Tenant) GetBaseURL() string {
+func (t Tenant) GetBaseURI() string {
 	return t.Scheme + "://" + t.Domain
 }
 

@@ -271,7 +271,7 @@ func (h *HttpAdapter) redirectToExternalIDP(w http.ResponseWriter, r *http.Reque
 	authURL := fmt.Sprintf("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s",
 		provider.Config.AuthorizationEndpoint,
 		url.QueryEscape(provider.Config.ClientID),
-		url.QueryEscape(tenant.GetBaseURL()+routeCallback),
+		url.QueryEscape(tenant.GetBaseURI()+routeCallback),
 		url.QueryEscape(strings.Join(provider.Config.Scopes, " ")),
 		state,
 	)
@@ -580,7 +580,7 @@ func (h *HttpAdapter) handleAuthenticatedAuthorize(w http.ResponseWriter, r *htt
 	if state != "" {
 		redirectURL += "&state=" + url.QueryEscape(state)
 	}
-	issuer := tenant.GetBaseURL()
+	issuer := tenant.GetBaseURI()
 	redirectURL += "&iss=" + url.QueryEscape(issuer)
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }

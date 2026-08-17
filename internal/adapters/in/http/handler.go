@@ -253,7 +253,7 @@ func (h *HttpAdapter) getDiscoveryMetadata(tenant *model.Tenant, isOIDC bool) ma
 	}
 	sort.Strings(acrValues)
 
-	issuer := tenant.GetBaseURL()
+	issuer := tenant.GetBaseURI()
 	meta := map[string]any{
 		"issuer":                                issuer,
 		"jwks_uri":                              issuer + routeKeys,
