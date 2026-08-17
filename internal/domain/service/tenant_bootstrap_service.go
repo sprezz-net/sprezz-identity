@@ -189,7 +189,7 @@ func (s *TenantBootstrapService) ensureAdminClient(ctx context.Context, tenantID
 		AllowedIDPs:            []string{usernamePasswordIDPAlias},
 		DefaultIDP:             usernamePasswordIDPAlias,
 		AllowedAudiences:       []string{},
-		ClientType:             model.ClientTypeInternalEphemeral,
+		ClientType:             model.ClientTypePublic,
 	}
 
 	return s.storage.SaveClient(ctx, adminClient)

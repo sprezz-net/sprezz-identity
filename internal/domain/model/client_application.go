@@ -7,9 +7,8 @@ import (
 )
 
 const (
-	ClientTypePublic            = "public"
-	ClientTypeConfidential      = "confidential"
-	ClientTypeInternalEphemeral = "internal_ephemeral"
+	ClientTypePublic       = "public"
+	ClientTypeConfidential = "confidential"
 )
 
 type ClientApplication struct {

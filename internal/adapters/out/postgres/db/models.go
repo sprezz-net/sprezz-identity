@@ -107,6 +107,17 @@ type InteractionSession struct {
 	AcrValues           string             `json:"acr_values"`
 }
 
+type OutboundHandshakeSession struct {
+	ID                 string             `json:"id"`
+	TenantID           int32              `json:"tenant_id"`
+	IdentityProviderID pgtype.UUID        `json:"identity_provider_id"`
+	ClientID           string             `json:"client_id"`
+	CodeVerifier       string             `json:"code_verifier"`
+	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
+	AccessToken        *string            `json:"access_token"`
+	TargetUri          *string            `json:"target_uri"`
+}
+
 type Partition struct {
 	ID        int64  `json:"id"`
 	TenantID  int32  `json:"tenant_id"`

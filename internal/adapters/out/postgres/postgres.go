@@ -1596,6 +1596,73 @@ func (s *PostgresStorage) DecoupleIdentity(ctx context.Context, userProfileID uu
 	return err
 }
 
+func (s *PostgresStorage) SaveOutboundHandshake(ctx context.Context, handshake model.OutboundHandshakeSession) error {
+	var accessToken *string
+	if handshake.AccessToken != "" {
+		accessToken = &handshake.AccessToken
+	}
+
+	// Maps parameter tracking variables straight to the generated sqlcdb CTE query structure
+	err := s.queries.SaveOutboundHandshake(ctx, sqlcdb.SaveOutboundHandshakeParams{
+		TenantUuid:         toPGUUID(handshake.TenantID),           // $1: Passes public tracking UUID to the CTE block
+		ID:                 handshake.ID,                           // $2: High-entropy state string primary key lookup slot
+		IdentityProviderID: toPGUUID(handshake.IdentityProviderID), // $3
+		ClientID:           handshake.ClientID,                     // $4
+		CodeVerifier:       handshake.CodeVerifier,                 // $5
+		ExpiresAt:          toPGTimestamptz(handshake.ExpiresAt),   // $6
+		AccessToken:        accessToken,                            // $7
+		TargetUri:          &handshake.TargetURI,                   // $8
+	})
+	if err != nil {
+		return fmt.Errorf("save outbound handshake: %w", err)
+	}
+	return nil
+}
+
+func (s *PostgresStorage) GetAndConsumeOutboundHandshake(ctx context.Context, tenantID uuid.UUID, stateToken string) (*model.OutboundHandshakeSession, error) {
+	// 1. Fetch data checking both state token and the native CTE validation lock matrix
+	row, err := s.queries.GetOutboundHandshake(ctx, sqlcdb.GetOutboundHandshakeParams{
+		TenantUuid: toPGUUID(tenantID), // $1
+		ID:         stateToken,         // $2
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil // Return an explicitly safe nil if the handshake tracking state is expired or unknown
+		}
+		return nil, fmt.Errorf("fetch outbound handshake: %w", err)
+	}
+
+	// 2. Destructive single-use security wipe: instantly erase row records from storage to block replay vectors
+	err = s.queries.DeleteOutboundHandshake(ctx, sqlcdb.DeleteOutboundHandshakeParams{
+		TenantUuid: toPGUUID(tenantID), // $1
+		ID:         stateToken,         // $2
+	})
+	if err != nil {
+		return nil, fmt.Errorf("consume outbound handshake tracking protection: %w", err)
+	}
+
+	providerUUID, err := pgUUIDToUUID(row.IdentityProviderID)
+	if err != nil {
+		return nil, fmt.Errorf("parse outbound handshake provider UUID: %w", err)
+	}
+
+	expiresAt, err := pgTimestamptzToTime(row.ExpiresAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse outbound handshake expiration window: %w", err)
+	}
+
+	return &model.OutboundHandshakeSession{
+		ID:                 row.ID,
+		TenantID:           tenantID, // Remap the matching public token parameter back to your domain model
+		IdentityProviderID: providerUUID,
+		ClientID:           row.ClientID,
+		CodeVerifier:       row.CodeVerifier,
+		ExpiresAt:          expiresAt,
+		AccessToken:        valueOrEmpty(row.AccessToken),
+		TargetURI:          valueOrEmpty(row.TargetUri),
+	}, nil
+}
+
 func (s *PostgresStorage) SaveRefreshToken(ctx context.Context, token model.RefreshToken) error {
 	_, err := s.queries.SaveRefreshToken(ctx, sqlcdb.SaveRefreshTokenParams{
 		TenantUuid:    toPGUUID(token.TenantID),

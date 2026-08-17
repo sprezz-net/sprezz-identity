@@ -20,6 +20,13 @@ type AuthMock struct {
 	t          minimock.Tester
 	finishOnce sync.Once
 
+	funcBuildOutboundOidcIntent          func(ctx context.Context, req model.OutboundOidcRequest) (o1 model.OidcLoginIntent, o2 model.OutboundHandshakeSession, err error)
+	funcBuildOutboundOidcIntentOrigin    string
+	inspectFuncBuildOutboundOidcIntent   func(ctx context.Context, req model.OutboundOidcRequest)
+	afterBuildOutboundOidcIntentCounter  uint64
+	beforeBuildOutboundOidcIntentCounter uint64
+	BuildOutboundOidcIntentMock          mAuthMockBuildOutboundOidcIntent
+
 	funcExchangeCodeForTokens          func(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string, dpopJKT string) (tp1 *model.TokenSetResponse, err error)
 	funcExchangeCodeForTokensOrigin    string
 	inspectFuncExchangeCodeForTokens   func(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string, dpopJKT string)
@@ -40,6 +47,13 @@ type AuthMock struct {
 	afterExchangeRefreshTokenForTokensCounter  uint64
 	beforeExchangeRefreshTokenForTokensCounter uint64
 	ExchangeRefreshTokenForTokensMock          mAuthMockExchangeRefreshTokenForTokens
+
+	funcGeneratePKCEPair          func() (p1 model.PKCEPair, err error)
+	funcGeneratePKCEPairOrigin    string
+	inspectFuncGeneratePKCEPair   func()
+	afterGeneratePKCEPairCounter  uint64
+	beforeGeneratePKCEPairCounter uint64
+	GeneratePKCEPairMock          mAuthMockGeneratePKCEPair
 
 	funcGetAndConsumePAR          func(ctx context.Context, tenantID uuid.UUID, requestURI string) (pp1 *model.PushedAuthorizationRequest, err error)
 	funcGetAndConsumePAROrigin    string
@@ -82,6 +96,13 @@ type AuthMock struct {
 	afterSavePARCounter  uint64
 	beforeSavePARCounter uint64
 	SavePARMock          mAuthMockSavePAR
+
+	funcValidateOutboundCallback          func(ctx context.Context, tenantID uuid.UUID, incomingState string) (op1 *model.OutboundHandshakeSession, err error)
+	funcValidateOutboundCallbackOrigin    string
+	inspectFuncValidateOutboundCallback   func(ctx context.Context, tenantID uuid.UUID, incomingState string)
+	afterValidateOutboundCallbackCounter  uint64
+	beforeValidateOutboundCallbackCounter uint64
+	ValidateOutboundCallbackMock          mAuthMockValidateOutboundCallback
 }
 
 // NewAuthMock returns a mock for mm_port.Auth
@@ -92,6 +113,9 @@ func NewAuthMock(t minimock.Tester) *AuthMock {
 		controller.RegisterMocker(m)
 	}
 
+	m.BuildOutboundOidcIntentMock = mAuthMockBuildOutboundOidcIntent{mock: m}
+	m.BuildOutboundOidcIntentMock.callArgs = []*AuthMockBuildOutboundOidcIntentParams{}
+
 	m.ExchangeCodeForTokensMock = mAuthMockExchangeCodeForTokens{mock: m}
 	m.ExchangeCodeForTokensMock.callArgs = []*AuthMockExchangeCodeForTokensParams{}
 
@@ -100,6 +124,8 @@ func NewAuthMock(t minimock.Tester) *AuthMock {
 
 	m.ExchangeRefreshTokenForTokensMock = mAuthMockExchangeRefreshTokenForTokens{mock: m}
 	m.ExchangeRefreshTokenForTokensMock.callArgs = []*AuthMockExchangeRefreshTokenForTokensParams{}
+
+	m.GeneratePKCEPairMock = mAuthMockGeneratePKCEPair{mock: m}
 
 	m.GetAndConsumePARMock = mAuthMockGetAndConsumePAR{mock: m}
 	m.GetAndConsumePARMock.callArgs = []*AuthMockGetAndConsumePARParams{}
@@ -119,9 +145,356 @@ func NewAuthMock(t minimock.Tester) *AuthMock {
 	m.SavePARMock = mAuthMockSavePAR{mock: m}
 	m.SavePARMock.callArgs = []*AuthMockSavePARParams{}
 
+	m.ValidateOutboundCallbackMock = mAuthMockValidateOutboundCallback{mock: m}
+	m.ValidateOutboundCallbackMock.callArgs = []*AuthMockValidateOutboundCallbackParams{}
+
 	t.Cleanup(m.MinimockFinish)
 
 	return m
+}
+
+type mAuthMockBuildOutboundOidcIntent struct {
+	optional           bool
+	mock               *AuthMock
+	defaultExpectation *AuthMockBuildOutboundOidcIntentExpectation
+	expectations       []*AuthMockBuildOutboundOidcIntentExpectation
+
+	callArgs []*AuthMockBuildOutboundOidcIntentParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AuthMockBuildOutboundOidcIntentExpectation specifies expectation struct of the Auth.BuildOutboundOidcIntent
+type AuthMockBuildOutboundOidcIntentExpectation struct {
+	mock               *AuthMock
+	params             *AuthMockBuildOutboundOidcIntentParams
+	paramPtrs          *AuthMockBuildOutboundOidcIntentParamPtrs
+	expectationOrigins AuthMockBuildOutboundOidcIntentExpectationOrigins
+	results            *AuthMockBuildOutboundOidcIntentResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AuthMockBuildOutboundOidcIntentParams contains parameters of the Auth.BuildOutboundOidcIntent
+type AuthMockBuildOutboundOidcIntentParams struct {
+	ctx context.Context
+	req model.OutboundOidcRequest
+}
+
+// AuthMockBuildOutboundOidcIntentParamPtrs contains pointers to parameters of the Auth.BuildOutboundOidcIntent
+type AuthMockBuildOutboundOidcIntentParamPtrs struct {
+	ctx *context.Context
+	req *model.OutboundOidcRequest
+}
+
+// AuthMockBuildOutboundOidcIntentResults contains results of the Auth.BuildOutboundOidcIntent
+type AuthMockBuildOutboundOidcIntentResults struct {
+	o1  model.OidcLoginIntent
+	o2  model.OutboundHandshakeSession
+	err error
+}
+
+// AuthMockBuildOutboundOidcIntentOrigins contains origins of expectations of the Auth.BuildOutboundOidcIntent
+type AuthMockBuildOutboundOidcIntentExpectationOrigins struct {
+	origin    string
+	originCtx string
+	originReq string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmBuildOutboundOidcIntent *mAuthMockBuildOutboundOidcIntent) Optional() *mAuthMockBuildOutboundOidcIntent {
+	mmBuildOutboundOidcIntent.optional = true
+	return mmBuildOutboundOidcIntent
+}
+
+// Expect sets up expected params for Auth.BuildOutboundOidcIntent
+func (mmBuildOutboundOidcIntent *mAuthMockBuildOutboundOidcIntent) Expect(ctx context.Context, req model.OutboundOidcRequest) *mAuthMockBuildOutboundOidcIntent {
+	if mmBuildOutboundOidcIntent.mock.funcBuildOutboundOidcIntent != nil {
+		mmBuildOutboundOidcIntent.mock.t.Fatalf("AuthMock.BuildOutboundOidcIntent mock is already set by Set")
+	}
+
+	if mmBuildOutboundOidcIntent.defaultExpectation == nil {
+		mmBuildOutboundOidcIntent.defaultExpectation = &AuthMockBuildOutboundOidcIntentExpectation{}
+	}
+
+	if mmBuildOutboundOidcIntent.defaultExpectation.paramPtrs != nil {
+		mmBuildOutboundOidcIntent.mock.t.Fatalf("AuthMock.BuildOutboundOidcIntent mock is already set by ExpectParams functions")
+	}
+
+	mmBuildOutboundOidcIntent.defaultExpectation.params = &AuthMockBuildOutboundOidcIntentParams{ctx, req}
+	mmBuildOutboundOidcIntent.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmBuildOutboundOidcIntent.expectations {
+		if minimock.Equal(e.params, mmBuildOutboundOidcIntent.defaultExpectation.params) {
+			mmBuildOutboundOidcIntent.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmBuildOutboundOidcIntent.defaultExpectation.params)
+		}
+	}
+
+	return mmBuildOutboundOidcIntent
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Auth.BuildOutboundOidcIntent
+func (mmBuildOutboundOidcIntent *mAuthMockBuildOutboundOidcIntent) ExpectCtxParam1(ctx context.Context) *mAuthMockBuildOutboundOidcIntent {
+	if mmBuildOutboundOidcIntent.mock.funcBuildOutboundOidcIntent != nil {
+		mmBuildOutboundOidcIntent.mock.t.Fatalf("AuthMock.BuildOutboundOidcIntent mock is already set by Set")
+	}
+
+	if mmBuildOutboundOidcIntent.defaultExpectation == nil {
+		mmBuildOutboundOidcIntent.defaultExpectation = &AuthMockBuildOutboundOidcIntentExpectation{}
+	}
+
+	if mmBuildOutboundOidcIntent.defaultExpectation.params != nil {
+		mmBuildOutboundOidcIntent.mock.t.Fatalf("AuthMock.BuildOutboundOidcIntent mock is already set by Expect")
+	}
+
+	if mmBuildOutboundOidcIntent.defaultExpectation.paramPtrs == nil {
+		mmBuildOutboundOidcIntent.defaultExpectation.paramPtrs = &AuthMockBuildOutboundOidcIntentParamPtrs{}
+	}
+	mmBuildOutboundOidcIntent.defaultExpectation.paramPtrs.ctx = &ctx
+	mmBuildOutboundOidcIntent.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmBuildOutboundOidcIntent
+}
+
+// ExpectReqParam2 sets up expected param req for Auth.BuildOutboundOidcIntent
+func (mmBuildOutboundOidcIntent *mAuthMockBuildOutboundOidcIntent) ExpectReqParam2(req model.OutboundOidcRequest) *mAuthMockBuildOutboundOidcIntent {
+	if mmBuildOutboundOidcIntent.mock.funcBuildOutboundOidcIntent != nil {
+		mmBuildOutboundOidcIntent.mock.t.Fatalf("AuthMock.BuildOutboundOidcIntent mock is already set by Set")
+	}
+
+	if mmBuildOutboundOidcIntent.defaultExpectation == nil {
+		mmBuildOutboundOidcIntent.defaultExpectation = &AuthMockBuildOutboundOidcIntentExpectation{}
+	}
+
+	if mmBuildOutboundOidcIntent.defaultExpectation.params != nil {
+		mmBuildOutboundOidcIntent.mock.t.Fatalf("AuthMock.BuildOutboundOidcIntent mock is already set by Expect")
+	}
+
+	if mmBuildOutboundOidcIntent.defaultExpectation.paramPtrs == nil {
+		mmBuildOutboundOidcIntent.defaultExpectation.paramPtrs = &AuthMockBuildOutboundOidcIntentParamPtrs{}
+	}
+	mmBuildOutboundOidcIntent.defaultExpectation.paramPtrs.req = &req
+	mmBuildOutboundOidcIntent.defaultExpectation.expectationOrigins.originReq = minimock.CallerInfo(1)
+
+	return mmBuildOutboundOidcIntent
+}
+
+// Inspect accepts an inspector function that has same arguments as the Auth.BuildOutboundOidcIntent
+func (mmBuildOutboundOidcIntent *mAuthMockBuildOutboundOidcIntent) Inspect(f func(ctx context.Context, req model.OutboundOidcRequest)) *mAuthMockBuildOutboundOidcIntent {
+	if mmBuildOutboundOidcIntent.mock.inspectFuncBuildOutboundOidcIntent != nil {
+		mmBuildOutboundOidcIntent.mock.t.Fatalf("Inspect function is already set for AuthMock.BuildOutboundOidcIntent")
+	}
+
+	mmBuildOutboundOidcIntent.mock.inspectFuncBuildOutboundOidcIntent = f
+
+	return mmBuildOutboundOidcIntent
+}
+
+// Return sets up results that will be returned by Auth.BuildOutboundOidcIntent
+func (mmBuildOutboundOidcIntent *mAuthMockBuildOutboundOidcIntent) Return(o1 model.OidcLoginIntent, o2 model.OutboundHandshakeSession, err error) *AuthMock {
+	if mmBuildOutboundOidcIntent.mock.funcBuildOutboundOidcIntent != nil {
+		mmBuildOutboundOidcIntent.mock.t.Fatalf("AuthMock.BuildOutboundOidcIntent mock is already set by Set")
+	}
+
+	if mmBuildOutboundOidcIntent.defaultExpectation == nil {
+		mmBuildOutboundOidcIntent.defaultExpectation = &AuthMockBuildOutboundOidcIntentExpectation{mock: mmBuildOutboundOidcIntent.mock}
+	}
+	mmBuildOutboundOidcIntent.defaultExpectation.results = &AuthMockBuildOutboundOidcIntentResults{o1, o2, err}
+	mmBuildOutboundOidcIntent.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmBuildOutboundOidcIntent.mock
+}
+
+// Set uses given function f to mock the Auth.BuildOutboundOidcIntent method
+func (mmBuildOutboundOidcIntent *mAuthMockBuildOutboundOidcIntent) Set(f func(ctx context.Context, req model.OutboundOidcRequest) (o1 model.OidcLoginIntent, o2 model.OutboundHandshakeSession, err error)) *AuthMock {
+	if mmBuildOutboundOidcIntent.defaultExpectation != nil {
+		mmBuildOutboundOidcIntent.mock.t.Fatalf("Default expectation is already set for the Auth.BuildOutboundOidcIntent method")
+	}
+
+	if len(mmBuildOutboundOidcIntent.expectations) > 0 {
+		mmBuildOutboundOidcIntent.mock.t.Fatalf("Some expectations are already set for the Auth.BuildOutboundOidcIntent method")
+	}
+
+	mmBuildOutboundOidcIntent.mock.funcBuildOutboundOidcIntent = f
+	mmBuildOutboundOidcIntent.mock.funcBuildOutboundOidcIntentOrigin = minimock.CallerInfo(1)
+	return mmBuildOutboundOidcIntent.mock
+}
+
+// When sets expectation for the Auth.BuildOutboundOidcIntent which will trigger the result defined by the following
+// Then helper
+func (mmBuildOutboundOidcIntent *mAuthMockBuildOutboundOidcIntent) When(ctx context.Context, req model.OutboundOidcRequest) *AuthMockBuildOutboundOidcIntentExpectation {
+	if mmBuildOutboundOidcIntent.mock.funcBuildOutboundOidcIntent != nil {
+		mmBuildOutboundOidcIntent.mock.t.Fatalf("AuthMock.BuildOutboundOidcIntent mock is already set by Set")
+	}
+
+	expectation := &AuthMockBuildOutboundOidcIntentExpectation{
+		mock:               mmBuildOutboundOidcIntent.mock,
+		params:             &AuthMockBuildOutboundOidcIntentParams{ctx, req},
+		expectationOrigins: AuthMockBuildOutboundOidcIntentExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmBuildOutboundOidcIntent.expectations = append(mmBuildOutboundOidcIntent.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Auth.BuildOutboundOidcIntent return parameters for the expectation previously defined by the When method
+func (e *AuthMockBuildOutboundOidcIntentExpectation) Then(o1 model.OidcLoginIntent, o2 model.OutboundHandshakeSession, err error) *AuthMock {
+	e.results = &AuthMockBuildOutboundOidcIntentResults{o1, o2, err}
+	return e.mock
+}
+
+// Times sets number of times Auth.BuildOutboundOidcIntent should be invoked
+func (mmBuildOutboundOidcIntent *mAuthMockBuildOutboundOidcIntent) Times(n uint64) *mAuthMockBuildOutboundOidcIntent {
+	if n == 0 {
+		mmBuildOutboundOidcIntent.mock.t.Fatalf("Times of AuthMock.BuildOutboundOidcIntent mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmBuildOutboundOidcIntent.expectedInvocations, n)
+	mmBuildOutboundOidcIntent.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmBuildOutboundOidcIntent
+}
+
+func (mmBuildOutboundOidcIntent *mAuthMockBuildOutboundOidcIntent) invocationsDone() bool {
+	if len(mmBuildOutboundOidcIntent.expectations) == 0 && mmBuildOutboundOidcIntent.defaultExpectation == nil && mmBuildOutboundOidcIntent.mock.funcBuildOutboundOidcIntent == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmBuildOutboundOidcIntent.mock.afterBuildOutboundOidcIntentCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmBuildOutboundOidcIntent.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// BuildOutboundOidcIntent implements mm_port.Auth
+func (mmBuildOutboundOidcIntent *AuthMock) BuildOutboundOidcIntent(ctx context.Context, req model.OutboundOidcRequest) (o1 model.OidcLoginIntent, o2 model.OutboundHandshakeSession, err error) {
+	mm_atomic.AddUint64(&mmBuildOutboundOidcIntent.beforeBuildOutboundOidcIntentCounter, 1)
+	defer mm_atomic.AddUint64(&mmBuildOutboundOidcIntent.afterBuildOutboundOidcIntentCounter, 1)
+
+	mmBuildOutboundOidcIntent.t.Helper()
+
+	if mmBuildOutboundOidcIntent.inspectFuncBuildOutboundOidcIntent != nil {
+		mmBuildOutboundOidcIntent.inspectFuncBuildOutboundOidcIntent(ctx, req)
+	}
+
+	mm_params := AuthMockBuildOutboundOidcIntentParams{ctx, req}
+
+	// Record call args
+	mmBuildOutboundOidcIntent.BuildOutboundOidcIntentMock.mutex.Lock()
+	mmBuildOutboundOidcIntent.BuildOutboundOidcIntentMock.callArgs = append(mmBuildOutboundOidcIntent.BuildOutboundOidcIntentMock.callArgs, &mm_params)
+	mmBuildOutboundOidcIntent.BuildOutboundOidcIntentMock.mutex.Unlock()
+
+	for _, e := range mmBuildOutboundOidcIntent.BuildOutboundOidcIntentMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.o1, e.results.o2, e.results.err
+		}
+	}
+
+	if mmBuildOutboundOidcIntent.BuildOutboundOidcIntentMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmBuildOutboundOidcIntent.BuildOutboundOidcIntentMock.defaultExpectation.Counter, 1)
+		mm_want := mmBuildOutboundOidcIntent.BuildOutboundOidcIntentMock.defaultExpectation.params
+		mm_want_ptrs := mmBuildOutboundOidcIntent.BuildOutboundOidcIntentMock.defaultExpectation.paramPtrs
+
+		mm_got := AuthMockBuildOutboundOidcIntentParams{ctx, req}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmBuildOutboundOidcIntent.t.Errorf("AuthMock.BuildOutboundOidcIntent got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmBuildOutboundOidcIntent.BuildOutboundOidcIntentMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.req != nil && !minimock.Equal(*mm_want_ptrs.req, mm_got.req) {
+				mmBuildOutboundOidcIntent.t.Errorf("AuthMock.BuildOutboundOidcIntent got unexpected parameter req, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmBuildOutboundOidcIntent.BuildOutboundOidcIntentMock.defaultExpectation.expectationOrigins.originReq, *mm_want_ptrs.req, mm_got.req, minimock.Diff(*mm_want_ptrs.req, mm_got.req))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmBuildOutboundOidcIntent.t.Errorf("AuthMock.BuildOutboundOidcIntent got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmBuildOutboundOidcIntent.BuildOutboundOidcIntentMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmBuildOutboundOidcIntent.BuildOutboundOidcIntentMock.defaultExpectation.results
+		if mm_results == nil {
+			mmBuildOutboundOidcIntent.t.Fatal("No results are set for the AuthMock.BuildOutboundOidcIntent")
+		}
+		return (*mm_results).o1, (*mm_results).o2, (*mm_results).err
+	}
+	if mmBuildOutboundOidcIntent.funcBuildOutboundOidcIntent != nil {
+		return mmBuildOutboundOidcIntent.funcBuildOutboundOidcIntent(ctx, req)
+	}
+	mmBuildOutboundOidcIntent.t.Fatalf("Unexpected call to AuthMock.BuildOutboundOidcIntent. %v %v", ctx, req)
+	return
+}
+
+// BuildOutboundOidcIntentAfterCounter returns a count of finished AuthMock.BuildOutboundOidcIntent invocations
+func (mmBuildOutboundOidcIntent *AuthMock) BuildOutboundOidcIntentAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmBuildOutboundOidcIntent.afterBuildOutboundOidcIntentCounter)
+}
+
+// BuildOutboundOidcIntentBeforeCounter returns a count of AuthMock.BuildOutboundOidcIntent invocations
+func (mmBuildOutboundOidcIntent *AuthMock) BuildOutboundOidcIntentBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmBuildOutboundOidcIntent.beforeBuildOutboundOidcIntentCounter)
+}
+
+// Calls returns a list of arguments used in each call to AuthMock.BuildOutboundOidcIntent.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmBuildOutboundOidcIntent *mAuthMockBuildOutboundOidcIntent) Calls() []*AuthMockBuildOutboundOidcIntentParams {
+	mmBuildOutboundOidcIntent.mutex.RLock()
+
+	argCopy := make([]*AuthMockBuildOutboundOidcIntentParams, len(mmBuildOutboundOidcIntent.callArgs))
+	copy(argCopy, mmBuildOutboundOidcIntent.callArgs)
+
+	mmBuildOutboundOidcIntent.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockBuildOutboundOidcIntentDone returns true if the count of the BuildOutboundOidcIntent invocations corresponds
+// the number of defined expectations
+func (m *AuthMock) MinimockBuildOutboundOidcIntentDone() bool {
+	if m.BuildOutboundOidcIntentMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.BuildOutboundOidcIntentMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.BuildOutboundOidcIntentMock.invocationsDone()
+}
+
+// MinimockBuildOutboundOidcIntentInspect logs each unmet expectation
+func (m *AuthMock) MinimockBuildOutboundOidcIntentInspect() {
+	for _, e := range m.BuildOutboundOidcIntentMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AuthMock.BuildOutboundOidcIntent at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterBuildOutboundOidcIntentCounter := mm_atomic.LoadUint64(&m.afterBuildOutboundOidcIntentCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.BuildOutboundOidcIntentMock.defaultExpectation != nil && afterBuildOutboundOidcIntentCounter < 1 {
+		if m.BuildOutboundOidcIntentMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AuthMock.BuildOutboundOidcIntent at\n%s", m.BuildOutboundOidcIntentMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AuthMock.BuildOutboundOidcIntent at\n%s with params: %#v", m.BuildOutboundOidcIntentMock.defaultExpectation.expectationOrigins.origin, *m.BuildOutboundOidcIntentMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcBuildOutboundOidcIntent != nil && afterBuildOutboundOidcIntentCounter < 1 {
+		m.t.Errorf("Expected call to AuthMock.BuildOutboundOidcIntent at\n%s", m.funcBuildOutboundOidcIntentOrigin)
+	}
+
+	if !m.BuildOutboundOidcIntentMock.invocationsDone() && afterBuildOutboundOidcIntentCounter > 0 {
+		m.t.Errorf("Expected %d calls to AuthMock.BuildOutboundOidcIntent at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.BuildOutboundOidcIntentMock.expectedInvocations), m.BuildOutboundOidcIntentMock.expectedInvocationsOrigin, afterBuildOutboundOidcIntentCounter)
+	}
 }
 
 type mAuthMockExchangeCodeForTokens struct {
@@ -1491,6 +1864,193 @@ func (m *AuthMock) MinimockExchangeRefreshTokenForTokensInspect() {
 	if !m.ExchangeRefreshTokenForTokensMock.invocationsDone() && afterExchangeRefreshTokenForTokensCounter > 0 {
 		m.t.Errorf("Expected %d calls to AuthMock.ExchangeRefreshTokenForTokens at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ExchangeRefreshTokenForTokensMock.expectedInvocations), m.ExchangeRefreshTokenForTokensMock.expectedInvocationsOrigin, afterExchangeRefreshTokenForTokensCounter)
+	}
+}
+
+type mAuthMockGeneratePKCEPair struct {
+	optional           bool
+	mock               *AuthMock
+	defaultExpectation *AuthMockGeneratePKCEPairExpectation
+	expectations       []*AuthMockGeneratePKCEPairExpectation
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AuthMockGeneratePKCEPairExpectation specifies expectation struct of the Auth.GeneratePKCEPair
+type AuthMockGeneratePKCEPairExpectation struct {
+	mock *AuthMock
+
+	results      *AuthMockGeneratePKCEPairResults
+	returnOrigin string
+	Counter      uint64
+}
+
+// AuthMockGeneratePKCEPairResults contains results of the Auth.GeneratePKCEPair
+type AuthMockGeneratePKCEPairResults struct {
+	p1  model.PKCEPair
+	err error
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGeneratePKCEPair *mAuthMockGeneratePKCEPair) Optional() *mAuthMockGeneratePKCEPair {
+	mmGeneratePKCEPair.optional = true
+	return mmGeneratePKCEPair
+}
+
+// Expect sets up expected params for Auth.GeneratePKCEPair
+func (mmGeneratePKCEPair *mAuthMockGeneratePKCEPair) Expect() *mAuthMockGeneratePKCEPair {
+	if mmGeneratePKCEPair.mock.funcGeneratePKCEPair != nil {
+		mmGeneratePKCEPair.mock.t.Fatalf("AuthMock.GeneratePKCEPair mock is already set by Set")
+	}
+
+	if mmGeneratePKCEPair.defaultExpectation == nil {
+		mmGeneratePKCEPair.defaultExpectation = &AuthMockGeneratePKCEPairExpectation{}
+	}
+
+	return mmGeneratePKCEPair
+}
+
+// Inspect accepts an inspector function that has same arguments as the Auth.GeneratePKCEPair
+func (mmGeneratePKCEPair *mAuthMockGeneratePKCEPair) Inspect(f func()) *mAuthMockGeneratePKCEPair {
+	if mmGeneratePKCEPair.mock.inspectFuncGeneratePKCEPair != nil {
+		mmGeneratePKCEPair.mock.t.Fatalf("Inspect function is already set for AuthMock.GeneratePKCEPair")
+	}
+
+	mmGeneratePKCEPair.mock.inspectFuncGeneratePKCEPair = f
+
+	return mmGeneratePKCEPair
+}
+
+// Return sets up results that will be returned by Auth.GeneratePKCEPair
+func (mmGeneratePKCEPair *mAuthMockGeneratePKCEPair) Return(p1 model.PKCEPair, err error) *AuthMock {
+	if mmGeneratePKCEPair.mock.funcGeneratePKCEPair != nil {
+		mmGeneratePKCEPair.mock.t.Fatalf("AuthMock.GeneratePKCEPair mock is already set by Set")
+	}
+
+	if mmGeneratePKCEPair.defaultExpectation == nil {
+		mmGeneratePKCEPair.defaultExpectation = &AuthMockGeneratePKCEPairExpectation{mock: mmGeneratePKCEPair.mock}
+	}
+	mmGeneratePKCEPair.defaultExpectation.results = &AuthMockGeneratePKCEPairResults{p1, err}
+	mmGeneratePKCEPair.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGeneratePKCEPair.mock
+}
+
+// Set uses given function f to mock the Auth.GeneratePKCEPair method
+func (mmGeneratePKCEPair *mAuthMockGeneratePKCEPair) Set(f func() (p1 model.PKCEPair, err error)) *AuthMock {
+	if mmGeneratePKCEPair.defaultExpectation != nil {
+		mmGeneratePKCEPair.mock.t.Fatalf("Default expectation is already set for the Auth.GeneratePKCEPair method")
+	}
+
+	if len(mmGeneratePKCEPair.expectations) > 0 {
+		mmGeneratePKCEPair.mock.t.Fatalf("Some expectations are already set for the Auth.GeneratePKCEPair method")
+	}
+
+	mmGeneratePKCEPair.mock.funcGeneratePKCEPair = f
+	mmGeneratePKCEPair.mock.funcGeneratePKCEPairOrigin = minimock.CallerInfo(1)
+	return mmGeneratePKCEPair.mock
+}
+
+// Times sets number of times Auth.GeneratePKCEPair should be invoked
+func (mmGeneratePKCEPair *mAuthMockGeneratePKCEPair) Times(n uint64) *mAuthMockGeneratePKCEPair {
+	if n == 0 {
+		mmGeneratePKCEPair.mock.t.Fatalf("Times of AuthMock.GeneratePKCEPair mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGeneratePKCEPair.expectedInvocations, n)
+	mmGeneratePKCEPair.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGeneratePKCEPair
+}
+
+func (mmGeneratePKCEPair *mAuthMockGeneratePKCEPair) invocationsDone() bool {
+	if len(mmGeneratePKCEPair.expectations) == 0 && mmGeneratePKCEPair.defaultExpectation == nil && mmGeneratePKCEPair.mock.funcGeneratePKCEPair == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGeneratePKCEPair.mock.afterGeneratePKCEPairCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGeneratePKCEPair.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GeneratePKCEPair implements mm_port.Auth
+func (mmGeneratePKCEPair *AuthMock) GeneratePKCEPair() (p1 model.PKCEPair, err error) {
+	mm_atomic.AddUint64(&mmGeneratePKCEPair.beforeGeneratePKCEPairCounter, 1)
+	defer mm_atomic.AddUint64(&mmGeneratePKCEPair.afterGeneratePKCEPairCounter, 1)
+
+	mmGeneratePKCEPair.t.Helper()
+
+	if mmGeneratePKCEPair.inspectFuncGeneratePKCEPair != nil {
+		mmGeneratePKCEPair.inspectFuncGeneratePKCEPair()
+	}
+
+	if mmGeneratePKCEPair.GeneratePKCEPairMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGeneratePKCEPair.GeneratePKCEPairMock.defaultExpectation.Counter, 1)
+
+		mm_results := mmGeneratePKCEPair.GeneratePKCEPairMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGeneratePKCEPair.t.Fatal("No results are set for the AuthMock.GeneratePKCEPair")
+		}
+		return (*mm_results).p1, (*mm_results).err
+	}
+	if mmGeneratePKCEPair.funcGeneratePKCEPair != nil {
+		return mmGeneratePKCEPair.funcGeneratePKCEPair()
+	}
+	mmGeneratePKCEPair.t.Fatalf("Unexpected call to AuthMock.GeneratePKCEPair.")
+	return
+}
+
+// GeneratePKCEPairAfterCounter returns a count of finished AuthMock.GeneratePKCEPair invocations
+func (mmGeneratePKCEPair *AuthMock) GeneratePKCEPairAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGeneratePKCEPair.afterGeneratePKCEPairCounter)
+}
+
+// GeneratePKCEPairBeforeCounter returns a count of AuthMock.GeneratePKCEPair invocations
+func (mmGeneratePKCEPair *AuthMock) GeneratePKCEPairBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGeneratePKCEPair.beforeGeneratePKCEPairCounter)
+}
+
+// MinimockGeneratePKCEPairDone returns true if the count of the GeneratePKCEPair invocations corresponds
+// the number of defined expectations
+func (m *AuthMock) MinimockGeneratePKCEPairDone() bool {
+	if m.GeneratePKCEPairMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GeneratePKCEPairMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GeneratePKCEPairMock.invocationsDone()
+}
+
+// MinimockGeneratePKCEPairInspect logs each unmet expectation
+func (m *AuthMock) MinimockGeneratePKCEPairInspect() {
+	for _, e := range m.GeneratePKCEPairMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Error("Expected call to AuthMock.GeneratePKCEPair")
+		}
+	}
+
+	afterGeneratePKCEPairCounter := mm_atomic.LoadUint64(&m.afterGeneratePKCEPairCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GeneratePKCEPairMock.defaultExpectation != nil && afterGeneratePKCEPairCounter < 1 {
+		m.t.Errorf("Expected call to AuthMock.GeneratePKCEPair at\n%s", m.GeneratePKCEPairMock.defaultExpectation.returnOrigin)
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGeneratePKCEPair != nil && afterGeneratePKCEPairCounter < 1 {
+		m.t.Errorf("Expected call to AuthMock.GeneratePKCEPair at\n%s", m.funcGeneratePKCEPairOrigin)
+	}
+
+	if !m.GeneratePKCEPairMock.invocationsDone() && afterGeneratePKCEPairCounter > 0 {
+		m.t.Errorf("Expected %d calls to AuthMock.GeneratePKCEPair at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GeneratePKCEPairMock.expectedInvocations), m.GeneratePKCEPairMock.expectedInvocationsOrigin, afterGeneratePKCEPairCounter)
 	}
 }
 
@@ -3766,15 +4326,393 @@ func (m *AuthMock) MinimockSavePARInspect() {
 	}
 }
 
+type mAuthMockValidateOutboundCallback struct {
+	optional           bool
+	mock               *AuthMock
+	defaultExpectation *AuthMockValidateOutboundCallbackExpectation
+	expectations       []*AuthMockValidateOutboundCallbackExpectation
+
+	callArgs []*AuthMockValidateOutboundCallbackParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AuthMockValidateOutboundCallbackExpectation specifies expectation struct of the Auth.ValidateOutboundCallback
+type AuthMockValidateOutboundCallbackExpectation struct {
+	mock               *AuthMock
+	params             *AuthMockValidateOutboundCallbackParams
+	paramPtrs          *AuthMockValidateOutboundCallbackParamPtrs
+	expectationOrigins AuthMockValidateOutboundCallbackExpectationOrigins
+	results            *AuthMockValidateOutboundCallbackResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AuthMockValidateOutboundCallbackParams contains parameters of the Auth.ValidateOutboundCallback
+type AuthMockValidateOutboundCallbackParams struct {
+	ctx           context.Context
+	tenantID      uuid.UUID
+	incomingState string
+}
+
+// AuthMockValidateOutboundCallbackParamPtrs contains pointers to parameters of the Auth.ValidateOutboundCallback
+type AuthMockValidateOutboundCallbackParamPtrs struct {
+	ctx           *context.Context
+	tenantID      *uuid.UUID
+	incomingState *string
+}
+
+// AuthMockValidateOutboundCallbackResults contains results of the Auth.ValidateOutboundCallback
+type AuthMockValidateOutboundCallbackResults struct {
+	op1 *model.OutboundHandshakeSession
+	err error
+}
+
+// AuthMockValidateOutboundCallbackOrigins contains origins of expectations of the Auth.ValidateOutboundCallback
+type AuthMockValidateOutboundCallbackExpectationOrigins struct {
+	origin              string
+	originCtx           string
+	originTenantID      string
+	originIncomingState string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmValidateOutboundCallback *mAuthMockValidateOutboundCallback) Optional() *mAuthMockValidateOutboundCallback {
+	mmValidateOutboundCallback.optional = true
+	return mmValidateOutboundCallback
+}
+
+// Expect sets up expected params for Auth.ValidateOutboundCallback
+func (mmValidateOutboundCallback *mAuthMockValidateOutboundCallback) Expect(ctx context.Context, tenantID uuid.UUID, incomingState string) *mAuthMockValidateOutboundCallback {
+	if mmValidateOutboundCallback.mock.funcValidateOutboundCallback != nil {
+		mmValidateOutboundCallback.mock.t.Fatalf("AuthMock.ValidateOutboundCallback mock is already set by Set")
+	}
+
+	if mmValidateOutboundCallback.defaultExpectation == nil {
+		mmValidateOutboundCallback.defaultExpectation = &AuthMockValidateOutboundCallbackExpectation{}
+	}
+
+	if mmValidateOutboundCallback.defaultExpectation.paramPtrs != nil {
+		mmValidateOutboundCallback.mock.t.Fatalf("AuthMock.ValidateOutboundCallback mock is already set by ExpectParams functions")
+	}
+
+	mmValidateOutboundCallback.defaultExpectation.params = &AuthMockValidateOutboundCallbackParams{ctx, tenantID, incomingState}
+	mmValidateOutboundCallback.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmValidateOutboundCallback.expectations {
+		if minimock.Equal(e.params, mmValidateOutboundCallback.defaultExpectation.params) {
+			mmValidateOutboundCallback.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmValidateOutboundCallback.defaultExpectation.params)
+		}
+	}
+
+	return mmValidateOutboundCallback
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Auth.ValidateOutboundCallback
+func (mmValidateOutboundCallback *mAuthMockValidateOutboundCallback) ExpectCtxParam1(ctx context.Context) *mAuthMockValidateOutboundCallback {
+	if mmValidateOutboundCallback.mock.funcValidateOutboundCallback != nil {
+		mmValidateOutboundCallback.mock.t.Fatalf("AuthMock.ValidateOutboundCallback mock is already set by Set")
+	}
+
+	if mmValidateOutboundCallback.defaultExpectation == nil {
+		mmValidateOutboundCallback.defaultExpectation = &AuthMockValidateOutboundCallbackExpectation{}
+	}
+
+	if mmValidateOutboundCallback.defaultExpectation.params != nil {
+		mmValidateOutboundCallback.mock.t.Fatalf("AuthMock.ValidateOutboundCallback mock is already set by Expect")
+	}
+
+	if mmValidateOutboundCallback.defaultExpectation.paramPtrs == nil {
+		mmValidateOutboundCallback.defaultExpectation.paramPtrs = &AuthMockValidateOutboundCallbackParamPtrs{}
+	}
+	mmValidateOutboundCallback.defaultExpectation.paramPtrs.ctx = &ctx
+	mmValidateOutboundCallback.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmValidateOutboundCallback
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Auth.ValidateOutboundCallback
+func (mmValidateOutboundCallback *mAuthMockValidateOutboundCallback) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthMockValidateOutboundCallback {
+	if mmValidateOutboundCallback.mock.funcValidateOutboundCallback != nil {
+		mmValidateOutboundCallback.mock.t.Fatalf("AuthMock.ValidateOutboundCallback mock is already set by Set")
+	}
+
+	if mmValidateOutboundCallback.defaultExpectation == nil {
+		mmValidateOutboundCallback.defaultExpectation = &AuthMockValidateOutboundCallbackExpectation{}
+	}
+
+	if mmValidateOutboundCallback.defaultExpectation.params != nil {
+		mmValidateOutboundCallback.mock.t.Fatalf("AuthMock.ValidateOutboundCallback mock is already set by Expect")
+	}
+
+	if mmValidateOutboundCallback.defaultExpectation.paramPtrs == nil {
+		mmValidateOutboundCallback.defaultExpectation.paramPtrs = &AuthMockValidateOutboundCallbackParamPtrs{}
+	}
+	mmValidateOutboundCallback.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmValidateOutboundCallback.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmValidateOutboundCallback
+}
+
+// ExpectIncomingStateParam3 sets up expected param incomingState for Auth.ValidateOutboundCallback
+func (mmValidateOutboundCallback *mAuthMockValidateOutboundCallback) ExpectIncomingStateParam3(incomingState string) *mAuthMockValidateOutboundCallback {
+	if mmValidateOutboundCallback.mock.funcValidateOutboundCallback != nil {
+		mmValidateOutboundCallback.mock.t.Fatalf("AuthMock.ValidateOutboundCallback mock is already set by Set")
+	}
+
+	if mmValidateOutboundCallback.defaultExpectation == nil {
+		mmValidateOutboundCallback.defaultExpectation = &AuthMockValidateOutboundCallbackExpectation{}
+	}
+
+	if mmValidateOutboundCallback.defaultExpectation.params != nil {
+		mmValidateOutboundCallback.mock.t.Fatalf("AuthMock.ValidateOutboundCallback mock is already set by Expect")
+	}
+
+	if mmValidateOutboundCallback.defaultExpectation.paramPtrs == nil {
+		mmValidateOutboundCallback.defaultExpectation.paramPtrs = &AuthMockValidateOutboundCallbackParamPtrs{}
+	}
+	mmValidateOutboundCallback.defaultExpectation.paramPtrs.incomingState = &incomingState
+	mmValidateOutboundCallback.defaultExpectation.expectationOrigins.originIncomingState = minimock.CallerInfo(1)
+
+	return mmValidateOutboundCallback
+}
+
+// Inspect accepts an inspector function that has same arguments as the Auth.ValidateOutboundCallback
+func (mmValidateOutboundCallback *mAuthMockValidateOutboundCallback) Inspect(f func(ctx context.Context, tenantID uuid.UUID, incomingState string)) *mAuthMockValidateOutboundCallback {
+	if mmValidateOutboundCallback.mock.inspectFuncValidateOutboundCallback != nil {
+		mmValidateOutboundCallback.mock.t.Fatalf("Inspect function is already set for AuthMock.ValidateOutboundCallback")
+	}
+
+	mmValidateOutboundCallback.mock.inspectFuncValidateOutboundCallback = f
+
+	return mmValidateOutboundCallback
+}
+
+// Return sets up results that will be returned by Auth.ValidateOutboundCallback
+func (mmValidateOutboundCallback *mAuthMockValidateOutboundCallback) Return(op1 *model.OutboundHandshakeSession, err error) *AuthMock {
+	if mmValidateOutboundCallback.mock.funcValidateOutboundCallback != nil {
+		mmValidateOutboundCallback.mock.t.Fatalf("AuthMock.ValidateOutboundCallback mock is already set by Set")
+	}
+
+	if mmValidateOutboundCallback.defaultExpectation == nil {
+		mmValidateOutboundCallback.defaultExpectation = &AuthMockValidateOutboundCallbackExpectation{mock: mmValidateOutboundCallback.mock}
+	}
+	mmValidateOutboundCallback.defaultExpectation.results = &AuthMockValidateOutboundCallbackResults{op1, err}
+	mmValidateOutboundCallback.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmValidateOutboundCallback.mock
+}
+
+// Set uses given function f to mock the Auth.ValidateOutboundCallback method
+func (mmValidateOutboundCallback *mAuthMockValidateOutboundCallback) Set(f func(ctx context.Context, tenantID uuid.UUID, incomingState string) (op1 *model.OutboundHandshakeSession, err error)) *AuthMock {
+	if mmValidateOutboundCallback.defaultExpectation != nil {
+		mmValidateOutboundCallback.mock.t.Fatalf("Default expectation is already set for the Auth.ValidateOutboundCallback method")
+	}
+
+	if len(mmValidateOutboundCallback.expectations) > 0 {
+		mmValidateOutboundCallback.mock.t.Fatalf("Some expectations are already set for the Auth.ValidateOutboundCallback method")
+	}
+
+	mmValidateOutboundCallback.mock.funcValidateOutboundCallback = f
+	mmValidateOutboundCallback.mock.funcValidateOutboundCallbackOrigin = minimock.CallerInfo(1)
+	return mmValidateOutboundCallback.mock
+}
+
+// When sets expectation for the Auth.ValidateOutboundCallback which will trigger the result defined by the following
+// Then helper
+func (mmValidateOutboundCallback *mAuthMockValidateOutboundCallback) When(ctx context.Context, tenantID uuid.UUID, incomingState string) *AuthMockValidateOutboundCallbackExpectation {
+	if mmValidateOutboundCallback.mock.funcValidateOutboundCallback != nil {
+		mmValidateOutboundCallback.mock.t.Fatalf("AuthMock.ValidateOutboundCallback mock is already set by Set")
+	}
+
+	expectation := &AuthMockValidateOutboundCallbackExpectation{
+		mock:               mmValidateOutboundCallback.mock,
+		params:             &AuthMockValidateOutboundCallbackParams{ctx, tenantID, incomingState},
+		expectationOrigins: AuthMockValidateOutboundCallbackExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmValidateOutboundCallback.expectations = append(mmValidateOutboundCallback.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Auth.ValidateOutboundCallback return parameters for the expectation previously defined by the When method
+func (e *AuthMockValidateOutboundCallbackExpectation) Then(op1 *model.OutboundHandshakeSession, err error) *AuthMock {
+	e.results = &AuthMockValidateOutboundCallbackResults{op1, err}
+	return e.mock
+}
+
+// Times sets number of times Auth.ValidateOutboundCallback should be invoked
+func (mmValidateOutboundCallback *mAuthMockValidateOutboundCallback) Times(n uint64) *mAuthMockValidateOutboundCallback {
+	if n == 0 {
+		mmValidateOutboundCallback.mock.t.Fatalf("Times of AuthMock.ValidateOutboundCallback mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmValidateOutboundCallback.expectedInvocations, n)
+	mmValidateOutboundCallback.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmValidateOutboundCallback
+}
+
+func (mmValidateOutboundCallback *mAuthMockValidateOutboundCallback) invocationsDone() bool {
+	if len(mmValidateOutboundCallback.expectations) == 0 && mmValidateOutboundCallback.defaultExpectation == nil && mmValidateOutboundCallback.mock.funcValidateOutboundCallback == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmValidateOutboundCallback.mock.afterValidateOutboundCallbackCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmValidateOutboundCallback.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// ValidateOutboundCallback implements mm_port.Auth
+func (mmValidateOutboundCallback *AuthMock) ValidateOutboundCallback(ctx context.Context, tenantID uuid.UUID, incomingState string) (op1 *model.OutboundHandshakeSession, err error) {
+	mm_atomic.AddUint64(&mmValidateOutboundCallback.beforeValidateOutboundCallbackCounter, 1)
+	defer mm_atomic.AddUint64(&mmValidateOutboundCallback.afterValidateOutboundCallbackCounter, 1)
+
+	mmValidateOutboundCallback.t.Helper()
+
+	if mmValidateOutboundCallback.inspectFuncValidateOutboundCallback != nil {
+		mmValidateOutboundCallback.inspectFuncValidateOutboundCallback(ctx, tenantID, incomingState)
+	}
+
+	mm_params := AuthMockValidateOutboundCallbackParams{ctx, tenantID, incomingState}
+
+	// Record call args
+	mmValidateOutboundCallback.ValidateOutboundCallbackMock.mutex.Lock()
+	mmValidateOutboundCallback.ValidateOutboundCallbackMock.callArgs = append(mmValidateOutboundCallback.ValidateOutboundCallbackMock.callArgs, &mm_params)
+	mmValidateOutboundCallback.ValidateOutboundCallbackMock.mutex.Unlock()
+
+	for _, e := range mmValidateOutboundCallback.ValidateOutboundCallbackMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.op1, e.results.err
+		}
+	}
+
+	if mmValidateOutboundCallback.ValidateOutboundCallbackMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmValidateOutboundCallback.ValidateOutboundCallbackMock.defaultExpectation.Counter, 1)
+		mm_want := mmValidateOutboundCallback.ValidateOutboundCallbackMock.defaultExpectation.params
+		mm_want_ptrs := mmValidateOutboundCallback.ValidateOutboundCallbackMock.defaultExpectation.paramPtrs
+
+		mm_got := AuthMockValidateOutboundCallbackParams{ctx, tenantID, incomingState}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmValidateOutboundCallback.t.Errorf("AuthMock.ValidateOutboundCallback got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmValidateOutboundCallback.ValidateOutboundCallbackMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmValidateOutboundCallback.t.Errorf("AuthMock.ValidateOutboundCallback got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmValidateOutboundCallback.ValidateOutboundCallbackMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.incomingState != nil && !minimock.Equal(*mm_want_ptrs.incomingState, mm_got.incomingState) {
+				mmValidateOutboundCallback.t.Errorf("AuthMock.ValidateOutboundCallback got unexpected parameter incomingState, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmValidateOutboundCallback.ValidateOutboundCallbackMock.defaultExpectation.expectationOrigins.originIncomingState, *mm_want_ptrs.incomingState, mm_got.incomingState, minimock.Diff(*mm_want_ptrs.incomingState, mm_got.incomingState))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmValidateOutboundCallback.t.Errorf("AuthMock.ValidateOutboundCallback got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmValidateOutboundCallback.ValidateOutboundCallbackMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmValidateOutboundCallback.ValidateOutboundCallbackMock.defaultExpectation.results
+		if mm_results == nil {
+			mmValidateOutboundCallback.t.Fatal("No results are set for the AuthMock.ValidateOutboundCallback")
+		}
+		return (*mm_results).op1, (*mm_results).err
+	}
+	if mmValidateOutboundCallback.funcValidateOutboundCallback != nil {
+		return mmValidateOutboundCallback.funcValidateOutboundCallback(ctx, tenantID, incomingState)
+	}
+	mmValidateOutboundCallback.t.Fatalf("Unexpected call to AuthMock.ValidateOutboundCallback. %v %v %v", ctx, tenantID, incomingState)
+	return
+}
+
+// ValidateOutboundCallbackAfterCounter returns a count of finished AuthMock.ValidateOutboundCallback invocations
+func (mmValidateOutboundCallback *AuthMock) ValidateOutboundCallbackAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmValidateOutboundCallback.afterValidateOutboundCallbackCounter)
+}
+
+// ValidateOutboundCallbackBeforeCounter returns a count of AuthMock.ValidateOutboundCallback invocations
+func (mmValidateOutboundCallback *AuthMock) ValidateOutboundCallbackBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmValidateOutboundCallback.beforeValidateOutboundCallbackCounter)
+}
+
+// Calls returns a list of arguments used in each call to AuthMock.ValidateOutboundCallback.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmValidateOutboundCallback *mAuthMockValidateOutboundCallback) Calls() []*AuthMockValidateOutboundCallbackParams {
+	mmValidateOutboundCallback.mutex.RLock()
+
+	argCopy := make([]*AuthMockValidateOutboundCallbackParams, len(mmValidateOutboundCallback.callArgs))
+	copy(argCopy, mmValidateOutboundCallback.callArgs)
+
+	mmValidateOutboundCallback.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockValidateOutboundCallbackDone returns true if the count of the ValidateOutboundCallback invocations corresponds
+// the number of defined expectations
+func (m *AuthMock) MinimockValidateOutboundCallbackDone() bool {
+	if m.ValidateOutboundCallbackMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.ValidateOutboundCallbackMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.ValidateOutboundCallbackMock.invocationsDone()
+}
+
+// MinimockValidateOutboundCallbackInspect logs each unmet expectation
+func (m *AuthMock) MinimockValidateOutboundCallbackInspect() {
+	for _, e := range m.ValidateOutboundCallbackMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AuthMock.ValidateOutboundCallback at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterValidateOutboundCallbackCounter := mm_atomic.LoadUint64(&m.afterValidateOutboundCallbackCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.ValidateOutboundCallbackMock.defaultExpectation != nil && afterValidateOutboundCallbackCounter < 1 {
+		if m.ValidateOutboundCallbackMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AuthMock.ValidateOutboundCallback at\n%s", m.ValidateOutboundCallbackMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AuthMock.ValidateOutboundCallback at\n%s with params: %#v", m.ValidateOutboundCallbackMock.defaultExpectation.expectationOrigins.origin, *m.ValidateOutboundCallbackMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcValidateOutboundCallback != nil && afterValidateOutboundCallbackCounter < 1 {
+		m.t.Errorf("Expected call to AuthMock.ValidateOutboundCallback at\n%s", m.funcValidateOutboundCallbackOrigin)
+	}
+
+	if !m.ValidateOutboundCallbackMock.invocationsDone() && afterValidateOutboundCallbackCounter > 0 {
+		m.t.Errorf("Expected %d calls to AuthMock.ValidateOutboundCallback at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.ValidateOutboundCallbackMock.expectedInvocations), m.ValidateOutboundCallbackMock.expectedInvocationsOrigin, afterValidateOutboundCallbackCounter)
+	}
+}
+
 // MinimockFinish checks that all mocked methods have been called the expected number of times
 func (m *AuthMock) MinimockFinish() {
 	m.finishOnce.Do(func() {
 		if !m.minimockDone() {
+			m.MinimockBuildOutboundOidcIntentInspect()
+
 			m.MinimockExchangeCodeForTokensInspect()
 
 			m.MinimockExchangeExternalTokenInspect()
 
 			m.MinimockExchangeRefreshTokenForTokensInspect()
+
+			m.MinimockGeneratePKCEPairInspect()
 
 			m.MinimockGetAndConsumePARInspect()
 
@@ -3787,6 +4725,8 @@ func (m *AuthMock) MinimockFinish() {
 			m.MinimockRevokeTokenInspect()
 
 			m.MinimockSavePARInspect()
+
+			m.MinimockValidateOutboundCallbackInspect()
 		}
 	})
 }
@@ -3810,13 +4750,16 @@ func (m *AuthMock) MinimockWait(timeout mm_time.Duration) {
 func (m *AuthMock) minimockDone() bool {
 	done := true
 	return done &&
+		m.MinimockBuildOutboundOidcIntentDone() &&
 		m.MinimockExchangeCodeForTokensDone() &&
 		m.MinimockExchangeExternalTokenDone() &&
 		m.MinimockExchangeRefreshTokenForTokensDone() &&
+		m.MinimockGeneratePKCEPairDone() &&
 		m.MinimockGetAndConsumePARDone() &&
 		m.MinimockInitiateAuthorizeDone() &&
 		m.MinimockIntrospectTokenDone() &&
 		m.MinimockProcessLogoutDone() &&
 		m.MinimockRevokeTokenDone() &&
-		m.MinimockSavePARDone()
+		m.MinimockSavePARDone() &&
+		m.MinimockValidateOutboundCallbackDone()
 }

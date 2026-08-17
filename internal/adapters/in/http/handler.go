@@ -36,6 +36,7 @@ const (
 	routeLogout         = "/oauth/logout"
 	routePAR            = "/oauth/par"
 	routeCallback       = "/oauth/callback"
+	routeAdmin          = "/admin"
 	contentTypeHeader   = "Content-Type"
 	contentTypeJSON     = "application/json"
 	contentTypeHtml     = "text/html; charset=utf-8"
@@ -63,7 +64,6 @@ type HttpAdapter struct {
 	clientService      *service.ClientService
 	userProfileService *service.UserProfileService
 	router             chi.Router
-	adminState         port.AdminState
 	appEnv             string
 	adminDomain        string
 }
@@ -99,11 +99,7 @@ func ClientFromContext(ctx context.Context) (*model.ClientApplication, bool) {
 	return client, ok
 }
 
-func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock, appEnv string, adminDomain string, as ...port.AdminState) *HttpAdapter {
-	var adminState port.AdminState
-	if len(as) > 0 {
-		adminState = as[0]
-	}
+func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock, appEnv string, adminDomain string) *HttpAdapter {
 	idpService := service.NewIdentityProviderService(s, cl)
 	h := &HttpAdapter{
 		authPort:           a,
@@ -117,7 +113,6 @@ func NewHttpAdapter(a port.Auth, s port.Storage, c port.Crypto, cl port.Clock, a
 		clientService:      service.NewClientService(s, c),
 		userProfileService: service.NewUserProfileService(s),
 		router:             chi.NewRouter(),
-		adminState:         adminState,
 		appEnv:             appEnv,
 		adminDomain:        adminDomain,
 	}
@@ -194,7 +189,6 @@ func (h *HttpAdapter) registerRoutes() {
 	h.router.Route("/admin", func(r chi.Router) {
 		r.Get("/", h.adminDashboardView)
 		r.Get("/dashboard", h.adminDashboardView)
-		r.Get("/callback", h.adminCallback)
 
 		r.Get("/tenants", h.adminTenantsPage)
 		r.Get("/tenants/new", h.adminNewTenantForm)

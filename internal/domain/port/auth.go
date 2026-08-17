@@ -10,6 +10,7 @@ import (
 
 // Cleaned: Renamed from OAuthFlowUseCase to Auth
 type Auth interface {
+	GeneratePKCEPair() (model.PKCEPair, error)
 	InitiateAuthorize(ctx context.Context, session model.AuthorizationCodeSession) error
 	ExchangeCodeForTokens(ctx context.Context, tenantID uuid.UUID, clientID string, code string, codeVerifier string, dpopJKT string) (*model.TokenSetResponse, error)
 	ExchangeRefreshTokenForTokens(ctx context.Context, tenantID uuid.UUID, clientID string, refreshTokenStr string, dpopJKT string) (*model.TokenSetResponse, error)
@@ -17,6 +18,13 @@ type Auth interface {
 	ProcessLogout(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) ([]string, error)
 	RevokeToken(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) error
 	IntrospectToken(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (*model.IntrospectionResponse, error)
+
+	// BuildOutboundOidcIntent coordinates state allocation, computes PKCE parameters,
+	// handles dynamic PAR pushes, and records transient handshake states for outbound journeys.
+	BuildOutboundOidcIntent(ctx context.Context, req model.OutboundOidcRequest) (model.OidcLoginIntent, model.OutboundHandshakeSession, error)
+	// ValidateOutboundCallback processes an incoming federation handshake redirect,
+	// matching multi-tenant state constraints and consuming the single-use token.
+	ValidateOutboundCallback(ctx context.Context, tenantID uuid.UUID, incomingState string) (*model.OutboundHandshakeSession, error)
 
 	SavePAR(ctx context.Context, req model.PushedAuthorizationRequest) error
 	GetAndConsumePAR(ctx context.Context, tenantID uuid.UUID, requestURI string) (*model.PushedAuthorizationRequest, error)

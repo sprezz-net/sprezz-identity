@@ -2,9 +2,7 @@ package http
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -29,17 +27,6 @@ const (
 	errInvalidURLFormat = "Invalid URL format (must include protocol like http:// or https://)"
 )
 
-func generateRandomVerifier() (string, string, error) {
-	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", "", err
-	}
-	verifier := base64.RawURLEncoding.EncodeToString(bytes)
-	hsh := sha256.Sum256([]byte(verifier))
-	challenge := base64.RawURLEncoding.EncodeToString(hsh[:])
-	return verifier, challenge, nil
-}
-
 func (h *HttpAdapter) adminDashboardView(w http.ResponseWriter, r *http.Request) {
 	tenant, ok := TenantFromContext(r.Context())
 	if !ok {
@@ -47,15 +34,26 @@ func (h *HttpAdapter) adminDashboardView(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	cookie, err := r.Cookie("spz_admin_token")
+	// 1. Call your established configuration tool dynamically
+	name, _ := h.resolveSessionCookieConfig(r)
+	cookie, err := r.Cookie(name)
 	if err != nil || cookie.Value == "" {
 		h.initiateAdminOIDC(w, r)
 		return
 	}
 
-	_, err = h.cryptoPort.VerifyToken(cookie.Value)
+	// 2. Parse colon string format to extract the local user token asset safely
+	parts := strings.Split(cookie.Value, ":")
+	if len(parts) != 3 || parts[0] == "" {
+		h.initiateAdminOIDC(w, r)
+		return
+	}
+	accessToken := parts[0]
+
+	// 3. Verify the access token extracted out of the unified tracking session slot
+	_, err = h.cryptoPort.VerifyToken(accessToken)
 	if err != nil {
-		h.clearCookieAndRedirect(w, r, "spz_admin_token", "/admin")
+		h.clearCookieAndRedirect(w, r, name, routeAdmin)
 		return
 	}
 
@@ -70,38 +68,73 @@ func (h *HttpAdapter) adminDashboardView(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *HttpAdapter) initiateAdminOIDC(w http.ResponseWriter, r *http.Request) {
-	scheme := model.SchemeHttp
-	if r.TLS != nil || r.Header.Get(xForwardedProto) == "https" {
-		scheme = model.SchemeHttps
-	}
-	redirectURI := scheme + "://" + r.Host + "/admin/callback"
-	state := uuid.NewString()
-
-	verifier, challenge, err := generateRandomVerifier()
-	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, "failed to generate secure PKCE verifier")
+	// 1. Resolve multi-tenant and layout boundaries safely
+	tenant, ok := TenantFromContext(r.Context())
+	if !ok {
+		h.renderError(w, r, http.StatusBadRequest, errTenantNotResolved)
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "spz_admin_state",
-		Value:    state,
+	// Dynamic Resolution: Sourced from canonical tenant configuration instead of hardcoded headers
+	tenantBaseURL := tenant.GetBaseURL()
+	redirectURI := tenantBaseURL + routeCallback
+
+	providers, err := h.storagePort.GetIdentityProviders(r.Context(), tenant.ID)
+	if err != nil {
+		h.renderError(w, r, http.StatusInternalServerError, "failed to load provider configurations")
+		return
+	}
+
+	// Dynamic Resolution: Lookup the explicit outbound provider enforcing all 3 mandatory criteria
+	var adminIDP *model.IdentityProvider
+	for _, p := range providers {
+		if p.Alias == "admin-sso" && p.IDPType == "oidc" && p.Enabled {
+			adminIDP = &p
+			break
+		}
+	}
+
+	if adminIDP == nil {
+		h.renderError(w, r, http.StatusInternalServerError, "system outbound administrative identity provider context is missing or misconfigured")
+		return
+	}
+
+	// 2. Map tracking parameters pulling configuration data purely from your administrative IDP metadata
+	reqCtx := model.OutboundOidcRequest{
+		ClientID:         adminIDP.Config.ClientID,
+		RedirectURI:      redirectURI,
+		TargetURI:        tenantBaseURL + routeAdmin,
+		Scopes:           adminIDP.Config.Scopes,
+		IdentityProvider: adminIDP,
+	}
+
+	// 3. Trigger our clean data-driven domain federation service
+	intent, handshake, err := h.authPort.BuildOutboundOidcIntent(r.Context(), reqCtx)
+	if err != nil {
+		h.renderError(w, r, http.StatusInternalServerError, "failed to initiate secure administrative session: "+err.Error())
+		return
+	}
+
+	// 4. Leverage established environment logic configurations completely (appEnv and host rules)
+	name, isSecureCookie := h.resolveSessionCookieConfig(r)
+
+	// 5. Structure payload to bypass strings.Split alignment bugs down-funnel
+	cookieVal := fmt.Sprintf("::%s", handshake.ID)
+
+	cookie := &http.Cookie{
+		Name:     name,
+		Value:    cookieVal,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   isSecureCookie,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   300,
-	})
+	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "spz_admin_verifier",
-		Value:    verifier,
-		Path:     "/",
-		HttpOnly: true,
-		MaxAge:   300,
-	})
+	http.SetCookie(w, cookie)
 
-	authURL := fmt.Sprintf("/oauth/authorize?response_type=code&client_id=admin_ui&redirect_uri=%s&scope=openid+profile+email&state=%s&code_challenge=%s&code_challenge_method=S256",
-		url.QueryEscape(redirectURI), state, challenge)
-	http.Redirect(w, r, authURL, http.StatusFound)
+	// 6. Direct browser outbound leg to the intent URL generated by the core service
+	http.Redirect(w, r, intent.AuthURL, http.StatusFound)
 }
 
 func (h *HttpAdapter) clearCookieAndRedirect(w http.ResponseWriter, r *http.Request, cookieName, redirectPath string) {
@@ -113,91 +146,6 @@ func (h *HttpAdapter) clearCookieAndRedirect(w http.ResponseWriter, r *http.Requ
 		HttpOnly: true,
 	})
 	http.Redirect(w, r, redirectPath, http.StatusFound)
-}
-
-func (h *HttpAdapter) adminCallback(w http.ResponseWriter, r *http.Request) {
-	state := r.URL.Query().Get("state")
-	stateCookie, err := r.Cookie("spz_admin_state")
-	if err != nil || stateCookie.Value == "" || stateCookie.Value != state {
-		h.renderError(w, r, http.StatusBadRequest, "invalid state parameter")
-		return
-	}
-
-	code := r.URL.Query().Get("code")
-	if code == "" {
-		h.renderError(w, r, http.StatusBadRequest, "missing authorization code")
-		return
-	}
-
-	verifierCookie, err := r.Cookie("spz_admin_verifier")
-	if err != nil || verifierCookie.Value == "" {
-		h.renderError(w, r, http.StatusBadRequest, "missing PKCE verifier parameter")
-		return
-	}
-
-	scheme := model.SchemeHttp
-	if r.TLS != nil || r.Header.Get(xForwardedProto) == "https" {
-		scheme = model.SchemeHttps
-	}
-	redirectURI := scheme + "://" + r.Host + "/admin/callback"
-
-	secret := ""
-	if h.adminState != nil {
-		secret = h.adminState.GetEphemeralSecret()
-	}
-
-	// Direct exchange POST back to our token endpoint
-	form := url.Values{}
-	form.Set("grant_type", "authorization_code")
-	form.Set("client_id", "admin_ui")
-	form.Set("client_secret", secret)
-	form.Set("code", code)
-	form.Set("code_verifier", verifierCookie.Value)
-	form.Set("redirect_uri", redirectURI)
-
-	tokenURL := scheme + "://" + r.Host + "/oauth/token"
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, tokenURL, strings.NewReader(form.Encode()))
-	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-	req.Header.Set(model.HeaderContentType, "application/x-www-form-urlencoded")
-
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, "failed to exchange code: "+err.Error())
-		return
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		var errData map[string]string
-		_ = json.NewDecoder(resp.Body).Decode(&errData)
-		h.renderError(w, r, resp.StatusCode, "token exchange rejected: "+errData["error"])
-		return
-	}
-
-	var tokens model.TokenSetResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tokens); err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, "failed to parse token response")
-		return
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "spz_admin_token",
-		Value:    tokens.AccessToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   resp.Request.URL.Scheme == "https",
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	// Clear transient flow cookies
-	http.SetCookie(w, &http.Cookie{Name: "spz_admin_state", Value: "", Path: "/", MaxAge: -1, HttpOnly: true})
-	http.SetCookie(w, &http.Cookie{Name: "spz_admin_verifier", Value: "", Path: "/", MaxAge: -1, HttpOnly: true})
-
-	http.Redirect(w, r, "/admin/dashboard", http.StatusFound)
 }
 
 func (h *HttpAdapter) adminNewTenantForm(w http.ResponseWriter, r *http.Request) {
@@ -272,7 +220,7 @@ func (h *HttpAdapter) adminCreateTenant(w http.ResponseWriter, r *http.Request) 
 	}
 	_ = h.storagePort.CreateIdentityProvider(r.Context(), newTenant.ID, defaultProvider)
 
-	w.Header().Set(hxRedirectHeader, "/admin/dashboard?msg=Tenant+created+successfully")
+	w.Header().Set(hxRedirectHeader, routeAdmin+"?msg=Tenant+created+successfully")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -302,7 +250,7 @@ func (h *HttpAdapter) adminToggleSignup(w http.ResponseWriter, r *http.Request) 
 	_ = component.Render(r.Context(), w)
 
 	// We use HX-Redirect to natively trigger a full page refresh with the success message
-	w.Header().Set(hxRedirectHeader, "/admin/dashboard?msg=Registration+status+updated+successfully")
+	w.Header().Set(hxRedirectHeader, routeAdmin+"?msg=Registration+status+updated+successfully")
 }
 
 func (h *HttpAdapter) adminTenantsPage(w http.ResponseWriter, r *http.Request) {

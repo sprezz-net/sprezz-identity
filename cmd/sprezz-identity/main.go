@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"log/slog"
@@ -16,9 +14,7 @@ import (
 	jwtcrypto "sprezz-identity/internal/adapters/out/crypto"
 	"sprezz-identity/internal/adapters/out/logout"
 	"sprezz-identity/internal/adapters/out/postgres"
-	"sprezz-identity/internal/adapters/out/state"
 	"sprezz-identity/internal/config"
-	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
 	"sprezz-identity/internal/domain/service"
 
@@ -44,7 +40,7 @@ func main() {
 	sysClock := clock.NewSystemClock()
 
 	bootstrap := service.NewTenantBootstrapService(deps.storage, sysClock, deps.cfg.AppEnv)
-	adminTenant, err := bootstrap.BootstrapAdminTenant(context.Background(), deps.cfg.IdentityServer.AdminTenantDomain)
+	_, err := bootstrap.BootstrapAdminTenant(context.Background(), deps.cfg.IdentityServer.AdminTenantDomain)
 	if err != nil {
 		log.Fatalf("Admin tenant bootstrap failed: %v", err)
 	}
@@ -60,21 +56,9 @@ func main() {
 	startTokenPruningWorker(ctx, deps.storage, deps.cfg.IdentityServer.TokenPruningInterval)
 	startKeyRotationWorker(ctx, signer, deps.cfg.IdentityServer.AdminTenantDomain, deps.cfg.IdentityServer.KeyRotationInterval)
 
-	decryptedSecret := loadOrInitializeAdminSecret(deps, adminTenant, deps.cfg.MasterKey)
-
-	var ephemeralStore *state.EphemeralStore
-	if decryptedSecret != "" {
-		ephemeralStore = state.NewEphemeralStoreWithSecret(decryptedSecret)
-	} else {
-		ephemeralStore, err = state.NewEphemeralStore()
-		if err != nil {
-			log.Fatalf("Failed to generate ephemeral secret store: %v", err)
-		}
-	}
-
 	notifier := logout.NewLogoutHttpClient()
 	oauthService := service.NewOAuthService(deps.storage, signer, nil, notifier, sysClock)
-	handler := httpadapter.NewHttpAdapter(oauthService, deps.storage, signer, sysClock, deps.cfg.AppEnv, deps.cfg.IdentityServer.AdminTenantDomain, ephemeralStore)
+	handler := httpadapter.NewHttpAdapter(oauthService, deps.storage, signer, sysClock, deps.cfg.AppEnv, deps.cfg.IdentityServer.AdminTenantDomain)
 	server := &http.Server{
 		Addr:    ":" + deps.cfg.Port,
 		Handler: handler.Router(),
@@ -83,33 +67,6 @@ func main() {
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Token server terminated: %v", err)
 	}
-}
-
-func loadOrInitializeAdminSecret(deps *dependencies, adminTenant *model.Tenant, masterKey string) string {
-	secret := adminTenant.Config.EncryptedAdminSecret
-	if masterKey != "" && secret != "" {
-		decVal, err := state.DecryptAESGCM(secret, masterKey)
-		if err != nil {
-			log.Fatalf("Failed to decrypt administrative secret with SPREZZ_MASTER_KEY: %v", err)
-		}
-		return decVal
-	} else if masterKey != "" && secret == "" {
-		bytes := make([]byte, 32)
-		if _, err := rand.Read(bytes); err != nil {
-			log.Fatalf("Failed to generate random secret: %v", err)
-		}
-		plaintextSecret := hex.EncodeToString(bytes)
-		encVal, err := state.EncryptAESGCM(plaintextSecret, masterKey)
-		if err != nil {
-			log.Fatalf("Failed to encrypt administrative secret: %v", err)
-		}
-		adminTenant.Config.EncryptedAdminSecret = encVal
-		if err := deps.storage.CreateTenant(context.Background(), *adminTenant); err != nil {
-			log.Fatalf("Failed to save encrypted admin secret to tenant: %v", err)
-		}
-		return plaintextSecret
-	}
-	return ""
 }
 
 func startTokenPruningWorker(ctx context.Context, storage *postgres.PostgresStorage, interval time.Duration) {

@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// Inbound Authorization
 type AuthorizationCodeSession struct {
 	Code            string
 	TenantID        string
@@ -61,4 +62,10 @@ type RefreshToken struct {
 	IsUsed        bool
 	ExpiresAt     time.Time
 	CreatedAt     time.Time
+}
+
+// PKCEPair contains the cleartext verifier and cryptographic challenge
+type PKCEPair struct {
+	Verifier  string `json:"verifier"`
+	Challenge string `json:"challenge"`
 }

@@ -66,14 +66,6 @@ func (h *HttpAdapter) authenticateClient(w http.ResponseWriter, r *http.Request,
 		return nil, fmt.Errorf("%s", errClientAuthFailed)
 	}
 
-	if client.ClientType == model.ClientTypeInternalEphemeral {
-		if h.adminState == nil || subtle.ConstantTimeCompare([]byte(h.adminState.GetEphemeralSecret()), []byte(clientSecret)) != 1 {
-			respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
-			return nil, fmt.Errorf("%s", errClientAuthFailed)
-		}
-		return client, nil
-	}
-
 	if client.ClientSecret == nil {
 		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
 		return nil, fmt.Errorf("%s", errClientAuthFailed)

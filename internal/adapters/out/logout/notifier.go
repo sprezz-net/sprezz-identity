@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/pkg/httpclient"
 )
 
@@ -28,7 +29,7 @@ func (n *LogoutHttpClient) SendBackChannelLogout(ctx context.Context, logoutURI 
 	if err != nil {
 		return fmt.Errorf("create back-channel logout request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", model.ContentTypeFormUrlEncoded)
 
 	resp, err := n.client.Do(req)
 	if err != nil {

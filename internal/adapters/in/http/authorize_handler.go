@@ -271,7 +271,7 @@ func (h *HttpAdapter) redirectToExternalIDP(w http.ResponseWriter, r *http.Reque
 	authURL := fmt.Sprintf("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s",
 		provider.Config.AuthorizationEndpoint,
 		url.QueryEscape(provider.Config.ClientID),
-		url.QueryEscape(tenant.GetBaseURL()+"/oauth/callback"),
+		url.QueryEscape(tenant.GetBaseURL()+routeCallback),
 		url.QueryEscape(strings.Join(provider.Config.Scopes, " ")),
 		state,
 	)

@@ -661,3 +661,21 @@ func (s *OAuthService) IntrospectToken(ctx context.Context, tenantID uuid.UUID, 
 		Confirmation: cnf,
 	}, nil
 }
+
+// GeneratePKCEPair creates a cryptographically secure random code_verifier
+// and calculates its corresponding S256 code_challenge per RFC 7636 parameters.
+func (s *OAuthService) GeneratePKCEPair() (model.PKCEPair, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return model.PKCEPair{}, fmt.Errorf("read secure random bytes: %w", err)
+	}
+
+	verifier := base64.RawURLEncoding.EncodeToString(bytes)
+	hsh := sha256.Sum256([]byte(verifier))
+	challenge := base64.RawURLEncoding.EncodeToString(hsh[:])
+
+	return model.PKCEPair{
+		Verifier:  verifier,
+		Challenge: challenge,
+	}, nil
+}

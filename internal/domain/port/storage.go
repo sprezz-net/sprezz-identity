@@ -58,6 +58,13 @@ type Storage interface {
 	GetUserIdentities(ctx context.Context, userProfileID uuid.UUID) ([]model.UserIdentity, error)
 	DecoupleIdentity(ctx context.Context, userProfileID uuid.UUID, identityProviderID uuid.UUID) error
 
+	// SaveOutboundHandshake persists the transient protocol tracking parameters (PKCE/State)
+	// for any ongoing inbound or outbound OIDC federation handshake transaction.
+	SaveOutboundHandshake(ctx context.Context, session model.OutboundHandshakeSession) error
+	// GetAndConsumeOutboundHandshake retrieves a tracking handshake record by its unique
+	// state token ID and instantly deletes it from persistence to prevent token replay vectors.
+	GetAndConsumeOutboundHandshake(ctx context.Context, tenantID uuid.UUID, incomingState string) (*model.OutboundHandshakeSession, error)
+
 	SavePAR(ctx context.Context, req model.PushedAuthorizationRequest) error
 	GetAndConsumePAR(ctx context.Context, tenantID uuid.UUID, requestURI string) (*model.PushedAuthorizationRequest, error)
 	IsDPoPProofUsed(ctx context.Context, jti string) (bool, error)

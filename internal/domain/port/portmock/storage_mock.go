@@ -98,6 +98,13 @@ type StorageMock struct {
 	beforeGetAndConsumeInteractionSessionCounter uint64
 	GetAndConsumeInteractionSessionMock          mStorageMockGetAndConsumeInteractionSession
 
+	funcGetAndConsumeOutboundHandshake          func(ctx context.Context, tenantID uuid.UUID, incomingState string) (op1 *model.OutboundHandshakeSession, err error)
+	funcGetAndConsumeOutboundHandshakeOrigin    string
+	inspectFuncGetAndConsumeOutboundHandshake   func(ctx context.Context, tenantID uuid.UUID, incomingState string)
+	afterGetAndConsumeOutboundHandshakeCounter  uint64
+	beforeGetAndConsumeOutboundHandshakeCounter uint64
+	GetAndConsumeOutboundHandshakeMock          mStorageMockGetAndConsumeOutboundHandshake
+
 	funcGetAndConsumePAR          func(ctx context.Context, tenantID uuid.UUID, requestURI string) (pp1 *model.PushedAuthorizationRequest, err error)
 	funcGetAndConsumePAROrigin    string
 	inspectFuncGetAndConsumePAR   func(ctx context.Context, tenantID uuid.UUID, requestURI string)
@@ -322,6 +329,13 @@ type StorageMock struct {
 	beforeSaveInteractionSessionCounter uint64
 	SaveInteractionSessionMock          mStorageMockSaveInteractionSession
 
+	funcSaveOutboundHandshake          func(ctx context.Context, session model.OutboundHandshakeSession) (err error)
+	funcSaveOutboundHandshakeOrigin    string
+	inspectFuncSaveOutboundHandshake   func(ctx context.Context, session model.OutboundHandshakeSession)
+	afterSaveOutboundHandshakeCounter  uint64
+	beforeSaveOutboundHandshakeCounter uint64
+	SaveOutboundHandshakeMock          mStorageMockSaveOutboundHandshake
+
 	funcSavePAR          func(ctx context.Context, req model.PushedAuthorizationRequest) (err error)
 	funcSavePAROrigin    string
 	inspectFuncSavePAR   func(ctx context.Context, req model.PushedAuthorizationRequest)
@@ -405,6 +419,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 
 	m.GetAndConsumeInteractionSessionMock = mStorageMockGetAndConsumeInteractionSession{mock: m}
 	m.GetAndConsumeInteractionSessionMock.callArgs = []*StorageMockGetAndConsumeInteractionSessionParams{}
+
+	m.GetAndConsumeOutboundHandshakeMock = mStorageMockGetAndConsumeOutboundHandshake{mock: m}
+	m.GetAndConsumeOutboundHandshakeMock.callArgs = []*StorageMockGetAndConsumeOutboundHandshakeParams{}
 
 	m.GetAndConsumePARMock = mStorageMockGetAndConsumePAR{mock: m}
 	m.GetAndConsumePARMock.callArgs = []*StorageMockGetAndConsumePARParams{}
@@ -501,6 +518,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 
 	m.SaveInteractionSessionMock = mStorageMockSaveInteractionSession{mock: m}
 	m.SaveInteractionSessionMock.callArgs = []*StorageMockSaveInteractionSessionParams{}
+
+	m.SaveOutboundHandshakeMock = mStorageMockSaveOutboundHandshake{mock: m}
+	m.SaveOutboundHandshakeMock.callArgs = []*StorageMockSaveOutboundHandshakeParams{}
 
 	m.SavePARMock = mStorageMockSavePAR{mock: m}
 	m.SavePARMock.callArgs = []*StorageMockSavePARParams{}
@@ -4568,6 +4588,380 @@ func (m *StorageMock) MinimockGetAndConsumeInteractionSessionInspect() {
 	if !m.GetAndConsumeInteractionSessionMock.invocationsDone() && afterGetAndConsumeInteractionSessionCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageMock.GetAndConsumeInteractionSession at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.GetAndConsumeInteractionSessionMock.expectedInvocations), m.GetAndConsumeInteractionSessionMock.expectedInvocationsOrigin, afterGetAndConsumeInteractionSessionCounter)
+	}
+}
+
+type mStorageMockGetAndConsumeOutboundHandshake struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockGetAndConsumeOutboundHandshakeExpectation
+	expectations       []*StorageMockGetAndConsumeOutboundHandshakeExpectation
+
+	callArgs []*StorageMockGetAndConsumeOutboundHandshakeParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockGetAndConsumeOutboundHandshakeExpectation specifies expectation struct of the Storage.GetAndConsumeOutboundHandshake
+type StorageMockGetAndConsumeOutboundHandshakeExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockGetAndConsumeOutboundHandshakeParams
+	paramPtrs          *StorageMockGetAndConsumeOutboundHandshakeParamPtrs
+	expectationOrigins StorageMockGetAndConsumeOutboundHandshakeExpectationOrigins
+	results            *StorageMockGetAndConsumeOutboundHandshakeResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockGetAndConsumeOutboundHandshakeParams contains parameters of the Storage.GetAndConsumeOutboundHandshake
+type StorageMockGetAndConsumeOutboundHandshakeParams struct {
+	ctx           context.Context
+	tenantID      uuid.UUID
+	incomingState string
+}
+
+// StorageMockGetAndConsumeOutboundHandshakeParamPtrs contains pointers to parameters of the Storage.GetAndConsumeOutboundHandshake
+type StorageMockGetAndConsumeOutboundHandshakeParamPtrs struct {
+	ctx           *context.Context
+	tenantID      *uuid.UUID
+	incomingState *string
+}
+
+// StorageMockGetAndConsumeOutboundHandshakeResults contains results of the Storage.GetAndConsumeOutboundHandshake
+type StorageMockGetAndConsumeOutboundHandshakeResults struct {
+	op1 *model.OutboundHandshakeSession
+	err error
+}
+
+// StorageMockGetAndConsumeOutboundHandshakeOrigins contains origins of expectations of the Storage.GetAndConsumeOutboundHandshake
+type StorageMockGetAndConsumeOutboundHandshakeExpectationOrigins struct {
+	origin              string
+	originCtx           string
+	originTenantID      string
+	originIncomingState string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetAndConsumeOutboundHandshake *mStorageMockGetAndConsumeOutboundHandshake) Optional() *mStorageMockGetAndConsumeOutboundHandshake {
+	mmGetAndConsumeOutboundHandshake.optional = true
+	return mmGetAndConsumeOutboundHandshake
+}
+
+// Expect sets up expected params for Storage.GetAndConsumeOutboundHandshake
+func (mmGetAndConsumeOutboundHandshake *mStorageMockGetAndConsumeOutboundHandshake) Expect(ctx context.Context, tenantID uuid.UUID, incomingState string) *mStorageMockGetAndConsumeOutboundHandshake {
+	if mmGetAndConsumeOutboundHandshake.mock.funcGetAndConsumeOutboundHandshake != nil {
+		mmGetAndConsumeOutboundHandshake.mock.t.Fatalf("StorageMock.GetAndConsumeOutboundHandshake mock is already set by Set")
+	}
+
+	if mmGetAndConsumeOutboundHandshake.defaultExpectation == nil {
+		mmGetAndConsumeOutboundHandshake.defaultExpectation = &StorageMockGetAndConsumeOutboundHandshakeExpectation{}
+	}
+
+	if mmGetAndConsumeOutboundHandshake.defaultExpectation.paramPtrs != nil {
+		mmGetAndConsumeOutboundHandshake.mock.t.Fatalf("StorageMock.GetAndConsumeOutboundHandshake mock is already set by ExpectParams functions")
+	}
+
+	mmGetAndConsumeOutboundHandshake.defaultExpectation.params = &StorageMockGetAndConsumeOutboundHandshakeParams{ctx, tenantID, incomingState}
+	mmGetAndConsumeOutboundHandshake.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetAndConsumeOutboundHandshake.expectations {
+		if minimock.Equal(e.params, mmGetAndConsumeOutboundHandshake.defaultExpectation.params) {
+			mmGetAndConsumeOutboundHandshake.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetAndConsumeOutboundHandshake.defaultExpectation.params)
+		}
+	}
+
+	return mmGetAndConsumeOutboundHandshake
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.GetAndConsumeOutboundHandshake
+func (mmGetAndConsumeOutboundHandshake *mStorageMockGetAndConsumeOutboundHandshake) ExpectCtxParam1(ctx context.Context) *mStorageMockGetAndConsumeOutboundHandshake {
+	if mmGetAndConsumeOutboundHandshake.mock.funcGetAndConsumeOutboundHandshake != nil {
+		mmGetAndConsumeOutboundHandshake.mock.t.Fatalf("StorageMock.GetAndConsumeOutboundHandshake mock is already set by Set")
+	}
+
+	if mmGetAndConsumeOutboundHandshake.defaultExpectation == nil {
+		mmGetAndConsumeOutboundHandshake.defaultExpectation = &StorageMockGetAndConsumeOutboundHandshakeExpectation{}
+	}
+
+	if mmGetAndConsumeOutboundHandshake.defaultExpectation.params != nil {
+		mmGetAndConsumeOutboundHandshake.mock.t.Fatalf("StorageMock.GetAndConsumeOutboundHandshake mock is already set by Expect")
+	}
+
+	if mmGetAndConsumeOutboundHandshake.defaultExpectation.paramPtrs == nil {
+		mmGetAndConsumeOutboundHandshake.defaultExpectation.paramPtrs = &StorageMockGetAndConsumeOutboundHandshakeParamPtrs{}
+	}
+	mmGetAndConsumeOutboundHandshake.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetAndConsumeOutboundHandshake.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetAndConsumeOutboundHandshake
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.GetAndConsumeOutboundHandshake
+func (mmGetAndConsumeOutboundHandshake *mStorageMockGetAndConsumeOutboundHandshake) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockGetAndConsumeOutboundHandshake {
+	if mmGetAndConsumeOutboundHandshake.mock.funcGetAndConsumeOutboundHandshake != nil {
+		mmGetAndConsumeOutboundHandshake.mock.t.Fatalf("StorageMock.GetAndConsumeOutboundHandshake mock is already set by Set")
+	}
+
+	if mmGetAndConsumeOutboundHandshake.defaultExpectation == nil {
+		mmGetAndConsumeOutboundHandshake.defaultExpectation = &StorageMockGetAndConsumeOutboundHandshakeExpectation{}
+	}
+
+	if mmGetAndConsumeOutboundHandshake.defaultExpectation.params != nil {
+		mmGetAndConsumeOutboundHandshake.mock.t.Fatalf("StorageMock.GetAndConsumeOutboundHandshake mock is already set by Expect")
+	}
+
+	if mmGetAndConsumeOutboundHandshake.defaultExpectation.paramPtrs == nil {
+		mmGetAndConsumeOutboundHandshake.defaultExpectation.paramPtrs = &StorageMockGetAndConsumeOutboundHandshakeParamPtrs{}
+	}
+	mmGetAndConsumeOutboundHandshake.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetAndConsumeOutboundHandshake.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetAndConsumeOutboundHandshake
+}
+
+// ExpectIncomingStateParam3 sets up expected param incomingState for Storage.GetAndConsumeOutboundHandshake
+func (mmGetAndConsumeOutboundHandshake *mStorageMockGetAndConsumeOutboundHandshake) ExpectIncomingStateParam3(incomingState string) *mStorageMockGetAndConsumeOutboundHandshake {
+	if mmGetAndConsumeOutboundHandshake.mock.funcGetAndConsumeOutboundHandshake != nil {
+		mmGetAndConsumeOutboundHandshake.mock.t.Fatalf("StorageMock.GetAndConsumeOutboundHandshake mock is already set by Set")
+	}
+
+	if mmGetAndConsumeOutboundHandshake.defaultExpectation == nil {
+		mmGetAndConsumeOutboundHandshake.defaultExpectation = &StorageMockGetAndConsumeOutboundHandshakeExpectation{}
+	}
+
+	if mmGetAndConsumeOutboundHandshake.defaultExpectation.params != nil {
+		mmGetAndConsumeOutboundHandshake.mock.t.Fatalf("StorageMock.GetAndConsumeOutboundHandshake mock is already set by Expect")
+	}
+
+	if mmGetAndConsumeOutboundHandshake.defaultExpectation.paramPtrs == nil {
+		mmGetAndConsumeOutboundHandshake.defaultExpectation.paramPtrs = &StorageMockGetAndConsumeOutboundHandshakeParamPtrs{}
+	}
+	mmGetAndConsumeOutboundHandshake.defaultExpectation.paramPtrs.incomingState = &incomingState
+	mmGetAndConsumeOutboundHandshake.defaultExpectation.expectationOrigins.originIncomingState = minimock.CallerInfo(1)
+
+	return mmGetAndConsumeOutboundHandshake
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.GetAndConsumeOutboundHandshake
+func (mmGetAndConsumeOutboundHandshake *mStorageMockGetAndConsumeOutboundHandshake) Inspect(f func(ctx context.Context, tenantID uuid.UUID, incomingState string)) *mStorageMockGetAndConsumeOutboundHandshake {
+	if mmGetAndConsumeOutboundHandshake.mock.inspectFuncGetAndConsumeOutboundHandshake != nil {
+		mmGetAndConsumeOutboundHandshake.mock.t.Fatalf("Inspect function is already set for StorageMock.GetAndConsumeOutboundHandshake")
+	}
+
+	mmGetAndConsumeOutboundHandshake.mock.inspectFuncGetAndConsumeOutboundHandshake = f
+
+	return mmGetAndConsumeOutboundHandshake
+}
+
+// Return sets up results that will be returned by Storage.GetAndConsumeOutboundHandshake
+func (mmGetAndConsumeOutboundHandshake *mStorageMockGetAndConsumeOutboundHandshake) Return(op1 *model.OutboundHandshakeSession, err error) *StorageMock {
+	if mmGetAndConsumeOutboundHandshake.mock.funcGetAndConsumeOutboundHandshake != nil {
+		mmGetAndConsumeOutboundHandshake.mock.t.Fatalf("StorageMock.GetAndConsumeOutboundHandshake mock is already set by Set")
+	}
+
+	if mmGetAndConsumeOutboundHandshake.defaultExpectation == nil {
+		mmGetAndConsumeOutboundHandshake.defaultExpectation = &StorageMockGetAndConsumeOutboundHandshakeExpectation{mock: mmGetAndConsumeOutboundHandshake.mock}
+	}
+	mmGetAndConsumeOutboundHandshake.defaultExpectation.results = &StorageMockGetAndConsumeOutboundHandshakeResults{op1, err}
+	mmGetAndConsumeOutboundHandshake.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetAndConsumeOutboundHandshake.mock
+}
+
+// Set uses given function f to mock the Storage.GetAndConsumeOutboundHandshake method
+func (mmGetAndConsumeOutboundHandshake *mStorageMockGetAndConsumeOutboundHandshake) Set(f func(ctx context.Context, tenantID uuid.UUID, incomingState string) (op1 *model.OutboundHandshakeSession, err error)) *StorageMock {
+	if mmGetAndConsumeOutboundHandshake.defaultExpectation != nil {
+		mmGetAndConsumeOutboundHandshake.mock.t.Fatalf("Default expectation is already set for the Storage.GetAndConsumeOutboundHandshake method")
+	}
+
+	if len(mmGetAndConsumeOutboundHandshake.expectations) > 0 {
+		mmGetAndConsumeOutboundHandshake.mock.t.Fatalf("Some expectations are already set for the Storage.GetAndConsumeOutboundHandshake method")
+	}
+
+	mmGetAndConsumeOutboundHandshake.mock.funcGetAndConsumeOutboundHandshake = f
+	mmGetAndConsumeOutboundHandshake.mock.funcGetAndConsumeOutboundHandshakeOrigin = minimock.CallerInfo(1)
+	return mmGetAndConsumeOutboundHandshake.mock
+}
+
+// When sets expectation for the Storage.GetAndConsumeOutboundHandshake which will trigger the result defined by the following
+// Then helper
+func (mmGetAndConsumeOutboundHandshake *mStorageMockGetAndConsumeOutboundHandshake) When(ctx context.Context, tenantID uuid.UUID, incomingState string) *StorageMockGetAndConsumeOutboundHandshakeExpectation {
+	if mmGetAndConsumeOutboundHandshake.mock.funcGetAndConsumeOutboundHandshake != nil {
+		mmGetAndConsumeOutboundHandshake.mock.t.Fatalf("StorageMock.GetAndConsumeOutboundHandshake mock is already set by Set")
+	}
+
+	expectation := &StorageMockGetAndConsumeOutboundHandshakeExpectation{
+		mock:               mmGetAndConsumeOutboundHandshake.mock,
+		params:             &StorageMockGetAndConsumeOutboundHandshakeParams{ctx, tenantID, incomingState},
+		expectationOrigins: StorageMockGetAndConsumeOutboundHandshakeExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetAndConsumeOutboundHandshake.expectations = append(mmGetAndConsumeOutboundHandshake.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.GetAndConsumeOutboundHandshake return parameters for the expectation previously defined by the When method
+func (e *StorageMockGetAndConsumeOutboundHandshakeExpectation) Then(op1 *model.OutboundHandshakeSession, err error) *StorageMock {
+	e.results = &StorageMockGetAndConsumeOutboundHandshakeResults{op1, err}
+	return e.mock
+}
+
+// Times sets number of times Storage.GetAndConsumeOutboundHandshake should be invoked
+func (mmGetAndConsumeOutboundHandshake *mStorageMockGetAndConsumeOutboundHandshake) Times(n uint64) *mStorageMockGetAndConsumeOutboundHandshake {
+	if n == 0 {
+		mmGetAndConsumeOutboundHandshake.mock.t.Fatalf("Times of StorageMock.GetAndConsumeOutboundHandshake mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetAndConsumeOutboundHandshake.expectedInvocations, n)
+	mmGetAndConsumeOutboundHandshake.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetAndConsumeOutboundHandshake
+}
+
+func (mmGetAndConsumeOutboundHandshake *mStorageMockGetAndConsumeOutboundHandshake) invocationsDone() bool {
+	if len(mmGetAndConsumeOutboundHandshake.expectations) == 0 && mmGetAndConsumeOutboundHandshake.defaultExpectation == nil && mmGetAndConsumeOutboundHandshake.mock.funcGetAndConsumeOutboundHandshake == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetAndConsumeOutboundHandshake.mock.afterGetAndConsumeOutboundHandshakeCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetAndConsumeOutboundHandshake.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetAndConsumeOutboundHandshake implements mm_port.Storage
+func (mmGetAndConsumeOutboundHandshake *StorageMock) GetAndConsumeOutboundHandshake(ctx context.Context, tenantID uuid.UUID, incomingState string) (op1 *model.OutboundHandshakeSession, err error) {
+	mm_atomic.AddUint64(&mmGetAndConsumeOutboundHandshake.beforeGetAndConsumeOutboundHandshakeCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetAndConsumeOutboundHandshake.afterGetAndConsumeOutboundHandshakeCounter, 1)
+
+	mmGetAndConsumeOutboundHandshake.t.Helper()
+
+	if mmGetAndConsumeOutboundHandshake.inspectFuncGetAndConsumeOutboundHandshake != nil {
+		mmGetAndConsumeOutboundHandshake.inspectFuncGetAndConsumeOutboundHandshake(ctx, tenantID, incomingState)
+	}
+
+	mm_params := StorageMockGetAndConsumeOutboundHandshakeParams{ctx, tenantID, incomingState}
+
+	// Record call args
+	mmGetAndConsumeOutboundHandshake.GetAndConsumeOutboundHandshakeMock.mutex.Lock()
+	mmGetAndConsumeOutboundHandshake.GetAndConsumeOutboundHandshakeMock.callArgs = append(mmGetAndConsumeOutboundHandshake.GetAndConsumeOutboundHandshakeMock.callArgs, &mm_params)
+	mmGetAndConsumeOutboundHandshake.GetAndConsumeOutboundHandshakeMock.mutex.Unlock()
+
+	for _, e := range mmGetAndConsumeOutboundHandshake.GetAndConsumeOutboundHandshakeMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.op1, e.results.err
+		}
+	}
+
+	if mmGetAndConsumeOutboundHandshake.GetAndConsumeOutboundHandshakeMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetAndConsumeOutboundHandshake.GetAndConsumeOutboundHandshakeMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetAndConsumeOutboundHandshake.GetAndConsumeOutboundHandshakeMock.defaultExpectation.params
+		mm_want_ptrs := mmGetAndConsumeOutboundHandshake.GetAndConsumeOutboundHandshakeMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockGetAndConsumeOutboundHandshakeParams{ctx, tenantID, incomingState}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetAndConsumeOutboundHandshake.t.Errorf("StorageMock.GetAndConsumeOutboundHandshake got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetAndConsumeOutboundHandshake.GetAndConsumeOutboundHandshakeMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetAndConsumeOutboundHandshake.t.Errorf("StorageMock.GetAndConsumeOutboundHandshake got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetAndConsumeOutboundHandshake.GetAndConsumeOutboundHandshakeMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.incomingState != nil && !minimock.Equal(*mm_want_ptrs.incomingState, mm_got.incomingState) {
+				mmGetAndConsumeOutboundHandshake.t.Errorf("StorageMock.GetAndConsumeOutboundHandshake got unexpected parameter incomingState, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetAndConsumeOutboundHandshake.GetAndConsumeOutboundHandshakeMock.defaultExpectation.expectationOrigins.originIncomingState, *mm_want_ptrs.incomingState, mm_got.incomingState, minimock.Diff(*mm_want_ptrs.incomingState, mm_got.incomingState))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetAndConsumeOutboundHandshake.t.Errorf("StorageMock.GetAndConsumeOutboundHandshake got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetAndConsumeOutboundHandshake.GetAndConsumeOutboundHandshakeMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetAndConsumeOutboundHandshake.GetAndConsumeOutboundHandshakeMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetAndConsumeOutboundHandshake.t.Fatal("No results are set for the StorageMock.GetAndConsumeOutboundHandshake")
+		}
+		return (*mm_results).op1, (*mm_results).err
+	}
+	if mmGetAndConsumeOutboundHandshake.funcGetAndConsumeOutboundHandshake != nil {
+		return mmGetAndConsumeOutboundHandshake.funcGetAndConsumeOutboundHandshake(ctx, tenantID, incomingState)
+	}
+	mmGetAndConsumeOutboundHandshake.t.Fatalf("Unexpected call to StorageMock.GetAndConsumeOutboundHandshake. %v %v %v", ctx, tenantID, incomingState)
+	return
+}
+
+// GetAndConsumeOutboundHandshakeAfterCounter returns a count of finished StorageMock.GetAndConsumeOutboundHandshake invocations
+func (mmGetAndConsumeOutboundHandshake *StorageMock) GetAndConsumeOutboundHandshakeAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetAndConsumeOutboundHandshake.afterGetAndConsumeOutboundHandshakeCounter)
+}
+
+// GetAndConsumeOutboundHandshakeBeforeCounter returns a count of StorageMock.GetAndConsumeOutboundHandshake invocations
+func (mmGetAndConsumeOutboundHandshake *StorageMock) GetAndConsumeOutboundHandshakeBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetAndConsumeOutboundHandshake.beforeGetAndConsumeOutboundHandshakeCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.GetAndConsumeOutboundHandshake.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetAndConsumeOutboundHandshake *mStorageMockGetAndConsumeOutboundHandshake) Calls() []*StorageMockGetAndConsumeOutboundHandshakeParams {
+	mmGetAndConsumeOutboundHandshake.mutex.RLock()
+
+	argCopy := make([]*StorageMockGetAndConsumeOutboundHandshakeParams, len(mmGetAndConsumeOutboundHandshake.callArgs))
+	copy(argCopy, mmGetAndConsumeOutboundHandshake.callArgs)
+
+	mmGetAndConsumeOutboundHandshake.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetAndConsumeOutboundHandshakeDone returns true if the count of the GetAndConsumeOutboundHandshake invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockGetAndConsumeOutboundHandshakeDone() bool {
+	if m.GetAndConsumeOutboundHandshakeMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetAndConsumeOutboundHandshakeMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetAndConsumeOutboundHandshakeMock.invocationsDone()
+}
+
+// MinimockGetAndConsumeOutboundHandshakeInspect logs each unmet expectation
+func (m *StorageMock) MinimockGetAndConsumeOutboundHandshakeInspect() {
+	for _, e := range m.GetAndConsumeOutboundHandshakeMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.GetAndConsumeOutboundHandshake at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetAndConsumeOutboundHandshakeCounter := mm_atomic.LoadUint64(&m.afterGetAndConsumeOutboundHandshakeCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetAndConsumeOutboundHandshakeMock.defaultExpectation != nil && afterGetAndConsumeOutboundHandshakeCounter < 1 {
+		if m.GetAndConsumeOutboundHandshakeMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.GetAndConsumeOutboundHandshake at\n%s", m.GetAndConsumeOutboundHandshakeMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.GetAndConsumeOutboundHandshake at\n%s with params: %#v", m.GetAndConsumeOutboundHandshakeMock.defaultExpectation.expectationOrigins.origin, *m.GetAndConsumeOutboundHandshakeMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetAndConsumeOutboundHandshake != nil && afterGetAndConsumeOutboundHandshakeCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.GetAndConsumeOutboundHandshake at\n%s", m.funcGetAndConsumeOutboundHandshakeOrigin)
+	}
+
+	if !m.GetAndConsumeOutboundHandshakeMock.invocationsDone() && afterGetAndConsumeOutboundHandshakeCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.GetAndConsumeOutboundHandshake at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetAndConsumeOutboundHandshakeMock.expectedInvocations), m.GetAndConsumeOutboundHandshakeMock.expectedInvocationsOrigin, afterGetAndConsumeOutboundHandshakeCounter)
 	}
 }
 
@@ -16002,6 +16396,348 @@ func (m *StorageMock) MinimockSaveInteractionSessionInspect() {
 	}
 }
 
+type mStorageMockSaveOutboundHandshake struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockSaveOutboundHandshakeExpectation
+	expectations       []*StorageMockSaveOutboundHandshakeExpectation
+
+	callArgs []*StorageMockSaveOutboundHandshakeParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockSaveOutboundHandshakeExpectation specifies expectation struct of the Storage.SaveOutboundHandshake
+type StorageMockSaveOutboundHandshakeExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockSaveOutboundHandshakeParams
+	paramPtrs          *StorageMockSaveOutboundHandshakeParamPtrs
+	expectationOrigins StorageMockSaveOutboundHandshakeExpectationOrigins
+	results            *StorageMockSaveOutboundHandshakeResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockSaveOutboundHandshakeParams contains parameters of the Storage.SaveOutboundHandshake
+type StorageMockSaveOutboundHandshakeParams struct {
+	ctx     context.Context
+	session model.OutboundHandshakeSession
+}
+
+// StorageMockSaveOutboundHandshakeParamPtrs contains pointers to parameters of the Storage.SaveOutboundHandshake
+type StorageMockSaveOutboundHandshakeParamPtrs struct {
+	ctx     *context.Context
+	session *model.OutboundHandshakeSession
+}
+
+// StorageMockSaveOutboundHandshakeResults contains results of the Storage.SaveOutboundHandshake
+type StorageMockSaveOutboundHandshakeResults struct {
+	err error
+}
+
+// StorageMockSaveOutboundHandshakeOrigins contains origins of expectations of the Storage.SaveOutboundHandshake
+type StorageMockSaveOutboundHandshakeExpectationOrigins struct {
+	origin        string
+	originCtx     string
+	originSession string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmSaveOutboundHandshake *mStorageMockSaveOutboundHandshake) Optional() *mStorageMockSaveOutboundHandshake {
+	mmSaveOutboundHandshake.optional = true
+	return mmSaveOutboundHandshake
+}
+
+// Expect sets up expected params for Storage.SaveOutboundHandshake
+func (mmSaveOutboundHandshake *mStorageMockSaveOutboundHandshake) Expect(ctx context.Context, session model.OutboundHandshakeSession) *mStorageMockSaveOutboundHandshake {
+	if mmSaveOutboundHandshake.mock.funcSaveOutboundHandshake != nil {
+		mmSaveOutboundHandshake.mock.t.Fatalf("StorageMock.SaveOutboundHandshake mock is already set by Set")
+	}
+
+	if mmSaveOutboundHandshake.defaultExpectation == nil {
+		mmSaveOutboundHandshake.defaultExpectation = &StorageMockSaveOutboundHandshakeExpectation{}
+	}
+
+	if mmSaveOutboundHandshake.defaultExpectation.paramPtrs != nil {
+		mmSaveOutboundHandshake.mock.t.Fatalf("StorageMock.SaveOutboundHandshake mock is already set by ExpectParams functions")
+	}
+
+	mmSaveOutboundHandshake.defaultExpectation.params = &StorageMockSaveOutboundHandshakeParams{ctx, session}
+	mmSaveOutboundHandshake.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmSaveOutboundHandshake.expectations {
+		if minimock.Equal(e.params, mmSaveOutboundHandshake.defaultExpectation.params) {
+			mmSaveOutboundHandshake.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmSaveOutboundHandshake.defaultExpectation.params)
+		}
+	}
+
+	return mmSaveOutboundHandshake
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.SaveOutboundHandshake
+func (mmSaveOutboundHandshake *mStorageMockSaveOutboundHandshake) ExpectCtxParam1(ctx context.Context) *mStorageMockSaveOutboundHandshake {
+	if mmSaveOutboundHandshake.mock.funcSaveOutboundHandshake != nil {
+		mmSaveOutboundHandshake.mock.t.Fatalf("StorageMock.SaveOutboundHandshake mock is already set by Set")
+	}
+
+	if mmSaveOutboundHandshake.defaultExpectation == nil {
+		mmSaveOutboundHandshake.defaultExpectation = &StorageMockSaveOutboundHandshakeExpectation{}
+	}
+
+	if mmSaveOutboundHandshake.defaultExpectation.params != nil {
+		mmSaveOutboundHandshake.mock.t.Fatalf("StorageMock.SaveOutboundHandshake mock is already set by Expect")
+	}
+
+	if mmSaveOutboundHandshake.defaultExpectation.paramPtrs == nil {
+		mmSaveOutboundHandshake.defaultExpectation.paramPtrs = &StorageMockSaveOutboundHandshakeParamPtrs{}
+	}
+	mmSaveOutboundHandshake.defaultExpectation.paramPtrs.ctx = &ctx
+	mmSaveOutboundHandshake.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmSaveOutboundHandshake
+}
+
+// ExpectSessionParam2 sets up expected param session for Storage.SaveOutboundHandshake
+func (mmSaveOutboundHandshake *mStorageMockSaveOutboundHandshake) ExpectSessionParam2(session model.OutboundHandshakeSession) *mStorageMockSaveOutboundHandshake {
+	if mmSaveOutboundHandshake.mock.funcSaveOutboundHandshake != nil {
+		mmSaveOutboundHandshake.mock.t.Fatalf("StorageMock.SaveOutboundHandshake mock is already set by Set")
+	}
+
+	if mmSaveOutboundHandshake.defaultExpectation == nil {
+		mmSaveOutboundHandshake.defaultExpectation = &StorageMockSaveOutboundHandshakeExpectation{}
+	}
+
+	if mmSaveOutboundHandshake.defaultExpectation.params != nil {
+		mmSaveOutboundHandshake.mock.t.Fatalf("StorageMock.SaveOutboundHandshake mock is already set by Expect")
+	}
+
+	if mmSaveOutboundHandshake.defaultExpectation.paramPtrs == nil {
+		mmSaveOutboundHandshake.defaultExpectation.paramPtrs = &StorageMockSaveOutboundHandshakeParamPtrs{}
+	}
+	mmSaveOutboundHandshake.defaultExpectation.paramPtrs.session = &session
+	mmSaveOutboundHandshake.defaultExpectation.expectationOrigins.originSession = minimock.CallerInfo(1)
+
+	return mmSaveOutboundHandshake
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.SaveOutboundHandshake
+func (mmSaveOutboundHandshake *mStorageMockSaveOutboundHandshake) Inspect(f func(ctx context.Context, session model.OutboundHandshakeSession)) *mStorageMockSaveOutboundHandshake {
+	if mmSaveOutboundHandshake.mock.inspectFuncSaveOutboundHandshake != nil {
+		mmSaveOutboundHandshake.mock.t.Fatalf("Inspect function is already set for StorageMock.SaveOutboundHandshake")
+	}
+
+	mmSaveOutboundHandshake.mock.inspectFuncSaveOutboundHandshake = f
+
+	return mmSaveOutboundHandshake
+}
+
+// Return sets up results that will be returned by Storage.SaveOutboundHandshake
+func (mmSaveOutboundHandshake *mStorageMockSaveOutboundHandshake) Return(err error) *StorageMock {
+	if mmSaveOutboundHandshake.mock.funcSaveOutboundHandshake != nil {
+		mmSaveOutboundHandshake.mock.t.Fatalf("StorageMock.SaveOutboundHandshake mock is already set by Set")
+	}
+
+	if mmSaveOutboundHandshake.defaultExpectation == nil {
+		mmSaveOutboundHandshake.defaultExpectation = &StorageMockSaveOutboundHandshakeExpectation{mock: mmSaveOutboundHandshake.mock}
+	}
+	mmSaveOutboundHandshake.defaultExpectation.results = &StorageMockSaveOutboundHandshakeResults{err}
+	mmSaveOutboundHandshake.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmSaveOutboundHandshake.mock
+}
+
+// Set uses given function f to mock the Storage.SaveOutboundHandshake method
+func (mmSaveOutboundHandshake *mStorageMockSaveOutboundHandshake) Set(f func(ctx context.Context, session model.OutboundHandshakeSession) (err error)) *StorageMock {
+	if mmSaveOutboundHandshake.defaultExpectation != nil {
+		mmSaveOutboundHandshake.mock.t.Fatalf("Default expectation is already set for the Storage.SaveOutboundHandshake method")
+	}
+
+	if len(mmSaveOutboundHandshake.expectations) > 0 {
+		mmSaveOutboundHandshake.mock.t.Fatalf("Some expectations are already set for the Storage.SaveOutboundHandshake method")
+	}
+
+	mmSaveOutboundHandshake.mock.funcSaveOutboundHandshake = f
+	mmSaveOutboundHandshake.mock.funcSaveOutboundHandshakeOrigin = minimock.CallerInfo(1)
+	return mmSaveOutboundHandshake.mock
+}
+
+// When sets expectation for the Storage.SaveOutboundHandshake which will trigger the result defined by the following
+// Then helper
+func (mmSaveOutboundHandshake *mStorageMockSaveOutboundHandshake) When(ctx context.Context, session model.OutboundHandshakeSession) *StorageMockSaveOutboundHandshakeExpectation {
+	if mmSaveOutboundHandshake.mock.funcSaveOutboundHandshake != nil {
+		mmSaveOutboundHandshake.mock.t.Fatalf("StorageMock.SaveOutboundHandshake mock is already set by Set")
+	}
+
+	expectation := &StorageMockSaveOutboundHandshakeExpectation{
+		mock:               mmSaveOutboundHandshake.mock,
+		params:             &StorageMockSaveOutboundHandshakeParams{ctx, session},
+		expectationOrigins: StorageMockSaveOutboundHandshakeExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmSaveOutboundHandshake.expectations = append(mmSaveOutboundHandshake.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.SaveOutboundHandshake return parameters for the expectation previously defined by the When method
+func (e *StorageMockSaveOutboundHandshakeExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockSaveOutboundHandshakeResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.SaveOutboundHandshake should be invoked
+func (mmSaveOutboundHandshake *mStorageMockSaveOutboundHandshake) Times(n uint64) *mStorageMockSaveOutboundHandshake {
+	if n == 0 {
+		mmSaveOutboundHandshake.mock.t.Fatalf("Times of StorageMock.SaveOutboundHandshake mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmSaveOutboundHandshake.expectedInvocations, n)
+	mmSaveOutboundHandshake.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmSaveOutboundHandshake
+}
+
+func (mmSaveOutboundHandshake *mStorageMockSaveOutboundHandshake) invocationsDone() bool {
+	if len(mmSaveOutboundHandshake.expectations) == 0 && mmSaveOutboundHandshake.defaultExpectation == nil && mmSaveOutboundHandshake.mock.funcSaveOutboundHandshake == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmSaveOutboundHandshake.mock.afterSaveOutboundHandshakeCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmSaveOutboundHandshake.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// SaveOutboundHandshake implements mm_port.Storage
+func (mmSaveOutboundHandshake *StorageMock) SaveOutboundHandshake(ctx context.Context, session model.OutboundHandshakeSession) (err error) {
+	mm_atomic.AddUint64(&mmSaveOutboundHandshake.beforeSaveOutboundHandshakeCounter, 1)
+	defer mm_atomic.AddUint64(&mmSaveOutboundHandshake.afterSaveOutboundHandshakeCounter, 1)
+
+	mmSaveOutboundHandshake.t.Helper()
+
+	if mmSaveOutboundHandshake.inspectFuncSaveOutboundHandshake != nil {
+		mmSaveOutboundHandshake.inspectFuncSaveOutboundHandshake(ctx, session)
+	}
+
+	mm_params := StorageMockSaveOutboundHandshakeParams{ctx, session}
+
+	// Record call args
+	mmSaveOutboundHandshake.SaveOutboundHandshakeMock.mutex.Lock()
+	mmSaveOutboundHandshake.SaveOutboundHandshakeMock.callArgs = append(mmSaveOutboundHandshake.SaveOutboundHandshakeMock.callArgs, &mm_params)
+	mmSaveOutboundHandshake.SaveOutboundHandshakeMock.mutex.Unlock()
+
+	for _, e := range mmSaveOutboundHandshake.SaveOutboundHandshakeMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmSaveOutboundHandshake.SaveOutboundHandshakeMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmSaveOutboundHandshake.SaveOutboundHandshakeMock.defaultExpectation.Counter, 1)
+		mm_want := mmSaveOutboundHandshake.SaveOutboundHandshakeMock.defaultExpectation.params
+		mm_want_ptrs := mmSaveOutboundHandshake.SaveOutboundHandshakeMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockSaveOutboundHandshakeParams{ctx, session}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmSaveOutboundHandshake.t.Errorf("StorageMock.SaveOutboundHandshake got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSaveOutboundHandshake.SaveOutboundHandshakeMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.session != nil && !minimock.Equal(*mm_want_ptrs.session, mm_got.session) {
+				mmSaveOutboundHandshake.t.Errorf("StorageMock.SaveOutboundHandshake got unexpected parameter session, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSaveOutboundHandshake.SaveOutboundHandshakeMock.defaultExpectation.expectationOrigins.originSession, *mm_want_ptrs.session, mm_got.session, minimock.Diff(*mm_want_ptrs.session, mm_got.session))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmSaveOutboundHandshake.t.Errorf("StorageMock.SaveOutboundHandshake got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmSaveOutboundHandshake.SaveOutboundHandshakeMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmSaveOutboundHandshake.SaveOutboundHandshakeMock.defaultExpectation.results
+		if mm_results == nil {
+			mmSaveOutboundHandshake.t.Fatal("No results are set for the StorageMock.SaveOutboundHandshake")
+		}
+		return (*mm_results).err
+	}
+	if mmSaveOutboundHandshake.funcSaveOutboundHandshake != nil {
+		return mmSaveOutboundHandshake.funcSaveOutboundHandshake(ctx, session)
+	}
+	mmSaveOutboundHandshake.t.Fatalf("Unexpected call to StorageMock.SaveOutboundHandshake. %v %v", ctx, session)
+	return
+}
+
+// SaveOutboundHandshakeAfterCounter returns a count of finished StorageMock.SaveOutboundHandshake invocations
+func (mmSaveOutboundHandshake *StorageMock) SaveOutboundHandshakeAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSaveOutboundHandshake.afterSaveOutboundHandshakeCounter)
+}
+
+// SaveOutboundHandshakeBeforeCounter returns a count of StorageMock.SaveOutboundHandshake invocations
+func (mmSaveOutboundHandshake *StorageMock) SaveOutboundHandshakeBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSaveOutboundHandshake.beforeSaveOutboundHandshakeCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.SaveOutboundHandshake.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmSaveOutboundHandshake *mStorageMockSaveOutboundHandshake) Calls() []*StorageMockSaveOutboundHandshakeParams {
+	mmSaveOutboundHandshake.mutex.RLock()
+
+	argCopy := make([]*StorageMockSaveOutboundHandshakeParams, len(mmSaveOutboundHandshake.callArgs))
+	copy(argCopy, mmSaveOutboundHandshake.callArgs)
+
+	mmSaveOutboundHandshake.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockSaveOutboundHandshakeDone returns true if the count of the SaveOutboundHandshake invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockSaveOutboundHandshakeDone() bool {
+	if m.SaveOutboundHandshakeMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.SaveOutboundHandshakeMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.SaveOutboundHandshakeMock.invocationsDone()
+}
+
+// MinimockSaveOutboundHandshakeInspect logs each unmet expectation
+func (m *StorageMock) MinimockSaveOutboundHandshakeInspect() {
+	for _, e := range m.SaveOutboundHandshakeMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.SaveOutboundHandshake at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterSaveOutboundHandshakeCounter := mm_atomic.LoadUint64(&m.afterSaveOutboundHandshakeCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.SaveOutboundHandshakeMock.defaultExpectation != nil && afterSaveOutboundHandshakeCounter < 1 {
+		if m.SaveOutboundHandshakeMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.SaveOutboundHandshake at\n%s", m.SaveOutboundHandshakeMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.SaveOutboundHandshake at\n%s with params: %#v", m.SaveOutboundHandshakeMock.defaultExpectation.expectationOrigins.origin, *m.SaveOutboundHandshakeMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcSaveOutboundHandshake != nil && afterSaveOutboundHandshakeCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.SaveOutboundHandshake at\n%s", m.funcSaveOutboundHandshakeOrigin)
+	}
+
+	if !m.SaveOutboundHandshakeMock.invocationsDone() && afterSaveOutboundHandshakeCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.SaveOutboundHandshake at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.SaveOutboundHandshakeMock.expectedInvocations), m.SaveOutboundHandshakeMock.expectedInvocationsOrigin, afterSaveOutboundHandshakeCounter)
+	}
+}
+
 type mStorageMockSavePAR struct {
 	optional           bool
 	mock               *StorageMock
@@ -18142,6 +18878,8 @@ func (m *StorageMock) MinimockFinish() {
 
 			m.MinimockGetAndConsumeInteractionSessionInspect()
 
+			m.MinimockGetAndConsumeOutboundHandshakeInspect()
+
 			m.MinimockGetAndConsumePARInspect()
 
 			m.MinimockGetClientInspect()
@@ -18206,6 +18944,8 @@ func (m *StorageMock) MinimockFinish() {
 
 			m.MinimockSaveInteractionSessionInspect()
 
+			m.MinimockSaveOutboundHandshakeInspect()
+
 			m.MinimockSavePARInspect()
 
 			m.MinimockSavePasswordCredentialInspect()
@@ -18251,6 +18991,7 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockGetAllTenantsDone() &&
 		m.MinimockGetAndConsumeAuthSessionDone() &&
 		m.MinimockGetAndConsumeInteractionSessionDone() &&
+		m.MinimockGetAndConsumeOutboundHandshakeDone() &&
 		m.MinimockGetAndConsumePARDone() &&
 		m.MinimockGetClientDone() &&
 		m.MinimockGetClientsByTenantDone() &&
@@ -18283,6 +19024,7 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockSaveClientDone() &&
 		m.MinimockSaveDPoPProofDone() &&
 		m.MinimockSaveInteractionSessionDone() &&
+		m.MinimockSaveOutboundHandshakeDone() &&
 		m.MinimockSavePARDone() &&
 		m.MinimockSavePasswordCredentialDone() &&
 		m.MinimockSaveRefreshTokenDone() &&

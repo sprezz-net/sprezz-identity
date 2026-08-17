@@ -2,6 +2,8 @@ package crypto
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -12,10 +14,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 
-	"sprezz-identity/internal/adapters/out/state"
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
 
@@ -39,7 +41,7 @@ type JWTSigner struct {
 	keyrings  map[string]*tenantKeyring
 	storage   Storage
 	clock     port.Clock
-	masterKey string
+	masterKey []byte
 }
 
 // Ensure JWTSigner strictly satisfies port.Crypto at compile time.
@@ -49,68 +51,83 @@ func NewJWTSigner(storage Storage, cl port.Clock, masterKey string) (*JWTSigner,
 	if masterKey == "" {
 		return nil, errors.New("SPREZZ_MASTER_KEY must not be empty")
 	}
+
+	// Enforce key requirements: AES-GCM requires exactly 16, 24, or 32 bytes keys
+	keyBytes := []byte(masterKey)
+	if len(keyBytes) != 16 && len(keyBytes) != 24 && len(keyBytes) != 32 {
+		return nil, fmt.Errorf("SPREZZ_MASTER_KEY must be exactly 16, 24, or 32 bytes for AES-GCM (current size: %d)", len(keyBytes))
+	}
+
 	return &JWTSigner{
 		keyrings:  make(map[string]*tenantKeyring),
 		storage:   storage,
 		clock:     cl,
-		masterKey: masterKey,
+		masterKey: keyBytes,
 	}, nil
 }
 
 // --- Cryptographic Envelope Utilities ---
 
 func (s *JWTSigner) encrypt(plaintext, key []byte) ([]byte, []byte, error) {
-	plaintextB64 := base64.StdEncoding.EncodeToString(plaintext)
-	passphrase := base64.StdEncoding.EncodeToString(key)
-	encB64, err := state.EncryptAESGCM(plaintextB64, passphrase)
+	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("create cipher block: %w", err)
 	}
-	data, err := base64.StdEncoding.DecodeString(encB64)
+
+	aesgcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("initialize gcm: %w", err)
 	}
-	if len(data) < 12 {
-		return nil, nil, fmt.Errorf("invalid ciphertext from EncryptAESGCM")
+
+	// Generate a high-entropy cryptographically secure random 12-byte nonce
+	nonce := make([]byte, 12)
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, nil, fmt.Errorf("generate random nonce: %w", err)
 	}
-	return data[12:], data[:12], nil
+
+	// Seal appends the ciphertext directly to the nonce slice space
+	ciphertext := aesgcm.Seal(nil, nonce, plaintext, nil)
+
+	return ciphertext, nonce, nil
 }
 
 func (s *JWTSigner) decrypt(ciphertext, key, nonce []byte) ([]byte, error) {
-	combined := append(nonce, ciphertext...)
-	combinedB64 := base64.StdEncoding.EncodeToString(combined)
-	passphrase := base64.StdEncoding.EncodeToString(key)
-	decB64, err := state.DecryptAESGCM(combinedB64, passphrase)
+	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create cipher block: %w", err)
 	}
-	return base64.StdEncoding.DecodeString(decB64)
+
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("initialize gcm: %w", err)
+	}
+
+	plaintext, err := aesgcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, fmt.Errorf("aes-gcm decryption failed: %w", err)
+	}
+
+	return plaintext, nil
 }
 
 func (s *JWTSigner) encryptDEK(plainDEK []byte) ([]byte, []byte, error) {
-	plainDEKB64 := base64.StdEncoding.EncodeToString(plainDEK)
-	encB64, err := state.EncryptAESGCM(plainDEKB64, s.masterKey)
+	// Reuses the optimized raw byte encryption utility using your configured masterKey string bytes
+	ciphertext, nonce, err := s.encrypt(plainDEK, s.masterKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("encrypt dek wrapper: %w", err)
 	}
-	data, err := base64.StdEncoding.DecodeString(encB64)
-	if err != nil {
-		return nil, nil, err
-	}
-	if len(data) < 12 {
-		return nil, nil, fmt.Errorf("invalid ciphertext for DEK encryption")
-	}
-	return data[12:], data[:12], nil
+
+	return ciphertext, nonce, nil
 }
 
 func (s *JWTSigner) decryptDEK(encDEK, nonce []byte) ([]byte, error) {
-	combined := append(nonce, encDEK...)
-	combinedB64 := base64.StdEncoding.EncodeToString(combined)
-	decB64, err := state.DecryptAESGCM(combinedB64, s.masterKey)
+	// Reuses our optimized raw decryption logic using the configured masterKey
+	plainDEK, err := s.decrypt(encDEK, s.masterKey, nonce)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decrypt dek wrapper failed: %w", err)
 	}
-	return base64.StdEncoding.DecodeString(decB64)
+
+	return plainDEK, nil
 }
 
 func (s *JWTSigner) SignAccessToken(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
