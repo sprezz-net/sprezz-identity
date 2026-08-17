@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -459,7 +460,7 @@ func TestJWTSigner_RotateKeys(t *testing.T) {
 	currentTime := time.Now().UTC()
 	initialClock := portmock.NewMockClock(currentTime)
 
-	signer1, _ := NewJWTSigner(storageRepo, initialClock, "01234567890123456789012345678901")
+	signer1, _ := NewJWTSigner(storageRepo, initialClock, "thisisa32byteplaintextsecretkey!")
 
 	// Initialize the original keyset state inside memory map cache
 	jwks, err := signer1.JWKSForTenant(ctx, domain, scheme)
@@ -478,7 +479,7 @@ func TestJWTSigner_RotateKeys(t *testing.T) {
 	rotatedClock := portmock.NewMockClock(advancedTime)
 
 	// Build a fresh signer container sharing the exact same storage memory context
-	signer2, _ := NewJWTSigner(storageRepo, rotatedClock, "01234567890123456789012345678901")
+	signer2, _ := NewJWTSigner(storageRepo, rotatedClock, "thisisa32byteplaintextsecretkey!")
 
 	// Prime the signer2 memory map cache with the initial keyring footprint
 	_, _ = signer2.JWKSForTenant(ctx, domain, scheme)
@@ -512,7 +513,7 @@ func TestJWTSigner_RotateKeys_NoDowntime(t *testing.T) {
 	// 1. PHASE 1: Sign token with the initial keyset baseline
 	currentTime := time.Now().UTC()
 	initialClock := portmock.NewMockClock(currentTime)
-	signer1, _ := NewJWTSigner(storageRepo, initialClock, "01234567890123456789012345678901")
+	signer1, _ := NewJWTSigner(storageRepo, initialClock, "thisisa32byteplaintextsecretkey!")
 
 	claims1 := model.TokenClaims{
 		TokenID:   "token-1",
@@ -531,7 +532,7 @@ func TestJWTSigner_RotateKeys_NoDowntime(t *testing.T) {
 	// This forces UnixNano() to generate a completely distinct, unique suffix string!
 	advancedTime := currentTime.Add(5 * time.Minute)
 	rotatedClock := portmock.NewMockClock(advancedTime)
-	signer2, _ := NewJWTSigner(storageRepo, rotatedClock, "01234567890123456789012345678901")
+	signer2, _ := NewJWTSigner(storageRepo, rotatedClock, "thisisa32byteplaintextsecretkey!")
 
 	// Prime signer2's memory map cache with the initial keyring data footprint from the DB
 	_, _ = signer2.JWKSForTenant(ctx, domain, "https")
@@ -660,9 +661,71 @@ func newTestSigner(t *testing.T) *JWTSigner {
 	// A standard dynamic evaluation functions perfectly for your basic token tests
 	staticClock := portmock.NewMockClock(time.Now().UTC())
 
-	signer, err := NewJWTSigner(newMockStorage(), staticClock, "01234567890123456789012345678901")
+	signer, err := NewJWTSigner(newMockStorage(), staticClock, "thisisa32byteplaintextsecretkey!")
 	if err != nil {
 		t.Fatalf("failed to create signer: %v", err)
 	}
 	return signer
+}
+
+// TestNewJWTSignerMasterKeyParsing verifies the hybrid evaluation strategies
+// introduced to support raw, hex, and base64 encoded SPREZZ_MASTER_KEY layouts.
+func TestNewJWTSignerMasterKeyParsing(t *testing.T) {
+	tests := []struct {
+		name        string
+		masterKey   string
+		expectError bool
+		expectedLen int
+	}{
+		{
+			name:        "Raw Text Key 32 Bytes Compliant",
+			masterKey:   "thisisa32byteplaintextsecretkey!", // Exactly 32 characters
+			expectError: false,
+			expectedLen: 32,
+		},
+		{
+			name:        "Hex Key Generated via OpenSSL (64 Hex Characters)",
+			masterKey:   "6465762d61646d696e2d7365637265742d646f6e742d7573652d696e2d70726f", // 64 Hex chars -> 32 binary bytes
+			expectError: false,
+			expectedLen: 32,
+		},
+		{
+			name:        "Base64 Encoded Key Translating to 32 Bytes",
+			masterKey:   base64.StdEncoding.EncodeToString([]byte("thisisa32byteplaintextsecretkey!")), // Valid 32-byte Base64 token
+			expectError: false,
+			expectedLen: 32,
+		},
+		{
+			name:        "Invalid Length Plaintext Triggers Failure",
+			masterKey:   "shortkey", // Insufficient key length
+			expectError: true,
+		},
+		{
+			name:        "Invalid 48-byte Base64 Decoding Triggers Failure",
+			masterKey:   base64.StdEncoding.EncodeToString([]byte("this_is_an_invalidly_padded_forty_eight_byte_key")), // Decodes to 48 binary bytes -> Rejected
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Constructor validates fields first; storage references can remain nil here
+			signer, err := NewJWTSigner(nil, nil, tt.masterKey)
+
+			if tt.expectError {
+				if err == nil {
+					t.Fatalf("expected initialization validation error but constructor returned green")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("failed to initialize cryptographic boundaries: %v", err)
+			}
+
+			if len(signer.masterKey) != tt.expectedLen {
+				t.Errorf("signer internal key footprint mismatch: expected %d bytes, got %d", tt.expectedLen, len(signer.masterKey))
+			}
+		})
+	}
 }
