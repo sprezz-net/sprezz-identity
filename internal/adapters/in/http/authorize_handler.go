@@ -7,7 +7,6 @@ import (
 	"html"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -29,9 +28,10 @@ func (h *HttpAdapter) resolveSessionCookieConfig(r *http.Request) (string, bool)
 	name := model.CookieSessionNameProd
 	secure := true
 
-	appEnv := os.Getenv("APP_ENV")
-	if appEnv == "" {
-		appEnv = "local"
+	// Fail-Secure: Default to "prod" if h.appEnv is empty or misconfigured
+	currentEnv := h.appEnv
+	if currentEnv == "" {
+		currentEnv = "prod"
 	}
 
 	host := r.Host
@@ -41,7 +41,8 @@ func (h *HttpAdapter) resolveSessionCookieConfig(r *http.Request) (string, bool)
 
 	isLocalHost := host == "localhost" || host == "127.0.0.1"
 
-	if appEnv == "local" && isLocalHost {
+	// Only lower security barriers if the environment is EXPLICITLY set to local on a localhost origin
+	if currentEnv == "local" && isLocalHost {
 		name = model.CookieSessionNameDev
 		secure = false
 	}
