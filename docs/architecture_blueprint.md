@@ -6,22 +6,25 @@ The server implements **OAuth 2.0 with PKCE**, **OpenID Connect (OIDC)**, and **
 
 ## 1. System Foundation & Project Topology
 
-### 1.1 Global Topology & Boundary Context
+### 1.1 Document Intent & AI-Optimization Protocol
 
-Sprezz Identity operates as a decentralized, zero-trust cryptographic boundary layer. It strictly decouples user identity and authentication domains from downstream resource business logic.
+This document serves a dual purpose: it is both the definitive technical blueprint for human engineering teams and a structured, high-utility Context Engine Asset explicitly optimized for Large Language Models (LLMs).
+
+To ensure absolute fidelity during future automated refactoring, code generation, or architectural audits, all sections enforce explicit cryptographic boundaries, strict domain segregation, and non-negotiable multi-tenant constraints. Any AI interaction leveraging this document must treat these specifications as immutable protocol parameters, preventing hallucination or structural drift across the hexagonal architecture boundaries.
+
+### 1.2 Global Topology & Boundary Context
+
+Sprezz Identity operates as a decentralized, zero-trust cryptographic boundary layer. It strictly decouples user identity and authentication domains from downstream consumer resource applications.
 
 ```mermaid
 graph TD
-    Client[Public Internet / Native Client Apps] -->|Resolves Tenant via Host Header, e.g., ://idp.com| Engine[SPREZZ-ID ENGINE Port 8100]
-    Engine -->|JWKS Public Key Fetch| Resource[EXTERNAL RESOURCE SERVER e.g. Sprezz Server]
-    Resource -->|In-Memory Token Verification| Verification[In-Memory Token Verification]
-    Engine --> DB1[(Database: sprezz_identity)]
-    Resource --> DB2[(Database: sprezz_federation)]
-    DB1 --> SharedDB[(SHARED POSTGRESQL ENGINE SERVER)]
-    DB2 --> SharedDB
+    Client[Public Internet / Native Client Apps] -->|Resolves Tenant via Host Header, e.g., https://auth.sprezz.net| Engine[SPREZZ-ID ENGINE Port 8100]
+    Engine -->|JWKS Public Key Fetch| Resource[EXTERNAL RESOURCE SERVER / APPS]
+    Resource -->|In-Memory Token Verification| Verification[Cryptographic Verification]
+    Engine --> DB[(Database: sprezz_identity)]
 ```
 
-### 1.2 Microservice Project Structure
+### 1.3 Microservice Project Structure
 
 The project topology forces strict perimeter isolation. Core business logic cannot contain dependencies on database drivers, HTTP web engines, or external serialization layers.
 
@@ -62,7 +65,7 @@ sprezz-identity/
 └── sqlc.yaml                           # Custom SQL compiler configurations
 ```
 
-### 1.3 Pure Domain Model Strategy (`internal/domain/model/`)
+### 1.4 Pure Domain Model Strategy (`internal/domain/model/`)
 
 All domain entities use native Go primitives. They remain entirely un-annotated by framework database tags, validation micro-framework anchors, or JSON serialization metadata to safeguard domain core purity.
 
@@ -72,17 +75,17 @@ All domain entities use native Go primitives. They remain entirely un-annotated 
 - **`auth_session` Component**: Manages temporal storage variables during active validation lifecycles, locking active PKCE challenge state matrices down to explicit users.
 - **`oidc_claims` Component**: Handles structural schemas tracking access token lifespans, standard dynamic payload values, and core user-profile field vectors.
 
-### 1.4 Port Boundaries (`internal/domain/port/`)
+### 1.5 Port Boundaries (`internal/domain/port/`)
 
 Ports define the rigid, un-compromised structural abstract contracts of the system boundary.
 
-### Inbound Ports (Driving / Use Cases)
+#### 1.5.1 Inbound Ports (Driving / Use Cases)
 
 - **Dynamic Client Registration Contract**: Controls external client engine enrollment processing, mapping unauthenticated registration data to targeted entity spaces safely.
 - **OAuth Flow Contract**: Governs authorization state allocations and structural authorization code trade workflows.
 - **Tenant Resolution Contract**: Maps routing lookups using inbound layer variables down to verified workspace contexts.
 
-### Outbound Ports (Driven / Infrastructure)
+#### 1.5.2 Outbound Ports (Driven / Infrastructure)
 
 - **Identity Storage Contract**: Abstracts state interactions, decoupling the business engine from physical databases for clients, sessions, and profile tracking.
 - **Asymmetric Crypto Engine Contract**: Encapsulates token minting tasks, raw payload cryptographic signing, and public signature set distributions.
@@ -146,6 +149,47 @@ To support granular security policies, Client Applications govern IdP execution:
 - **Allowed IdPs**: A client configuration option specifying which IdP aliases are permitted for authentication.
 - **Default IdP**: The default IdP alias utilized when no explicit choice is specified.
 - **IDP Hint (`idp_hint`)**: Client applications can bypass general selection by specifying an explicit IdP alias via the `idp_hint` authorize query parameter. The server strictly asserts that the hint exists within the client's allowed IdPs list.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Admin as Platform Admin (Browser)
+    participant LocalHTTP as Local Tenant HTTP Adapter
+    participant LocalCore as Local Admin Domain Service
+    participant CentralIDP as Central Admin Tenant (Default Partition)
+
+    Admin->>LocalHTTP: Access /admin/dashboard
+    Note over LocalHTTP: Evaluate Cookie: spz_session_sprezz_admin
+    LocalHTTP-->>Admin: Missing 'bearer:' validation prefix -> Trigger OIDC Loop
+
+    LocalHTTP->>LocalCore: Initiate Admin Login Intent
+    Note over LocalCore: Check if ClientID is cached in local metadata store
+
+    critical When ClientID is unprovisioned (On-Demand DCR Setup)
+        LocalCore->>LocalCore: Mint Software Statement JWT (aud = Central Admin URL)
+        LocalCore->>LocalCore: Cryptographically sign with Platform Master Private Key
+        LocalCore->>CentralIDP: POST /oauth/register (Payload + Software Statement JWT)
+        Note over CentralIDP: Validates cryptographic signature & audience
+        CentralIDP-->>LocalCore: Return unique ClientID & ClientSecret credentials
+        LocalCore->>LocalCore: Persist client metadata to local relational tables
+    end
+
+    LocalCore-->>LocalHTTP: Return OIDC Authorization Intent URL & State
+    LocalHTTP->>Admin: Issue Cookie 'spz_session_sprezz_admin' (Value = 'handshake:STATE')
+    LocalHTTP->>Admin: 302 Redirect to Central Admin Tenant
+
+    Admin->>CentralIDP: Complete local Username / Password authentication
+    CentralIDP->>Admin: 302 Redirect to /oauth/federation/callback?code=CODE&state=STATE
+
+    Admin->>LocalHTTP: GET /oauth/federation/callback?code=CODE&state=STATE
+    Note over LocalHTTP: Assert that incoming 'state' == cookie 'handshake:STATE'
+
+    LocalHTTP->>CentralIDP: Back-channel POST /oauth/token (Exchange CODE + PKCE verifier)
+    CentralIDP-->>LocalHTTP: Return token bundle response
+
+    LocalHTTP->>Admin: Overwrite Cookie 'spz_session_sprezz_admin' to 'bearer:JWT'
+    LocalHTTP->>Admin: 302 Redirect to /admin/dashboard (Access Granted)
+```
 
 ### 3.2 Cryptographic Argon2id Storage
 
@@ -270,14 +314,72 @@ Enables native apps (like mobile clients or single-page applications) to registe
 - **Rule 1 (Public Client Stripping)**: If the registration payload specifies a native mobile or browser client application type, the engine **must not** generate or return a `client_secret`. The application profile is saved with a null secret and locked out of standard client-credential grant executions.
 - **Rule 2 (Scope Filtering)**: The registration engine matches requested scopes against the tenant's predefined list of allowed scopes (`PredefinedScopes`) before committing the client application registration.
 
-### 5.5 Protocol Compliance Interface Map
+### 5.4.1 Dual-Track Software Statement Trust Paradigms
+
+The Dynamic Client Registration (DCR) engine (`/oauth/register`) operates as a shared infrastructure plane across all tenants. To support both platform infrastructure onboarding (e.g., the cross-tenant Admin UI loop) and standard business integrations, the validation engine evaluates inbound `software_statement` JSON Web Tokens (JWTs) using two decoupled routing paths based on the unverified Issuer (`iss`) and Key ID (`kid`) fields:
+
+#### 1. Central Platform Administration Track
+
+- **Issuer (`iss`):** The canonical domain identifier of the root Central Admin Tenant.
+- **Cryptographic Verification:** Validated exclusively against the platform's Master Public Key.
+- **Audience Requirement (`aud`):** Must strictly match the Token Endpoint or Issuer URI of the Central Admin Tenant.
+- **Target Context:** Registers an application instance bound to the `sprezz_admin` partition, authorizing cross-tenant operations via the root administration directory.
+
+#### 2. Autonomous Business Tenant Track
+
+- **Issuer (`iss`):** The specific domain of the requesting business tenant.
+- **Cryptographic Verification:** Validated dynamically by resolving the active public JSON Web Key Set (JWKS) belonging to that specific tenant (reusing existing token issuance keys).
+- **Audience Requirement (`aud`):** Must match the base vanity URL or domain of that specific local tenant space.
+- **Target Context:** Registers a standard client application securely jailed inside that single tenant's business partition boundary, completely preventing cross-tenant data exfiltration or impersonation.
+
+```mermaid
+graph TD
+    A[Inbound DCR Request at /oauth/register] --> B{Inspect Software Statement JWT Header & 'iss'}
+
+    B -->|iss == Central Admin Platform| C[Route to Platform Master Track]
+    B -->|iss == Autonomous Business Tenant| D[Route to Tenant-Key Track]
+
+    C --> C1{Verified via Platform Master Key?}
+    C1 -->|No| X[400 Bad Request / Validation Failure]
+    C1 -->|Yes| C2{Audience 'aud' == Central Admin URL?}
+    C2 -->|No| X
+    C2 -->|Yes| C3[Provision App Instance in 'sprezz_admin' Partition]
+
+    D --> D1[Fetch Active JWKS of Requesting Tenant]
+    D1 --> D2{Verified via Tenant Public Key?}
+    D2 -->|No| X
+    D2 -->|Yes| D3{Audience 'aud' == Tenant Base URL?}
+    D3 -->|No| X
+    D3 -->|Yes| D4[Provision App Instance Jailed inside Tenant Boundary]
+```
+
+#### 5.4.2 Cryptographic Replay and Audience Enforcement
+
+To protect the centralized registration plane from token replay vectors, the `aud` claim validation is non-negotiable. If a valid, signed software statement is intercepted on the network, the central validator will immediately reject the DCR transaction if the statement's targeted audience does not match the URI of the executing registration endpoint.
+
+### 5.5 Policy-Driven Client Architecture (Applications, Profiles & Groups)
+
+To eliminate configuration sprawl and enforce strict compliance templates across tenants, client representations are structurally decoupled into three distinct layers of concern:
+
+1. **Applications (The Identity Layer):** Represents the unique client instance. It holds the immutable Client ID, cryptographic secret hashes, and ownership links to its parent Tenant and Partition.
+2. **Application Profiles (The Security Policy Layer):** Defines the behavioral mechanics of the authentication channel. It enforces token expiration lifecycles (TTL matrices), permitted grant types, and token endpoint authentication methods.
+3. **Application Groups (The Authorization & Routing Layer):** Defines the physical network and scope boundaries. It governs whitelisted redirect URIs, allowed scopes, target audiences, and claims-mapping profiles.
+
+#### 5.5.1 DCR Ingestion Mapping Behavior
+
+During a Dynamic Client Registration execution flow, the engine uses these boundaries to isolate risk:
+
+- Standard tenant developer requests are mapped to default business profiles and restricted tenant-scoped groups.
+- Platform administrative loops automatically map the dynamically generated Application into the highly privileged 'Platform Admin UI' Profile and Group, locking down token lifespans and scoping audiences strictly to the root control directory.
+
+### 5.6 Protocol Compliance Interface Map
 
 To maintain complete compatibility with off-the-shelf native app clients, the HTTP Inbound Adapter layer translates protocol transport wire conventions down to domain primitives.
 
 1. **Scope Tokenization Check**: On the HTTP wire, scopes pass as space-delimited string vectors (`"openid profile email"`). The inbound controller must intercept this parameter and tokenize it immediately, routing only a pure Go slice array to the ports layer.
 2. **Extended Boundary Constraints**: The IDP serves strictly as an access gatekeeper mapping identities down to an un-alterable `sub` URI or resource pointer. It **does not** function as an expansive CRM, contact manager, or corporate directory table. Any future requirement for semantic contact mapping via RDF or triple stores must reside in an entirely detached, isolated application container.
 
-#### 5.5.1 Token Endpoint Route Requirements
+#### 5.6.1 Token Endpoint Route Requirements
 
 | Route Endpoint | HTTP Method | RFC/Specification Context | Functional Responsibility |
 | :--- | :--- | :--- | :--- |
@@ -292,7 +394,7 @@ To maintain complete compatibility with off-the-shelf native app clients, the HT
 | `/oauth/userinfo` | `GET` | OIDC Core 1.0 | Authenticated user profile retrieval interface (`Authorization: Bearer`). |
 | **Dynamic Routing Middleware** | `Intercept` | HTTP Host Header Context | Resolves incoming raw server domains (`Host`) to a valid internal `tenant_id` state. |
 
-### 5.6 OAuth 2.0 Token Exchange (RFC 8693)
+### 5.7 OAuth 2.0 Token Exchange (RFC 8693)
 
 Sprezz Identity implements OAuth 2.0 Token Exchange (RFC 8693) via the custom grant type `urn:ietf:params:oauth:grant-type:token-exchange` at the `/oauth/token` POST endpoint. This enables standard federated logins by allowing trusted clients to trade an external token (e.g., an OIDC ID Token from Google or GitHub, or a legacy system token) directly for native Sprezz Identity Access and ID tokens.
 
@@ -422,10 +524,10 @@ Sprezz Identity implements standard RFC 9449 DPoP to bind minted tokens to a cli
 
 Sprezz Identity implements OIDC Front-Channel Logout 1.0 to clear browser cookie sessions across multiple logged-in client applications.
 
-- **The Single Cookie `spz_session` & `"sid"` claim**: To comply with modern strict cookie policies, consent minimization guidelines, and simplify auditing, Sprezz Identity combines the active SSO session details into a single first-party cookie named `spz_session`. This cookie securely encapsulates the authenticated subject, identity provider, and a cryptographically stable, unique Session ID in the format `<subject_id>:<provider_id>:<sso_session_id>`.
-- **The `"sid"` Session Claim**: Issued ID Tokens contain a unique, stable `"sid"` (Session ID) claim populated directly from the `sso_session_id` stored inside the single `spz_session` cookie. This links the client's token directly to the active login browser session, making back-channel session trackability possible.
-- **The Iframe Rendering Flow**: Upon receiving a valid GET request at `/oauth/logout`, the HttpAdapter clears the `spz_session` cookie and queries the usecase for front-channel logout URLs. If present, it serves `views.Logout`, rendering a hidden `<iframe>` targeting each client's registered `front_channel_logout_uri`.
-- **Robust Redirection Timout**: To guarantee browser navigation, the template implements a dual-timer scheme: an unconditional 2-second safety timeout coupled to a faster `window.onload` callback, ensuring a reliable user redirect to the validated `post_logout_redirect_uri` even if client endpoints are slow or offline.
+- **The Partition-Scoped Session Cookie:** In alignment with Section 8.3.1, the active SSO session details are isolated within a single first-party cookie namespaced by the partition (e.g., `spz_session_default` or `spz_session_sprezz_admin`). This cookie securely encapsulates states via explicit protocol value prefixes.
+- **The "sid" Session Claim:** Issued ID Tokens contain a unique, stable `"sid"` (Session ID) claim populated directly from the underlying session tracking database row. This links the client's token directly to the active login browser session, making back-channel session trackability possible.
+- **The Iframe Rendering Flow:** Upon receiving a valid GET request at `/oauth/logout`, the HttpAdapter clears the respective partition-scoped cookie and queries the usecase for front-channel logout URLs. If present, it serves `views.Logout`, rendering a hidden `<iframe>` targeting each client's registered `front_channel_logout_uri`.
+- **Robust Redirection Timeout:** To guarantee browser navigation, the template implements a dual-timer scheme: an unconditional 2-second safety timeout coupled to a faster `window.onload` callback, ensuring a reliable user redirect to the validated `post_logout_redirect_uri` even if client endpoints are slow or offline.
 
 ### 7.2 OIDC Back-Channel Logout 1.0
 
@@ -439,9 +541,9 @@ Sprezz Identity implements OIDC Back-Channel Logout 1.0 to trigger secure, out-o
 
 Sprezz Identity supports a direct, non-federated session termination route `/logout` specifically designed for local web portal applications.
 
-- **Local Session Invalidation**: Upon receiving a request at `/logout`, the HttpAdapter extracts the active user's credentials from the `spz_session` cookie and immediately calls the core session usecase (`ProcessLogout`) to revoke the session inside transactional persistence.
-- **Cookie Expiration**: The adapter forcefully expires and clears the browser's `spz_session` first-party cookie by returning a standard `Set-Cookie` header with a negative `Max-Age` attribute.
-- **Out-of-Band Single Logout Propagations**: To guarantee secure state cleanup across the workspace, the usecase automatically triggers all asynchronous backchannel logout requests to currently coupled third-party clients, ensuring zero orphan sessions remain active after the user leaves the direct web interface.
+- **Local Session Invalidation:** Upon receiving a request at `/logout`, the HttpAdapter extracts the active user's credentials from the partition-scoped session cookie and immediately calls the core session usecase (`ProcessLogout`) to revoke the session inside transactional persistence.
+- **Cookie Expiration:** The adapter forcefully expires and clears the browser's partition-scoped first-party cookie by returning a standard `Set-Cookie` header with a negative `Max-Age` attribute.
+- **Out-of-Band Single Logout Propagations:** To guarantee secure state cleanup across the workspace, the usecase automatically triggers all asynchronous backchannel logout requests to currently coupled third-party clients, ensuring zero orphan sessions remain active after the user leaves the direct web interface.
 
 ## 8. Security Hardening & Horizontal Scaling
 
@@ -449,11 +551,11 @@ To transition Sprezz Identity from a secure single-instance architecture to an e
 
 ### 8.1 Horizontal Scaling & Distributed Clusters (State Resilience)
 
-The default `internal_ephemeral` startup routine derives a transient secret string strictly within the Go process RAM allocation. While optimal for single-instance deployments, this introduces split-brain authentication states during rolling software updates or across multiple load-balanced application instances.
+Sprezz Identity is engineered from the ground up as a stateless cluster layer. Coordinating active runtime states inside isolated server processes introduces split-brain vulnerabilities during rolling updates or across auto-scaled replica infrastructure.
 
-- **Database-Centric Cluster Architecture**: Sprezz Identity coordinates all active runtime states—including active OAuth2 authorization codes, user login sessions, and token validations—strictly through the centralized PostgreSQL database layer. This eliminates the need for distributed memory cache synchronization infrastructure (such as Redis or Ristretto sync pools).
-- **Stateless Execution Workers**: Each auto-scaled application replica node operates as a stateless execution worker. Upon system boot or container launch, every node queries the single shared source of truth (PostgreSQL) to read the administrative tenant configuration parameters.
-- **Master Secret Encryption (Deterministic Derivation)**: To ensure all cluster nodes validate the Admin UI tokens using the identical cryptographic envelope without storing plaintext credentials on disk, the system enforces a secure key derivation pipeline:
+- **Database-Centric Cluster Architecture:** Sprezz Identity coordinates all active runtime states—including active OAuth2 authorization codes, user login sessions, outbound federation handshakes, and token validations—strictly through the centralized, transactional PostgreSQL database layer. This eliminates the need for complex distributed memory cache synchronization grids.
+- **Stateless Execution Workers:** Each auto-scaled application replica node operates as a completely stateless execution worker. Upon system boot or container launch, every node queries the single shared source of truth (PostgreSQL) to read the active tenant configuration parameters.
+- **Master Secret Encryption (Deterministic Derivation):** To ensure all cluster nodes validate the Admin UI tokens using the identical cryptographic envelope without storing plaintext credentials on disk, the system enforces a secure key derivation pipeline:
   1. The production environment configuration must share a single, identical `SPREZZ_MASTER_KEY` environment variable (32-byte AES key) across all running instances.
   2. During the data bootstrapping transaction, the initial node generates a secure random 32-byte admin client secret, encrypts it using **AES-256-GCM** with the `SPREZZ_MASTER_KEY`, and saves the ciphertext to the `tenants` metadata block in PostgreSQL.
   3. On every subsequent server restart or horizontal scale-out event, each node reads the ciphertext from the database, decrypts it using its local `SPREZZ_MASTER_KEY` environment variable, and safely loads the identical operational plaintext secret directly into its local process token endpoint validation memory workspace.
@@ -471,11 +573,26 @@ To prevent Session Hijacking, Cross-Site Scripting (XSS) extraction, and Cross-S
 - **`HttpOnly = true`**: Restricts access to the cookie parameter block strictly to the network layer, preventing execution readouts by client-side JavaScript fragments (essential defense-in-depth against malicious XSS vectors).
 - **`Secure = true`**: Forces transmission of the authentication session context strictly over TLS-encrypted HTTPS transport layers.
 - **`SameSite = SameSiteLaxMode`**: Mitigates malicious cross-origin parameter forging attempts while maintaining fast, smooth OIDC cross-app hypermedia navigation loops.
-- **Prefix Enforcement**: In all non-development environments, the cookie identifier must be explicitly declared with the `__Host-` structural prefix (i.e., `__Host-spz_session`). This guarantees the token pool is bound exclusively to the exact hostname domain grid, prevents cross-contamination across broader organizational sub-domains, and mandates a strict root path definition.
+- **Prefix Enforcement**: In all non-development environments, the partition based cookie identifier must be explicitly declared with the `__Host-` structural prefix (i.e., `__Host-spz_session_default`). This guarantees the token pool is bound exclusively to the exact hostname domain grid, prevents cross-contamination across broader organizational sub-domains, and mandates a strict root path definition.
 - **Local Development Exception Loop**: To support local unencrypted debugging workflows on `http://localhost` (as detailed in Section 5.C), the cookie generation factory incorporates a dual-gated environmental and network runtime validation fence:
   1. **The Global Flag Gate**: The engine asserts that the centralized operational configuration parameter `APP_ENV` is explicitly set to `"local"`.
   2. **The Request Network Gate**: The inbound HTTP handler verifies that the inbound `r.Host` parameter targets `localhost` or `127.0.0.1`.
   3. **The Execution Rule**: If and only if *both* criteria are simultaneously satisfied, the engine is permitted to dynamically strip the `__Host-` prefix wrapper (falling back to plain `spz_session`) and flip `Secure = false` to enable cookie persistence over unencrypted channels. If `APP_ENV` is set to anything else (e.g., `staging`, `production`), any request hitting the engine with a local host header is treated with zero-trust defaults, strictly enforcing prefix wrappers and encryption.
+
+### 8.3.1 Dynamic Partition Namespacing Strategy
+
+To satisfy strict compliance, data minimalization, and audit guidelines, the platform enforces a single functional cookie footprint per security boundary. To allow administrators and standard users to maintain concurrent independent sessions on the same vanity domain (e.g., holding a standard user session in one browser tab and an open administrative pane on the `/admin` route in another) without collision, cookie identifiers are dynamically namespaced by partition:
+
+`Cookie Identity Matrix = spz_session_[partition_alias]`
+
+This configuration forces the browser to sandbox storage contexts natively (e.g., `spz_session_default` running concurrently beside `spz_session_sprezz_admin`), eliminating state overwrites.
+
+### 8.3.2 Transient Protocol Lifecycle Prefixes
+
+Within the isolated partition cookie, states are evaluated and migrated using strict protocol value prefixes:
+
+- **Outbound Handshake Lifecycle:** The cookie value stores a high-entropy state tracking UUID prefixed with the handshake protocol identifier (`handshake:[state_uuid]`). This acts as an anti-XSRF fence during the redirection loop to the central identity provider.
+- **Authenticated Bearer Lifecycle:** Upon completing back-channel validation, the HTTP adapter overwrites the transient token with the finalized, signed access token string using the bearer namespace prefix (`bearer:[jwt_access_token]`).
 
 ### 8.4 Hypermedia Semantic Error Status Compliance
 
