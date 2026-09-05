@@ -11,22 +11,41 @@ import (
 )
 
 type TenantService struct {
-	storage     port.Storage
-	clock       port.Clock
-	idpService  *IdentityProviderService
-	appEnv      string
-	adminDomain string
+	storage      port.Storage
+	adminStorage port.AdminStorage
+	clock        port.Clock
+	idpService   *IdentityProviderService
+	appEnv       string
+	adminDomain  string
 }
 
-func NewTenantService(storage port.Storage, cl port.Clock, idpService *IdentityProviderService, appEnv string, adminDomain string) *TenantService {
-	return &TenantService{storage: storage, clock: cl, idpService: idpService, appEnv: appEnv, adminDomain: adminDomain}
+// Explicitly assert that TenantService implements port.TenantUseCase
+var _ port.TenantUseCase = (*TenantService)(nil)
+
+// NewTenantService creates a fully initialized instance of the tenant coordinator.
+func NewTenantService(
+	storage port.Storage,
+	adminStorage port.AdminStorage,
+	cl port.Clock,
+	idpService *IdentityProviderService,
+	appEnv string,
+	adminDomain string,
+) *TenantService {
+	return &TenantService{
+		storage:      storage,
+		adminStorage: adminStorage,
+		clock:        cl,
+		idpService:   idpService,
+		appEnv:       appEnv,
+		adminDomain:  adminDomain,
+	}
 }
 
-func (s *TenantService) CreateTenant(ctx context.Context, name, domain string) (*model.Tenant, error) {
-	if name == "" {
+func (s *TenantService) CreateTenant(ctx context.Context, cmd port.CreateTenantCommand) (*model.Tenant, error) {
+	if cmd.TenantName == "" {
 		return nil, fmt.Errorf("tenant name is required")
 	}
-	if domain == "" {
+	if cmd.DomainName == "" {
 		return nil, fmt.Errorf("canonical domain is required")
 	}
 
@@ -36,11 +55,11 @@ func (s *TenantService) CreateTenant(ctx context.Context, name, domain string) (
 		scheme = model.SchemeHttp
 	}
 
-	baseURL := scheme + "://" + domain
+	baseURL := scheme + "://" + cmd.DomainName
 	newTenant := model.Tenant{
 		ID:        uuid.New(),
-		Name:      name,
-		Domain:    domain,
+		Name:      cmd.TenantName,
+		Domain:    cmd.DomainName,
 		Scheme:    scheme,
 		IsActive:  true,
 		CreatedAt: s.clock.Now(),
@@ -58,36 +77,23 @@ func (s *TenantService) CreateTenant(ctx context.Context, name, domain string) (
 	}
 
 	// 1. Persist the new tenant first to get the ID for partition creation
-	if err := s.storage.CreateTenant(ctx, newTenant); err != nil {
+	if err := s.adminStorage.CreateTenant(ctx, newTenant); err != nil {
 		return nil, err
 	}
 
-	// 2. Provision the default partition (Left completely clean, no default IDPs)
-	p1, err := s.storage.CreatePartition(ctx, newTenant.ID, newTenant.Name, "default")
-	if err != nil {
-		return nil, fmt.Errorf("create default partition: %w", err)
-	}
-
-	// 3. Provision the administrative partition
-	p2, err := s.storage.CreatePartition(ctx, newTenant.ID, "Sprezz Admin", "sprezz_admin")
+	// 2. Provision the administrative partition
+	p2, err := s.adminStorage.CreatePartition(ctx, newTenant.ID, "Sprezz Admin", "sprezz_admin")
 	if err != nil {
 		return nil, fmt.Errorf("create sprezz admin partition: %w", err)
 	}
 
-	// 4. Link back the root default reference to the base tenant context
-	newTenant.DefaultPartition = &p1.ID
-	if err := s.storage.CreateTenant(ctx, newTenant); err != nil {
-		return nil, fmt.Errorf("update tenant default partition: %w", err)
-	}
-
-	// 5. Secure the admin partition with an OIDC identity provider pointing to the root admin domain
+	// 3. Secure the admin partition with an OIDC identity provider pointing to the root admin domain
 	adminIssuerURL := scheme + s.adminDomain
 	adminDiscoveryEndpoint := adminIssuerURL + "/.well-known/openid-configuration"
 
 	idpConfig := model.IdentityProviderConfig{
-		Issuer:            adminIssuerURL,
 		DiscoveryEndpoint: adminDiscoveryEndpoint,
-		DCRMode:           model.DCRModeAuthenticated,
+		DCRMode:           model.DCRModeSoftwareStatement,
 		Scopes:            []string{"openid", "profile", "email"},
 	}
 
@@ -99,7 +105,7 @@ func (s *TenantService) CreateTenant(ctx context.Context, name, domain string) (
 		Alias:       "admin-sso",
 		Name:        "Administrative SSO",
 		PartitionID: p2.ID,
-		IssuerURL:   adminIssuerURL,
+		Issuer:      adminIssuerURL,
 		Config:      idpConfig,
 	}
 
@@ -112,34 +118,57 @@ func (s *TenantService) CreateTenant(ctx context.Context, name, domain string) (
 	return &newTenant, nil
 }
 
+// ResolveTenantContext handles runtime domain-to-tenant verification mappings.
+// It acts as the core business authority to validate if an incoming r.Host string
+// belongs to an active, bootstrapped organization platform workspace.
+func (s *TenantService) ResolveTenantContext(ctx context.Context, host string) (*model.Tenant, error) {
+	if host == "" {
+		return nil, fmt.Errorf("%w: host domain parameter cannot be empty", port.ErrInvalidRequest)
+	}
+
+	// Delegate the lookup strictly to the outbound storage port
+	tenant, err := s.storage.ResolveTenantByDomain(ctx, host)
+	if err != nil {
+		return nil, fmt.Errorf("tenant_service: domain %s not bootstrapped: %w", host, err)
+	}
+
+	return tenant, nil
+}
+
 func (s *TenantService) GetTenant(ctx context.Context, id uuid.UUID) (*model.Tenant, error) {
-	return s.storage.ResolveTenantByID(ctx, id)
+	return s.storage.ResolveTenantByUUID(ctx, id)
 }
 
 func (s *TenantService) GetAllTenants(ctx context.Context) ([]model.Tenant, error) {
-	return s.storage.GetAllTenants(ctx)
+	return s.adminStorage.GetAllTenants(ctx)
 }
 
-func (s *TenantService) ToggleSignup(ctx context.Context, id uuid.UUID) (*model.Tenant, error) {
-	tenant, err := s.storage.ResolveTenantByID(ctx, id)
+func (s *TenantService) ToggleSignup(ctx context.Context, id uuid.UUID, allow bool) (*model.Tenant, error) {
+	tenant, err := s.storage.ResolveTenantByUUID(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("tenant_service: toggle signup rejected, tenantID unresolvable: %w", err)
 	}
 
-	// 1. Toggle state within the domain boundary
-	tenant.Config.AllowSignup = !tenant.Config.AllowSignup
+	previousAllowSignup := tenant.Config.AllowSignup
 
-	// 2. Persist the updated configuration first
-	// We can update tenant by calling CreateTenant since ON CONFLICT (tenant_uuid) DO UPDATE is used
-	if err := s.storage.CreateTenant(ctx, *tenant); err != nil {
-		return nil, err
+	// 1. Check existing config
+	if previousAllowSignup == allow {
+		return tenant, nil
 	}
 
-	// 3. Conditional Side-Effect: Only purge tokens if this is the Administrative Tenant
+	// 2. Toggle state within the domain boundary
+	tenant.Config.AllowSignup = allow
+
+	// 3. Force an atomic persistent database serialization update call via the outbound storage port
+	if tenant, err = s.UpdateTenant(ctx, tenant.ID, "", "", tenant.Config); err != nil {
+		return nil, fmt.Errorf("tenant_service: failed to commit signup registration state: %w", err)
+	}
+
+	// 4. Conditional Side-Effect: Only purge tokens if this is the Administrative Tenant
 	// and signup is being closed (e.g., initial setup is complete).
-	if tenant.Name == "Administrative Tenant" && !tenant.Config.AllowSignup {
+	if tenant.Name == "Administrative Tenant" && previousAllowSignup && !allow {
 		if err := s.storage.PurgeTenantSessionsAndTokens(ctx, tenant.ID); err != nil {
-			return tenant, fmt.Errorf("tenant updated, but failed to purge admin bootstrap sessions: %w", err)
+			return tenant, fmt.Errorf("tenant updated, but failed to purge admin sessions: %w", err)
 		}
 	}
 
@@ -147,7 +176,7 @@ func (s *TenantService) ToggleSignup(ctx context.Context, id uuid.UUID) (*model.
 }
 
 func (s *TenantService) UpdateTenant(ctx context.Context, id uuid.UUID, name, domain string, config model.TenantConfig) (*model.Tenant, error) {
-	tenant, err := s.storage.ResolveTenantByID(ctx, id)
+	tenant, err := s.storage.ResolveTenantByUUID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +201,7 @@ func (s *TenantService) UpdateTenant(ctx context.Context, id uuid.UUID, name, do
 		tenant.Config.ACRToLevels = map[string]model.Levels{}
 	}
 
-	if err := s.storage.CreateTenant(ctx, *tenant); err != nil {
+	if err := s.adminStorage.CreateTenant(ctx, *tenant); err != nil {
 		return nil, err
 	}
 

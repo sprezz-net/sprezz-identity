@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -19,15 +20,18 @@ func TestJWTSigner_SignAccessToken_Success(t *testing.T) {
 	signer := newTestSigner(t)
 	ctx := context.Background()
 
+	tenantID := uuid.New()
 	claims := model.TokenClaims{
-		TokenID:   "token-123",
-		Issuer:    "https://auth.example.com",
-		TenantID:  "https://auth.example.com",
-		Subject:   "user-sub",
-		ClientID:  "client-id",
-		Scopes:    []string{"openid", "profile"},
-		IssuedAt:  time.Now().UTC(),
-		ExpiresAt: time.Now().UTC().Add(time.Hour),
+		BaseTokenClaims: model.BaseTokenClaims{
+			TokenID:   "token-123",
+			Issuer:    "https://auth.example.com",
+			TenantID:  tenantID,
+			Subject:   "user-sub",
+			ClientID:  "client-id",
+			IssuedAt:  time.Now().UTC().Unix(),
+			ExpiresAt: time.Now().UTC().Add(time.Hour).Unix(),
+		},
+		Scopes: []string{"openid", "profile"},
 	}
 
 	tokenStr, err := signer.SignAccessToken(ctx, claims, model.AlgRS256)
@@ -76,8 +80,8 @@ func TestJWTSigner_SignAccessToken_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to verify RS256 token: %v", err)
 	}
-	if claimsVerified["tid"] != "https://auth.example.com" {
-		t.Errorf("expected tid 'https://auth.example.com', got %v", claimsVerified["tid"])
+	if claimsVerified["tid"] != tenantID.String() {
+		t.Errorf("expected tid %q, got %v", tenantID.String(), claimsVerified["tid"])
 	}
 }
 
@@ -85,15 +89,18 @@ func TestJWTSigner_SignAccessToken_ES256_Success(t *testing.T) {
 	signer := newTestSigner(t)
 	ctx := context.Background()
 
+	tenantID := uuid.New()
 	claims := model.TokenClaims{
-		TokenID:   "token-es256-123",
-		Issuer:    "https://auth.example.com",
-		TenantID:  "https://auth.example.com",
-		Subject:   "user-sub",
-		ClientID:  "client-id",
-		Scopes:    []string{"openid", "profile"},
-		IssuedAt:  time.Now().UTC(),
-		ExpiresAt: time.Now().UTC().Add(time.Hour),
+		BaseTokenClaims: model.BaseTokenClaims{
+			TokenID:   "token-es256-123",
+			Issuer:    "https://auth.example.com",
+			TenantID:  tenantID,
+			Subject:   "user-sub",
+			ClientID:  "client-id",
+			IssuedAt:  time.Now().UTC().Unix(),
+			ExpiresAt: time.Now().UTC().Add(time.Hour).Unix(),
+		},
+		Scopes: []string{"openid", "profile"},
 	}
 
 	tokenStr, err := signer.SignAccessToken(ctx, claims, model.AlgES256)
@@ -114,8 +121,8 @@ func TestJWTSigner_SignAccessToken_ES256_Success(t *testing.T) {
 		t.Errorf("expected sub 'user-sub', got %v", claimsVerified["sub"])
 	}
 
-	if claimsVerified["tid"] != "https://auth.example.com" {
-		t.Errorf("expected tid 'https://auth.example.com', got %v", claimsVerified["tid"])
+	if claimsVerified["tid"] != tenantID.String() {
+		t.Errorf("expected tid %q, got %v", tenantID.String(), claimsVerified["tid"])
 	}
 }
 
@@ -135,19 +142,23 @@ func TestJWTSigner_SignIDToken_Success(t *testing.T) {
 	signer := newTestSigner(t)
 	ctx := context.Background()
 
+	tenantID := uuid.New()
 	claims := model.OIDCTokenClaims{
-		TokenID:   "id-token-123",
-		Issuer:    "https://auth.example.com",
-		Subject:   "user-sub",
-		Audience:  "client-id",
-		TenantID:  "https://auth.example.com",
-		IssuedAt:  time.Now().UTC(),
-		ExpiresAt: time.Now().UTC().Add(time.Hour),
-		AuthTime:  time.Now().UTC(),
-		Nonce:     "nonce-value",
+		BaseTokenClaims: model.BaseTokenClaims{
+			TokenID:   "id-token-123",
+			Issuer:    "https://auth.example.com",
+			Subject:   "user-sub",
+			ClientID:  "client-id",
+			TenantID:  tenantID,
+			IssuedAt:  time.Now().UTC().Unix(),
+			ExpiresAt: time.Now().UTC().Add(time.Hour).Unix(),
+		},
+		Audience: "client-id",
+		AuthTime: time.Now().UTC().Unix(),
+		Nonce:    "nonce-value",
 	}
 
-	tokenStr, err := signer.SignIDToken(ctx, claims, model.AlgRS256)
+	tokenStr, err := signer.SignIDToken(ctx, claims, []string{"openid"}, model.AlgRS256)
 	if err != nil {
 		t.Fatalf("unexpected error signing ID token: %v", err)
 	}
@@ -160,8 +171,8 @@ func TestJWTSigner_SignIDToken_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to verify RS256 ID token: %v", err)
 	}
-	if claimsVerified["tid"] != "https://auth.example.com" {
-		t.Errorf("expected tid 'https://auth.example.com', got %v", claimsVerified["tid"])
+	if claimsVerified["tid"] != tenantID.String() {
+		t.Errorf("expected tid %q, got %v", tenantID.String(), claimsVerified["tid"])
 	}
 }
 
@@ -169,19 +180,23 @@ func TestJWTSigner_SignIDToken_ES256_Success(t *testing.T) {
 	signer := newTestSigner(t)
 	ctx := context.Background()
 
+	tenantID := uuid.New()
 	claims := model.OIDCTokenClaims{
-		TokenID:   "id-token-es256",
-		Issuer:    "https://auth.example.com",
-		Subject:   "user-sub-es",
-		Audience:  "client-id",
-		TenantID:  "https://auth.example.com",
-		IssuedAt:  time.Now().UTC(),
-		ExpiresAt: time.Now().UTC().Add(time.Hour),
-		AuthTime:  time.Now().UTC(),
-		Nonce:     "nonce-value",
+		BaseTokenClaims: model.BaseTokenClaims{
+			TokenID:   "id-token-es256",
+			Issuer:    "https://auth.example.com",
+			Subject:   "user-sub-es",
+			ClientID:  "client-id",
+			TenantID:  tenantID,
+			IssuedAt:  time.Now().UTC().Unix(),
+			ExpiresAt: time.Now().UTC().Add(time.Hour).Unix(),
+		},
+		Audience: "client-id",
+		AuthTime: time.Now().UTC().Unix(),
+		Nonce:    "nonce-value",
 	}
 
-	tokenStr, err := signer.SignIDToken(ctx, claims, model.AlgES256)
+	tokenStr, err := signer.SignIDToken(ctx, claims, []string{"openid"}, model.AlgES256)
 	if err != nil {
 		t.Fatalf("unexpected error signing ID token ES256: %v", err)
 	}
@@ -195,8 +210,8 @@ func TestJWTSigner_SignIDToken_ES256_Success(t *testing.T) {
 		t.Errorf("expected sub 'user-sub-es', got %v", claimsVerified["sub"])
 	}
 
-	if claimsVerified["tid"] != "https://auth.example.com" {
-		t.Errorf("expected tid 'https://auth.example.com', got %v", claimsVerified["tid"])
+	if claimsVerified["tid"] != tenantID.String() {
+		t.Errorf("expected tid %q, got %v", tenantID.String(), claimsVerified["tid"])
 	}
 }
 
@@ -206,7 +221,7 @@ func TestJWTSigner_SignIDToken_UnsupportedAlg(t *testing.T) {
 
 	claims := model.OIDCTokenClaims{}
 
-	_, err := signer.SignIDToken(ctx, claims, "HS256")
+	_, err := signer.SignIDToken(ctx, claims, []string{"openid"}, "HS256")
 	if err == nil {
 		t.Fatal("expected error for unsupported algorithm, got nil")
 	}
@@ -257,7 +272,7 @@ func TestJWTSigner_SignLogoutToken_Success(t *testing.T) {
 		Issuer:   "https://auth.example.com",
 		Subject:  "user-sub",
 		Audience: "client-id",
-		IssuedAt: time.Now().UTC(),
+		IssuedAt: time.Now().UTC().Unix(),
 	}
 
 	tokenStr, err := signer.SignLogoutToken(ctx, claims, model.AlgRS256)
@@ -279,7 +294,7 @@ func TestJWTSigner_SignLogoutToken_ES256_Success(t *testing.T) {
 		Issuer:   "https://auth.example.com",
 		Subject:  "user-sub-es",
 		Audience: "client-id",
-		IssuedAt: time.Now().UTC(),
+		IssuedAt: time.Now().UTC().Unix(),
 	}
 
 	tokenStr, err := signer.SignLogoutToken(ctx, claims, model.AlgES256)
@@ -313,15 +328,18 @@ func TestJWTSigner_VerifyToken_Success(t *testing.T) {
 	signer := newTestSigner(t)
 	ctx := context.Background()
 
+	tenantID := uuid.New()
 	claims := model.TokenClaims{
-		TokenID:   "token-123",
-		Issuer:    "https://auth.example.com",
-		TenantID:  "https://auth.example.com",
-		Subject:   "user-sub",
-		ClientID:  "client-id",
-		Scopes:    []string{"openid"},
-		IssuedAt:  time.Now().UTC(),
-		ExpiresAt: time.Now().UTC().Add(time.Hour),
+		BaseTokenClaims: model.BaseTokenClaims{
+			TokenID:   "token-123",
+			Issuer:    "https://auth.example.com",
+			TenantID:  tenantID,
+			Subject:   "user-sub",
+			ClientID:  "client-id",
+			IssuedAt:  time.Now().UTC().Unix(),
+			ExpiresAt: time.Now().UTC().Add(time.Hour).Unix(),
+		},
+		Scopes: []string{"openid"},
 	}
 
 	tokenStr, err := signer.SignAccessToken(ctx, claims, model.AlgRS256)
@@ -342,6 +360,7 @@ func TestJWTSigner_VerifyToken_Success(t *testing.T) {
 func TestJWTSigner_VerifyToken_Failures(t *testing.T) {
 	signer := newTestSigner(t)
 	ctx := context.Background()
+	tenantID := uuid.New()
 
 	// 1. Mismatched method: HMAC token
 	tokenHMAC := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"sub": "test"})
@@ -367,13 +386,15 @@ func TestJWTSigner_VerifyToken_Failures(t *testing.T) {
 
 	// 3. Expired token
 	claimsExpired := model.TokenClaims{
-		TokenID:   "token-expired",
-		Issuer:    "https://auth.example.com",
-		TenantID:  "https://auth.example.com",
-		Subject:   "user-sub",
-		ClientID:  "client-id",
-		IssuedAt:  time.Now().UTC().Add(-2 * time.Hour),
-		ExpiresAt: time.Now().UTC().Add(-time.Hour),
+		BaseTokenClaims: model.BaseTokenClaims{
+			TokenID:   "token-expired",
+			Issuer:    "https://auth.example.com",
+			TenantID:  tenantID,
+			Subject:   "user-sub",
+			ClientID:  "client-id",
+			IssuedAt:  time.Now().UTC().Add(-2 * time.Hour).Unix(),
+			ExpiresAt: time.Now().UTC().Add(-time.Hour).Unix(),
+		},
 	}
 	tokenStrExpired, err := signer.SignAccessToken(ctx, claimsExpired, model.AlgRS256)
 	if err != nil {
@@ -398,15 +419,18 @@ func TestJWTSigner_VerifyToken_Failures(t *testing.T) {
 func TestJWTSigner_IssuerEmpty(t *testing.T) {
 	signer := newTestSigner(t)
 	ctx := context.Background()
+	tenantID := uuid.New()
 
 	// 1. Assert failure for SignAccessToken when Issuer is missing
 	claimsAccess := model.TokenClaims{
-		TokenID:   "token-fallback",
-		TenantID:  "https://auth.example.com",
-		Subject:   "user-sub",
-		ClientID:  "client-id",
-		IssuedAt:  time.Now().UTC(),
-		ExpiresAt: time.Now().UTC().Add(time.Hour),
+		BaseTokenClaims: model.BaseTokenClaims{
+			TokenID:   "token-fallback",
+			TenantID:  tenantID,
+			Subject:   "user-sub",
+			ClientID:  "client-id",
+			IssuedAt:  time.Now().UTC().Unix(),
+			ExpiresAt: time.Now().UTC().Add(time.Hour).Unix(),
+		},
 	}
 	_, err := signer.SignAccessToken(ctx, claimsAccess, model.AlgRS256)
 	if err == nil {
@@ -415,15 +439,18 @@ func TestJWTSigner_IssuerEmpty(t *testing.T) {
 
 	// 2. Assert failure for SignIDToken when Issuer is missing
 	claimsID := model.OIDCTokenClaims{
-		TokenID:   "id-fallback",
-		TenantID:  "https://auth.example.com",
-		Subject:   "user-sub",
-		Audience:  "client-id",
-		IssuedAt:  time.Now().UTC(),
-		ExpiresAt: time.Now().UTC().Add(time.Hour),
-		AuthTime:  time.Now().UTC(),
+		BaseTokenClaims: model.BaseTokenClaims{
+			TokenID:   "id-fallback",
+			TenantID:  tenantID,
+			Subject:   "user-sub",
+			ClientID:  "client-id",
+			IssuedAt:  time.Now().UTC().Unix(),
+			ExpiresAt: time.Now().UTC().Add(time.Hour).Unix(),
+		},
+		Audience: "client-id",
+		AuthTime: time.Now().UTC().Unix(),
 	}
-	_, err = signer.SignIDToken(ctx, claimsID, model.AlgRS256)
+	_, err = signer.SignIDToken(ctx, claimsID, []string{"openid"}, model.AlgRS256)
 	if err == nil {
 		t.Fatal("expected error when signing ID token with an empty issuer, got nil")
 	}
@@ -433,7 +460,7 @@ func TestJWTSigner_IssuerEmpty(t *testing.T) {
 		TokenID:  "logout-fallback",
 		Subject:  "https://auth.example.com",
 		Audience: "client-id",
-		IssuedAt: time.Now().UTC(),
+		IssuedAt: time.Now().UTC().Unix(),
 	}
 	_, err = signer.SignLogoutToken(ctx, claimsLogout, model.AlgRS256)
 	if err == nil {
@@ -460,7 +487,7 @@ func TestJWTSigner_RotateKeys(t *testing.T) {
 	currentTime := time.Now().UTC()
 	initialClock := portmock.NewMockClock(currentTime)
 
-	signer1, _ := NewJWTSigner(storageRepo, initialClock, "thisisa32byteplaintextsecretkey!")
+	signer1, _ := NewJWTSigner(storageRepo, initialClock, http.DefaultClient, "thisisa32byteplaintextsecretkey!", "test-tenant.com", "unittest")
 
 	// Initialize the original keyset state inside memory map cache
 	jwks, err := signer1.JWKSForTenant(ctx, domain, scheme)
@@ -479,7 +506,7 @@ func TestJWTSigner_RotateKeys(t *testing.T) {
 	rotatedClock := portmock.NewMockClock(advancedTime)
 
 	// Build a fresh signer container sharing the exact same storage memory context
-	signer2, _ := NewJWTSigner(storageRepo, rotatedClock, "thisisa32byteplaintextsecretkey!")
+	signer2, _ := NewJWTSigner(storageRepo, rotatedClock, http.DefaultClient, "thisisa32byteplaintextsecretkey!", "test-tenant.com", "unittest")
 
 	// Prime the signer2 memory map cache with the initial keyring footprint
 	_, _ = signer2.JWKSForTenant(ctx, domain, scheme)
@@ -509,19 +536,23 @@ func TestJWTSigner_RotateKeys_NoDowntime(t *testing.T) {
 	storageRepo := newMockStorage()
 	domain := "test-tenant.com"
 	issuer := "https://" + domain
+	tenantID := uuid.New()
 
 	// 1. PHASE 1: Sign token with the initial keyset baseline
 	currentTime := time.Now().UTC()
 	initialClock := portmock.NewMockClock(currentTime)
-	signer1, _ := NewJWTSigner(storageRepo, initialClock, "thisisa32byteplaintextsecretkey!")
+	signer1, _ := NewJWTSigner(storageRepo, initialClock, http.DefaultClient, "thisisa32byteplaintextsecretkey!", "test-tenant.com", "unittest")
 
 	claims1 := model.TokenClaims{
-		TokenID:   "token-1",
-		Issuer:    issuer,
-		Subject:   "user-1",
-		ClientID:  "client-1",
-		IssuedAt:  time.Now().UTC(),
-		ExpiresAt: time.Now().UTC().Add(time.Hour),
+		BaseTokenClaims: model.BaseTokenClaims{
+			TokenID:   "token-1",
+			Issuer:    issuer,
+			TenantID:  tenantID,
+			Subject:   "user-1",
+			ClientID:  "client-1",
+			IssuedAt:  time.Now().UTC().Unix(),
+			ExpiresAt: time.Now().UTC().Add(time.Hour).Unix(),
+		},
 	}
 	tokenStr1, err := signer1.SignAccessToken(ctx, claims1, model.AlgRS256)
 	if err != nil {
@@ -532,7 +563,7 @@ func TestJWTSigner_RotateKeys_NoDowntime(t *testing.T) {
 	// This forces UnixNano() to generate a completely distinct, unique suffix string!
 	advancedTime := currentTime.Add(5 * time.Minute)
 	rotatedClock := portmock.NewMockClock(advancedTime)
-	signer2, _ := NewJWTSigner(storageRepo, rotatedClock, "thisisa32byteplaintextsecretkey!")
+	signer2, _ := NewJWTSigner(storageRepo, rotatedClock, http.DefaultClient, "thisisa32byteplaintextsecretkey!", "test-tenant.com", "unittest")
 
 	// Prime signer2's memory map cache with the initial keyring data footprint from the DB
 	_, _ = signer2.JWKSForTenant(ctx, domain, "https")
@@ -544,12 +575,15 @@ func TestJWTSigner_RotateKeys_NoDowntime(t *testing.T) {
 
 	// 3. PHASE 3: Sign a second token using the newly rotated keyset
 	claims2 := model.TokenClaims{
-		TokenID:   "token-2",
-		Issuer:    issuer,
-		Subject:   "user-1",
-		ClientID:  "client-1",
-		IssuedAt:  time.Now().UTC(),
-		ExpiresAt: time.Now().UTC().Add(time.Hour),
+		BaseTokenClaims: model.BaseTokenClaims{
+			TokenID:   "token-2",
+			Issuer:    issuer,
+			TenantID:  tenantID,
+			Subject:   "user-1",
+			ClientID:  "client-1",
+			IssuedAt:  time.Now().UTC().Unix(),
+			ExpiresAt: time.Now().UTC().Add(time.Hour).Unix(),
+		},
 	}
 	tokenStr2, err := signer2.SignAccessToken(ctx, claims2, model.AlgRS256)
 	if err != nil {
@@ -661,7 +695,7 @@ func newTestSigner(t *testing.T) *JWTSigner {
 	// A standard dynamic evaluation functions perfectly for your basic token tests
 	staticClock := portmock.NewMockClock(time.Now().UTC())
 
-	signer, err := NewJWTSigner(newMockStorage(), staticClock, "thisisa32byteplaintextsecretkey!")
+	signer, err := NewJWTSigner(newMockStorage(), staticClock, http.DefaultClient, "thisisa32byteplaintextsecretkey!", "default", "unittest")
 	if err != nil {
 		t.Fatalf("failed to create signer: %v", err)
 	}
@@ -710,7 +744,7 @@ func TestNewJWTSignerMasterKeyParsing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Constructor validates fields first; storage references can remain nil here
-			signer, err := NewJWTSigner(nil, nil, tt.masterKey)
+			signer, err := NewJWTSigner(nil, nil, http.DefaultClient, tt.masterKey, "default", "unittest")
 
 			if tt.expectError {
 				if err == nil {

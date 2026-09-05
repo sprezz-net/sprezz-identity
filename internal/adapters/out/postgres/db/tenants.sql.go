@@ -8,13 +8,32 @@ package db
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createTenant = `-- name: CreateTenant :execresult
-INSERT INTO tenants (tenant_uuid, name, domain_name, is_active, created_at, config, default_partition, encrypted_dek, dek_nonce)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+const createTenant = `-- name: CreateTenant :one
+INSERT INTO tenants (
+    tenant_uuid,
+    name,
+    domain_name,
+    is_active,
+    created_at,
+    config,
+    default_partition,
+    encrypted_dek,
+    dek_nonce
+)
+VALUES (
+    $1::uuid,
+    $2,
+    $3,
+    $4,
+    $5::timestamptz,
+    $6,
+    $7::bigint,
+    $8,
+    $9
+)
 ON CONFLICT (tenant_uuid) DO UPDATE SET
     name = EXCLUDED.name,
     domain_name = EXCLUDED.domain_name,
@@ -23,6 +42,7 @@ ON CONFLICT (tenant_uuid) DO UPDATE SET
     default_partition = EXCLUDED.default_partition,
     encrypted_dek = COALESCE(EXCLUDED.encrypted_dek, tenants.encrypted_dek),
     dek_nonce = COALESCE(EXCLUDED.dek_nonce, tenants.dek_nonce)
+RETURNING id
 `
 
 type CreateTenantParams struct {
@@ -32,13 +52,15 @@ type CreateTenantParams struct {
 	IsActive         bool               `json:"is_active"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	Config           []byte             `json:"config"`
-	DefaultPartition *int64             `json:"default_partition"`
+	DefaultPartition int64              `json:"default_partition"`
 	EncryptedDek     []byte             `json:"encrypted_dek"`
 	DekNonce         []byte             `json:"dek_nonce"`
 }
 
-func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (pgconn.CommandTag, error) {
-	return q.db.Exec(ctx, createTenant,
+// CreateTenant inserts or updates a core tenant profile partition block,
+// returning its assigned internal auto-incrementing integer key.
+func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (int32, error) {
+	row := q.db.QueryRow(ctx, createTenant,
 		arg.TenantUuid,
 		arg.Name,
 		arg.DomainName,
@@ -49,6 +71,25 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (pgc
 		arg.EncryptedDek,
 		arg.DekNonce,
 	)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getTenantIDByUUID = `-- name: GetTenantIDByUUID :one
+SELECT id
+FROM tenants
+WHERE tenant_uuid = $1::uuid
+LIMIT 1
+`
+
+// GetTenantIDByUUID resolves the internal sequential primary key integer
+// ID for an application tenant using its public tracking UUID boundary.
+func (q *Queries) GetTenantIDByUUID(ctx context.Context, tenantUuid pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, getTenantIDByUUID, tenantUuid)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
 }
 
 const resolveTenantByDomain = `-- name: ResolveTenantByDomain :one
@@ -71,6 +112,8 @@ type ResolveTenantByDomainRow struct {
 	DekNonce         []byte             `json:"dek_nonce"`
 }
 
+// ResolveTenantByDomain loads the complete operational context metadata
+// record for a tenant using its unique canonical host domain string.
 func (q *Queries) ResolveTenantByDomain(ctx context.Context, domainName string) (ResolveTenantByDomainRow, error) {
 	row := q.db.QueryRow(ctx, resolveTenantByDomain, domainName)
 	var i ResolveTenantByDomainRow
@@ -92,7 +135,7 @@ func (q *Queries) ResolveTenantByDomain(ctx context.Context, domainName string) 
 const resolveTenantByUUID = `-- name: ResolveTenantByUUID :one
 SELECT tenant_uuid, name, domain_name, is_active, created_at, config, default_partition, updated_at, encrypted_dek, dek_nonce
 FROM tenants
-WHERE tenant_uuid = $1
+WHERE tenant_uuid = $1::uuid
 LIMIT 1
 `
 
@@ -109,6 +152,8 @@ type ResolveTenantByUUIDRow struct {
 	DekNonce         []byte             `json:"dek_nonce"`
 }
 
+// ResolveTenantByUUID loads the complete operational context metadata
+// record for a tenant using its public tracking UUID boundary.
 func (q *Queries) ResolveTenantByUUID(ctx context.Context, tenantUuid pgtype.UUID) (ResolveTenantByUUIDRow, error) {
 	row := q.db.QueryRow(ctx, resolveTenantByUUID, tenantUuid)
 	var i ResolveTenantByUUIDRow
@@ -130,19 +175,39 @@ func (q *Queries) ResolveTenantByUUID(ctx context.Context, tenantUuid pgtype.UUI
 const updateTenantDEK = `-- name: UpdateTenantDEK :exec
 UPDATE tenants
 SET
-    encrypted_dek = $2,
-    dek_nonce = $3,
+    encrypted_dek = $1,
+    dek_nonce = $2,
     updated_at = NOW()
-WHERE tenant_uuid = $1
+WHERE tenant_uuid = $3::uuid
 `
 
 type UpdateTenantDEKParams struct {
-	TenantUuid   pgtype.UUID `json:"tenant_uuid"`
 	EncryptedDek []byte      `json:"encrypted_dek"`
 	DekNonce     []byte      `json:"dek_nonce"`
+	TenantUuid   pgtype.UUID `json:"tenant_uuid"`
 }
 
+// UpdateTenantDEK mutates the cryptographic Data Encryption Key (DEK) blobs
+// assigned to protect a tenant's field secrets.
 func (q *Queries) UpdateTenantDEK(ctx context.Context, arg UpdateTenantDEKParams) error {
-	_, err := q.db.Exec(ctx, updateTenantDEK, arg.TenantUuid, arg.EncryptedDek, arg.DekNonce)
+	_, err := q.db.Exec(ctx, updateTenantDEK, arg.EncryptedDek, arg.DekNonce, arg.TenantUuid)
+	return err
+}
+
+const updateTenantDefaultPartition = `-- name: UpdateTenantDefaultPartition :exec
+UPDATE tenants
+SET default_partition = $1::bigint
+WHERE tenant_uuid = $2::uuid
+`
+
+type UpdateTenantDefaultPartitionParams struct {
+	DefaultPartition int64       `json:"default_partition"`
+	TenantUuid       pgtype.UUID `json:"tenant_uuid"`
+}
+
+// UpdateTenantDefaultPartition sets the default partition foreign key link column
+// on the root tenant record to wrap up the self-linking side effect pass.
+func (q *Queries) UpdateTenantDefaultPartition(ctx context.Context, arg UpdateTenantDefaultPartitionParams) error {
+	_, err := q.db.Exec(ctx, updateTenantDefaultPartition, arg.DefaultPartition, arg.TenantUuid)
 	return err
 }

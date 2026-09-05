@@ -2,99 +2,162 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"regexp"
 	"strings"
-	"time"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
 
-	"github.com/alexedwards/argon2id"
 	"github.com/google/uuid"
 )
 
-var (
-	ErrPasswordTooShort     = errors.New("password must be at least 8 characters long")
-	ErrRegistrationDisabled = errors.New("registration is disabled for this tenant")
-)
+// Structural constraints matching Section 5.3 data protection parameters [5.3]
+var strictUsernameFilter = regexp.MustCompile(`^[a-zA-Z0-9_\-\.\@]+$`)
 
 type UserRegistrationService struct {
-	storage port.Storage
+	storage            port.Storage
+	userProfileUseCase port.UserProfileUseCase
+	clock              port.Clock
 }
 
-func NewUserRegistrationService(s port.Storage) *UserRegistrationService {
+func NewUserRegistrationService(s port.Storage, upuc port.UserProfileUseCase, cl port.Clock) *UserRegistrationService {
 	return &UserRegistrationService{
-		storage: s,
+		storage:            s,
+		userProfileUseCase: upuc,
+		clock:              cl,
 	}
 }
 
-func (s *UserRegistrationService) RegisterUser(ctx context.Context, tenantID uuid.UUID, name, username, email, password string) (*model.UserProfile, error) {
-	provider, err := s.storage.GetIdentityProviderByType(ctx, tenantID, model.UsernamePasswordIDPType)
+func (s *UserRegistrationService) RegisterUser(ctx context.Context, cmd port.RegisterUserCommand) (*model.UserProfile, error) {
+	// 1. Load the explicit identity provider passed down from the target login flow context [5.7]
+	provider, err := s.storage.GetIdentityProviderByUUID(ctx, cmd.TenantID, cmd.ProviderID)
 	if err != nil {
-		return nil, ErrRegistrationDisabled
+		return nil, fmt.Errorf("registration: target identity provider context unresolvable: %w", err)
 	}
 
-	username = strings.TrimSpace(username)
-	email = strings.TrimSpace(email)
-	name = strings.TrimSpace(name)
-
-	if len(password) < 8 {
-		return nil, ErrPasswordTooShort
+	// Safety Gate: Ensure the provider is a local username/password directory and is active [5.7]
+	if provider.IDPType != model.UsernamePasswordIDPType || !provider.Enabled {
+		return nil, port.ErrRegistrationDisabled
 	}
 
-	// Email as Username mode standardizes username to email input
+	// 2. Section 5.3 Sanitization: Enforce space trimming and strict byte constraint filters [5.3]
+	username := strings.TrimSpace(cmd.Username)
+	email := strings.TrimSpace(cmd.Email)
+	firstName := strings.TrimSpace(cmd.FirstName)
+	lastName := strings.TrimSpace(cmd.LastName)
+
+	if len(firstName) > 64 || len(lastName) > 64 {
+		return nil, port.ErrInputTooLong
+	}
+	if len(username) > 64 || len(email) > 255 {
+		return nil, port.ErrInputTooLong
+	}
+
+	if !strictUsernameFilter.MatchString(username) {
+		return nil, port.ErrInvalidCharacters
+	}
+
+	if len(cmd.Password) < 8 {
+		return nil, port.ErrPasswordTooShort
+	}
+
 	if provider.Config.UsernameField == "email" {
 		username = email
 	}
 
-	profile := model.UserProfile{
-		ID:                uuid.New(),
-		PreferredUsername: username,
-		Name:              name,
-		Email:             email,
-		EmailVerified:     false,
-		PartitionID:       provider.PartitionID,
-	}
+	now := s.clock.Now()
 
-	// Save profile to database (this checks collisions internally)
-	if err := s.storage.SaveUserProfile(ctx, tenantID, profile); err != nil {
-		return nil, err
-	}
-
-	// Resolve the newly created profile with UUID
-	savedProfile, err := s.storage.GetUserProfileByIdentifier(ctx, tenantID, provider.PartitionID, provider.ID, username)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve registered profile: %w", err)
-	}
-
-	// Hash password
-	hash, err := argon2id.CreateHash(password, argon2id.DefaultParams)
-	if err != nil {
-		return nil, fmt.Errorf("password processing failed: %w", err)
-	}
-
-	// Save credential record
-	cred := model.PasswordCredential{
-		UserProfileID:      savedProfile.ID,
+	// 3. DELEGATION: Route execution via the profile use-case border, passing the definitive CreatedAt clock tick
+	profile, err := s.userProfileUseCase.CreateUserProfile(ctx, port.CreateUserProfileCommand{
+		TenantID:           cmd.TenantID,
+		PartitionID:        provider.PartitionID,
 		IdentityProviderID: provider.ID,
-		Argon2Hash:         hash,
-	}
-	if err := s.storage.SavePasswordCredential(ctx, cred); err != nil {
-		return nil, fmt.Errorf("failed to store credentials: %w", err)
-	}
-
-	// Upsert initial identity record as well
-	identity := model.UserIdentity{
-		ID:                 uuid.New(),
-		UserProfileID:      savedProfile.ID,
-		IdentityProviderID: provider.ID,
-		ExternalIdentityID: savedProfile.ID.String(),
-		CoupledAt:          time.Now().Truncate(time.Second),
-	}
-	if err := s.storage.UpsertIdentity(ctx, identity); err != nil {
-		return nil, fmt.Errorf("failed to couple user identity: %w", err)
+		Username:           username,
+		Email:              email,
+		FirstName:          firstName,
+		LastName:           lastName,
+		Password:           cmd.Password,
+		LifecycleState:     model.LifecycleActivated, // Defaults cleanly to activated on standard signups
+		CreatedAt:          now,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("registration: database transaction failed: %w", err)
 	}
 
-	return savedProfile, nil
+	return profile, nil
+}
+
+// ApproveUserRequest advances a pending profile from REQUESTED to ACTIVATED state [5.7].
+func (s *UserRegistrationService) ApproveUserRequest(ctx context.Context, cmd port.ApproveUserCommand) error {
+	// 1. Fetch the user profile safely locked under the correct multi-tenant partition key
+	profile, err := s.storage.GetUserProfileByID(ctx, cmd.TenantID, cmd.PartitionID, cmd.ProfileID)
+	if err != nil {
+		return fmt.Errorf("approval: failed loading targeted profile: %w", err)
+	}
+
+	if profile.LifecycleState != model.LifecycleRequested {
+		return fmt.Errorf("approval: profile %s is not in a pending request state", cmd.ProfileID)
+	}
+
+	// 2. Advance the state properties
+	profile.LifecycleState = model.LifecycleActivated
+	profile.UpdatedAt = s.clock.Now()
+
+	// 3. Save the modified profile back to the partition table
+	if err := s.storage.SaveUserProfile(ctx, cmd.TenantID, cmd.PartitionID, *profile); err != nil {
+		return fmt.Errorf("approval: failed committing profile activation state: %w", err)
+	}
+
+	return nil
+}
+
+func (s *UserRegistrationService) GetSignupContext(ctx context.Context, cmd port.GetSignupContextCommand) (*port.SignupContextResponse, error) {
+	var interactionSession *model.InteractionSession
+	var partitionID int64
+	var isDirectAccess = true
+
+	if cmd.InteractionID != "" {
+		sessionUUID, err := uuid.Parse(cmd.InteractionID)
+		if err == nil {
+			var session *model.InteractionSession
+			var sessionErr error
+			if cmd.ConsumeSession {
+				session, sessionErr = s.storage.GetAndConsumeInteractionSession(ctx, cmd.TenantID, sessionUUID)
+			} else {
+				session, sessionErr = s.storage.GetInteractionSession(ctx, cmd.TenantID, sessionUUID)
+			}
+			if sessionErr == nil && session != nil {
+				interactionSession = session
+				isDirectAccess = false
+				partitionID = session.PartitionID
+			}
+		}
+	}
+
+	// Fetch partition-confined username-password providers
+	providers, err := s.storage.GetIdentityProvidersByTypeAndPartition(ctx, cmd.TenantID, partitionID, model.UsernamePasswordIDPType)
+	if err != nil || len(providers) == 0 {
+		if isDirectAccess {
+			allProviders, fallbackErr := s.storage.GetEnabledIdentityProviders(ctx, cmd.TenantID)
+			if fallbackErr == nil {
+				for _, p := range allProviders {
+					if p.IDPType == model.UsernamePasswordIDPType {
+						providers = append(providers, p)
+						break
+					}
+				}
+			}
+		}
+	}
+
+	var provider *model.IdentityProvider
+	if len(providers) > 0 {
+		provider = &providers[0]
+	}
+
+	return &port.SignupContextResponse{
+		Provider:           provider,
+		InteractionSession: interactionSession,
+	}, nil
 }

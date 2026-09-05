@@ -1,484 +1,210 @@
 package http
 
 import (
-	"crypto/ecdsa"
-	"crypto/ed25519"
-	"crypto/elliptic"
-	"crypto/rsa"
-	"crypto/sha256"
-	"crypto/subtle"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"math/big"
 	"net/http"
 	"strings"
-	"time"
 
 	"sprezz-identity/internal/domain/model"
+	"sprezz-identity/internal/domain/port"
 
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
-func (h *HttpAdapter) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Request, tenant *model.Tenant) {
-	clientID := r.FormValue("client_id")
-	code := r.FormValue("code")
-	codeVerifier := r.FormValue("code_verifier")
-	if clientID == "" || code == "" || codeVerifier == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "client_id, code and code_verifier are required"})
-		return
-	}
-	dpopJKT, err := h.validateDPoPProof(r, tenant)
-	if err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": errInvalidDPoP + err.Error()})
-		return
-	}
-	tokens, err := h.authPort.ExchangeCodeForTokens(r.Context(), tenant.ID, clientID, code, codeVerifier, dpopJKT)
-	if err != nil {
-		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
-		return
-	}
-	respondJSON(w, http.StatusOK, tokens)
+type TokenHandler struct {
+	authUseCase port.AuthUseCase
+	crypto      port.Crypto
+	storage     port.Storage // Needed to fetch client secret hashes for inbound verification
 }
 
-func (h *HttpAdapter) authenticateClient(w http.ResponseWriter, r *http.Request, tenant *model.Tenant) (*model.ClientApplication, error) {
-	var clientID, clientSecret string
-
-	if id, secret, ok := r.BasicAuth(); ok {
-		clientID = id
-		clientSecret = secret
-	} else {
-		clientID = r.FormValue("client_id")
-		clientSecret = r.FormValue("client_secret")
+func NewTokenHandler(auc port.AuthUseCase, c port.Crypto, s port.Storage) *TokenHandler {
+	return &TokenHandler{
+		authUseCase: auc,
+		crypto:      c,
+		storage:     s,
 	}
-
-	if clientID == "" || clientSecret == "" {
-		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "client_id and client_secret are required"})
-		return nil, fmt.Errorf("client_id and client_secret are required")
-	}
-
-	// Fetch client application records
-	client, err := h.storagePort.GetClient(r.Context(), tenant.ID, clientID)
-	if err != nil {
-		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
-		return nil, fmt.Errorf("%s", errClientAuthFailed)
-	}
-
-	if client.ClientSecret == nil {
-		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
-		return nil, fmt.Errorf("%s", errClientAuthFailed)
-	}
-
-	// Authenticate the plain request secret against the database hash using the crypto port
-	matched, err := h.cryptoPort.CompareCredential(*client.ClientSecret, clientSecret)
-	if err != nil || !matched {
-		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
-		return nil, fmt.Errorf("%s", errClientAuthFailed)
-	}
-
-	return client, nil
 }
 
-func (h *HttpAdapter) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request, tenant *model.Tenant) {
-	clientID := r.FormValue("client_id")
-	refreshTokenStr := r.FormValue("refresh_token")
-	if clientID == "" || refreshTokenStr == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "client_id and refresh_token are required"})
-		return
-	}
-
-	client, err := h.storagePort.GetClient(r.Context(), tenant.ID, clientID)
-	if err != nil {
-		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
-		return
-	}
-
-	if client.ClientType == model.ClientTypeConfidential {
-		clientSecret := r.FormValue("client_secret")
-		if client.ClientSecret == nil || subtle.ConstantTimeCompare([]byte(*client.ClientSecret), []byte(clientSecret)) != 1 {
-			respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
-			return
-		}
-	}
-
-	dpopJKT, err := h.validateDPoPProof(r, tenant)
-	if err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": errInvalidDPoP + err.Error()})
-		return
-	}
-
-	tokens, err := h.authPort.ExchangeRefreshTokenForTokens(r.Context(), tenant.ID, clientID, refreshTokenStr, dpopJKT)
-	if err != nil {
-		if err.Error() == "invalid_grant" {
-			respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant"})
-			return
-		}
-		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
-		return
-	}
-	respondJSON(w, http.StatusOK, tokens)
+// Routes hooks the handler up to the main chi router container.
+func (h *TokenHandler) Routes(r chi.Router) {
+	r.Post("/oauth/token", h.HandleTokenRequest)
 }
 
-func (h *HttpAdapter) handleClientCredentialsGrant(w http.ResponseWriter, r *http.Request, tenant *model.Tenant) {
-	client, err := h.authenticateClient(w, r, tenant)
-	if err != nil {
+func (h *TokenHandler) HandleTokenRequest(w http.ResponseWriter, r *http.Request) {
+	// 1. Enforce strict Content-Type compliance per RFC 6749 Section 4.1.3
+	contentType := r.Header.Get(model.HeaderContentType)
+	if !strings.HasPrefix(contentType, model.ContentTypeFormUrlEncoded) {
+		h.writeError(w, http.StatusBadRequest, "invalid_request", "content-type must be application/x-www-form-urlencoded")
 		return
 	}
-	dpopJKT, err := h.validateDPoPProof(r, tenant)
-	if err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": errInvalidDPoP + err.Error()})
-		return
-	}
-	issuedAt := time.Now().UTC()
-	accessToken, err := h.cryptoPort.SignAccessToken(r.Context(), model.TokenClaims{
-		TokenID:   uuid.NewString(),
-		Issuer:    tenant.GetBaseURI(),
-		TenantID:  tenant.ID.String(),
-		Subject:   client.ClientID,
-		ClientID:  client.ClientID,
-		Scopes:    client.DefaultScopes,
-		IssuedAt:  issuedAt,
-		ExpiresAt: issuedAt.Add(client.AccessTokenLifetime),
-		Audiences: client.AllowedAudiences,
-		DPoPHash:  dpopJKT,
-	}, client.Algorithm)
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	tokenType := "Bearer"
-	if dpopJKT != "" {
-		tokenType = "DPoP"
-	}
-	respondJSON(w, http.StatusOK, &model.TokenSetResponse{
-		AccessToken: accessToken,
-		TokenType:   tokenType,
-		ExpiresIn:   int64(client.AccessTokenLifetime / time.Second),
-	})
-}
 
-func (h *HttpAdapter) token(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "malformed token request"})
-		return
-	}
-	grantType := r.FormValue("grant_type")
-	tenant, ok := TenantFromContext(r.Context())
-	if !ok {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": errTenantNotResolved})
+		h.writeError(w, http.StatusBadRequest, "invalid_request", "malformed form parameters")
 		return
 	}
 
-	switch grantType {
-	case "authorization_code":
-		h.handleAuthorizationCodeGrant(w, r, tenant)
-	case "client_credentials":
-		h.handleClientCredentialsGrant(w, r, tenant)
-	case "refresh_token":
-		h.handleRefreshTokenGrant(w, r, tenant)
-	case "urn:ietf:params:oauth:grant-type:token-exchange":
-		h.handleTokenExchangeGrant(w, r, tenant)
-	default:
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported grant_type"})
-	}
-}
-
-func (h *HttpAdapter) handleTokenExchangeGrant(w http.ResponseWriter, r *http.Request, tenant *model.Tenant) {
-	clientID := r.FormValue("client_id")
-	subjectToken := r.FormValue("subject_token")
-	subjectTokenType := r.FormValue("subject_token_type")
-
-	if id, _, ok := r.BasicAuth(); ok {
-		clientID = id
-	}
-
-	if clientID == "" || subjectToken == "" || subjectTokenType == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "client_id, subject_token and subject_token_type are required"})
+	// 2. Resolve Multi-Tenant Context from Middleware thread injection
+	tenantIDVal := r.Context().Value(tenantIDCtxKey)
+	tenantUUID, ok := tenantIDVal.(uuid.UUID)
+	if !ok || tenantUUID == uuid.Nil {
+		h.writeError(w, http.StatusBadRequest, "invalid_request", "missing or corrupt tenant execution boundary")
 		return
 	}
 
-	client, err := h.storagePort.GetClient(r.Context(), tenant.ID, clientID)
+	// 3. Authenticate Client Credentials (Dual-Track: HTTP Basic vs Form POST)
+	// Invokes the shared, spec-compliant extraction helper safely
+	clientID, clientSecret, isClientAuthenticated, app, profile, group, err := authenticateClientContext(r, tenantUUID, h.storage, h.crypto)
 	if err != nil {
-		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
+		h.writeError(w, http.StatusUnauthorized, "invalid_client", "client authentication failed")
 		return
 	}
 
-	if client.ClientType == model.ClientTypeConfidential {
-		var clientSecret string
-		if _, secret, ok := r.BasicAuth(); ok {
-			clientSecret = secret
-		} else {
-			clientSecret = r.FormValue("client_secret")
-		}
-		if client.ClientSecret == nil || subtle.ConstantTimeCompare([]byte(*client.ClientSecret), []byte(clientSecret)) != 1 {
-			respondJSON(w, http.StatusUnauthorized, map[string]string{"error": errClientAuthFailed})
+	grantType := model.GrantType(r.Form.Get("grant_type"))
+	if grantType == "" {
+		h.writeError(w, http.StatusBadRequest, "invalid_request", "missing mandatory grant_type parameter")
+		return
+	}
+
+	var tokenResponse *model.TokenSetResponse
+
+	// 4. Branch Execution based on spec-compliant Grant Types
+	switch grantType {
+	case model.GrantTypeClientCredentials:
+		// Machine-to-Machine Flow [RFC 6749 Section 4.4]
+		if !isClientAuthenticated || clientSecret == "" {
+			h.writeError(w, http.StatusUnauthorized, "invalid_client", "client credentials grant mandates client authentication")
 			return
 		}
-	}
 
-	dpopJKT, err := h.validateDPoPProof(r, tenant)
-	if err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": errInvalidDPoP + err.Error()})
-		return
-	}
+		tokenResponse, err = h.authUseCase.ExchangeClientCredentials(r.Context(), port.ExchangeClientCredentialsCommand{
+			TenantID:           tenantUUID,
+			ClientID:           clientID,
+			Application:        app,
+			ApplicationProfile: profile,
+			ApplicationGroup:   group,
+		})
 
-	tokens, err := h.authPort.ExchangeExternalToken(r.Context(), tenant.ID, clientID, subjectToken, subjectTokenType, dpopJKT)
-	if err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
+	case model.GrantTypeAuthorizationCode:
+		// Interactive User Authorization Flow with PKCE [RFC 7636]
+		code := r.Form.Get("code")
+		codeVerifier := r.Form.Get("code_verifier")
+		if code == "" {
+			h.writeError(w, http.StatusBadRequest, "invalid_request", "missing mandatory code parameter")
+			return
+		}
 
-	respondJSON(w, http.StatusOK, tokens)
-}
+		tokenResponse, err = h.authUseCase.ExchangeCodeForTokens(r.Context(), port.ExchangeCodeForTokensCommand{
+			TenantID:           tenantUUID,
+			ClientID:           clientID,
+			Code:               code,
+			CodeVerifier:       codeVerifier,
+			Application:        app,
+			ApplicationProfile: profile,
+			ApplicationGroup:   group,
+		})
 
-func (h *HttpAdapter) validateUserInfoDPoP(r *http.Request, claims jwt.MapClaims, isDPoP bool) error {
-	cnfVal, ok := claims["cnf"].(map[string]any)
-	if !ok {
-		return nil
-	}
-	jktVal, _ := cnfVal["jkt"].(string)
-	if jktVal == "" {
-		return nil
-	}
-	if !isDPoP {
-		return errors.New("token is DPoP-bound, but Bearer scheme was used")
-	}
+	case model.GrantTypeRefreshToken:
+		// Sliding Session Renewal Flow [RFC 6749 Section 6]
+		refreshToken := r.Form.Get("refresh_token")
+		if refreshToken == "" {
+			h.writeError(w, http.StatusBadRequest, "invalid_request", "missing mandatory refresh_token parameter")
+			return
+		}
 
-	tenant, ok := TenantFromContext(r.Context())
-	if !ok {
-		return errors.New("failed to resolve tenant context for UserInfo validation")
-	}
+		// Token verification infrastructure decrypts claims securely via the port boundary
+		var rawClaims map[string]any
+		rawClaims, err = h.crypto.VerifyToken(r.Header.Get("Authorization"))
+		if err != nil {
+			h.writeError(w, http.StatusUnauthorized, "invalid_grant", "invalid or expired access token context loop")
+			return
+		}
 
-	dpopJKT, err := h.validateDPoPProof(r, tenant)
-	if err != nil {
-		return fmt.Errorf("%s%w", errInvalidDPoP, err)
-	}
-	if dpopJKT != jktVal {
-		return errors.New("DPoP proof key mismatch")
-	}
-	return nil
-}
+		// Map dictionary structures safely into type-safe domain models
+		currentClaims := h.mapMapClaimsToTokenClaims(tenantUUID, rawClaims)
+		tokenResponse, err = h.authUseCase.RotateRefreshToken(r.Context(), port.RotateRefreshTokenCommand{
+			TenantID:           tenantUUID,
+			ClientID:           clientID,
+			RefreshToken:       refreshToken,
+			CurrentClaims:      currentClaims,
+			Application:        app,
+			ApplicationProfile: profile,
+			ApplicationGroup:   group,
+		})
 
-func (h *HttpAdapter) parseRSADPoPKey(jwkJSON []byte) (*rsa.PublicKey, string, error) {
-	var rsaPub struct {
-		N string `json:"n"`
-		E string `json:"e"`
-	}
-	if err := json.Unmarshal(jwkJSON, &rsaPub); err != nil {
-		return nil, "", fmt.Errorf("unmarshal rsa jwk: %w", err)
-	}
-	nBytes, err := base64.RawURLEncoding.DecodeString(rsaPub.N)
-	if err != nil {
-		return nil, "", fmt.Errorf("decode jwk n: %w", err)
-	}
-	eBytes, err := base64.RawURLEncoding.DecodeString(rsaPub.E)
-	if err != nil {
-		return nil, "", fmt.Errorf("decode jwk e: %w", err)
-	}
-	if len(eBytes) < 1 {
-		return nil, "", errors.New("invalid jwk e")
-	}
-	var eVal int
-	for _, b := range eBytes {
-		eVal = (eVal << 8) | int(b)
-	}
-
-	pubKey := &rsa.PublicKey{
-		N: new(big.Int).SetBytes(nBytes),
-		E: eVal,
-	}
-
-	sortedJWKJSON := fmt.Sprintf(`{"e":"%s","kty":"RSA","n":"%s"}`, rsaPub.E, rsaPub.N)
-	hsh := sha256.Sum256([]byte(sortedJWKJSON))
-	jkt := base64.RawURLEncoding.EncodeToString(hsh[:])
-
-	return pubKey, jkt, nil
-}
-
-func (h *HttpAdapter) parseECDPoPKey(jwkJSON []byte) (*ecdsa.PublicKey, string, error) {
-	var ecPub struct {
-		Crv string `json:"crv"`
-		X   string `json:"x"`
-		Y   string `json:"y"`
-	}
-	if err := json.Unmarshal(jwkJSON, &ecPub); err != nil {
-		return nil, "", fmt.Errorf("unmarshal ec jwk: %w", err)
-	}
-	if ecPub.Crv != "P-256" {
-		return nil, "", fmt.Errorf("unsupported EC curve: %s", ecPub.Crv)
-	}
-	xBytes, err := base64.RawURLEncoding.DecodeString(ecPub.X)
-	if err != nil {
-		return nil, "", fmt.Errorf("decode jwk x: %w", err)
-	}
-	yBytes, err := base64.RawURLEncoding.DecodeString(ecPub.Y)
-	if err != nil {
-		return nil, "", fmt.Errorf("decode jwk y: %w", err)
-	}
-
-	pubKey := &ecdsa.PublicKey{
-		Curve: elliptic.P256(),
-		X:     new(big.Int).SetBytes(xBytes),
-		Y:     new(big.Int).SetBytes(yBytes),
-	}
-
-	sortedJWKJSON := fmt.Sprintf(`{"crv":"%s","kty":"EC","x":"%s","y":"%s"}`, ecPub.Crv, ecPub.X, ecPub.Y)
-	hsh := sha256.Sum256([]byte(sortedJWKJSON))
-	jkt := base64.RawURLEncoding.EncodeToString(hsh[:])
-
-	return pubKey, jkt, nil
-}
-
-func (h *HttpAdapter) parseOKPDPoPKey(jwkJSON []byte) (ed25519.PublicKey, string, error) {
-	var okpPub struct {
-		Crv string `json:"crv"`
-		X   string `json:"x"`
-	}
-	if err := json.Unmarshal(jwkJSON, &okpPub); err != nil {
-		return nil, "", fmt.Errorf("unmarshal okp jwk: %w", err)
-	}
-	if okpPub.Crv != "Ed25519" {
-		return nil, "", fmt.Errorf("unsupported OKP curve: %s", okpPub.Crv)
-	}
-	xBytes, err := base64.RawURLEncoding.DecodeString(okpPub.X)
-	if err != nil {
-		return nil, "", fmt.Errorf("decode jwk x: %w", err)
-	}
-	if len(xBytes) != ed25519.PublicKeySize {
-		return nil, "", fmt.Errorf("invalid Ed25519 public key size: %d", len(xBytes))
-	}
-
-	pubKey := ed25519.PublicKey(xBytes)
-
-	sortedJWKJSON := fmt.Sprintf(`{"crv":"%s","kty":"OKP","x":"%s"}`, okpPub.Crv, okpPub.X)
-	hsh := sha256.Sum256([]byte(sortedJWKJSON))
-	jkt := base64.RawURLEncoding.EncodeToString(hsh[:])
-
-	return pubKey, jkt, nil
-}
-
-func (h *HttpAdapter) parseDPoPPubKey(dpopHeader string) (any, string, error) {
-	parser := new(jwt.Parser)
-	token, _, err := parser.ParseUnverified(dpopHeader, jwt.MapClaims{})
-	if err != nil {
-		return nil, "", fmt.Errorf("invalid DPoP header format: %w", err)
-	}
-
-	jwkHeader, ok := token.Header["jwk"].(map[string]any)
-	if !ok || jwkHeader == nil {
-		return nil, "", errors.New("missing jwk in DPoP header")
-	}
-
-	typHeader, _ := token.Header["typ"].(string)
-	if typHeader != "dpop+jwt" {
-		return nil, "", errors.New("invalid DPoP header typ, must be dpop+jwt")
-	}
-
-	jwkJSON, err := json.Marshal(jwkHeader)
-	if err != nil {
-		return nil, "", fmt.Errorf("marshal jwk: %w", err)
-	}
-
-	var jwkBase struct {
-		Kty string `json:"kty"`
-	}
-	if err := json.Unmarshal(jwkJSON, &jwkBase); err != nil {
-		return nil, "", fmt.Errorf("unmarshal jwk base: %w", err)
-	}
-
-	switch jwkBase.Kty {
-	case "RSA":
-		return h.parseRSADPoPKey(jwkJSON)
-	case "EC":
-		return h.parseECDPoPKey(jwkJSON)
-	case "OKP":
-		return h.parseOKPDPoPKey(jwkJSON)
 	default:
-		return nil, "", fmt.Errorf("unsupported JWK kty: %s", jwkBase.Kty)
-	}
-}
-
-func (h *HttpAdapter) validateDPoPClaims(r *http.Request, tenant *model.Tenant, claims jwt.MapClaims) (time.Time, error) {
-	htm, _ := claims["htm"].(string)
-	htu, _ := claims["htu"].(string)
-	jti, _ := claims["jti"].(string)
-	iatVal, _ := claims["iat"].(float64)
-
-	if htm == "" || htu == "" || jti == "" || iatVal == 0 {
-		return time.Time{}, errors.New("missing mandatory DPoP claims (htm, htu, jti, iat)")
+		h.writeError(w, http.StatusBadRequest, "unsupported_grant_type", "the requested grant type profile is unsupported")
+		return
 	}
 
-	// 1. Enforce strict HTTP Method compliance
-	if !strings.EqualFold(htm, r.Method) {
-		return time.Time{}, fmt.Errorf("DPoP htm mismatch: expected %s, got %s", r.Method, htm)
-	}
-
-	// 2. RFC 9449 Guard: Ensure the client sent a full, absolute URL scheme
-	if !strings.HasPrefix(htu, "http://") && !strings.HasPrefix(htu, "https://") {
-		return time.Time{}, errors.New("invalid DPoP proof: htu claim must be an absolute URL")
-	}
-
-	// 3. Construct the absolute server endpoint using the trusted Tenant base URL context
-	expectedAbsoluteURL := tenant.GetBaseURI() + r.URL.Path
-
-	// 4. Normalize by stripping any query strings out of both components
-	normHTU := strings.Split(htu, "?")[0]
-	normExpected := strings.Split(expectedAbsoluteURL, "?")[0]
-
-	// 5. Enforce an exact, precise structural equality match (No more generic suffix matching)
-	if !strings.EqualFold(normExpected, normHTU) {
-		return time.Time{}, fmt.Errorf("DPoP htu mismatch: expected absolute target %s, but token was signed for %s", normExpected, normHTU)
-	}
-
-	// 6. Time validation lifecycle check
-	iat := time.Unix(int64(iatVal), 0)
-	now := h.clockPort.Now() // Using the injected clock port instead of raw time.Now()
-	if iat.Before(now.Add(-2*time.Minute)) || iat.After(now.Add(2*time.Minute)) {
-		return time.Time{}, errors.New("DPoP proof has expired or is in the future")
-	}
-
-	return iat, nil
-}
-
-func (h *HttpAdapter) validateDPoPProof(r *http.Request, tenant *model.Tenant) (string, error) {
-	dpopHeader := r.Header.Get("DPoP")
-	if dpopHeader == "" {
-		return "", nil
-	}
-
-	pubKey, jkt, err := h.parseDPoPPubKey(dpopHeader)
+	// 5. Handle Use-Case Layer Errors mapping cleanly to OAuth2 semantics
 	if err != nil {
-		return "", err
+		h.handleServiceError(w, err)
+		return
 	}
 
-	parsedToken, err := jwt.Parse(dpopHeader, func(t *jwt.Token) (any, error) {
-		return pubKey, nil
+	// 6. Success Output Generation
+	w.Header().Set(model.HeaderContentType, model.ContentTypeJSON)
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(tokenResponse)
+}
+
+// Maps transient unverified string keys safely back into compiled structural Go primatives
+func (h *TokenHandler) mapMapClaimsToTokenClaims(tenantID uuid.UUID, claims map[string]any) model.TokenClaims {
+	sub, _ := claims["sub"].(string)
+	sid, _ := claims["sid"].(string)
+	pid, _ := claims["pid"].(string)
+	azp, _ := claims["azp"].(string)
+	acr, _ := claims["acr"].(string)
+
+	var auds []string
+	if rawAud, exists := claims["aud"]; exists {
+		if single, ok := rawAud.(string); ok {
+			auds = []string{single}
+		} else if slice, ok := rawAud.([]any); ok {
+			for _, a := range slice {
+				if s, ok := a.(string); ok {
+					auds = append(auds, s)
+				}
+			}
+		}
+	}
+
+	return model.TokenClaims{
+		BaseTokenClaims: model.BaseTokenClaims{
+			Subject:   sub,
+			SessionID: sid,
+			TenantID:  tenantID,
+			ClientID:  azp,
+			ACR:       acr,
+		},
+		Audiences:      auds,
+		PartitionAlias: pid,
+	}
+}
+
+func (h *TokenHandler) handleServiceError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, port.ErrInvalidGrant):
+		h.writeError(w, http.StatusBadRequest, "invalid_grant", err.Error())
+	case errors.Is(err, port.ErrInvalidClient):
+		h.writeError(w, http.StatusUnauthorized, "invalid_client", "client authentication failed")
+	case errors.Is(err, port.ErrInvalidRequest):
+		h.writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+	default:
+		// Shield backend system faults gracefully from exposure logs
+		h.writeError(w, http.StatusInternalServerError, "server_error", "an internal execution worker faulted")
+	}
+}
+
+func (h *TokenHandler) writeError(w http.ResponseWriter, statusCode int, errCode string, description string) {
+	w.Header().Set(model.HeaderContentType, model.ContentTypeJSON)
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"error":             errCode,
+		"error_description": description,
 	})
-	if err != nil || !parsedToken.Valid {
-		return "", fmt.Errorf("invalid DPoP proof signature: %w", err)
-	}
-
-	claims, ok := parsedToken.Claims.(jwt.MapClaims)
-	if !ok {
-		return "", errors.New("invalid DPoP claims")
-	}
-
-	iat, err := h.validateDPoPClaims(r, tenant, claims)
-	if err != nil {
-		return "", err
-	}
-
-	jti, _ := claims["jti"].(string)
-	used, err := h.storagePort.IsDPoPProofUsed(r.Context(), jti)
-	if err != nil || used {
-		return "", errors.New("DPoP proof jti has already been used")
-	}
-
-	if err := h.storagePort.SaveDPoPProof(r.Context(), jti, iat.Add(5*time.Minute)); err != nil {
-		return "", fmt.Errorf("save DPoP proof: %w", err)
-	}
-
-	return jkt, nil
 }

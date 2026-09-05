@@ -18,13 +18,13 @@ RETURNING id, tenant_id, name, alias_name
 `
 
 type CreatePartitionParams struct {
-	Column1   pgtype.UUID `json:"column_1"`
-	Name      string      `json:"name"`
-	AliasName string      `json:"alias_name"`
+	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+	Name       string      `json:"name"`
+	AliasName  string      `json:"alias_name"`
 }
 
 func (q *Queries) CreatePartition(ctx context.Context, arg CreatePartitionParams) (Partition, error) {
-	row := q.db.QueryRow(ctx, createPartition, arg.Column1, arg.Name, arg.AliasName)
+	row := q.db.QueryRow(ctx, createPartition, arg.TenantUuid, arg.Name, arg.AliasName)
 	var i Partition
 	err := row.Scan(
 		&i.ID,
@@ -44,12 +44,12 @@ LIMIT 1
 `
 
 type GetPartitionByAliasParams struct {
-	Column1   pgtype.UUID `json:"column_1"`
-	AliasName string      `json:"alias_name"`
+	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+	AliasName  string      `json:"alias_name"`
 }
 
 func (q *Queries) GetPartitionByAlias(ctx context.Context, arg GetPartitionByAliasParams) (Partition, error) {
-	row := q.db.QueryRow(ctx, getPartitionByAlias, arg.Column1, arg.AliasName)
+	row := q.db.QueryRow(ctx, getPartitionByAlias, arg.TenantUuid, arg.AliasName)
 	var i Partition
 	err := row.Scan(
 		&i.ID,
@@ -61,14 +61,31 @@ func (q *Queries) GetPartitionByAlias(ctx context.Context, arg GetPartitionByAli
 }
 
 const getPartitionByID = `-- name: GetPartitionByID :one
-SELECT id, tenant_id, name, alias_name
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $2::uuid
+    LIMIT 1
+)
+SELECT
+    id,
+    tenant_id,
+    name, -- Corrected from partition_name to match the standard table layout
+    alias_name
 FROM partitions
-WHERE id = $1
+WHERE id = $1::bigint
+  AND tenant_id = (SELECT id FROM tenant)
 LIMIT 1
 `
 
-func (q *Queries) GetPartitionByID(ctx context.Context, id int64) (Partition, error) {
-	row := q.db.QueryRow(ctx, getPartitionByID, id)
+type GetPartitionByIDParams struct {
+	PartitionID int64       `json:"partition_id"`
+	TenantUuid  pgtype.UUID `json:"tenant_uuid"`
+}
+
+// GetPartitionByID resolves a partition's metadata and URL string slug using its internal numeric primary key.
+func (q *Queries) GetPartitionByID(ctx context.Context, arg GetPartitionByIDParams) (Partition, error) {
+	row := q.db.QueryRow(ctx, getPartitionByID, arg.PartitionID, arg.TenantUuid)
 	var i Partition
 	err := row.Scan(
 		&i.ID,
@@ -86,8 +103,8 @@ WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
 ORDER BY id ASC
 `
 
-func (q *Queries) GetPartitions(ctx context.Context, dollar_1 pgtype.UUID) ([]Partition, error) {
-	rows, err := q.db.Query(ctx, getPartitions, dollar_1)
+func (q *Queries) GetPartitions(ctx context.Context, tenantUuid pgtype.UUID) ([]Partition, error) {
+	rows, err := q.db.Query(ctx, getPartitions, tenantUuid)
 	if err != nil {
 		return nil, err
 	}
@@ -109,4 +126,69 @@ func (q *Queries) GetPartitions(ctx context.Context, dollar_1 pgtype.UUID) ([]Pa
 		return nil, err
 	}
 	return items, nil
+}
+
+const getPartitionsByInternalTenantID = `-- name: GetPartitionsByInternalTenantID :many
+SELECT id, tenant_id, name, alias_name
+FROM partitions
+WHERE tenant_id = $1::integer
+`
+
+// GetPartitionsByInternalTenantID scans the partitions grid to verify
+// whether this specific tenant row already holds any operational isolation boundaries.
+func (q *Queries) GetPartitionsByInternalTenantID(ctx context.Context, tenantID int32) ([]Partition, error) {
+	rows, err := q.db.Query(ctx, getPartitionsByInternalTenantID, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Partition{}
+	for rows.Next() {
+		var i Partition
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.Name,
+			&i.AliasName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const insertPartition = `-- name: InsertPartition :one
+INSERT INTO partitions (
+    tenant_id,
+    name,
+    alias_name
+) VALUES (
+    $1::integer,
+    $2,
+    $3
+)
+RETURNING id, tenant_id, name, alias_name
+`
+
+type InsertPartitionParams struct {
+	TenantID  int32  `json:"tenant_id"`
+	Name      string `json:"name"`
+	AliasName string `json:"alias_name"`
+}
+
+// InsertPartition provisions a brand new partition record linked to the tenant's internal sequence.
+func (q *Queries) InsertPartition(ctx context.Context, arg InsertPartitionParams) (Partition, error) {
+	row := q.db.QueryRow(ctx, insertPartition, arg.TenantID, arg.Name, arg.AliasName)
+	var i Partition
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Name,
+		&i.AliasName,
+	)
+	return i, err
 }

@@ -8,14 +8,13 @@ package db
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const consumeAuthSession = `-- name: ConsumeAuthSession :one
 WITH deleted AS (
     DELETE FROM auth_sessions
-    WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1)
+    WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
       AND code = $2
     RETURNING
         code,
@@ -29,7 +28,9 @@ WITH deleted AS (
         session_id,
         state,
         nonce,
-        acr_values
+        acr_values,
+        identity_provider_id,
+        identity_provider_alias
 )
 SELECT
     code,
@@ -43,7 +44,9 @@ SELECT
     session_id,
     state,
     nonce,
-    acr_values
+    acr_values,
+    identity_provider_id,
+    identity_provider_alias
 FROM deleted
 LIMIT 1
 `
@@ -54,18 +57,20 @@ type ConsumeAuthSessionParams struct {
 }
 
 type ConsumeAuthSessionRow struct {
-	Code            string             `json:"code"`
-	ClientID        string             `json:"client_id"`
-	Subject         string             `json:"subject"`
-	CodeChallenge   string             `json:"code_challenge"`
-	ChallengeMethod string             `json:"challenge_method"`
-	RedirectUri     string             `json:"redirect_uri"`
-	Scopes          []string           `json:"scopes"`
-	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
-	SessionID       string             `json:"session_id"`
-	State           string             `json:"state"`
-	Nonce           string             `json:"nonce"`
-	AcrValues       string             `json:"acr_values"`
+	Code                  string             `json:"code"`
+	ClientID              string             `json:"client_id"`
+	Subject               string             `json:"subject"`
+	CodeChallenge         string             `json:"code_challenge"`
+	ChallengeMethod       string             `json:"challenge_method"`
+	RedirectUri           string             `json:"redirect_uri"`
+	Scopes                []string           `json:"scopes"`
+	ExpiresAt             pgtype.Timestamptz `json:"expires_at"`
+	SessionID             string             `json:"session_id"`
+	State                 string             `json:"state"`
+	Nonce                 string             `json:"nonce"`
+	AcrValues             string             `json:"acr_values"`
+	IdentityProviderID    pgtype.UUID        `json:"identity_provider_id"`
+	IdentityProviderAlias *string            `json:"identity_provider_alias"`
 }
 
 func (q *Queries) ConsumeAuthSession(ctx context.Context, arg ConsumeAuthSessionParams) (ConsumeAuthSessionRow, error) {
@@ -84,87 +89,52 @@ func (q *Queries) ConsumeAuthSession(ctx context.Context, arg ConsumeAuthSession
 		&i.State,
 		&i.Nonce,
 		&i.AcrValues,
+		&i.IdentityProviderID,
+		&i.IdentityProviderAlias,
 	)
 	return i, err
 }
 
-const consumePAR = `-- name: ConsumePAR :one
-WITH deleted AS (
-    DELETE FROM pushed_authorization_requests
-    WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1)
-      AND request_uri = $2
-    RETURNING
-        request_uri,
-        client_id,
-        redirect_uri,
-        code_challenge,
-        code_challenge_method,
-        scopes,
-        state,
-        nonce,
-        idp_hint,
-        acr_values,
-        expires_at
-)
-SELECT
-    request_uri,
-    client_id,
-    redirect_uri,
-    code_challenge,
-    code_challenge_method,
-    scopes,
-    state,
-    nonce,
-    idp_hint,
-    acr_values,
-    expires_at
-FROM deleted
-LIMIT 1
+const purgeAuthSessionsByTenant = `-- name: PurgeAuthSessionsByTenant :exec
+DELETE FROM auth_sessions
+WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
 `
 
-type ConsumePARParams struct {
-	TenantUuid pgtype.UUID `json:"tenant_uuid"`
-	RequestUri string      `json:"request_uri"`
+func (q *Queries) PurgeAuthSessionsByTenant(ctx context.Context, tenantUuid pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, purgeAuthSessionsByTenant, tenantUuid)
+	return err
 }
 
-type ConsumePARRow struct {
-	RequestUri          string             `json:"request_uri"`
-	ClientID            string             `json:"client_id"`
-	RedirectUri         string             `json:"redirect_uri"`
-	CodeChallenge       string             `json:"code_challenge"`
-	CodeChallengeMethod string             `json:"code_challenge_method"`
-	Scopes              []string           `json:"scopes"`
-	State               string             `json:"state"`
-	Nonce               string             `json:"nonce"`
-	IdpHint             string             `json:"idp_hint"`
-	AcrValues           string             `json:"acr_values"`
-	ExpiresAt           pgtype.Timestamptz `json:"expires_at"`
-}
-
-func (q *Queries) ConsumePAR(ctx context.Context, arg ConsumePARParams) (ConsumePARRow, error) {
-	row := q.db.QueryRow(ctx, consumePAR, arg.TenantUuid, arg.RequestUri)
-	var i ConsumePARRow
-	err := row.Scan(
-		&i.RequestUri,
-		&i.ClientID,
-		&i.RedirectUri,
-		&i.CodeChallenge,
-		&i.CodeChallengeMethod,
-		&i.Scopes,
-		&i.State,
-		&i.Nonce,
-		&i.IdpHint,
-		&i.AcrValues,
-		&i.ExpiresAt,
-	)
-	return i, err
-}
-
-const saveAuthSession = `-- name: SaveAuthSession :execresult
+const revokeSession = `-- name: RevokeSession :exec
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $1
+    WHERE tenant_uuid = $3::uuid
+    LIMIT 1
+)
+DELETE FROM auth_sessions
+WHERE tenant_id = tenant.id
+  AND subject = $1
+  AND client_id = $2
+`
+
+type RevokeSessionParams struct {
+	Subject    string      `json:"subject"`
+	ClientID   string      `json:"client_id"`
+	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+}
+
+func (q *Queries) RevokeSession(ctx context.Context, arg RevokeSessionParams) error {
+	_, err := q.db.Exec(ctx, revokeSession, arg.Subject, arg.ClientID, arg.TenantUuid)
+	return err
+}
+
+const saveAuthSession = `-- name: SaveAuthSession :exec
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $15::uuid
+    LIMIT 1
 )
 INSERT INTO auth_sessions (
     code,
@@ -179,44 +149,49 @@ INSERT INTO auth_sessions (
     session_id,
     state,
     nonce,
-    acr_values
+    acr_values,
+    identity_provider_id,
+    identity_provider_alias
 )
 SELECT
-    $2,
+    $1,
     tenant.id,
+    $2,
     $3,
     $4,
     $5,
     $6,
     $7,
-    $8,
+    $8::timestamptz,
     $9,
     $10,
     $11,
     $12,
-    $13
+    $13::uuid,
+    $14
 FROM tenant
 `
 
 type SaveAuthSessionParams struct {
-	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
-	Code            string             `json:"code"`
-	ClientID        string             `json:"client_id"`
-	Subject         string             `json:"subject"`
-	CodeChallenge   string             `json:"code_challenge"`
-	ChallengeMethod string             `json:"challenge_method"`
-	RedirectUri     string             `json:"redirect_uri"`
-	Scopes          []string           `json:"scopes"`
-	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
-	SessionID       string             `json:"session_id"`
-	State           string             `json:"state"`
-	Nonce           string             `json:"nonce"`
-	AcrValues       string             `json:"acr_values"`
+	Code                  string             `json:"code"`
+	ClientID              string             `json:"client_id"`
+	Subject               string             `json:"subject"`
+	CodeChallenge         string             `json:"code_challenge"`
+	ChallengeMethod       string             `json:"challenge_method"`
+	RedirectUri           string             `json:"redirect_uri"`
+	Scopes                []string           `json:"scopes"`
+	ExpiresAt             pgtype.Timestamptz `json:"expires_at"`
+	SessionID             string             `json:"session_id"`
+	State                 string             `json:"state"`
+	Nonce                 string             `json:"nonce"`
+	AcrValues             string             `json:"acr_values"`
+	IdentityProviderID    pgtype.UUID        `json:"identity_provider_id"`
+	IdentityProviderAlias *string            `json:"identity_provider_alias"`
+	TenantUuid            pgtype.UUID        `json:"tenant_uuid"`
 }
 
-func (q *Queries) SaveAuthSession(ctx context.Context, arg SaveAuthSessionParams) (pgconn.CommandTag, error) {
-	return q.db.Exec(ctx, saveAuthSession,
-		arg.TenantUuid,
+func (q *Queries) SaveAuthSession(ctx context.Context, arg SaveAuthSessionParams) error {
+	_, err := q.db.Exec(ctx, saveAuthSession,
 		arg.Code,
 		arg.ClientID,
 		arg.Subject,
@@ -229,73 +204,9 @@ func (q *Queries) SaveAuthSession(ctx context.Context, arg SaveAuthSessionParams
 		arg.State,
 		arg.Nonce,
 		arg.AcrValues,
-	)
-}
-
-const savePAR = `-- name: SavePAR :execresult
-WITH tenant AS (
-    SELECT id
-    FROM tenants
-    WHERE tenant_uuid = $1
-)
-INSERT INTO pushed_authorization_requests (
-    request_uri,
-    tenant_id,
-    client_id,
-    redirect_uri,
-    code_challenge,
-    code_challenge_method,
-    scopes,
-    state,
-    nonce,
-    idp_hint,
-    acr_values,
-    expires_at
-)
-SELECT
-    $2,
-    tenant.id,
-    $3,
-    $4,
-    $5,
-    $6,
-    $7,
-    $8,
-    $9,
-    $10,
-    $11,
-    $12
-FROM tenant
-`
-
-type SavePARParams struct {
-	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
-	RequestUri          string             `json:"request_uri"`
-	ClientID            string             `json:"client_id"`
-	RedirectUri         string             `json:"redirect_uri"`
-	CodeChallenge       string             `json:"code_challenge"`
-	CodeChallengeMethod string             `json:"code_challenge_method"`
-	Scopes              []string           `json:"scopes"`
-	State               string             `json:"state"`
-	Nonce               string             `json:"nonce"`
-	IdpHint             string             `json:"idp_hint"`
-	AcrValues           string             `json:"acr_values"`
-	ExpiresAt           pgtype.Timestamptz `json:"expires_at"`
-}
-
-func (q *Queries) SavePAR(ctx context.Context, arg SavePARParams) (pgconn.CommandTag, error) {
-	return q.db.Exec(ctx, savePAR,
+		arg.IdentityProviderID,
+		arg.IdentityProviderAlias,
 		arg.TenantUuid,
-		arg.RequestUri,
-		arg.ClientID,
-		arg.RedirectUri,
-		arg.CodeChallenge,
-		arg.CodeChallengeMethod,
-		arg.Scopes,
-		arg.State,
-		arg.Nonce,
-		arg.IdpHint,
-		arg.AcrValues,
-		arg.ExpiresAt,
 	)
+	return err
 }

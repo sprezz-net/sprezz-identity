@@ -109,7 +109,7 @@ templ ProfileDashboard(user model.UserProfile, identities []model.UserIdentity, 
 										<div class="text-2xs text-slate-400 flex flex-wrap gap-x-3">
 											<span>Login Count: { fmt.Sprintf("%d", ident.LoginCount) }</span>
 											<span>|</span>
-											<span>Status: { func() string { if ident.Blocked { return "Blocked" }; return "Active" }() }</span>
+											<span>Status: Active</span>
 										</div>
 										<p class="text-2xs text-slate-400">Coupled at: { ident.CoupledAt.Format("2006-01-02 15:04:05") }</p>
 									</div>

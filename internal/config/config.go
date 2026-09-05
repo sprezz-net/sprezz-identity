@@ -54,7 +54,7 @@ func (c *Config) GetDSN() string {
 func LoadConfig() (*Config, error) {
 	var cfg Config
 
-	// 1. Check for command-line parameter first (-env=dev)
+	// 1. Check for command-line parameter first (-env=production)
 	var envFlag string
 	flag.StringVar(&envFlag, "env", "", "Target environment profile (e.g. local, dev, production)")
 	flag.Parse()
@@ -83,6 +83,10 @@ func LoadConfig() (*Config, error) {
 			return nil, fmt.Errorf("failed to process system environment fields: %w", err)
 		}
 	}
+
+	// Force ensure cfg.AppEnv matches the true loaded profile path context explicitly
+	// This makes any manual trimming down-funnel in your HTTP/Crypto adapters completely redundant.
+	cfg.AppEnv = targetEnv
 
 	// 4. Assert core cryptographic safety rules established in the Sprezz-IDP spec.
 	if cfg.Database.Password == "" && cfg.DatabaseURL == "" {

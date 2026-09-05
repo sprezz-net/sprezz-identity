@@ -64,7 +64,7 @@ func TestSecureClient_BlocksPrivateAddresses(t *testing.T) {
 	defer ts.Close()
 
 	// Create our secure client
-	client := New()
+	client := New("test-client")
 
 	// Try to fetch from the local test server (which runs on 127.0.0.1 / loopback)
 	_, err := client.Get(ts.URL)

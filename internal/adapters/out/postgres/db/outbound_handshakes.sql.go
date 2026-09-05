@@ -11,72 +11,57 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const deleteOutboundHandshake = `-- name: DeleteOutboundHandshake :exec
+const consumeOutboundHandshake = `-- name: ConsumeOutboundHandshake :one
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $1
+    WHERE tenant_uuid = $2::uuid
 )
-DELETE FROM outbound_handshake_sessions
-WHERE outbound_handshake_sessions.id = $2
-  AND outbound_handshake_sessions.tenant_id = (SELECT id FROM tenant)
-`
-
-type DeleteOutboundHandshakeParams struct {
-	TenantUuid pgtype.UUID `json:"tenant_uuid"`
-	ID         string      `json:"id"`
-}
-
-func (q *Queries) DeleteOutboundHandshake(ctx context.Context, arg DeleteOutboundHandshakeParams) error {
-	_, err := q.db.Exec(ctx, deleteOutboundHandshake, arg.TenantUuid, arg.ID)
-	return err
-}
-
-const getOutboundHandshake = `-- name: GetOutboundHandshake :one
-WITH tenant AS (
-    SELECT id
-    FROM tenants
-    WHERE tenant_uuid = $1
-)
-SELECT
-    ohs.id, -- Fixed: Qualify column target to eliminate selection ambiguity
+DELETE FROM outbound_handshake_sessions ohs
+WHERE ohs.id = $1
+  AND ohs.tenant_id = (SELECT id FROM tenant)
+RETURNING
+    ohs.id,
+    ohs.partition_id,
     ohs.identity_provider_id,
     ohs.client_id,
     ohs.code_verifier,
+    ohs.created_at,
     ohs.expires_at,
-    ohs.access_token,
-    ohs.target_uri
-FROM outbound_handshake_sessions ohs
-WHERE ohs.id = $2
-  AND ohs.tenant_id = (SELECT id FROM tenant)
+    ohs.target_uri,
+    ohs.callback_uri
 `
 
-type GetOutboundHandshakeParams struct {
+type ConsumeOutboundHandshakeParams struct {
+	StateToken string      `json:"state_token"`
 	TenantUuid pgtype.UUID `json:"tenant_uuid"`
-	ID         string      `json:"id"`
 }
 
-type GetOutboundHandshakeRow struct {
+type ConsumeOutboundHandshakeRow struct {
 	ID                 string             `json:"id"`
+	PartitionID        int64              `json:"partition_id"`
 	IdentityProviderID pgtype.UUID        `json:"identity_provider_id"`
 	ClientID           string             `json:"client_id"`
 	CodeVerifier       string             `json:"code_verifier"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
-	AccessToken        *string            `json:"access_token"`
 	TargetUri          *string            `json:"target_uri"`
+	CallbackUri        *string            `json:"callback_uri"`
 }
 
-func (q *Queries) GetOutboundHandshake(ctx context.Context, arg GetOutboundHandshakeParams) (GetOutboundHandshakeRow, error) {
-	row := q.db.QueryRow(ctx, getOutboundHandshake, arg.TenantUuid, arg.ID)
-	var i GetOutboundHandshakeRow
+func (q *Queries) ConsumeOutboundHandshake(ctx context.Context, arg ConsumeOutboundHandshakeParams) (ConsumeOutboundHandshakeRow, error) {
+	row := q.db.QueryRow(ctx, consumeOutboundHandshake, arg.StateToken, arg.TenantUuid)
+	var i ConsumeOutboundHandshakeRow
 	err := row.Scan(
 		&i.ID,
+		&i.PartitionID,
 		&i.IdentityProviderID,
 		&i.ClientID,
 		&i.CodeVerifier,
+		&i.CreatedAt,
 		&i.ExpiresAt,
-		&i.AccessToken,
 		&i.TargetUri,
+		&i.CallbackUri,
 	)
 	return i, err
 }
@@ -95,39 +80,59 @@ const saveOutboundHandshake = `-- name: SaveOutboundHandshake :exec
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $1
+    WHERE tenant_uuid = $10::uuid
 )
 INSERT INTO outbound_handshake_sessions (
-    id, tenant_id, identity_provider_id, client_id, code_verifier, expires_at, access_token, target_uri
+    id,
+    tenant_id,
+    partition_id,
+    identity_provider_id,
+    client_id,
+    code_verifier,
+    created_at,
+    expires_at,
+    target_uri,
+    callback_uri
 )
 SELECT
-    $2,
+    $1,
     tenant.id,
-    $3, $4, $5, $6, $7, $8
+    $2::bigint,
+    $3::uuid,
+    $4,
+    $5,
+    $6::timestamptz,
+    $7::timestamptz,
+    $8::text,
+    $9::text
 FROM tenant
 `
 
 type SaveOutboundHandshakeParams struct {
-	TenantUuid         pgtype.UUID        `json:"tenant_uuid"`
-	ID                 string             `json:"id"`
+	StateToken         string             `json:"state_token"`
+	PartitionID        int64              `json:"partition_id"`
 	IdentityProviderID pgtype.UUID        `json:"identity_provider_id"`
 	ClientID           string             `json:"client_id"`
 	CodeVerifier       string             `json:"code_verifier"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
-	AccessToken        *string            `json:"access_token"`
-	TargetUri          *string            `json:"target_uri"`
+	TargetUri          string             `json:"target_uri"`
+	CallbackUri        string             `json:"callback_uri"`
+	TenantUuid         pgtype.UUID        `json:"tenant_uuid"`
 }
 
 func (q *Queries) SaveOutboundHandshake(ctx context.Context, arg SaveOutboundHandshakeParams) error {
 	_, err := q.db.Exec(ctx, saveOutboundHandshake,
-		arg.TenantUuid,
-		arg.ID,
+		arg.StateToken,
+		arg.PartitionID,
 		arg.IdentityProviderID,
 		arg.ClientID,
 		arg.CodeVerifier,
+		arg.CreatedAt,
 		arg.ExpiresAt,
-		arg.AccessToken,
 		arg.TargetUri,
+		arg.CallbackUri,
+		arg.TenantUuid,
 	)
 	return err
 }

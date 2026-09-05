@@ -5,177 +5,437 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"sprezz-identity/internal/domain/model"
+	"sprezz-identity/internal/domain/port"
 
 	"github.com/google/uuid"
 )
 
-// BuildOutboundOidcIntent coordinates dynamic state allocations, computes optional PKCE pairs,
-// triggers upstream PAR endpoints if mandated, and registers transient handshake states.
-func (s *OAuthService) BuildOutboundOidcIntent(ctx context.Context, req model.OutboundOidcRequest) (model.OidcLoginIntent, model.OutboundHandshakeSession, error) {
-	if req.IdentityProvider == nil {
-		return model.OidcLoginIntent{}, model.OutboundHandshakeSession{}, errors.New("identity provider context is mandatory for outbound requests")
-	}
-
-	stateBytes := make([]byte, 32)
-	if _, err := rand.Read(stateBytes); err != nil {
-		return model.OidcLoginIntent{}, model.OutboundHandshakeSession{}, fmt.Errorf("generate outbound state token bytes: %w", err)
-	}
-	stateToken := base64.RawURLEncoding.EncodeToString(stateBytes)
-
-	cfg := req.IdentityProvider.Config
-	if cfg.AuthorizationEndpoint == "" {
-		return model.OidcLoginIntent{}, model.OutboundHandshakeSession{},
-			errors.New("identity provider configuration contains an invalid authorization endpoint")
-	}
-	authEndpoint := cfg.AuthorizationEndpoint
-
-	var scopesStr string
-	if len(cfg.Scopes) > 0 {
-		scopesStr = strings.Join(cfg.Scopes, "+")
-	} else if len(req.Scopes) > 0 {
-		scopesStr = strings.Join(req.Scopes, "+")
-	}
-
-	var codeVerifier, codeChallenge string
-	if cfg.PkceEnabled {
-		bytes := make([]byte, 32)
-		if _, err := rand.Read(bytes); err != nil {
-			return model.OidcLoginIntent{}, model.OutboundHandshakeSession{}, fmt.Errorf("read secure pkce bytes: %w", err)
-		}
-		codeVerifier = base64.RawURLEncoding.EncodeToString(bytes)
-		hsh := sha256.Sum256([]byte(codeVerifier))
-		codeChallenge = base64.RawURLEncoding.EncodeToString(hsh[:])
-	}
-
-	handshakeSession := model.OutboundHandshakeSession{
-		ID:                 stateToken,
-		TenantID:           req.IdentityProvider.TenantID,
-		IdentityProviderID: req.IdentityProvider.ID,
-		ClientID:           req.ClientID,
-		CodeVerifier:       codeVerifier,
-		ExpiresAt:          s.clock.Now().Add(5 * time.Minute),
-		TargetURI:          req.TargetURI,
-	}
-
-	if cfg.ParEnabled && cfg.PushedAuthorizationEndpoint != "" {
-		intent, err := s.executeOutboundPAR(ctx, cfg.PushedAuthorizationEndpoint, authEndpoint, req, stateToken, codeChallenge, scopesStr)
-		if err != nil {
-			return model.OidcLoginIntent{}, model.OutboundHandshakeSession{}, err
-		}
-
-		if err := s.storage.SaveOutboundHandshake(ctx, handshakeSession); err != nil {
-			return model.OidcLoginIntent{}, model.OutboundHandshakeSession{}, fmt.Errorf("persist par handshake state: %w", err)
-		}
-
-		return intent, handshakeSession, nil
-	}
-
-	authURL := fmt.Sprintf(
-		"%s?response_type=code&client_id=%s&redirect_uri=%s&state=%s",
-		authEndpoint,
-		url.QueryEscape(req.ClientID),
-		url.QueryEscape(req.RedirectURI),
-		stateToken,
-	)
-
-	if scopesStr != "" {
-		authURL = fmt.Sprintf("%s&scope=%s", authURL, scopesStr)
-	}
-
-	if cfg.PkceEnabled {
-		authURL = fmt.Sprintf("%s&code_challenge=%s&code_challenge_method=S256", authURL, codeChallenge)
-	}
-
-	if err := s.storage.SaveOutboundHandshake(ctx, handshakeSession); err != nil {
-		return model.OidcLoginIntent{}, model.OutboundHandshakeSession{}, fmt.Errorf("persist handshake state: %w", err)
-	}
-
-	return model.OidcLoginIntent{
-		AuthURL: authURL,
-		State:   stateToken,
-	}, handshakeSession, nil
+type FederationService struct {
+	storage          port.Storage          // Driven Port: Relational DB persistence
+	federationClient port.FederationClient // Driven Port: Outbound HTTP network client [1.3]
+	crypto           port.Crypto           // Driven Port: JWT verify and token signature checks
+	clock            port.Clock            // Driven Port: Deterministic System Clock
+	validator        OAuthValidatorService
 }
 
-// executeOutboundPAR handles back-channel pushed authorization workflows (RFC 9126) for secure dynamic upstream links.
-func (s *OAuthService) executeOutboundPAR(ctx context.Context, parURL, authURL string, req model.OutboundOidcRequest, state, challenge, scopes string) (model.OidcLoginIntent, error) {
-	form := url.Values{}
-	form.Set("response_type", "code")
-	form.Set("client_id", req.ClientID)
-	form.Set("redirect_uri", req.RedirectURI)
-	form.Set("scope", scopes)
-	form.Set("state", state)
+// NewFederationService instantiates a fully isolated federation engine domain loop
+func NewFederationService(
+	s port.Storage,
+	fc port.FederationClient,
+	c port.Crypto,
+	cl port.Clock,
+) *FederationService {
+	return &FederationService{
+		storage:          s,
+		federationClient: fc,
+		crypto:           c,
+		clock:            cl,
+	}
+}
 
-	if challenge != "" {
-		form.Set("code_challenge", challenge)
-		form.Set("code_challenge_method", "S256")
+func (s *FederationService) createStateToken() (string, error) {
+	// 1. Generate 16 bytes of cryptographically secure pseudo-random noise directly
+	tokenBytes := make([]byte, 16)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return "", fmt.Errorf("federation_service: high-entropy failure: %w", err)
 	}
 
-	if req.IdentityProvider.Config.ClientSecret != "" {
-		form.Set("client_secret", req.IdentityProvider.Config.ClientSecret)
+	// 2. Compact the payload into a 22-character url-safe string with zero allocations overhead
+	stateToken := base64.RawURLEncoding.EncodeToString(tokenBytes)
+	return stateToken, nil
+}
+
+func (s *FederationService) createCodeVerifier() (string, error) {
+	// 1. Allocate 32 bytes of secure cryptographic noise for the verifier (entropy > 256 bits)
+	verifierBytes := make([]byte, 32)
+	if _, err := rand.Read(verifierBytes); err != nil {
+		return "", fmt.Errorf("federation_service: random safety source failure: %w", err)
 	}
 
-	client := &http.Client{Timeout: 5 * time.Second}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, parURL, strings.NewReader(form.Encode()))
+	// 2. Encode to create the RFC 7636 compliant high-entropy code_verifier string (43 characters)
+	codeVerifier := base64.RawURLEncoding.EncodeToString(verifierBytes)
+	return codeVerifier, nil
+}
+
+func (s *FederationService) createPKCEChallenge(codeVerifier string) string {
+	// 3. Compute the SHA-256 cryptographic digest over the verifier string bytes
+	hashDigest := sha256.Sum256([]byte(codeVerifier))
+
+	// 4. Compact the raw binary digest to build your final S256 code_challenge
+	pkceChallenge := base64.RawURLEncoding.EncodeToString(hashDigest[:])
+	return pkceChallenge
+}
+
+// InitiateFederatedLogin coordinates Use Case 2.0: Outbound Handshake Construction with dynamic PAR fallback capabilities
+func (s *FederationService) InitiateFederatedLogin(
+	ctx context.Context,
+	cmd port.InitiateFederatedLoginCommand,
+) (*port.InitiateFederatedLoginResponse, error) {
+
+	// 1. Resolve configuration schemas for the target provider and assert status values
+	idp, err := s.storage.GetIdentityProviderByUUID(ctx, cmd.TenantID, cmd.IdentityProviderID)
 	if err != nil {
-		return model.OidcLoginIntent{}, err
+		return nil, fmt.Errorf("federation_service: initiate failed: %w", port.ErrIdentityProviderNotFound)
 	}
-	httpReq.Header.Set("Content-Type", model.ContentTypeFormUrlEncoded)
 
-	resp, err := client.Do(httpReq)
+	if !idp.Enabled {
+		return nil, fmt.Errorf("federation_service: target provider container is administratively deactivated")
+	}
+
+	// 2. Fetch runtime network capabilities directly via OIDC Discovery configurations conditionally
+	var discovery *model.OIDCDiscoveryMetadata
+	if idp.Config.DiscoveryEndpoint != "" {
+		discovery, err = s.federationClient.FetchOIDCDiscoveryMetadata(ctx, idp.Config.DiscoveryEndpoint)
+		if err != nil {
+			return nil, fmt.Errorf("federation_service: live metadata harvesting failed: %w", err)
+		}
+	}
+
+	// 3. Hierarchy Resolution: Prioritize explicit DB endpoints, fall back to discovery keys
+	authEndpoint := idp.Config.AuthorizationEndpoint
+	if authEndpoint == "" && discovery != nil {
+		authEndpoint = discovery.AuthorizationEndpoint
+	}
+
+	parEndpoint := idp.Config.PushedAuthorizationEndpoint
+	if parEndpoint == "" && discovery != nil {
+		parEndpoint = discovery.PushedAuthorizationRequestEndpoint
+	}
+
+	if authEndpoint == "" {
+		return nil, fmt.Errorf("federation_service: authorization endpoint is unresolvable for idp %s", idp.ID)
+	}
+
+	// 4. DYNAMIC PKCE DETECTION: Optional fallback parsing via CodeChallengeMethodsSupported arrays
+	pkceSupportedUpstream := false
+	if discovery != nil {
+		for _, method := range discovery.CodeChallengeMethodsSupported {
+			if strings.ToUpper(method) == "S256" {
+				pkceSupportedUpstream = true
+				break
+			}
+		}
+	}
+	isPkceRequired := idp.Config.PkceEnabled || pkceSupportedUpstream
+
+	stateToken, err := s.createStateToken()
 	if err != nil {
-		return model.OidcLoginIntent{}, fmt.Errorf("outbound par network failure: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return model.OidcLoginIntent{}, fmt.Errorf("upstream par rejected with status code: %d", resp.StatusCode)
+		return nil, err
 	}
 
-	var parResponse struct {
-		RequestURI string `json:"request_uri"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&parResponse); err != nil {
-		return model.OidcLoginIntent{}, fmt.Errorf("decode par payload json: %w", err)
+	var codeVerifier, pkceChallenge string
+	if isPkceRequired {
+		codeVerifier, err = s.createCodeVerifier()
+		if err != nil {
+			return nil, err
+		}
+		pkceChallenge = s.createPKCEChallenge(codeVerifier)
 	}
 
-	finalURL := fmt.Sprintf("%s?client_id=%s&request_uri=%s",
-		authURL,
-		url.QueryEscape(req.ClientID),
-		url.QueryEscape(parResponse.RequestURI),
-	)
+	now := s.clock.Now()
 
-	return model.OidcLoginIntent{
-		AuthURL: finalURL,
-		State:   state,
+	handshakeRecord := model.OutboundHandshakeSession{
+		ID:                 stateToken,
+		TenantID:           cmd.TenantID,
+		PartitionID:        idp.PartitionID,
+		IdentityProviderID: idp.ID,
+		ClientID:           cmd.ClientID,
+		CodeVerifier:       codeVerifier,
+		CreatedAt:          now,
+		ExpiresAt:          now.Add(5 * time.Minute), // Strict expiration constraint
+		CallbackURI:        cmd.LocalCallbackURI,     // e.g., https://sprezz.net
+		TargetURI:          cmd.FinalTargetURI,       // Final landing path inside tenant perimeter
+	}
+
+	if err := s.storage.SaveOutboundHandshake(ctx, handshakeRecord); err != nil {
+		return nil, fmt.Errorf("federation_service: failed to persist context bounds: %w", err)
+	}
+
+	// 5. SANITIZE SCOPES: Enforce strict RFC-compliant space-separated string mappings
+	targetScopes := idp.Config.Scopes
+	if len(targetScopes) == 0 {
+		targetScopes = cmd.RequestedScopes // Graceful runtime fallback allocation from controller Command
+	}
+	scopesStr := strings.Join(targetScopes, " ")
+
+	// 6. Encapsulate parameters matching your updated ports layer structures
+	oidcParams := port.OutboundOIDCParams{
+		ClientID:         idp.Config.ClientID,
+		RedirectURI:      cmd.LocalCallbackURI,
+		TargetURI:        cmd.FinalTargetURI,
+		Scopes:           targetScopes,
+		IdentityProvider: idp,
+	}
+
+	var redirectionTargetURL string
+
+	// DUAL-TRACK ROUTING DECISION MATRIX: Determine if PAR can be executed safely
+	if parEndpoint != "" {
+		// Upstream server supports modern RFC 9126 PAR routines; process via back-channel socket
+		requestURI, err := s.federationClient.ExecutePushedAuthorization(
+			ctx,
+			parEndpoint,
+			oidcParams,
+			stateToken,
+			pkceChallenge,
+			scopesStr,
+		)
+		if err == nil {
+			// Backchannel execution completed successfully; return short PAR handle pointing to auth endpoint
+			redirectionTargetURL = fmt.Sprintf("%s?client_id=%s&request_uri=%s",
+				authEndpoint,
+				idp.Config.ClientID,
+				url.QueryEscape(requestURI),
+			)
+		}
+		// If backchannel execution fails unexpectedly, it will drop through cleanly to the legacy tracking fallback line
+	}
+
+	if redirectionTargetURL == "" {
+		// FRONT-CHANNEL FALLBACK: Build classic legacy query parameters because PAR is unsupported or down
+		v := url.Values{}
+		v.Set("response_type", "code")
+		v.Set("client_id", idp.Config.ClientID)
+		v.Set("redirect_uri", cmd.LocalCallbackURI)
+		v.Set("state", stateToken)
+		if scopesStr != "" {
+			v.Set("scope", scopesStr)
+		}
+		if isPkceRequired {
+			v.Set("code_challenge", pkceChallenge)
+			v.Set("code_challenge_method", "S256")
+		}
+
+		redirectionTargetURL = fmt.Sprintf("%s?%s", discovery.AuthorizationEndpoint, v.Encode())
+	}
+
+	// 5. Package results to allow transport layers to safely redirect client browser frames
+	return &port.InitiateFederatedLoginResponse{
+		TargetRedirectURL: redirectionTargetURL,
+		StateToken:        stateToken,
 	}, nil
 }
 
-// ValidateOutboundCallback cleans up and validates an incoming federation code return tracking vector.
-func (s *OAuthService) ValidateOutboundCallback(ctx context.Context, tenantID uuid.UUID, incomingState string) (*model.OutboundHandshakeSession, error) {
-	if incomingState == "" {
-		return nil, errors.New("mandatory federation callback tracking state parameter is missing")
+// ExecuteFederatedCallback coordinates the multi-stage external handshake pipeline natively [5.7]
+func (s *FederationService) ExecuteFederatedCallback(
+	ctx context.Context,
+	cmd port.FederatedCallbackCommand,
+) (*port.FederatedCallbackResponse, error) {
+
+	// 1. STAGE 1: Evict and validate the tracking state parameter to block XSRF replays
+	handshake, err := s.storage.GetAndConsumeOutboundHandshake(ctx, cmd.TenantID, cmd.IncomingState)
+	if err != nil {
+		return nil, fmt.Errorf("federation_service: tracking state invalid or replayed: %w", port.ErrSessionNotFound)
 	}
 
-	// 1. Consume the row from database storage immediately to prevent replay vectors
-	// (Invokes your outbound port.Storage interface)
-	handshake, err := s.storage.GetAndConsumeOutboundHandshake(ctx, tenantID, incomingState)
-	if err != nil || handshake == nil {
-		return nil, errors.New("outbound federation context is invalid, unknown, or expired")
-	}
-
-	// 2. Validate expiration constraints in the domain core
+	// Enforce strict time-window tracking boundaries
 	if s.clock.Now().After(handshake.ExpiresAt) {
-		return nil, errors.New("outbound verification window has closed")
+		return nil, errors.New("federation_service: outbound authentication tracking state expired")
 	}
 
-	return handshake, nil
+	// 2. STAGE 2: Resolve the specific IdP profile parameters from persistent schema storage
+	idp, err := s.storage.GetIdentityProviderByUUID(ctx, cmd.TenantID, handshake.IdentityProviderID)
+	if err != nil {
+		return nil, fmt.Errorf("federation_service: target idp config unresolvable: %w", port.ErrIdentityProviderNotFound)
+	}
+
+	if !idp.Enabled {
+		return nil, errors.New("federation_service: target provider instance is currently deactivated")
+	}
+
+	// STAGE 3: Execute back-channel token trade over the abstract driven port
+	// Hydrate the parameters on the fly using stored handshake and configuration data
+	oidcParams := port.OutboundOIDCParams{ // TODO Extend with more params, like acr request values?
+		ClientID:         idp.Config.ClientID,
+		RedirectURI:      handshake.CallbackURI, // Matches the exact redirect string registered upstream [3]
+		TargetURI:        handshake.TargetURI,   // Preserves destination landing zone context [3]
+		Scopes:           idp.Config.Scopes,     // Matches original requested scope vectors
+		IdentityProvider: idp,                   // Enforces complete multi-tenant context passing
+	}
+
+	providerTokenSet, err := s.federationClient.ExchangeAuthorizationCode(
+		ctx,
+		idp.Config.TokenEndpoint,
+		oidcParams,
+		cmd.IncomingCode,
+		handshake.CodeVerifier,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("federation_service: provider token swap failed: %w", err)
+	}
+
+	// Verify the external ID token integrity signatures against the provider's JWKS registry
+	externalClaims, err := s.crypto.VerifyExternalTokenWithProvider(ctx, providerTokenSet.IDToken, idp.Config.JwksURI, idp.Issuer)
+	if err != nil {
+		return nil, fmt.Errorf("federation_service: cryptographic id token signature invalid: %w", err)
+	}
+
+	var upstreamACR string
+	if acrVal, ok := externalClaims["acr"].(string); ok {
+		upstreamACR = acrVal
+	}
+
+	var upstreamAMR []string
+	if amrInterface, ok := externalClaims["amr"]; ok {
+		if amrSlice, ok := amrInterface.([]any); ok {
+			for _, val := range amrSlice {
+				if str, ok := val.(string); ok {
+					upstreamAMR = append(upstreamAMR, str)
+				}
+			}
+		} else if amrStr, ok := amrInterface.(string); ok {
+			upstreamAMR = strings.Split(amrStr, " ")
+		}
+	}
+
+	// Calculate internal assurance levels via the centralized validator service.
+	assurance := s.validator.TranslateIDPReachedLevels(idp, upstreamACR, upstreamAMR)
+
+	// Generate downstream space-delimited ACR string configurations.
+	tenant, err := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("federation_service: failed to resolve tenant context: %w", err)
+	}
+	_ = s.validator.CompileSessionAssuranceToClientACR(tenant, idp, upstreamACR, upstreamAMR)
+
+	// 4. STAGE 4: Identity Mapping and Security-Gated Auto-Linking [5.7]
+	var targetUser *model.UserProfile
+	now := s.clock.Now()
+
+	// Strategy A: Direct Match lookup via existing coupled profile link record
+	// Extract and assert the unique provider subject identifier (sub)
+	subject, ok := externalClaims["sub"].(string)
+	if !ok || subject == "" {
+		return nil, errors.New("federation_service: assertion token validation failed - missing or invalid 'sub' claim")
+	}
+	identity, err := s.storage.GetUserIdentityByProviderAndExternalID(ctx, cmd.TenantID, idp.PartitionID, idp.ID, subject)
+	if err == nil {
+		// Existing linkage established, query corresponding core profile
+		targetUser, err = s.storage.GetUserProfileByID(ctx, cmd.TenantID, idp.PartitionID, identity.UserProfileID)
+		if err != nil {
+			return nil, fmt.Errorf("federation_service: linked user profile missing from record: %w", port.ErrUserProfileNotFound)
+		}
+	} else {
+		// Strategy B: Link missing. Assert strict security gates before checking email parity [5.7]
+		email, ok := externalClaims["email"].(string)
+		if !ok || email == "" {
+			return nil, errors.New("federation_service: assertion token validation failed - missing or invalid 'email' claim")
+		}
+
+		emailVerified, _ := externalClaims["email_verified"].(bool)
+		if !emailVerified {
+			return nil, errors.New("federation_service: dynamic profile link blocked - external provider email is unverified")
+		}
+
+		// Look up account matching the verified email explicitly locked inside the handshake's target Partition [3.1]
+		targetUser, err = s.storage.FindProfileByEmail(ctx, idp.PartitionID, email)
+		if err != nil {
+			return nil, fmt.Errorf("federation_service: no matching system profile found to stitch account link against: %w", port.ErrUserProfileNotFound)
+		}
+
+		// Strategy C: Structural Account stitching registration
+		newLink := model.UserIdentity{
+			ID:                 uuid.New(),
+			UserProfileID:      targetUser.ID,
+			IdentityProviderID: idp.ID,
+			ExternalIdentityID: subject,
+			CoupledAt:          now,
+		}
+
+		if err := s.storage.UpsertUserIdentity(ctx, cmd.TenantID, idp.PartitionID, newLink); err != nil {
+			return nil, fmt.Errorf("federation_service: failed to commit structural profile identity link context: %w", err)
+		}
+	}
+
+	// Verify profile account state transitions before authorizing entrance permissions
+	allowed, err := targetUser.IsLoginAllowed()
+	if !allowed {
+		return nil, err
+	}
+
+	// 6. STAGE 5: Persist upstream tokens
+
+	// Default safety fallback lifespan (1 hour) if provider fails to pass implicit 'expires_in' metrics
+	tokenLifespan := 15 * time.Minute
+	if providerTokenSet.ExpiresIn > 0 {
+		tokenLifespan = time.Duration(providerTokenSet.ExpiresIn) * time.Second
+	}
+
+	fedSessionRecord := model.FederatedSession{
+		ID:                   uuid.New(), // Distinct tracking key allocated natively [5.7]
+		TenantUUID:           cmd.TenantID,
+		PartitionID:          handshake.PartitionID,
+		SessionID:            cmd.SessionID, // Securely binds to our active native cookie session reference
+		IdentityProviderID:   idp.ID,
+		UpstreamSubject:      subject,
+		UpstreamAccessToken:  providerTokenSet.AccessToken,
+		UpstreamIDToken:      providerTokenSet.IDToken,
+		UpstreamRefreshToken: providerTokenSet.RefreshToken,
+		CreatedAt:            now,
+		ExpiresAt:            now.Add(tokenLifespan), // Strictly locked to upstream expiration limits [6.3]
+	}
+
+	// Commit the cryptographic tracking payload securely to disk
+	if err := s.storage.SaveFederatedSession(ctx, fedSessionRecord); err != nil {
+		return nil, fmt.Errorf("federation_service: failed to commit federated session record tracking track: %w", err)
+	}
+
+	// 7. STAGE 6: Pack and return clean data boundaries back up to the caller ring [3.1, 5.7]
+	return &port.FederatedCallbackResponse{
+		UpstreamAccessToken:  providerTokenSet.AccessToken,  // Maps operational session parameters
+		UpstreamIDToken:      providerTokenSet.IDToken,      // Preserved for the SLO id_token_hint parameter
+		UpstreamRefreshToken: providerTokenSet.RefreshToken, // Preserved for background refresh access if needed
+		PartitionID:          handshake.PartitionID,         // Preserves internal database int64 sequence column natively [3.1]
+		TargetLandingURI:     handshake.TargetURI,           // Restores intended routing location gracefully [5.7]
+		ReachedAAL:           assurance.AAL,
+		ReachedIAL:           assurance.IAL,
+	}, nil
+}
+
+// Private helper to prevent cross-service dependencies while retaining decoupling purity
+//
+//nolint:unused
+func (s *FederationService) resolveFederatedLevels(config model.IdentityProviderConfig, externalAcr string, externalAmrs []string) (int, int) {
+	resolvedAAL := config.AAL
+	if resolvedAAL < 1 {
+		resolvedAAL = 1
+	}
+
+	resolvedIAL := config.IAL
+	if resolvedIAL < 1 {
+		resolvedIAL = 1
+	}
+
+	if externalAcr != "" && config.AcrToTuple != nil {
+		if tuple, exists := config.AcrToTuple[externalAcr]; exists {
+			if tuple.AAL >= 1 && tuple.AAL <= 4 {
+				resolvedAAL = tuple.AAL
+			}
+			if tuple.IAL >= 1 && tuple.IAL <= 4 {
+				resolvedIAL = tuple.IAL
+			}
+		}
+	}
+
+	if config.AmrToAAL != nil {
+		highestAMRMapped := 0
+		for _, amr := range externalAmrs {
+			cleanAmr := strings.ToLower(strings.TrimSpace(amr))
+			if level, exists := config.AmrToAAL[cleanAmr]; exists && level > highestAMRMapped {
+				highestAMRMapped = level
+			}
+		}
+		if highestAMRMapped >= 1 && highestAMRMapped <= 4 && highestAMRMapped > resolvedAAL {
+			resolvedAAL = highestAMRMapped
+		}
+	}
+
+	return resolvedAAL, resolvedIAL
 }

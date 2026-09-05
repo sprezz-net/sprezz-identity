@@ -109,6 +109,7 @@ The persistence architecture isolates records by forcing a primary composite mul
 - **`tenants` Engine Domain**: Isolates the global identity landscapes. Employs a partial index on domains to provide zero-latency workspace routing for active accounts.
 - **`applications` Engine Domain**: Stores tenant client details. Includes an algorithm identifier (`RS256` or `EdDSA`) and tracks application details via primary composite multi-tenant matrix structures.
 - **`auth_sessions` Engine Domain**: Tracks high-entropy short-lived validation codes, state parameters, scopes, and expirations.
+- **`client_sessions` Engine Domain**: Tracks the footprint of client applications accessed by a user within a single single-sign-on lifecycle. It provides an immediate look-up mapping to identify exactly which external resources must be notified when that specific browser session is terminated.
 
 Internally a tenant is represented by an integer, externally (inside tokens for example) by a UUIDv4.
 
@@ -291,6 +292,7 @@ sequenceDiagram
     Server-->>Client: Returns 200 OK (JSON Token Set containing access_token, id_token, refresh_token)
 ```
 
+- **Client Session Linkage Registration**: During the back-channel token trade step, if the authorization session is bound to a parent browser single-sign-on container, the server logs the association between that session and the requesting client application inside the client sessions store. This tracking happens atomically before token issuance to build the lineage required for targeted sign-out notifications.
 - **Issuer Parameter Redirection (RFC 9207)**: To shield client applications against authorization server mix-up attacks, successful authorization code redirects dynamically append the `iss` parameter containing the exact issuer identifier of the authorization server (e.g. `&iss=https%3A%2F%2Ftest.com`).
 
 The mathematical evaluation inside the business layer service strictly asserts:
@@ -400,13 +402,14 @@ Sprezz Identity implements OAuth 2.0 Token Exchange (RFC 8693) via the custom gr
 
 - **Client Authentication**: Confidential clients are authenticated via standard HTTP Basic Authentication or form parameter checks. Public clients are checked for validity by resolving their registrations.
 - **Token Validation**: The service decodes and extracts claims (e.g., `iss`, `sub`, `email`, `name`, `preferred_username`, `email_verified`) from incoming OIDC JWT tokens or custom legacy string formats.
-- **Federated Identity Mapping**: The server matches the token's `iss` issuer exactly on `p.IssuerURL == iss` or `p.Alias == iss` to an enabled, configured `IdentityProvider` in the tenant context. If direct issuer matching fails, the engine falls back to matching the email's domain alias against the configured provider's `DomainAliases`.
+- **Federated Identity Mapping**: The server matches the token's `iss` issuer exactly on `p.Issuer == iss` to an enabled, configured `IdentityProvider` in the tenant context. If direct issuer matching fails, the engine falls back to matching the email's domain alias against the configured provider's `DomainAliases`.
 - **Prioritized Profile Matching & Verification Safety Gating**:
   - **Stage 1 (Identity External ID Match)**: If the provider is configured with a `UserIdentifierClaim` (e.g., `"sub"`), the engine extracts it from the payload as `externalSub` and queries the `identities` table using `GetIdentityByProviderAndExternalID`. If a matching coupled identity exists, the linked `UserProfile` is resolved and returned immediately.
   - **Stage 2 (Email Verification Gate)**: If no identity match is found, the engine evaluates the `email_verified` claim of the incoming token. If `email_verified` is false or missing, the exchange is immediately denied with an `invalid_grant` error (`ErrExternalEmailNotVerified`) to prevent account takeover via spoofed external identities.
   - **Stage 3 (Verified Email Match & Auto-Link)**: If email verification passes, the engine queries the `user_profiles` table using `FindProfileByEmail` matching the partition. If a verified matching profile is found, the engine automatically persists a new link in the `identities` table using `UpsertIdentity` so subsequent logins resolve instantly via Stage 1, then returns the profile.
   - **Stage 4 (Deny Token Exchange)**: If no profile matches any of these stages, or if safety gates fail, the token exchange is strictly denied.
 - **Token Issuance**: The server mints a secure, native Access Token (and ID/Refresh Token as per client capabilities and configuration) bound to the newly resolved native subject.
+- **Interactive Federation Client Session Registration**: When processing a token exchange that facilitates an interactive browser-facing user transition, the service registers the newly joined client application under the active session identifier inside the client sessions store. This binds the application to the single-sign-on logout boundary. Headless server-to-server or machine-to-machine token exchanges bypass this registration entirely.
 
 ## 6. Token Lifecycle, Governance & Asymmetric Cryptography
 
@@ -455,13 +458,7 @@ Sprezz Identity implements RFC 7009 Token Revocation to invalidate stateless JWT
 
 - **The Blacklist Mechanism**: Revoking a token parses its unique JWT ID (`jti` / `TokenID`) and commits the `token_id` alongside its absolute expiration timestamp (`expires_at`) into a PostgreSQL-backed `revoked_tokens` table.
 - **Introspection Verification**: Any cryptographic validation or introspection checks assert that the token's `jti` is not present within the active revoked blacklist database.
-- **Automated Periodic Pruning (15-Minute Ticks)**: Because revoked tokens and session records naturally become invalid once they pass their `expires_at` timestamp, storing them is redundant and degrades index performance. A background pruning worker, running on 15-minute ticks (configured via `TokenPruningInterval` in `IdentityServerConfig`), executes bulk-pruning deletes to purge expired rows from `revoked_tokens`, `auth_sessions`, and `interaction_sessions`:
-
-  ```sql
-  DELETE FROM revoked_tokens WHERE expires_at <= NOW();
-  DELETE FROM auth_sessions WHERE expires_at <= NOW();
-  DELETE FROM interaction_sessions WHERE expires_at <= NOW();
-  ```
+- **Automated Periodic Pruning (15-Minute Ticks)**: A background worker execution routine continuously sweeps state tracking memory stores on 15-minute intervals. It automatically purges expired tokens, terminated interaction configurations, and cleans up old client sessions records that no longer point to an active session, ensuring that old data traces do not degrade runtime query latency.
 
 ### 6.4 Refresh Token Rotation (RTR) with Family Tracking & Breach Detection
 
@@ -533,6 +530,7 @@ Sprezz Identity implements OIDC Front-Channel Logout 1.0 to clear browser cookie
 
 Sprezz Identity implements OIDC Back-Channel Logout 1.0 to trigger secure, out-of-band single logout actions directly at client endpoints.
 
+- **Targeted Client Sessions Propagation**: Upon receiving a logout request, the single-sign-out engine queries the client sessions store using the active session identifier to resolve the specific list of client applications that were actually authorized during that browser lifecycle. The server dispatches signed logout tokens and front-channel iframe blocks **strictly to the subset of applications the user actually interacted with**, leaving unvisited systems untouched and reducing redundant cross-network load.
 - **Cryptographic Token Verification**: The server generates a unique, cryptographically signed `logout_token` (JWT) for each client. This token contains the standard claims (`iss`, `sub`, `aud`, `iat`, `jti`) and the mandatory `events` claim:
   `"events": { "http://schemas.openid.net/event/back-channel-logout": {} }`
 - **Non-Blocking Asynchronous Propagation**: To keep logout execution extremely fast for the browser, the usecase invokes our SSRF-protected `port.LogoutNotifier` adapter asynchronously inside separate background goroutines, shielding client-to-server HTTP request times from the user.
@@ -562,9 +560,10 @@ Sprezz Identity is engineered from the ground up as a stateless cluster layer. C
 
 ### 8.2 Session Revocation on Administrative Lockdown
 
-Modifying the `allow_signup` flag to `false` prevents future rogue registration queries but fails to immediately intercept malicious administrative profile token payloads that were generated immediately prior to the system lockdown.
+Modifying the `allow_signup` flag to `false` prevents future rogue registration queries across targeting tenants. However, the system must treat the root Administrative Tenant boundary with heightened operational security constraints.
 
-- **Active Session Purge Rule**: The HTTP handler processing `PATCH /admin/tenants/{id}/toggle-signup` must verify the parameter transition state. If `allow_signup` transitions from `true` to `false`, the database context service layer must trigger an atomic transaction that blacklists, revokes, and invalidates all active OIDC Session cookies, Access Tokens, and Refresh Tokens issued to the administrative tenant partition. This forces a clean, global re-authentication check across all admin entry portals instantly.
+- **Administrative Tenant Post-Bootstrap Isolation Rule**: The HTTP or service handler processing registration state mutations must evaluate both tenant scopes and parameters. If `allow_signup` transitions from `true` to `false` specifically inside the root "Administrative Tenant", the core database context layer must execute an atomic transaction that blacklists, revokes, and invalidates all active OIDC Session cookies, Access Tokens, and Refresh Tokens issued to that platform control partition.
+- **Multi-Tenant Exclusion Isolation**: Standard business tenant instances toggling their local registration capabilities are strictly excluded from this purging constraint. This preserves the runtime continuity of active client user channels under normal operational shifts.
 
 ### 8.3 Watertight Cookie Session Defenses
 

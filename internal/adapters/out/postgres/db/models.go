@@ -5,35 +5,112 @@
 package db
 
 import (
+	"database/sql/driver"
+	"fmt"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ProfileLifecycleState string
+
+const (
+	ProfileLifecycleStateCREATED     ProfileLifecycleState = "CREATED"
+	ProfileLifecycleStateREQUESTED   ProfileLifecycleState = "REQUESTED"
+	ProfileLifecycleStateINVITED     ProfileLifecycleState = "INVITED"
+	ProfileLifecycleStateACTIVATED   ProfileLifecycleState = "ACTIVATED"
+	ProfileLifecycleStateDEACTIVATED ProfileLifecycleState = "DEACTIVATED"
+)
+
+func (e *ProfileLifecycleState) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ProfileLifecycleState(s)
+	case string:
+		*e = ProfileLifecycleState(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ProfileLifecycleState: %T", src)
+	}
+	return nil
+}
+
+type NullProfileLifecycleState struct {
+	ProfileLifecycleState ProfileLifecycleState `json:"profile_lifecycle_state"`
+	Valid                 bool                  `json:"valid"` // Valid is true if ProfileLifecycleState is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullProfileLifecycleState) Scan(value interface{}) error {
+	if value == nil {
+		ns.ProfileLifecycleState, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ProfileLifecycleState.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullProfileLifecycleState) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ProfileLifecycleState), nil
+}
+
 type Application struct {
+	ID               pgtype.UUID        `json:"id"`
+	TenantID         int32              `json:"tenant_id"`
+	ProfileID        pgtype.UUID        `json:"profile_id"`
+	GroupID          pgtype.UUID        `json:"group_id"`
+	ApplicationName  string             `json:"application_name"`
+	IsEnabled        bool               `json:"is_enabled"`
+	ClientID         string             `json:"client_id"`
+	ClientSecretHash *string            `json:"client_secret_hash"`
+	IsDynamic        bool               `json:"is_dynamic"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
+}
+
+type ApplicationGroup struct {
 	ID                     pgtype.UUID        `json:"id"`
 	TenantID               int32              `json:"tenant_id"`
-	ClientID               string             `json:"client_id"`
-	ClientSecretHash       *string            `json:"client_secret_hash"`
-	ClientName             string             `json:"client_name"`
+	GroupName              string             `json:"group_name"`
+	IsEnabled              bool               `json:"is_enabled"`
+	RedirectUri            string             `json:"redirect_uri"`
 	RedirectUris           []string           `json:"redirect_uris"`
 	PostLogoutRedirectUris []string           `json:"post_logout_redirect_uris"`
 	FrontChannelLogoutUri  *string            `json:"front_channel_logout_uri"`
 	BackChannelLogoutUri   *string            `json:"back_channel_logout_uri"`
-	GrantTypes             []string           `json:"grant_types"`
-	ResponseTypes          []string           `json:"response_types"`
-	IdpSigningAlgorithm    string             `json:"idp_signing_algorithm"`
-	AccessTokenLifetime    pgtype.Interval    `json:"access_token_lifetime"`
-	RefreshTokenLifetime   pgtype.Interval    `json:"refresh_token_lifetime"`
-	IDTokenLifetime        pgtype.Interval    `json:"id_token_lifetime"`
 	AllowedScopes          []string           `json:"allowed_scopes"`
 	DefaultScopes          []string           `json:"default_scopes"`
-	AllowedIdps            []string           `json:"allowed_idps"`
-	DefaultIdp             *string            `json:"default_idp"`
 	AllowedAudiences       []string           `json:"allowed_audiences"`
-	ClientType             string             `json:"client_type"`
-	RedirectUri            string             `json:"redirect_uri"`
-	EnforceRtr             bool               `json:"enforce_rtr"`
 	CreatedAt              pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	DefaultIdpID           pgtype.UUID        `json:"default_idp_id"`
+}
+
+type ApplicationGroupIdp struct {
+	GroupID   pgtype.UUID        `json:"group_id"`
+	IdpID     pgtype.UUID        `json:"idp_id"`
+	TenantID  pgtype.UUID        `json:"tenant_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type ApplicationProfile struct {
+	ID                      pgtype.UUID        `json:"id"`
+	TenantID                int32              `json:"tenant_id"`
+	ProfileName             string             `json:"profile_name"`
+	IsEnabled               bool               `json:"is_enabled"`
+	TokenEndpointAuthMethod string             `json:"token_endpoint_auth_method"`
+	GrantTypes              []string           `json:"grant_types"`
+	ResponseTypes           []string           `json:"response_types"`
+	AccessTokenLifetime     pgtype.Interval    `json:"access_token_lifetime"`
+	RefreshTokenLifetime    pgtype.Interval    `json:"refresh_token_lifetime"`
+	IDTokenLifetime         pgtype.Interval    `json:"id_token_lifetime"`
+	EnforceRtr              bool               `json:"enforce_rtr"`
+	SigningAlgorithm        string             `json:"signing_algorithm"`
+	CreatedAt               pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
 }
 
 type AuditEventLog struct {
@@ -47,19 +124,28 @@ type AuditEventLog struct {
 }
 
 type AuthSession struct {
-	Code            string             `json:"code"`
-	TenantID        int32              `json:"tenant_id"`
-	ClientID        string             `json:"client_id"`
-	Subject         string             `json:"subject"`
-	CodeChallenge   string             `json:"code_challenge"`
-	ChallengeMethod string             `json:"challenge_method"`
-	RedirectUri     string             `json:"redirect_uri"`
-	Scopes          []string           `json:"scopes"`
-	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
-	SessionID       string             `json:"session_id"`
-	State           string             `json:"state"`
-	Nonce           string             `json:"nonce"`
-	AcrValues       string             `json:"acr_values"`
+	Code                  string             `json:"code"`
+	TenantID              int32              `json:"tenant_id"`
+	ClientID              string             `json:"client_id"`
+	Subject               string             `json:"subject"`
+	CodeChallenge         string             `json:"code_challenge"`
+	ChallengeMethod       string             `json:"challenge_method"`
+	RedirectUri           string             `json:"redirect_uri"`
+	Scopes                []string           `json:"scopes"`
+	ExpiresAt             pgtype.Timestamptz `json:"expires_at"`
+	SessionID             string             `json:"session_id"`
+	State                 string             `json:"state"`
+	Nonce                 string             `json:"nonce"`
+	AcrValues             string             `json:"acr_values"`
+	IdentityProviderID    pgtype.UUID        `json:"identity_provider_id"`
+	IdentityProviderAlias *string            `json:"identity_provider_alias"`
+}
+
+type ClientSession struct {
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	SessionID    string             `json:"session_id"`
+	ClientID     string             `json:"client_id"`
+	AssociatedAt pgtype.Timestamptz `json:"associated_at"`
 }
 
 type DpopProof struct {
@@ -67,17 +153,18 @@ type DpopProof struct {
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
-type Identity struct {
-	ID                      pgtype.UUID        `json:"id"`
-	UserProfileID           pgtype.UUID        `json:"user_profile_id"`
-	IdentityProviderID      pgtype.UUID        `json:"identity_provider_id"`
-	ExternalIdentityID      string             `json:"external_identity_id"`
-	LoginCount              int32              `json:"login_count"`
-	LastLoginAt             pgtype.Timestamptz `json:"last_login_at"`
-	LastVerificationAttempt pgtype.Timestamptz `json:"last_verification_attempt"`
-	Blocked                 bool               `json:"blocked"`
-	CoupledAt               pgtype.Timestamptz `json:"coupled_at"`
-	FailedVerificationCount int32              `json:"failed_verification_count"`
+type FederatedSession struct {
+	ID                   pgtype.UUID        `json:"id"`
+	TenantID             pgtype.UUID        `json:"tenant_id"`
+	PartitionID          int64              `json:"partition_id"`
+	SessionID            string             `json:"session_id"`
+	IdentityProviderID   pgtype.UUID        `json:"identity_provider_id"`
+	UpstreamSubject      string             `json:"upstream_subject"`
+	UpstreamAccessToken  *string            `json:"upstream_access_token"`
+	UpstreamIDToken      *string            `json:"upstream_id_token"`
+	UpstreamRefreshToken *string            `json:"upstream_refresh_token"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt            pgtype.Timestamptz `json:"expires_at"`
 }
 
 type IdentityProvider struct {
@@ -91,6 +178,7 @@ type IdentityProvider struct {
 	Name        string             `json:"name"`
 	PartitionID int64              `json:"partition_id"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	Issuer      *string            `json:"issuer"`
 }
 
 type InteractionSession struct {
@@ -114,8 +202,10 @@ type OutboundHandshakeSession struct {
 	ClientID           string             `json:"client_id"`
 	CodeVerifier       string             `json:"code_verifier"`
 	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
-	AccessToken        *string            `json:"access_token"`
 	TargetUri          *string            `json:"target_uri"`
+	PartitionID        int64              `json:"partition_id"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	CallbackUri        *string            `json:"callback_uri"`
 }
 
 type Partition struct {
@@ -126,11 +216,14 @@ type Partition struct {
 }
 
 type Password struct {
-	UserProfileID      pgtype.UUID        `json:"user_profile_id"`
-	IdentityProviderID pgtype.UUID        `json:"identity_provider_id"`
-	PasswordHash       string             `json:"password_hash"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	UserProfileID           pgtype.UUID        `json:"user_profile_id"`
+	IdentityProviderID      pgtype.UUID        `json:"identity_provider_id"`
+	PasswordHash            string             `json:"password_hash"`
+	CreatedAt               pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
+	FailedVerificationCount int32              `json:"failed_verification_count"`
+	LastVerificationAttempt pgtype.Timestamptz `json:"last_verification_attempt"`
+	BlockedUntil            pgtype.Timestamptz `json:"blocked_until"`
 }
 
 type PushedAuthorizationRequest struct {
@@ -149,15 +242,18 @@ type PushedAuthorizationRequest struct {
 }
 
 type RefreshToken struct {
-	TokenID       string             `json:"token_id"`
-	TenantID      int32              `json:"tenant_id"`
-	ClientID      string             `json:"client_id"`
-	Subject       string             `json:"subject"`
-	Scopes        []string           `json:"scopes"`
-	TokenFamilyID string             `json:"token_family_id"`
-	IsUsed        bool               `json:"is_used"`
-	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	TokenID               string             `json:"token_id"`
+	TenantID              int32              `json:"tenant_id"`
+	ClientID              string             `json:"client_id"`
+	Subject               string             `json:"subject"`
+	Scopes                []string           `json:"scopes"`
+	TokenFamilyID         string             `json:"token_family_id"`
+	IsUsed                bool               `json:"is_used"`
+	ExpiresAt             pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	IdentityProviderID    pgtype.UUID        `json:"identity_provider_id"`
+	IdentityProviderAlias *string            `json:"identity_provider_alias"`
+	SessionID             *string            `json:"session_id"`
 }
 
 type RevokedToken struct {
@@ -192,14 +288,40 @@ type TenantSigningKey struct {
 	CreatedAt            pgtype.Timestamp `json:"created_at"`
 }
 
+type TmpAppGroupsMap struct {
+	OldAppID   pgtype.UUID `json:"old_app_id"`
+	NewGroupID pgtype.UUID `json:"new_group_id"`
+}
+
+type TmpAppProfilesMap struct {
+	OldAppID     pgtype.UUID `json:"old_app_id"`
+	NewProfileID pgtype.UUID `json:"new_profile_id"`
+}
+
+type UserIdentity struct {
+	ID                 pgtype.UUID        `json:"id"`
+	UserProfileID      pgtype.UUID        `json:"user_profile_id"`
+	IdentityProviderID pgtype.UUID        `json:"identity_provider_id"`
+	ExternalIdentityID string             `json:"external_identity_id"`
+	LoginCount         int32              `json:"login_count"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	CoupledAt          pgtype.Timestamptz `json:"coupled_at"`
+	TenantID           int64              `json:"tenant_id"`
+	PartitionID        int64              `json:"partition_id"`
+}
+
 type UserProfile struct {
-	ID                pgtype.UUID        `json:"id"`
-	TenantID          int32              `json:"tenant_id"`
-	PreferredUsername string             `json:"preferred_username"`
-	Name              string             `json:"name"`
-	Email             string             `json:"email"`
-	EmailVerified     bool               `json:"email_verified"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	PartitionID       int64              `json:"partition_id"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	ID                pgtype.UUID           `json:"id"`
+	TenantID          int32                 `json:"tenant_id"`
+	PreferredUsername string                `json:"preferred_username"`
+	Name              string                `json:"name"`
+	Email             string                `json:"email"`
+	EmailVerified     bool                  `json:"email_verified"`
+	CreatedAt         pgtype.Timestamptz    `json:"created_at"`
+	PartitionID       int64                 `json:"partition_id"`
+	UpdatedAt         pgtype.Timestamptz    `json:"updated_at"`
+	FirstName         string                `json:"first_name"`
+	LastName          string                `json:"last_name"`
+	LifecycleState    ProfileLifecycleState `json:"lifecycle_state"`
+	Blocked           bool                  `json:"blocked"`
 }

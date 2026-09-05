@@ -72,7 +72,8 @@ func isPrivateOrLocalIP(ip net.IP) bool {
 
 // safeDialContext wraps a dialer and adds strict validation of resolved IP addresses
 // to prevent SSRF and DNS rebinding attacks.
-func safeDialContext(dialer *net.Dialer) func(ctx context.Context, network, addr string) (net.Conn, error) {
+func safeDialContext(dialer *net.Dialer, appEnv string) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	isLocal := appEnv == "local"
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		host, port, err := net.SplitHostPort(addr)
 		if err != nil {
@@ -89,10 +90,12 @@ func safeDialContext(dialer *net.Dialer) func(ctx context.Context, network, addr
 			return nil, fmt.Errorf("no IP addresses found for host: %s", host)
 		}
 
-		// Ensure all resolved IPs are public / safe
-		for _, ip := range ips {
-			if isPrivateOrLocalIP(ip) {
-				return nil, fmt.Errorf("connection to private or local address is forbidden: %s", ip.String())
+		if !isLocal {
+			// Ensure all resolved IPs are public / safe
+			for _, ip := range ips {
+				if isPrivateOrLocalIP(ip) {
+					return nil, fmt.Errorf("connection to private or local address is forbidden: %s", ip.String())
+				}
 			}
 		}
 
@@ -106,7 +109,7 @@ func safeDialContext(dialer *net.Dialer) func(ctx context.Context, network, addr
 
 // New returns an *http.Client configured with a 10-second timeout, the User-Agent transport,
 // and a secure transport that protects against SSRF and DNS rebinding.
-func New() *http.Client {
+func New(appEnv string) *http.Client {
 	dialer := &net.Dialer{
 		Timeout:   10 * time.Second,
 		KeepAlive: 10 * time.Second,
@@ -114,7 +117,7 @@ func New() *http.Client {
 
 	transport := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           safeDialContext(dialer),
+		DialContext:           safeDialContext(dialer, appEnv),
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,

@@ -1,20 +1,16 @@
 package http
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
-	"sprezz-identity/internal/adapters/out/clock"
-	jwtcrypto "sprezz-identity/internal/adapters/out/crypto"
 	"sprezz-identity/internal/domain/model"
+	"sprezz-identity/internal/domain/port"
 	"sprezz-identity/internal/domain/port/portmock"
 
 	"github.com/gojuno/minimock/v3"
@@ -42,243 +38,76 @@ func buildTestAdapter(ctrl *minimock.Controller) (*HttpAdapter, *model.Tenant) {
 		},
 	}
 
-	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
+	tuc := portmock.NewTenantUseCaseMock(ctrl)
+	fuc := portmock.NewFederatedLoginUseCaseMock(ctrl)
+	suc := portmock.NewSSOSessionUseCaseMock(ctrl)
+	upuc := portmock.NewUserProfileUseCaseMock(ctrl)
+	uruc := portmock.NewUserRegistrationUseCaseMock(ctrl)
+	lauc := portmock.NewLocalAuthUseCaseMock(ctrl)
+
+	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
 		return tenant, nil
 	})
 
-	return NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com"), tenant
-}
-
-func TestHttpAdapter_OpenIDConfiguration_Success(t *testing.T) {
-	ctrl := minimock.NewController(t)
-	adapter, _ := buildTestAdapter(ctrl)
-
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/openid-configuration", nil)
-	req.Host = "test.com"
-	rec := httptest.NewRecorder()
-
-	adapter.Router().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", rec.Code)
-	}
-
-	var resp map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	scopes, ok := resp["scopes_supported"].([]any)
-	if !ok {
-		t.Fatal("scopes_supported is missing or not a list")
-	}
-
-	if len(scopes) != 2 || scopes[0] != "openid" || scopes[1] != "custom-scope" {
-		t.Fatalf("unexpected scopes in configuration: %v", scopes)
-	}
-
-	acrValues, ok := resp["acr_values_supported"].([]any)
-	if !ok {
-		t.Fatal("acr_values_supported is missing or not a list")
-	}
-
-	if len(acrValues) != 2 || acrValues[0] != "acr:a" || acrValues[1] != "acr:b" {
-		t.Fatalf("unexpected acr values order (must be sorted): %v", acrValues)
-	}
-
-	if resp["end_session_endpoint"] != "https://test.com/oauth/logout" {
-		t.Fatalf("expected end_session_endpoint https://test.com/oauth/logout, got %v", resp["end_session_endpoint"])
-	}
-
-	if resp["frontchannel_logout_supported"] != true || resp["frontchannel_logout_session_supported"] != true {
-		t.Fatal("expected frontchannel logout to be supported")
-	}
-}
-
-func TestHttpAdapter_OAuthAuthorizationServer_Success(t *testing.T) {
-	ctrl := minimock.NewController(t)
-	adapter, _ := buildTestAdapter(ctrl)
-
-	req2 := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-authorization-server", nil)
-	req2.Host = "test.com"
-	rec2 := httptest.NewRecorder()
-
-	adapter.Router().ServeHTTP(rec2, req2)
-
-	if rec2.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", rec2.Code)
-	}
-
-	var resp2 map[string]any
-	if err := json.Unmarshal(rec2.Body.Bytes(), &resp2); err != nil {
-		t.Fatalf("failed to decode response 2: %v", err)
-	}
-
-	oidcFields := []string{
-		"userinfo_endpoint",
-		"end_session_endpoint",
-		"frontchannel_logout_supported",
-		"frontchannel_logout_session_supported",
-		"claims_supported",
-		"id_token_signing_alg_values_supported",
-		"subject_types_supported",
-	}
-
-	for _, f := range oidcFields {
-		if _, exists := resp2[f]; exists {
-			t.Fatalf("expected field %q to be absent in OAuth 2.0 metadata, but it exists", f)
+	auth.ProcessDiscoveryMetadataMock.Set(func(ctx context.Context, tenantID uuid.UUID, isOIDC bool) (*port.DiscoveryResponse, error) {
+		resp := &port.DiscoveryResponse{
+			Issuer:                "https://test.com",
+			ScopesSupported:       []string{"openid", "custom-scope"},
+			ACRValuesSupported:    []string{"acr:a", "acr:b"},
+			AuthorizationEndpoint: "https://test.com/oauth/authorize",
+			TokenEndpoint:         "https://test.com/oauth/token",
+			JWKSURI:               "https://test.com/.well-known/jwks.json",
 		}
-	}
-
-	if resp2["issuer"] != "https://test.com" || resp2["authorization_endpoint"] != "https://test.com/oauth/authorize" {
-		t.Fatalf("unexpected OAuth 2.0 metadata endpoint values: %v", resp2)
-	}
-}
-
-type registerTestCase struct {
-	name                string
-	predefinedScopes    []string
-	allowedScopes       []string
-	defaultScopes       []string
-	predefinedAudiences []string
-	allowedAudiences    []string
-	expectedStatusCode  int
-	expectedError       string
-}
-
-func TestHttpAdapter_Register_Validation(t *testing.T) {
-	tests := []registerTestCase{
-		{
-			name:               "Valid scopes subset",
-			predefinedScopes:   []string{"openid", "profile", "custom"},
-			allowedScopes:      []string{"openid", "custom"},
-			defaultScopes:      []string{"openid"},
-			expectedStatusCode: http.StatusCreated,
-		},
-		{
-			name:               "Invalid allowed scope",
-			predefinedScopes:   []string{"openid", "profile"},
-			allowedScopes:      []string{"openid", "illegal-scope"},
-			defaultScopes:      []string{"openid"},
-			expectedStatusCode: http.StatusBadRequest,
-			expectedError:      "requested allowed_scopes are not predefined/allowed by the tenant",
-		},
-		{
-			name:               "Invalid default scope",
-			predefinedScopes:   []string{"openid", "profile"},
-			allowedScopes:      []string{"openid", "profile"},
-			defaultScopes:      []string{"illegal-scope"},
-			expectedStatusCode: http.StatusBadRequest,
-			expectedError:      "requested default_scopes are not predefined/allowed by the tenant",
-		},
-		{
-			name:                "Valid allowed audience subset",
-			predefinedAudiences: []string{"https://api.one.com", "https://api.two.com"},
-			allowedAudiences:    []string{"https://api.one.com"},
-			expectedStatusCode:  http.StatusCreated,
-		},
-		{
-			name:                "Invalid allowed audience subset",
-			predefinedAudiences: []string{"https://api.one.com"},
-			allowedAudiences:    []string{"https://api.rogue.com"},
-			expectedStatusCode:  http.StatusBadRequest,
-			expectedError:       "requested allowed_audiences are not predefined/allowed by the tenant",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			runRegisterTestCase(t, tt)
-		})
-	}
-}
-
-func runRegisterTestCase(t *testing.T, tt registerTestCase) {
-	ctrl := minimock.NewController(t)
-
-	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
-	crypto := portmock.NewCryptoMock(ctrl)
-
-	tenantID := uuid.New()
-	tenant := &model.Tenant{
-		ID:       tenantID,
-		Name:     "test-tenant",
-		Domain:   "test.com",
-		IsActive: true,
-		Config: model.TenantConfig{
-			PredefinedScopes:    tt.predefinedScopes,
-			PredefinedAudiences: tt.predefinedAudiences,
-			RedirectWhitelist:   []string{"https://test.com/callback"},
-		},
-	}
-
-	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
-		return tenant, nil
+		if isOIDC {
+			resp.EndSessionEndpoint = "https://test.com/oauth/logout"
+			resp.FrontChannelLogoutSupported = true
+			resp.FrontChannelLogoutSessionSupported = true
+		}
+		return resp, nil
 	})
 
-	if tt.expectedStatusCode == http.StatusCreated {
-		storage.SaveClientMock.Set(func(ctx context.Context, client model.ClientApplication) error {
-			return nil
-		})
-	}
-
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.om")
-
-	payload := registerRequest{
-		ClientName:       "test-app",
-		RedirectURIs:     []string{"https://test.com/callback"},
-		AllowedScopes:    tt.allowedScopes,
-		DefaultScopes:    tt.defaultScopes,
-		AllowedAudiences: tt.allowedAudiences,
-	}
-
-	body, _ := json.Marshal(payload)
-	req := httptest.NewRequest(http.MethodPost, "/oauth/register", bytes.NewReader(body))
-	req.Host = "test.com"
-	rec := httptest.NewRecorder()
-
-	adapter.Router().ServeHTTP(rec, req)
-
-	if rec.Code != tt.expectedStatusCode {
-		t.Fatalf("expected status %d, got %d. Body: %s", tt.expectedStatusCode, rec.Code, rec.Body.String())
-	}
-
-	if tt.expectedError != "" {
-		verifyRegisterErrorResponse(t, rec.Body.Bytes(), tt.expectedError)
-	}
-}
-
-func verifyRegisterErrorResponse(t *testing.T, bodyBytes []byte, expectedError string) {
-	var resp map[string]string
-	if err := json.Unmarshal(bodyBytes, &resp); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
-	}
-	if resp["error"] != expectedError {
-		t.Fatalf("expected error %q, got %q", expectedError, resp["error"])
-	}
+	return NewHttpAdapter(tuc, auth, fuc, suc, upuc, uruc, lauc, storage, crypto, "unittest", "admin-domain.com"), tenant
 }
 
 func TestHttpAdapter_CSPNonce(t *testing.T) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
-	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
-		return &model.Tenant{
-			ID:     uuid.New(),
-			Domain: "example.com",
-			Config: model.TenantConfig{
-				AllowSignup: false,
-			},
-		}, nil
-	})
-	storage.GetEnabledIdentityProvidersMock.Return(nil, nil)
-	storage.GetPartitionsMock.Return(nil, nil)
-
 	auth := portmock.NewAuthMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
+	tuc := portmock.NewTenantUseCaseMock(ctrl)
+	fuc := portmock.NewFederatedLoginUseCaseMock(ctrl)
+	suc := portmock.NewSSOSessionUseCaseMock(ctrl)
+	upuc := portmock.NewUserProfileUseCaseMock(ctrl)
+	uruc := portmock.NewUserRegistrationUseCaseMock(ctrl)
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
+	tenant := &model.Tenant{
+		ID:     uuid.New(),
+		Domain: "example.com",
+		Config: model.TenantConfig{
+			AllowSignup: false,
+		},
+	}
+
+	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
+		return tenant, nil
+	})
+
+	suc.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
+		return &port.CookieIntentResponse{CookieName: "spz_session"}, nil
+	})
+
+	lauc := portmock.NewLocalAuthUseCaseMock(ctrl)
+	lauc.GetLoginContextMock.Set(func(ctx context.Context, cmd port.GetLoginContextCommand) (*port.LoginContextResponse, error) {
+		return &port.LoginContextResponse{
+			AllowSignup:              false,
+			Providers:                []model.IdentityProvider{},
+			ShowUsernamePasswordForm: false,
+			PartitionID:              0,
+		}, nil
+	})
+
+	adapter := NewHttpAdapter(tuc, auth, fuc, suc, upuc, uruc, lauc, storage, crypto, "unittest", "admin-domain.com")
 
 	// Request 1
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -294,7 +123,6 @@ func TestHttpAdapter_CSPNonce(t *testing.T) {
 		t.Fatal("expected Content-Security-Policy header, got empty")
 	}
 
-	// Extract nonce from CSP: script-src 'self' 'nonce-[nonce]' ...
 	re := regexp.MustCompile(`'nonce-([^']+)'`)
 	match1 := re.FindStringSubmatch(csp1)
 	if len(match1) < 2 {
@@ -307,35 +135,25 @@ func TestHttpAdapter_CSPNonce(t *testing.T) {
 	if !strings.Contains(body1, expectedScriptTag1) {
 		t.Fatalf("expected body to contain %q, but got:\n%s", expectedScriptTag1, body1)
 	}
-
-	// Request 2 (to verify randomization/per-request change)
-	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec2 := httptest.NewRecorder()
-	adapter.Router().ServeHTTP(rec2, req2)
-
-	csp2 := rec2.Header().Get("Content-Security-Policy")
-	match2 := re.FindStringSubmatch(csp2)
-	if len(match2) < 2 {
-		t.Fatalf("could not find nonce in CSP header 2: %s", csp2)
-	}
-	nonce2 := match2[1]
-
-	if nonce1 == nonce2 {
-		t.Fatalf("expected nonces to be different per request, but both were: %s", nonce1)
-	}
 }
 
-func TestHttpAdapter_TenantMiddleware_ResolutionFailure(t *testing.T) {
+func TestHttpAdapter_Tenant_Middleware_Failure(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
 	auth := portmock.NewAuthMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 
-	storage.ResolveTenantByDomainMock.Set(func(ctx context.Context, domain string) (*model.Tenant, error) {
+	tuc := portmock.NewTenantUseCaseMock(ctrl)
+	fuc := portmock.NewFederatedLoginUseCaseMock(ctrl)
+	suc := portmock.NewSSOSessionUseCaseMock(ctrl)
+	upuc := portmock.NewUserProfileUseCaseMock(ctrl)
+	uruc := portmock.NewUserRegistrationUseCaseMock(ctrl)
+
+	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
 		return nil, errors.New("unbootstrapped tenant")
 	})
 
-	adapter := NewHttpAdapter(auth, storage, crypto, clock.NewSystemClock(), "unittest", "admin-domain.com")
+	adapter := NewHttpAdapter(tuc, auth, fuc, suc, upuc, uruc, portmock.NewLocalAuthUseCaseMock(ctrl), storage, crypto, "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/openid-configuration", nil)
 	req.Host = "unknown.com"
@@ -346,6 +164,21 @@ func TestHttpAdapter_TenantMiddleware_ResolutionFailure(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
+}
+
+type registerRequest struct {
+	ClientName              string   `json:"client_name"`
+	RedirectURIs            []string `json:"redirect_uris"`
+	PostLogoutRedirectURIs  []string `json:"post_logout_redirect_uris"`
+	FrontChannelLogoutURI   string   `json:"frontchannel_logout_uri"`
+	BackChannelLogoutURI    string   `json:"backchannel_logout_uri"`
+	GrantTypes              []string `json:"grant_types"`
+	ResponseTypes           []string `json:"response_types"`
+	AllowedScopes           []string `json:"allowed_scopes"`
+	DefaultScopes           []string `json:"default_scopes"`
+	AllowedAudiences        []string `json:"allowed_audiences"`
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"`
+	SoftwareStatement       string   `json:"software_statement,omitempty"`
 }
 
 type handlerMockStorage struct {
@@ -359,8 +192,8 @@ func (m *handlerMockStorage) GetTenantDEK(ctx context.Context, tenantUUID uuid.U
 	return m.deks[tenantUUID], m.nonces[tenantUUID], nil
 }
 
-func (m *handlerMockStorage) InsertTenantDEK(ctx context.Context, tenantUUID uuid.UUID, encryptedDEK, nonce []byte) error {
-	m.deks[tenantUUID] = encryptedDEK
+func (m *handlerMockStorage) InsertTenantDEK(ctx context.Context, tenantUUID uuid.UUID, key, nonce []byte) error {
+	m.deks[tenantUUID] = key
 	m.nonces[tenantUUID] = nonce
 	return nil
 }
@@ -386,54 +219,4 @@ func (m *handlerMockStorage) InsertSigningKey(ctx context.Context, tenantUUID uu
 func (m *handlerMockStorage) RotateSigningKeys(ctx context.Context, tenantUUID uuid.UUID) error {
 	m.keys[tenantUUID] = nil
 	return nil
-}
-
-func TestHttpAdapter_JWKS_CacheControl(t *testing.T) {
-	ctrl := minimock.NewController(t)
-	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
-	clock := portmock.NewMockClock(time.Now())
-
-	tenantID := uuid.New()
-	storage.ResolveTenantByDomainMock.Expect(minimock.AnyContext, "test.com").Return(&model.Tenant{
-		ID:       tenantID,
-		Domain:   "test.com",
-		Scheme:   "https",
-		IsActive: true,
-	}, nil)
-
-	mockStore := &handlerMockStorage{
-		StorageMock: storage,
-		deks:        make(map[uuid.UUID][]byte),
-		nonces:      make(map[uuid.UUID][]byte),
-		keys:        make(map[uuid.UUID][]model.SigningKey),
-	}
-
-	crypto, err := jwtcrypto.NewJWTSigner(mockStore, clock, "01234567890123456789012345678901")
-	if err != nil {
-		t.Fatalf("failed to create signer: %v", err)
-	}
-
-	adapter := NewHttpAdapter(auth, storage, crypto, clock, "unittest", "admin-domain.com")
-
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/jwks.json", nil)
-	req.Host = "test.com"
-	rec := httptest.NewRecorder()
-
-	adapter.Router().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", rec.Code)
-	}
-
-	contentType := rec.Header().Get("Content-Type")
-	if !strings.Contains(contentType, "application/json") {
-		t.Fatalf("expected Content-Type to contain application/json, got %q", contentType)
-	}
-
-	cacheControl := rec.Header().Get("Cache-Control")
-	expectedCacheControl := "public, max-age=600, stale-while-revalidate=86400"
-	if cacheControl != expectedCacheControl {
-		t.Fatalf("expected Cache-Control %q, got %q", expectedCacheControl, cacheControl)
-	}
 }

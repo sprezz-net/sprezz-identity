@@ -9,6 +9,7 @@ import (
 	"sprezz-identity/internal/domain/model"
 	"sync"
 	mm_atomic "sync/atomic"
+	"time"
 	mm_time "time"
 
 	"github.com/gojuno/minimock/v3"
@@ -26,12 +27,26 @@ type CryptoMock struct {
 	beforeCompareCredentialCounter uint64
 	CompareCredentialMock          mCryptoMockCompareCredential
 
+	funcGetMasterRegistrationPublicKey          func() (a1 any, err error)
+	funcGetMasterRegistrationPublicKeyOrigin    string
+	inspectFuncGetMasterRegistrationPublicKey   func()
+	afterGetMasterRegistrationPublicKeyCounter  uint64
+	beforeGetMasterRegistrationPublicKeyCounter uint64
+	GetMasterRegistrationPublicKeyMock          mCryptoMockGetMasterRegistrationPublicKey
+
 	funcHashCredential          func(secret string) (s1 string, err error)
 	funcHashCredentialOrigin    string
 	inspectFuncHashCredential   func(secret string)
 	afterHashCredentialCounter  uint64
 	beforeHashCredentialCounter uint64
 	HashCredentialMock          mCryptoMockHashCredential
+
+	funcJWKSForTenant          func(ctx context.Context, domain string, scheme string) (ma1 []map[string]any, err error)
+	funcJWKSForTenantOrigin    string
+	inspectFuncJWKSForTenant   func(ctx context.Context, domain string, scheme string)
+	afterJWKSForTenantCounter  uint64
+	beforeJWKSForTenantCounter uint64
+	JWKSForTenantMock          mCryptoMockJWKSForTenant
 
 	funcMarshalJWKSet          func(ctx context.Context, domain string, scheme string) (s1 string, err error)
 	funcMarshalJWKSetOrigin    string
@@ -54,9 +69,9 @@ type CryptoMock struct {
 	beforeSignAccessTokenCounter uint64
 	SignAccessTokenMock          mCryptoMockSignAccessToken
 
-	funcSignIDToken          func(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)
+	funcSignIDToken          func(ctx context.Context, claims model.OIDCTokenClaims, grantedScopes []string, alg model.SignatureAlgorithm) (s1 string, err error)
 	funcSignIDTokenOrigin    string
-	inspectFuncSignIDToken   func(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm)
+	inspectFuncSignIDToken   func(ctx context.Context, claims model.OIDCTokenClaims, grantedScopes []string, alg model.SignatureAlgorithm)
 	afterSignIDTokenCounter  uint64
 	beforeSignIDTokenCounter uint64
 	SignIDTokenMock          mCryptoMockSignIDToken
@@ -67,6 +82,20 @@ type CryptoMock struct {
 	afterSignLogoutTokenCounter  uint64
 	beforeSignLogoutTokenCounter uint64
 	SignLogoutTokenMock          mCryptoMockSignLogoutToken
+
+	funcSignSoftwareStatement          func(ctx context.Context, issuer string, audience string, claims model.SoftwareStatementClaims, issuedAt time.Time, expiresAt time.Time) (s1 string, err error)
+	funcSignSoftwareStatementOrigin    string
+	inspectFuncSignSoftwareStatement   func(ctx context.Context, issuer string, audience string, claims model.SoftwareStatementClaims, issuedAt time.Time, expiresAt time.Time)
+	afterSignSoftwareStatementCounter  uint64
+	beforeSignSoftwareStatementCounter uint64
+	SignSoftwareStatementMock          mCryptoMockSignSoftwareStatement
+
+	funcVerifyExternalTokenWithProvider          func(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string) (m1 map[string]any, err error)
+	funcVerifyExternalTokenWithProviderOrigin    string
+	inspectFuncVerifyExternalTokenWithProvider   func(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string)
+	afterVerifyExternalTokenWithProviderCounter  uint64
+	beforeVerifyExternalTokenWithProviderCounter uint64
+	VerifyExternalTokenWithProviderMock          mCryptoMockVerifyExternalTokenWithProvider
 
 	funcVerifyToken          func(tokenStr string) (m1 map[string]any, err error)
 	funcVerifyTokenOrigin    string
@@ -87,8 +116,13 @@ func NewCryptoMock(t minimock.Tester) *CryptoMock {
 	m.CompareCredentialMock = mCryptoMockCompareCredential{mock: m}
 	m.CompareCredentialMock.callArgs = []*CryptoMockCompareCredentialParams{}
 
+	m.GetMasterRegistrationPublicKeyMock = mCryptoMockGetMasterRegistrationPublicKey{mock: m}
+
 	m.HashCredentialMock = mCryptoMockHashCredential{mock: m}
 	m.HashCredentialMock.callArgs = []*CryptoMockHashCredentialParams{}
+
+	m.JWKSForTenantMock = mCryptoMockJWKSForTenant{mock: m}
+	m.JWKSForTenantMock.callArgs = []*CryptoMockJWKSForTenantParams{}
 
 	m.MarshalJWKSetMock = mCryptoMockMarshalJWKSet{mock: m}
 	m.MarshalJWKSetMock.callArgs = []*CryptoMockMarshalJWKSetParams{}
@@ -104,6 +138,12 @@ func NewCryptoMock(t minimock.Tester) *CryptoMock {
 
 	m.SignLogoutTokenMock = mCryptoMockSignLogoutToken{mock: m}
 	m.SignLogoutTokenMock.callArgs = []*CryptoMockSignLogoutTokenParams{}
+
+	m.SignSoftwareStatementMock = mCryptoMockSignSoftwareStatement{mock: m}
+	m.SignSoftwareStatementMock.callArgs = []*CryptoMockSignSoftwareStatementParams{}
+
+	m.VerifyExternalTokenWithProviderMock = mCryptoMockVerifyExternalTokenWithProvider{mock: m}
+	m.VerifyExternalTokenWithProviderMock.callArgs = []*CryptoMockVerifyExternalTokenWithProviderParams{}
 
 	m.VerifyTokenMock = mCryptoMockVerifyToken{mock: m}
 	m.VerifyTokenMock.callArgs = []*CryptoMockVerifyTokenParams{}
@@ -456,6 +496,193 @@ func (m *CryptoMock) MinimockCompareCredentialInspect() {
 	}
 }
 
+type mCryptoMockGetMasterRegistrationPublicKey struct {
+	optional           bool
+	mock               *CryptoMock
+	defaultExpectation *CryptoMockGetMasterRegistrationPublicKeyExpectation
+	expectations       []*CryptoMockGetMasterRegistrationPublicKeyExpectation
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// CryptoMockGetMasterRegistrationPublicKeyExpectation specifies expectation struct of the Crypto.GetMasterRegistrationPublicKey
+type CryptoMockGetMasterRegistrationPublicKeyExpectation struct {
+	mock *CryptoMock
+
+	results      *CryptoMockGetMasterRegistrationPublicKeyResults
+	returnOrigin string
+	Counter      uint64
+}
+
+// CryptoMockGetMasterRegistrationPublicKeyResults contains results of the Crypto.GetMasterRegistrationPublicKey
+type CryptoMockGetMasterRegistrationPublicKeyResults struct {
+	a1  any
+	err error
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetMasterRegistrationPublicKey *mCryptoMockGetMasterRegistrationPublicKey) Optional() *mCryptoMockGetMasterRegistrationPublicKey {
+	mmGetMasterRegistrationPublicKey.optional = true
+	return mmGetMasterRegistrationPublicKey
+}
+
+// Expect sets up expected params for Crypto.GetMasterRegistrationPublicKey
+func (mmGetMasterRegistrationPublicKey *mCryptoMockGetMasterRegistrationPublicKey) Expect() *mCryptoMockGetMasterRegistrationPublicKey {
+	if mmGetMasterRegistrationPublicKey.mock.funcGetMasterRegistrationPublicKey != nil {
+		mmGetMasterRegistrationPublicKey.mock.t.Fatalf("CryptoMock.GetMasterRegistrationPublicKey mock is already set by Set")
+	}
+
+	if mmGetMasterRegistrationPublicKey.defaultExpectation == nil {
+		mmGetMasterRegistrationPublicKey.defaultExpectation = &CryptoMockGetMasterRegistrationPublicKeyExpectation{}
+	}
+
+	return mmGetMasterRegistrationPublicKey
+}
+
+// Inspect accepts an inspector function that has same arguments as the Crypto.GetMasterRegistrationPublicKey
+func (mmGetMasterRegistrationPublicKey *mCryptoMockGetMasterRegistrationPublicKey) Inspect(f func()) *mCryptoMockGetMasterRegistrationPublicKey {
+	if mmGetMasterRegistrationPublicKey.mock.inspectFuncGetMasterRegistrationPublicKey != nil {
+		mmGetMasterRegistrationPublicKey.mock.t.Fatalf("Inspect function is already set for CryptoMock.GetMasterRegistrationPublicKey")
+	}
+
+	mmGetMasterRegistrationPublicKey.mock.inspectFuncGetMasterRegistrationPublicKey = f
+
+	return mmGetMasterRegistrationPublicKey
+}
+
+// Return sets up results that will be returned by Crypto.GetMasterRegistrationPublicKey
+func (mmGetMasterRegistrationPublicKey *mCryptoMockGetMasterRegistrationPublicKey) Return(a1 any, err error) *CryptoMock {
+	if mmGetMasterRegistrationPublicKey.mock.funcGetMasterRegistrationPublicKey != nil {
+		mmGetMasterRegistrationPublicKey.mock.t.Fatalf("CryptoMock.GetMasterRegistrationPublicKey mock is already set by Set")
+	}
+
+	if mmGetMasterRegistrationPublicKey.defaultExpectation == nil {
+		mmGetMasterRegistrationPublicKey.defaultExpectation = &CryptoMockGetMasterRegistrationPublicKeyExpectation{mock: mmGetMasterRegistrationPublicKey.mock}
+	}
+	mmGetMasterRegistrationPublicKey.defaultExpectation.results = &CryptoMockGetMasterRegistrationPublicKeyResults{a1, err}
+	mmGetMasterRegistrationPublicKey.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetMasterRegistrationPublicKey.mock
+}
+
+// Set uses given function f to mock the Crypto.GetMasterRegistrationPublicKey method
+func (mmGetMasterRegistrationPublicKey *mCryptoMockGetMasterRegistrationPublicKey) Set(f func() (a1 any, err error)) *CryptoMock {
+	if mmGetMasterRegistrationPublicKey.defaultExpectation != nil {
+		mmGetMasterRegistrationPublicKey.mock.t.Fatalf("Default expectation is already set for the Crypto.GetMasterRegistrationPublicKey method")
+	}
+
+	if len(mmGetMasterRegistrationPublicKey.expectations) > 0 {
+		mmGetMasterRegistrationPublicKey.mock.t.Fatalf("Some expectations are already set for the Crypto.GetMasterRegistrationPublicKey method")
+	}
+
+	mmGetMasterRegistrationPublicKey.mock.funcGetMasterRegistrationPublicKey = f
+	mmGetMasterRegistrationPublicKey.mock.funcGetMasterRegistrationPublicKeyOrigin = minimock.CallerInfo(1)
+	return mmGetMasterRegistrationPublicKey.mock
+}
+
+// Times sets number of times Crypto.GetMasterRegistrationPublicKey should be invoked
+func (mmGetMasterRegistrationPublicKey *mCryptoMockGetMasterRegistrationPublicKey) Times(n uint64) *mCryptoMockGetMasterRegistrationPublicKey {
+	if n == 0 {
+		mmGetMasterRegistrationPublicKey.mock.t.Fatalf("Times of CryptoMock.GetMasterRegistrationPublicKey mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetMasterRegistrationPublicKey.expectedInvocations, n)
+	mmGetMasterRegistrationPublicKey.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetMasterRegistrationPublicKey
+}
+
+func (mmGetMasterRegistrationPublicKey *mCryptoMockGetMasterRegistrationPublicKey) invocationsDone() bool {
+	if len(mmGetMasterRegistrationPublicKey.expectations) == 0 && mmGetMasterRegistrationPublicKey.defaultExpectation == nil && mmGetMasterRegistrationPublicKey.mock.funcGetMasterRegistrationPublicKey == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetMasterRegistrationPublicKey.mock.afterGetMasterRegistrationPublicKeyCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetMasterRegistrationPublicKey.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetMasterRegistrationPublicKey implements mm_port.Crypto
+func (mmGetMasterRegistrationPublicKey *CryptoMock) GetMasterRegistrationPublicKey() (a1 any, err error) {
+	mm_atomic.AddUint64(&mmGetMasterRegistrationPublicKey.beforeGetMasterRegistrationPublicKeyCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetMasterRegistrationPublicKey.afterGetMasterRegistrationPublicKeyCounter, 1)
+
+	mmGetMasterRegistrationPublicKey.t.Helper()
+
+	if mmGetMasterRegistrationPublicKey.inspectFuncGetMasterRegistrationPublicKey != nil {
+		mmGetMasterRegistrationPublicKey.inspectFuncGetMasterRegistrationPublicKey()
+	}
+
+	if mmGetMasterRegistrationPublicKey.GetMasterRegistrationPublicKeyMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetMasterRegistrationPublicKey.GetMasterRegistrationPublicKeyMock.defaultExpectation.Counter, 1)
+
+		mm_results := mmGetMasterRegistrationPublicKey.GetMasterRegistrationPublicKeyMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetMasterRegistrationPublicKey.t.Fatal("No results are set for the CryptoMock.GetMasterRegistrationPublicKey")
+		}
+		return (*mm_results).a1, (*mm_results).err
+	}
+	if mmGetMasterRegistrationPublicKey.funcGetMasterRegistrationPublicKey != nil {
+		return mmGetMasterRegistrationPublicKey.funcGetMasterRegistrationPublicKey()
+	}
+	mmGetMasterRegistrationPublicKey.t.Fatalf("Unexpected call to CryptoMock.GetMasterRegistrationPublicKey.")
+	return
+}
+
+// GetMasterRegistrationPublicKeyAfterCounter returns a count of finished CryptoMock.GetMasterRegistrationPublicKey invocations
+func (mmGetMasterRegistrationPublicKey *CryptoMock) GetMasterRegistrationPublicKeyAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetMasterRegistrationPublicKey.afterGetMasterRegistrationPublicKeyCounter)
+}
+
+// GetMasterRegistrationPublicKeyBeforeCounter returns a count of CryptoMock.GetMasterRegistrationPublicKey invocations
+func (mmGetMasterRegistrationPublicKey *CryptoMock) GetMasterRegistrationPublicKeyBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetMasterRegistrationPublicKey.beforeGetMasterRegistrationPublicKeyCounter)
+}
+
+// MinimockGetMasterRegistrationPublicKeyDone returns true if the count of the GetMasterRegistrationPublicKey invocations corresponds
+// the number of defined expectations
+func (m *CryptoMock) MinimockGetMasterRegistrationPublicKeyDone() bool {
+	if m.GetMasterRegistrationPublicKeyMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetMasterRegistrationPublicKeyMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetMasterRegistrationPublicKeyMock.invocationsDone()
+}
+
+// MinimockGetMasterRegistrationPublicKeyInspect logs each unmet expectation
+func (m *CryptoMock) MinimockGetMasterRegistrationPublicKeyInspect() {
+	for _, e := range m.GetMasterRegistrationPublicKeyMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Error("Expected call to CryptoMock.GetMasterRegistrationPublicKey")
+		}
+	}
+
+	afterGetMasterRegistrationPublicKeyCounter := mm_atomic.LoadUint64(&m.afterGetMasterRegistrationPublicKeyCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetMasterRegistrationPublicKeyMock.defaultExpectation != nil && afterGetMasterRegistrationPublicKeyCounter < 1 {
+		m.t.Errorf("Expected call to CryptoMock.GetMasterRegistrationPublicKey at\n%s", m.GetMasterRegistrationPublicKeyMock.defaultExpectation.returnOrigin)
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetMasterRegistrationPublicKey != nil && afterGetMasterRegistrationPublicKeyCounter < 1 {
+		m.t.Errorf("Expected call to CryptoMock.GetMasterRegistrationPublicKey at\n%s", m.funcGetMasterRegistrationPublicKeyOrigin)
+	}
+
+	if !m.GetMasterRegistrationPublicKeyMock.invocationsDone() && afterGetMasterRegistrationPublicKeyCounter > 0 {
+		m.t.Errorf("Expected %d calls to CryptoMock.GetMasterRegistrationPublicKey at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetMasterRegistrationPublicKeyMock.expectedInvocations), m.GetMasterRegistrationPublicKeyMock.expectedInvocationsOrigin, afterGetMasterRegistrationPublicKeyCounter)
+	}
+}
+
 type mCryptoMockHashCredential struct {
 	optional           bool
 	mock               *CryptoMock
@@ -765,6 +992,380 @@ func (m *CryptoMock) MinimockHashCredentialInspect() {
 	if !m.HashCredentialMock.invocationsDone() && afterHashCredentialCounter > 0 {
 		m.t.Errorf("Expected %d calls to CryptoMock.HashCredential at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.HashCredentialMock.expectedInvocations), m.HashCredentialMock.expectedInvocationsOrigin, afterHashCredentialCounter)
+	}
+}
+
+type mCryptoMockJWKSForTenant struct {
+	optional           bool
+	mock               *CryptoMock
+	defaultExpectation *CryptoMockJWKSForTenantExpectation
+	expectations       []*CryptoMockJWKSForTenantExpectation
+
+	callArgs []*CryptoMockJWKSForTenantParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// CryptoMockJWKSForTenantExpectation specifies expectation struct of the Crypto.JWKSForTenant
+type CryptoMockJWKSForTenantExpectation struct {
+	mock               *CryptoMock
+	params             *CryptoMockJWKSForTenantParams
+	paramPtrs          *CryptoMockJWKSForTenantParamPtrs
+	expectationOrigins CryptoMockJWKSForTenantExpectationOrigins
+	results            *CryptoMockJWKSForTenantResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// CryptoMockJWKSForTenantParams contains parameters of the Crypto.JWKSForTenant
+type CryptoMockJWKSForTenantParams struct {
+	ctx    context.Context
+	domain string
+	scheme string
+}
+
+// CryptoMockJWKSForTenantParamPtrs contains pointers to parameters of the Crypto.JWKSForTenant
+type CryptoMockJWKSForTenantParamPtrs struct {
+	ctx    *context.Context
+	domain *string
+	scheme *string
+}
+
+// CryptoMockJWKSForTenantResults contains results of the Crypto.JWKSForTenant
+type CryptoMockJWKSForTenantResults struct {
+	ma1 []map[string]any
+	err error
+}
+
+// CryptoMockJWKSForTenantOrigins contains origins of expectations of the Crypto.JWKSForTenant
+type CryptoMockJWKSForTenantExpectationOrigins struct {
+	origin       string
+	originCtx    string
+	originDomain string
+	originScheme string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmJWKSForTenant *mCryptoMockJWKSForTenant) Optional() *mCryptoMockJWKSForTenant {
+	mmJWKSForTenant.optional = true
+	return mmJWKSForTenant
+}
+
+// Expect sets up expected params for Crypto.JWKSForTenant
+func (mmJWKSForTenant *mCryptoMockJWKSForTenant) Expect(ctx context.Context, domain string, scheme string) *mCryptoMockJWKSForTenant {
+	if mmJWKSForTenant.mock.funcJWKSForTenant != nil {
+		mmJWKSForTenant.mock.t.Fatalf("CryptoMock.JWKSForTenant mock is already set by Set")
+	}
+
+	if mmJWKSForTenant.defaultExpectation == nil {
+		mmJWKSForTenant.defaultExpectation = &CryptoMockJWKSForTenantExpectation{}
+	}
+
+	if mmJWKSForTenant.defaultExpectation.paramPtrs != nil {
+		mmJWKSForTenant.mock.t.Fatalf("CryptoMock.JWKSForTenant mock is already set by ExpectParams functions")
+	}
+
+	mmJWKSForTenant.defaultExpectation.params = &CryptoMockJWKSForTenantParams{ctx, domain, scheme}
+	mmJWKSForTenant.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmJWKSForTenant.expectations {
+		if minimock.Equal(e.params, mmJWKSForTenant.defaultExpectation.params) {
+			mmJWKSForTenant.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmJWKSForTenant.defaultExpectation.params)
+		}
+	}
+
+	return mmJWKSForTenant
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Crypto.JWKSForTenant
+func (mmJWKSForTenant *mCryptoMockJWKSForTenant) ExpectCtxParam1(ctx context.Context) *mCryptoMockJWKSForTenant {
+	if mmJWKSForTenant.mock.funcJWKSForTenant != nil {
+		mmJWKSForTenant.mock.t.Fatalf("CryptoMock.JWKSForTenant mock is already set by Set")
+	}
+
+	if mmJWKSForTenant.defaultExpectation == nil {
+		mmJWKSForTenant.defaultExpectation = &CryptoMockJWKSForTenantExpectation{}
+	}
+
+	if mmJWKSForTenant.defaultExpectation.params != nil {
+		mmJWKSForTenant.mock.t.Fatalf("CryptoMock.JWKSForTenant mock is already set by Expect")
+	}
+
+	if mmJWKSForTenant.defaultExpectation.paramPtrs == nil {
+		mmJWKSForTenant.defaultExpectation.paramPtrs = &CryptoMockJWKSForTenantParamPtrs{}
+	}
+	mmJWKSForTenant.defaultExpectation.paramPtrs.ctx = &ctx
+	mmJWKSForTenant.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmJWKSForTenant
+}
+
+// ExpectDomainParam2 sets up expected param domain for Crypto.JWKSForTenant
+func (mmJWKSForTenant *mCryptoMockJWKSForTenant) ExpectDomainParam2(domain string) *mCryptoMockJWKSForTenant {
+	if mmJWKSForTenant.mock.funcJWKSForTenant != nil {
+		mmJWKSForTenant.mock.t.Fatalf("CryptoMock.JWKSForTenant mock is already set by Set")
+	}
+
+	if mmJWKSForTenant.defaultExpectation == nil {
+		mmJWKSForTenant.defaultExpectation = &CryptoMockJWKSForTenantExpectation{}
+	}
+
+	if mmJWKSForTenant.defaultExpectation.params != nil {
+		mmJWKSForTenant.mock.t.Fatalf("CryptoMock.JWKSForTenant mock is already set by Expect")
+	}
+
+	if mmJWKSForTenant.defaultExpectation.paramPtrs == nil {
+		mmJWKSForTenant.defaultExpectation.paramPtrs = &CryptoMockJWKSForTenantParamPtrs{}
+	}
+	mmJWKSForTenant.defaultExpectation.paramPtrs.domain = &domain
+	mmJWKSForTenant.defaultExpectation.expectationOrigins.originDomain = minimock.CallerInfo(1)
+
+	return mmJWKSForTenant
+}
+
+// ExpectSchemeParam3 sets up expected param scheme for Crypto.JWKSForTenant
+func (mmJWKSForTenant *mCryptoMockJWKSForTenant) ExpectSchemeParam3(scheme string) *mCryptoMockJWKSForTenant {
+	if mmJWKSForTenant.mock.funcJWKSForTenant != nil {
+		mmJWKSForTenant.mock.t.Fatalf("CryptoMock.JWKSForTenant mock is already set by Set")
+	}
+
+	if mmJWKSForTenant.defaultExpectation == nil {
+		mmJWKSForTenant.defaultExpectation = &CryptoMockJWKSForTenantExpectation{}
+	}
+
+	if mmJWKSForTenant.defaultExpectation.params != nil {
+		mmJWKSForTenant.mock.t.Fatalf("CryptoMock.JWKSForTenant mock is already set by Expect")
+	}
+
+	if mmJWKSForTenant.defaultExpectation.paramPtrs == nil {
+		mmJWKSForTenant.defaultExpectation.paramPtrs = &CryptoMockJWKSForTenantParamPtrs{}
+	}
+	mmJWKSForTenant.defaultExpectation.paramPtrs.scheme = &scheme
+	mmJWKSForTenant.defaultExpectation.expectationOrigins.originScheme = minimock.CallerInfo(1)
+
+	return mmJWKSForTenant
+}
+
+// Inspect accepts an inspector function that has same arguments as the Crypto.JWKSForTenant
+func (mmJWKSForTenant *mCryptoMockJWKSForTenant) Inspect(f func(ctx context.Context, domain string, scheme string)) *mCryptoMockJWKSForTenant {
+	if mmJWKSForTenant.mock.inspectFuncJWKSForTenant != nil {
+		mmJWKSForTenant.mock.t.Fatalf("Inspect function is already set for CryptoMock.JWKSForTenant")
+	}
+
+	mmJWKSForTenant.mock.inspectFuncJWKSForTenant = f
+
+	return mmJWKSForTenant
+}
+
+// Return sets up results that will be returned by Crypto.JWKSForTenant
+func (mmJWKSForTenant *mCryptoMockJWKSForTenant) Return(ma1 []map[string]any, err error) *CryptoMock {
+	if mmJWKSForTenant.mock.funcJWKSForTenant != nil {
+		mmJWKSForTenant.mock.t.Fatalf("CryptoMock.JWKSForTenant mock is already set by Set")
+	}
+
+	if mmJWKSForTenant.defaultExpectation == nil {
+		mmJWKSForTenant.defaultExpectation = &CryptoMockJWKSForTenantExpectation{mock: mmJWKSForTenant.mock}
+	}
+	mmJWKSForTenant.defaultExpectation.results = &CryptoMockJWKSForTenantResults{ma1, err}
+	mmJWKSForTenant.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmJWKSForTenant.mock
+}
+
+// Set uses given function f to mock the Crypto.JWKSForTenant method
+func (mmJWKSForTenant *mCryptoMockJWKSForTenant) Set(f func(ctx context.Context, domain string, scheme string) (ma1 []map[string]any, err error)) *CryptoMock {
+	if mmJWKSForTenant.defaultExpectation != nil {
+		mmJWKSForTenant.mock.t.Fatalf("Default expectation is already set for the Crypto.JWKSForTenant method")
+	}
+
+	if len(mmJWKSForTenant.expectations) > 0 {
+		mmJWKSForTenant.mock.t.Fatalf("Some expectations are already set for the Crypto.JWKSForTenant method")
+	}
+
+	mmJWKSForTenant.mock.funcJWKSForTenant = f
+	mmJWKSForTenant.mock.funcJWKSForTenantOrigin = minimock.CallerInfo(1)
+	return mmJWKSForTenant.mock
+}
+
+// When sets expectation for the Crypto.JWKSForTenant which will trigger the result defined by the following
+// Then helper
+func (mmJWKSForTenant *mCryptoMockJWKSForTenant) When(ctx context.Context, domain string, scheme string) *CryptoMockJWKSForTenantExpectation {
+	if mmJWKSForTenant.mock.funcJWKSForTenant != nil {
+		mmJWKSForTenant.mock.t.Fatalf("CryptoMock.JWKSForTenant mock is already set by Set")
+	}
+
+	expectation := &CryptoMockJWKSForTenantExpectation{
+		mock:               mmJWKSForTenant.mock,
+		params:             &CryptoMockJWKSForTenantParams{ctx, domain, scheme},
+		expectationOrigins: CryptoMockJWKSForTenantExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmJWKSForTenant.expectations = append(mmJWKSForTenant.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Crypto.JWKSForTenant return parameters for the expectation previously defined by the When method
+func (e *CryptoMockJWKSForTenantExpectation) Then(ma1 []map[string]any, err error) *CryptoMock {
+	e.results = &CryptoMockJWKSForTenantResults{ma1, err}
+	return e.mock
+}
+
+// Times sets number of times Crypto.JWKSForTenant should be invoked
+func (mmJWKSForTenant *mCryptoMockJWKSForTenant) Times(n uint64) *mCryptoMockJWKSForTenant {
+	if n == 0 {
+		mmJWKSForTenant.mock.t.Fatalf("Times of CryptoMock.JWKSForTenant mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmJWKSForTenant.expectedInvocations, n)
+	mmJWKSForTenant.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmJWKSForTenant
+}
+
+func (mmJWKSForTenant *mCryptoMockJWKSForTenant) invocationsDone() bool {
+	if len(mmJWKSForTenant.expectations) == 0 && mmJWKSForTenant.defaultExpectation == nil && mmJWKSForTenant.mock.funcJWKSForTenant == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmJWKSForTenant.mock.afterJWKSForTenantCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmJWKSForTenant.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// JWKSForTenant implements mm_port.Crypto
+func (mmJWKSForTenant *CryptoMock) JWKSForTenant(ctx context.Context, domain string, scheme string) (ma1 []map[string]any, err error) {
+	mm_atomic.AddUint64(&mmJWKSForTenant.beforeJWKSForTenantCounter, 1)
+	defer mm_atomic.AddUint64(&mmJWKSForTenant.afterJWKSForTenantCounter, 1)
+
+	mmJWKSForTenant.t.Helper()
+
+	if mmJWKSForTenant.inspectFuncJWKSForTenant != nil {
+		mmJWKSForTenant.inspectFuncJWKSForTenant(ctx, domain, scheme)
+	}
+
+	mm_params := CryptoMockJWKSForTenantParams{ctx, domain, scheme}
+
+	// Record call args
+	mmJWKSForTenant.JWKSForTenantMock.mutex.Lock()
+	mmJWKSForTenant.JWKSForTenantMock.callArgs = append(mmJWKSForTenant.JWKSForTenantMock.callArgs, &mm_params)
+	mmJWKSForTenant.JWKSForTenantMock.mutex.Unlock()
+
+	for _, e := range mmJWKSForTenant.JWKSForTenantMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.ma1, e.results.err
+		}
+	}
+
+	if mmJWKSForTenant.JWKSForTenantMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmJWKSForTenant.JWKSForTenantMock.defaultExpectation.Counter, 1)
+		mm_want := mmJWKSForTenant.JWKSForTenantMock.defaultExpectation.params
+		mm_want_ptrs := mmJWKSForTenant.JWKSForTenantMock.defaultExpectation.paramPtrs
+
+		mm_got := CryptoMockJWKSForTenantParams{ctx, domain, scheme}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmJWKSForTenant.t.Errorf("CryptoMock.JWKSForTenant got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmJWKSForTenant.JWKSForTenantMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.domain != nil && !minimock.Equal(*mm_want_ptrs.domain, mm_got.domain) {
+				mmJWKSForTenant.t.Errorf("CryptoMock.JWKSForTenant got unexpected parameter domain, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmJWKSForTenant.JWKSForTenantMock.defaultExpectation.expectationOrigins.originDomain, *mm_want_ptrs.domain, mm_got.domain, minimock.Diff(*mm_want_ptrs.domain, mm_got.domain))
+			}
+
+			if mm_want_ptrs.scheme != nil && !minimock.Equal(*mm_want_ptrs.scheme, mm_got.scheme) {
+				mmJWKSForTenant.t.Errorf("CryptoMock.JWKSForTenant got unexpected parameter scheme, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmJWKSForTenant.JWKSForTenantMock.defaultExpectation.expectationOrigins.originScheme, *mm_want_ptrs.scheme, mm_got.scheme, minimock.Diff(*mm_want_ptrs.scheme, mm_got.scheme))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmJWKSForTenant.t.Errorf("CryptoMock.JWKSForTenant got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmJWKSForTenant.JWKSForTenantMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmJWKSForTenant.JWKSForTenantMock.defaultExpectation.results
+		if mm_results == nil {
+			mmJWKSForTenant.t.Fatal("No results are set for the CryptoMock.JWKSForTenant")
+		}
+		return (*mm_results).ma1, (*mm_results).err
+	}
+	if mmJWKSForTenant.funcJWKSForTenant != nil {
+		return mmJWKSForTenant.funcJWKSForTenant(ctx, domain, scheme)
+	}
+	mmJWKSForTenant.t.Fatalf("Unexpected call to CryptoMock.JWKSForTenant. %v %v %v", ctx, domain, scheme)
+	return
+}
+
+// JWKSForTenantAfterCounter returns a count of finished CryptoMock.JWKSForTenant invocations
+func (mmJWKSForTenant *CryptoMock) JWKSForTenantAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmJWKSForTenant.afterJWKSForTenantCounter)
+}
+
+// JWKSForTenantBeforeCounter returns a count of CryptoMock.JWKSForTenant invocations
+func (mmJWKSForTenant *CryptoMock) JWKSForTenantBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmJWKSForTenant.beforeJWKSForTenantCounter)
+}
+
+// Calls returns a list of arguments used in each call to CryptoMock.JWKSForTenant.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmJWKSForTenant *mCryptoMockJWKSForTenant) Calls() []*CryptoMockJWKSForTenantParams {
+	mmJWKSForTenant.mutex.RLock()
+
+	argCopy := make([]*CryptoMockJWKSForTenantParams, len(mmJWKSForTenant.callArgs))
+	copy(argCopy, mmJWKSForTenant.callArgs)
+
+	mmJWKSForTenant.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockJWKSForTenantDone returns true if the count of the JWKSForTenant invocations corresponds
+// the number of defined expectations
+func (m *CryptoMock) MinimockJWKSForTenantDone() bool {
+	if m.JWKSForTenantMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.JWKSForTenantMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.JWKSForTenantMock.invocationsDone()
+}
+
+// MinimockJWKSForTenantInspect logs each unmet expectation
+func (m *CryptoMock) MinimockJWKSForTenantInspect() {
+	for _, e := range m.JWKSForTenantMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to CryptoMock.JWKSForTenant at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterJWKSForTenantCounter := mm_atomic.LoadUint64(&m.afterJWKSForTenantCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.JWKSForTenantMock.defaultExpectation != nil && afterJWKSForTenantCounter < 1 {
+		if m.JWKSForTenantMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to CryptoMock.JWKSForTenant at\n%s", m.JWKSForTenantMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to CryptoMock.JWKSForTenant at\n%s with params: %#v", m.JWKSForTenantMock.defaultExpectation.expectationOrigins.origin, *m.JWKSForTenantMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcJWKSForTenant != nil && afterJWKSForTenantCounter < 1 {
+		m.t.Errorf("Expected call to CryptoMock.JWKSForTenant at\n%s", m.funcJWKSForTenantOrigin)
+	}
+
+	if !m.JWKSForTenantMock.invocationsDone() && afterJWKSForTenantCounter > 0 {
+		m.t.Errorf("Expected %d calls to CryptoMock.JWKSForTenant at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.JWKSForTenantMock.expectedInvocations), m.JWKSForTenantMock.expectedInvocationsOrigin, afterJWKSForTenantCounter)
 	}
 }
 
@@ -1884,16 +2485,18 @@ type CryptoMockSignIDTokenExpectation struct {
 
 // CryptoMockSignIDTokenParams contains parameters of the Crypto.SignIDToken
 type CryptoMockSignIDTokenParams struct {
-	ctx    context.Context
-	claims model.OIDCTokenClaims
-	alg    model.SignatureAlgorithm
+	ctx           context.Context
+	claims        model.OIDCTokenClaims
+	grantedScopes []string
+	alg           model.SignatureAlgorithm
 }
 
 // CryptoMockSignIDTokenParamPtrs contains pointers to parameters of the Crypto.SignIDToken
 type CryptoMockSignIDTokenParamPtrs struct {
-	ctx    *context.Context
-	claims *model.OIDCTokenClaims
-	alg    *model.SignatureAlgorithm
+	ctx           *context.Context
+	claims        *model.OIDCTokenClaims
+	grantedScopes *[]string
+	alg           *model.SignatureAlgorithm
 }
 
 // CryptoMockSignIDTokenResults contains results of the Crypto.SignIDToken
@@ -1904,10 +2507,11 @@ type CryptoMockSignIDTokenResults struct {
 
 // CryptoMockSignIDTokenOrigins contains origins of expectations of the Crypto.SignIDToken
 type CryptoMockSignIDTokenExpectationOrigins struct {
-	origin       string
-	originCtx    string
-	originClaims string
-	originAlg    string
+	origin              string
+	originCtx           string
+	originClaims        string
+	originGrantedScopes string
+	originAlg           string
 }
 
 // Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
@@ -1921,7 +2525,7 @@ func (mmSignIDToken *mCryptoMockSignIDToken) Optional() *mCryptoMockSignIDToken 
 }
 
 // Expect sets up expected params for Crypto.SignIDToken
-func (mmSignIDToken *mCryptoMockSignIDToken) Expect(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) *mCryptoMockSignIDToken {
+func (mmSignIDToken *mCryptoMockSignIDToken) Expect(ctx context.Context, claims model.OIDCTokenClaims, grantedScopes []string, alg model.SignatureAlgorithm) *mCryptoMockSignIDToken {
 	if mmSignIDToken.mock.funcSignIDToken != nil {
 		mmSignIDToken.mock.t.Fatalf("CryptoMock.SignIDToken mock is already set by Set")
 	}
@@ -1934,7 +2538,7 @@ func (mmSignIDToken *mCryptoMockSignIDToken) Expect(ctx context.Context, claims 
 		mmSignIDToken.mock.t.Fatalf("CryptoMock.SignIDToken mock is already set by ExpectParams functions")
 	}
 
-	mmSignIDToken.defaultExpectation.params = &CryptoMockSignIDTokenParams{ctx, claims, alg}
+	mmSignIDToken.defaultExpectation.params = &CryptoMockSignIDTokenParams{ctx, claims, grantedScopes, alg}
 	mmSignIDToken.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmSignIDToken.expectations {
 		if minimock.Equal(e.params, mmSignIDToken.defaultExpectation.params) {
@@ -1991,8 +2595,31 @@ func (mmSignIDToken *mCryptoMockSignIDToken) ExpectClaimsParam2(claims model.OID
 	return mmSignIDToken
 }
 
-// ExpectAlgParam3 sets up expected param alg for Crypto.SignIDToken
-func (mmSignIDToken *mCryptoMockSignIDToken) ExpectAlgParam3(alg model.SignatureAlgorithm) *mCryptoMockSignIDToken {
+// ExpectGrantedScopesParam3 sets up expected param grantedScopes for Crypto.SignIDToken
+func (mmSignIDToken *mCryptoMockSignIDToken) ExpectGrantedScopesParam3(grantedScopes []string) *mCryptoMockSignIDToken {
+	if mmSignIDToken.mock.funcSignIDToken != nil {
+		mmSignIDToken.mock.t.Fatalf("CryptoMock.SignIDToken mock is already set by Set")
+	}
+
+	if mmSignIDToken.defaultExpectation == nil {
+		mmSignIDToken.defaultExpectation = &CryptoMockSignIDTokenExpectation{}
+	}
+
+	if mmSignIDToken.defaultExpectation.params != nil {
+		mmSignIDToken.mock.t.Fatalf("CryptoMock.SignIDToken mock is already set by Expect")
+	}
+
+	if mmSignIDToken.defaultExpectation.paramPtrs == nil {
+		mmSignIDToken.defaultExpectation.paramPtrs = &CryptoMockSignIDTokenParamPtrs{}
+	}
+	mmSignIDToken.defaultExpectation.paramPtrs.grantedScopes = &grantedScopes
+	mmSignIDToken.defaultExpectation.expectationOrigins.originGrantedScopes = minimock.CallerInfo(1)
+
+	return mmSignIDToken
+}
+
+// ExpectAlgParam4 sets up expected param alg for Crypto.SignIDToken
+func (mmSignIDToken *mCryptoMockSignIDToken) ExpectAlgParam4(alg model.SignatureAlgorithm) *mCryptoMockSignIDToken {
 	if mmSignIDToken.mock.funcSignIDToken != nil {
 		mmSignIDToken.mock.t.Fatalf("CryptoMock.SignIDToken mock is already set by Set")
 	}
@@ -2015,7 +2642,7 @@ func (mmSignIDToken *mCryptoMockSignIDToken) ExpectAlgParam3(alg model.Signature
 }
 
 // Inspect accepts an inspector function that has same arguments as the Crypto.SignIDToken
-func (mmSignIDToken *mCryptoMockSignIDToken) Inspect(f func(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm)) *mCryptoMockSignIDToken {
+func (mmSignIDToken *mCryptoMockSignIDToken) Inspect(f func(ctx context.Context, claims model.OIDCTokenClaims, grantedScopes []string, alg model.SignatureAlgorithm)) *mCryptoMockSignIDToken {
 	if mmSignIDToken.mock.inspectFuncSignIDToken != nil {
 		mmSignIDToken.mock.t.Fatalf("Inspect function is already set for CryptoMock.SignIDToken")
 	}
@@ -2040,7 +2667,7 @@ func (mmSignIDToken *mCryptoMockSignIDToken) Return(s1 string, err error) *Crypt
 }
 
 // Set uses given function f to mock the Crypto.SignIDToken method
-func (mmSignIDToken *mCryptoMockSignIDToken) Set(f func(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error)) *CryptoMock {
+func (mmSignIDToken *mCryptoMockSignIDToken) Set(f func(ctx context.Context, claims model.OIDCTokenClaims, grantedScopes []string, alg model.SignatureAlgorithm) (s1 string, err error)) *CryptoMock {
 	if mmSignIDToken.defaultExpectation != nil {
 		mmSignIDToken.mock.t.Fatalf("Default expectation is already set for the Crypto.SignIDToken method")
 	}
@@ -2056,14 +2683,14 @@ func (mmSignIDToken *mCryptoMockSignIDToken) Set(f func(ctx context.Context, cla
 
 // When sets expectation for the Crypto.SignIDToken which will trigger the result defined by the following
 // Then helper
-func (mmSignIDToken *mCryptoMockSignIDToken) When(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) *CryptoMockSignIDTokenExpectation {
+func (mmSignIDToken *mCryptoMockSignIDToken) When(ctx context.Context, claims model.OIDCTokenClaims, grantedScopes []string, alg model.SignatureAlgorithm) *CryptoMockSignIDTokenExpectation {
 	if mmSignIDToken.mock.funcSignIDToken != nil {
 		mmSignIDToken.mock.t.Fatalf("CryptoMock.SignIDToken mock is already set by Set")
 	}
 
 	expectation := &CryptoMockSignIDTokenExpectation{
 		mock:               mmSignIDToken.mock,
-		params:             &CryptoMockSignIDTokenParams{ctx, claims, alg},
+		params:             &CryptoMockSignIDTokenParams{ctx, claims, grantedScopes, alg},
 		expectationOrigins: CryptoMockSignIDTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmSignIDToken.expectations = append(mmSignIDToken.expectations, expectation)
@@ -2098,17 +2725,17 @@ func (mmSignIDToken *mCryptoMockSignIDToken) invocationsDone() bool {
 }
 
 // SignIDToken implements mm_port.Crypto
-func (mmSignIDToken *CryptoMock) SignIDToken(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (s1 string, err error) {
+func (mmSignIDToken *CryptoMock) SignIDToken(ctx context.Context, claims model.OIDCTokenClaims, grantedScopes []string, alg model.SignatureAlgorithm) (s1 string, err error) {
 	mm_atomic.AddUint64(&mmSignIDToken.beforeSignIDTokenCounter, 1)
 	defer mm_atomic.AddUint64(&mmSignIDToken.afterSignIDTokenCounter, 1)
 
 	mmSignIDToken.t.Helper()
 
 	if mmSignIDToken.inspectFuncSignIDToken != nil {
-		mmSignIDToken.inspectFuncSignIDToken(ctx, claims, alg)
+		mmSignIDToken.inspectFuncSignIDToken(ctx, claims, grantedScopes, alg)
 	}
 
-	mm_params := CryptoMockSignIDTokenParams{ctx, claims, alg}
+	mm_params := CryptoMockSignIDTokenParams{ctx, claims, grantedScopes, alg}
 
 	// Record call args
 	mmSignIDToken.SignIDTokenMock.mutex.Lock()
@@ -2127,7 +2754,7 @@ func (mmSignIDToken *CryptoMock) SignIDToken(ctx context.Context, claims model.O
 		mm_want := mmSignIDToken.SignIDTokenMock.defaultExpectation.params
 		mm_want_ptrs := mmSignIDToken.SignIDTokenMock.defaultExpectation.paramPtrs
 
-		mm_got := CryptoMockSignIDTokenParams{ctx, claims, alg}
+		mm_got := CryptoMockSignIDTokenParams{ctx, claims, grantedScopes, alg}
 
 		if mm_want_ptrs != nil {
 
@@ -2139,6 +2766,11 @@ func (mmSignIDToken *CryptoMock) SignIDToken(ctx context.Context, claims model.O
 			if mm_want_ptrs.claims != nil && !minimock.Equal(*mm_want_ptrs.claims, mm_got.claims) {
 				mmSignIDToken.t.Errorf("CryptoMock.SignIDToken got unexpected parameter claims, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmSignIDToken.SignIDTokenMock.defaultExpectation.expectationOrigins.originClaims, *mm_want_ptrs.claims, mm_got.claims, minimock.Diff(*mm_want_ptrs.claims, mm_got.claims))
+			}
+
+			if mm_want_ptrs.grantedScopes != nil && !minimock.Equal(*mm_want_ptrs.grantedScopes, mm_got.grantedScopes) {
+				mmSignIDToken.t.Errorf("CryptoMock.SignIDToken got unexpected parameter grantedScopes, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSignIDToken.SignIDTokenMock.defaultExpectation.expectationOrigins.originGrantedScopes, *mm_want_ptrs.grantedScopes, mm_got.grantedScopes, minimock.Diff(*mm_want_ptrs.grantedScopes, mm_got.grantedScopes))
 			}
 
 			if mm_want_ptrs.alg != nil && !minimock.Equal(*mm_want_ptrs.alg, mm_got.alg) {
@@ -2158,9 +2790,9 @@ func (mmSignIDToken *CryptoMock) SignIDToken(ctx context.Context, claims model.O
 		return (*mm_results).s1, (*mm_results).err
 	}
 	if mmSignIDToken.funcSignIDToken != nil {
-		return mmSignIDToken.funcSignIDToken(ctx, claims, alg)
+		return mmSignIDToken.funcSignIDToken(ctx, claims, grantedScopes, alg)
 	}
-	mmSignIDToken.t.Fatalf("Unexpected call to CryptoMock.SignIDToken. %v %v %v", ctx, claims, alg)
+	mmSignIDToken.t.Fatalf("Unexpected call to CryptoMock.SignIDToken. %v %v %v %v", ctx, claims, grantedScopes, alg)
 	return
 }
 
@@ -2606,6 +3238,878 @@ func (m *CryptoMock) MinimockSignLogoutTokenInspect() {
 	}
 }
 
+type mCryptoMockSignSoftwareStatement struct {
+	optional           bool
+	mock               *CryptoMock
+	defaultExpectation *CryptoMockSignSoftwareStatementExpectation
+	expectations       []*CryptoMockSignSoftwareStatementExpectation
+
+	callArgs []*CryptoMockSignSoftwareStatementParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// CryptoMockSignSoftwareStatementExpectation specifies expectation struct of the Crypto.SignSoftwareStatement
+type CryptoMockSignSoftwareStatementExpectation struct {
+	mock               *CryptoMock
+	params             *CryptoMockSignSoftwareStatementParams
+	paramPtrs          *CryptoMockSignSoftwareStatementParamPtrs
+	expectationOrigins CryptoMockSignSoftwareStatementExpectationOrigins
+	results            *CryptoMockSignSoftwareStatementResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// CryptoMockSignSoftwareStatementParams contains parameters of the Crypto.SignSoftwareStatement
+type CryptoMockSignSoftwareStatementParams struct {
+	ctx       context.Context
+	issuer    string
+	audience  string
+	claims    model.SoftwareStatementClaims
+	issuedAt  time.Time
+	expiresAt time.Time
+}
+
+// CryptoMockSignSoftwareStatementParamPtrs contains pointers to parameters of the Crypto.SignSoftwareStatement
+type CryptoMockSignSoftwareStatementParamPtrs struct {
+	ctx       *context.Context
+	issuer    *string
+	audience  *string
+	claims    *model.SoftwareStatementClaims
+	issuedAt  *time.Time
+	expiresAt *time.Time
+}
+
+// CryptoMockSignSoftwareStatementResults contains results of the Crypto.SignSoftwareStatement
+type CryptoMockSignSoftwareStatementResults struct {
+	s1  string
+	err error
+}
+
+// CryptoMockSignSoftwareStatementOrigins contains origins of expectations of the Crypto.SignSoftwareStatement
+type CryptoMockSignSoftwareStatementExpectationOrigins struct {
+	origin          string
+	originCtx       string
+	originIssuer    string
+	originAudience  string
+	originClaims    string
+	originIssuedAt  string
+	originExpiresAt string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmSignSoftwareStatement *mCryptoMockSignSoftwareStatement) Optional() *mCryptoMockSignSoftwareStatement {
+	mmSignSoftwareStatement.optional = true
+	return mmSignSoftwareStatement
+}
+
+// Expect sets up expected params for Crypto.SignSoftwareStatement
+func (mmSignSoftwareStatement *mCryptoMockSignSoftwareStatement) Expect(ctx context.Context, issuer string, audience string, claims model.SoftwareStatementClaims, issuedAt time.Time, expiresAt time.Time) *mCryptoMockSignSoftwareStatement {
+	if mmSignSoftwareStatement.mock.funcSignSoftwareStatement != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("CryptoMock.SignSoftwareStatement mock is already set by Set")
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation == nil {
+		mmSignSoftwareStatement.defaultExpectation = &CryptoMockSignSoftwareStatementExpectation{}
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation.paramPtrs != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("CryptoMock.SignSoftwareStatement mock is already set by ExpectParams functions")
+	}
+
+	mmSignSoftwareStatement.defaultExpectation.params = &CryptoMockSignSoftwareStatementParams{ctx, issuer, audience, claims, issuedAt, expiresAt}
+	mmSignSoftwareStatement.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmSignSoftwareStatement.expectations {
+		if minimock.Equal(e.params, mmSignSoftwareStatement.defaultExpectation.params) {
+			mmSignSoftwareStatement.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmSignSoftwareStatement.defaultExpectation.params)
+		}
+	}
+
+	return mmSignSoftwareStatement
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Crypto.SignSoftwareStatement
+func (mmSignSoftwareStatement *mCryptoMockSignSoftwareStatement) ExpectCtxParam1(ctx context.Context) *mCryptoMockSignSoftwareStatement {
+	if mmSignSoftwareStatement.mock.funcSignSoftwareStatement != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("CryptoMock.SignSoftwareStatement mock is already set by Set")
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation == nil {
+		mmSignSoftwareStatement.defaultExpectation = &CryptoMockSignSoftwareStatementExpectation{}
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation.params != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("CryptoMock.SignSoftwareStatement mock is already set by Expect")
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation.paramPtrs == nil {
+		mmSignSoftwareStatement.defaultExpectation.paramPtrs = &CryptoMockSignSoftwareStatementParamPtrs{}
+	}
+	mmSignSoftwareStatement.defaultExpectation.paramPtrs.ctx = &ctx
+	mmSignSoftwareStatement.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmSignSoftwareStatement
+}
+
+// ExpectIssuerParam2 sets up expected param issuer for Crypto.SignSoftwareStatement
+func (mmSignSoftwareStatement *mCryptoMockSignSoftwareStatement) ExpectIssuerParam2(issuer string) *mCryptoMockSignSoftwareStatement {
+	if mmSignSoftwareStatement.mock.funcSignSoftwareStatement != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("CryptoMock.SignSoftwareStatement mock is already set by Set")
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation == nil {
+		mmSignSoftwareStatement.defaultExpectation = &CryptoMockSignSoftwareStatementExpectation{}
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation.params != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("CryptoMock.SignSoftwareStatement mock is already set by Expect")
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation.paramPtrs == nil {
+		mmSignSoftwareStatement.defaultExpectation.paramPtrs = &CryptoMockSignSoftwareStatementParamPtrs{}
+	}
+	mmSignSoftwareStatement.defaultExpectation.paramPtrs.issuer = &issuer
+	mmSignSoftwareStatement.defaultExpectation.expectationOrigins.originIssuer = minimock.CallerInfo(1)
+
+	return mmSignSoftwareStatement
+}
+
+// ExpectAudienceParam3 sets up expected param audience for Crypto.SignSoftwareStatement
+func (mmSignSoftwareStatement *mCryptoMockSignSoftwareStatement) ExpectAudienceParam3(audience string) *mCryptoMockSignSoftwareStatement {
+	if mmSignSoftwareStatement.mock.funcSignSoftwareStatement != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("CryptoMock.SignSoftwareStatement mock is already set by Set")
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation == nil {
+		mmSignSoftwareStatement.defaultExpectation = &CryptoMockSignSoftwareStatementExpectation{}
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation.params != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("CryptoMock.SignSoftwareStatement mock is already set by Expect")
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation.paramPtrs == nil {
+		mmSignSoftwareStatement.defaultExpectation.paramPtrs = &CryptoMockSignSoftwareStatementParamPtrs{}
+	}
+	mmSignSoftwareStatement.defaultExpectation.paramPtrs.audience = &audience
+	mmSignSoftwareStatement.defaultExpectation.expectationOrigins.originAudience = minimock.CallerInfo(1)
+
+	return mmSignSoftwareStatement
+}
+
+// ExpectClaimsParam4 sets up expected param claims for Crypto.SignSoftwareStatement
+func (mmSignSoftwareStatement *mCryptoMockSignSoftwareStatement) ExpectClaimsParam4(claims model.SoftwareStatementClaims) *mCryptoMockSignSoftwareStatement {
+	if mmSignSoftwareStatement.mock.funcSignSoftwareStatement != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("CryptoMock.SignSoftwareStatement mock is already set by Set")
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation == nil {
+		mmSignSoftwareStatement.defaultExpectation = &CryptoMockSignSoftwareStatementExpectation{}
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation.params != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("CryptoMock.SignSoftwareStatement mock is already set by Expect")
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation.paramPtrs == nil {
+		mmSignSoftwareStatement.defaultExpectation.paramPtrs = &CryptoMockSignSoftwareStatementParamPtrs{}
+	}
+	mmSignSoftwareStatement.defaultExpectation.paramPtrs.claims = &claims
+	mmSignSoftwareStatement.defaultExpectation.expectationOrigins.originClaims = minimock.CallerInfo(1)
+
+	return mmSignSoftwareStatement
+}
+
+// ExpectIssuedAtParam5 sets up expected param issuedAt for Crypto.SignSoftwareStatement
+func (mmSignSoftwareStatement *mCryptoMockSignSoftwareStatement) ExpectIssuedAtParam5(issuedAt time.Time) *mCryptoMockSignSoftwareStatement {
+	if mmSignSoftwareStatement.mock.funcSignSoftwareStatement != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("CryptoMock.SignSoftwareStatement mock is already set by Set")
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation == nil {
+		mmSignSoftwareStatement.defaultExpectation = &CryptoMockSignSoftwareStatementExpectation{}
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation.params != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("CryptoMock.SignSoftwareStatement mock is already set by Expect")
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation.paramPtrs == nil {
+		mmSignSoftwareStatement.defaultExpectation.paramPtrs = &CryptoMockSignSoftwareStatementParamPtrs{}
+	}
+	mmSignSoftwareStatement.defaultExpectation.paramPtrs.issuedAt = &issuedAt
+	mmSignSoftwareStatement.defaultExpectation.expectationOrigins.originIssuedAt = minimock.CallerInfo(1)
+
+	return mmSignSoftwareStatement
+}
+
+// ExpectExpiresAtParam6 sets up expected param expiresAt for Crypto.SignSoftwareStatement
+func (mmSignSoftwareStatement *mCryptoMockSignSoftwareStatement) ExpectExpiresAtParam6(expiresAt time.Time) *mCryptoMockSignSoftwareStatement {
+	if mmSignSoftwareStatement.mock.funcSignSoftwareStatement != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("CryptoMock.SignSoftwareStatement mock is already set by Set")
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation == nil {
+		mmSignSoftwareStatement.defaultExpectation = &CryptoMockSignSoftwareStatementExpectation{}
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation.params != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("CryptoMock.SignSoftwareStatement mock is already set by Expect")
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation.paramPtrs == nil {
+		mmSignSoftwareStatement.defaultExpectation.paramPtrs = &CryptoMockSignSoftwareStatementParamPtrs{}
+	}
+	mmSignSoftwareStatement.defaultExpectation.paramPtrs.expiresAt = &expiresAt
+	mmSignSoftwareStatement.defaultExpectation.expectationOrigins.originExpiresAt = minimock.CallerInfo(1)
+
+	return mmSignSoftwareStatement
+}
+
+// Inspect accepts an inspector function that has same arguments as the Crypto.SignSoftwareStatement
+func (mmSignSoftwareStatement *mCryptoMockSignSoftwareStatement) Inspect(f func(ctx context.Context, issuer string, audience string, claims model.SoftwareStatementClaims, issuedAt time.Time, expiresAt time.Time)) *mCryptoMockSignSoftwareStatement {
+	if mmSignSoftwareStatement.mock.inspectFuncSignSoftwareStatement != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("Inspect function is already set for CryptoMock.SignSoftwareStatement")
+	}
+
+	mmSignSoftwareStatement.mock.inspectFuncSignSoftwareStatement = f
+
+	return mmSignSoftwareStatement
+}
+
+// Return sets up results that will be returned by Crypto.SignSoftwareStatement
+func (mmSignSoftwareStatement *mCryptoMockSignSoftwareStatement) Return(s1 string, err error) *CryptoMock {
+	if mmSignSoftwareStatement.mock.funcSignSoftwareStatement != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("CryptoMock.SignSoftwareStatement mock is already set by Set")
+	}
+
+	if mmSignSoftwareStatement.defaultExpectation == nil {
+		mmSignSoftwareStatement.defaultExpectation = &CryptoMockSignSoftwareStatementExpectation{mock: mmSignSoftwareStatement.mock}
+	}
+	mmSignSoftwareStatement.defaultExpectation.results = &CryptoMockSignSoftwareStatementResults{s1, err}
+	mmSignSoftwareStatement.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmSignSoftwareStatement.mock
+}
+
+// Set uses given function f to mock the Crypto.SignSoftwareStatement method
+func (mmSignSoftwareStatement *mCryptoMockSignSoftwareStatement) Set(f func(ctx context.Context, issuer string, audience string, claims model.SoftwareStatementClaims, issuedAt time.Time, expiresAt time.Time) (s1 string, err error)) *CryptoMock {
+	if mmSignSoftwareStatement.defaultExpectation != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("Default expectation is already set for the Crypto.SignSoftwareStatement method")
+	}
+
+	if len(mmSignSoftwareStatement.expectations) > 0 {
+		mmSignSoftwareStatement.mock.t.Fatalf("Some expectations are already set for the Crypto.SignSoftwareStatement method")
+	}
+
+	mmSignSoftwareStatement.mock.funcSignSoftwareStatement = f
+	mmSignSoftwareStatement.mock.funcSignSoftwareStatementOrigin = minimock.CallerInfo(1)
+	return mmSignSoftwareStatement.mock
+}
+
+// When sets expectation for the Crypto.SignSoftwareStatement which will trigger the result defined by the following
+// Then helper
+func (mmSignSoftwareStatement *mCryptoMockSignSoftwareStatement) When(ctx context.Context, issuer string, audience string, claims model.SoftwareStatementClaims, issuedAt time.Time, expiresAt time.Time) *CryptoMockSignSoftwareStatementExpectation {
+	if mmSignSoftwareStatement.mock.funcSignSoftwareStatement != nil {
+		mmSignSoftwareStatement.mock.t.Fatalf("CryptoMock.SignSoftwareStatement mock is already set by Set")
+	}
+
+	expectation := &CryptoMockSignSoftwareStatementExpectation{
+		mock:               mmSignSoftwareStatement.mock,
+		params:             &CryptoMockSignSoftwareStatementParams{ctx, issuer, audience, claims, issuedAt, expiresAt},
+		expectationOrigins: CryptoMockSignSoftwareStatementExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmSignSoftwareStatement.expectations = append(mmSignSoftwareStatement.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Crypto.SignSoftwareStatement return parameters for the expectation previously defined by the When method
+func (e *CryptoMockSignSoftwareStatementExpectation) Then(s1 string, err error) *CryptoMock {
+	e.results = &CryptoMockSignSoftwareStatementResults{s1, err}
+	return e.mock
+}
+
+// Times sets number of times Crypto.SignSoftwareStatement should be invoked
+func (mmSignSoftwareStatement *mCryptoMockSignSoftwareStatement) Times(n uint64) *mCryptoMockSignSoftwareStatement {
+	if n == 0 {
+		mmSignSoftwareStatement.mock.t.Fatalf("Times of CryptoMock.SignSoftwareStatement mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmSignSoftwareStatement.expectedInvocations, n)
+	mmSignSoftwareStatement.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmSignSoftwareStatement
+}
+
+func (mmSignSoftwareStatement *mCryptoMockSignSoftwareStatement) invocationsDone() bool {
+	if len(mmSignSoftwareStatement.expectations) == 0 && mmSignSoftwareStatement.defaultExpectation == nil && mmSignSoftwareStatement.mock.funcSignSoftwareStatement == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmSignSoftwareStatement.mock.afterSignSoftwareStatementCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmSignSoftwareStatement.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// SignSoftwareStatement implements mm_port.Crypto
+func (mmSignSoftwareStatement *CryptoMock) SignSoftwareStatement(ctx context.Context, issuer string, audience string, claims model.SoftwareStatementClaims, issuedAt time.Time, expiresAt time.Time) (s1 string, err error) {
+	mm_atomic.AddUint64(&mmSignSoftwareStatement.beforeSignSoftwareStatementCounter, 1)
+	defer mm_atomic.AddUint64(&mmSignSoftwareStatement.afterSignSoftwareStatementCounter, 1)
+
+	mmSignSoftwareStatement.t.Helper()
+
+	if mmSignSoftwareStatement.inspectFuncSignSoftwareStatement != nil {
+		mmSignSoftwareStatement.inspectFuncSignSoftwareStatement(ctx, issuer, audience, claims, issuedAt, expiresAt)
+	}
+
+	mm_params := CryptoMockSignSoftwareStatementParams{ctx, issuer, audience, claims, issuedAt, expiresAt}
+
+	// Record call args
+	mmSignSoftwareStatement.SignSoftwareStatementMock.mutex.Lock()
+	mmSignSoftwareStatement.SignSoftwareStatementMock.callArgs = append(mmSignSoftwareStatement.SignSoftwareStatementMock.callArgs, &mm_params)
+	mmSignSoftwareStatement.SignSoftwareStatementMock.mutex.Unlock()
+
+	for _, e := range mmSignSoftwareStatement.SignSoftwareStatementMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.s1, e.results.err
+		}
+	}
+
+	if mmSignSoftwareStatement.SignSoftwareStatementMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmSignSoftwareStatement.SignSoftwareStatementMock.defaultExpectation.Counter, 1)
+		mm_want := mmSignSoftwareStatement.SignSoftwareStatementMock.defaultExpectation.params
+		mm_want_ptrs := mmSignSoftwareStatement.SignSoftwareStatementMock.defaultExpectation.paramPtrs
+
+		mm_got := CryptoMockSignSoftwareStatementParams{ctx, issuer, audience, claims, issuedAt, expiresAt}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmSignSoftwareStatement.t.Errorf("CryptoMock.SignSoftwareStatement got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSignSoftwareStatement.SignSoftwareStatementMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.issuer != nil && !minimock.Equal(*mm_want_ptrs.issuer, mm_got.issuer) {
+				mmSignSoftwareStatement.t.Errorf("CryptoMock.SignSoftwareStatement got unexpected parameter issuer, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSignSoftwareStatement.SignSoftwareStatementMock.defaultExpectation.expectationOrigins.originIssuer, *mm_want_ptrs.issuer, mm_got.issuer, minimock.Diff(*mm_want_ptrs.issuer, mm_got.issuer))
+			}
+
+			if mm_want_ptrs.audience != nil && !minimock.Equal(*mm_want_ptrs.audience, mm_got.audience) {
+				mmSignSoftwareStatement.t.Errorf("CryptoMock.SignSoftwareStatement got unexpected parameter audience, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSignSoftwareStatement.SignSoftwareStatementMock.defaultExpectation.expectationOrigins.originAudience, *mm_want_ptrs.audience, mm_got.audience, minimock.Diff(*mm_want_ptrs.audience, mm_got.audience))
+			}
+
+			if mm_want_ptrs.claims != nil && !minimock.Equal(*mm_want_ptrs.claims, mm_got.claims) {
+				mmSignSoftwareStatement.t.Errorf("CryptoMock.SignSoftwareStatement got unexpected parameter claims, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSignSoftwareStatement.SignSoftwareStatementMock.defaultExpectation.expectationOrigins.originClaims, *mm_want_ptrs.claims, mm_got.claims, minimock.Diff(*mm_want_ptrs.claims, mm_got.claims))
+			}
+
+			if mm_want_ptrs.issuedAt != nil && !minimock.Equal(*mm_want_ptrs.issuedAt, mm_got.issuedAt) {
+				mmSignSoftwareStatement.t.Errorf("CryptoMock.SignSoftwareStatement got unexpected parameter issuedAt, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSignSoftwareStatement.SignSoftwareStatementMock.defaultExpectation.expectationOrigins.originIssuedAt, *mm_want_ptrs.issuedAt, mm_got.issuedAt, minimock.Diff(*mm_want_ptrs.issuedAt, mm_got.issuedAt))
+			}
+
+			if mm_want_ptrs.expiresAt != nil && !minimock.Equal(*mm_want_ptrs.expiresAt, mm_got.expiresAt) {
+				mmSignSoftwareStatement.t.Errorf("CryptoMock.SignSoftwareStatement got unexpected parameter expiresAt, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSignSoftwareStatement.SignSoftwareStatementMock.defaultExpectation.expectationOrigins.originExpiresAt, *mm_want_ptrs.expiresAt, mm_got.expiresAt, minimock.Diff(*mm_want_ptrs.expiresAt, mm_got.expiresAt))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmSignSoftwareStatement.t.Errorf("CryptoMock.SignSoftwareStatement got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmSignSoftwareStatement.SignSoftwareStatementMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmSignSoftwareStatement.SignSoftwareStatementMock.defaultExpectation.results
+		if mm_results == nil {
+			mmSignSoftwareStatement.t.Fatal("No results are set for the CryptoMock.SignSoftwareStatement")
+		}
+		return (*mm_results).s1, (*mm_results).err
+	}
+	if mmSignSoftwareStatement.funcSignSoftwareStatement != nil {
+		return mmSignSoftwareStatement.funcSignSoftwareStatement(ctx, issuer, audience, claims, issuedAt, expiresAt)
+	}
+	mmSignSoftwareStatement.t.Fatalf("Unexpected call to CryptoMock.SignSoftwareStatement. %v %v %v %v %v %v", ctx, issuer, audience, claims, issuedAt, expiresAt)
+	return
+}
+
+// SignSoftwareStatementAfterCounter returns a count of finished CryptoMock.SignSoftwareStatement invocations
+func (mmSignSoftwareStatement *CryptoMock) SignSoftwareStatementAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSignSoftwareStatement.afterSignSoftwareStatementCounter)
+}
+
+// SignSoftwareStatementBeforeCounter returns a count of CryptoMock.SignSoftwareStatement invocations
+func (mmSignSoftwareStatement *CryptoMock) SignSoftwareStatementBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSignSoftwareStatement.beforeSignSoftwareStatementCounter)
+}
+
+// Calls returns a list of arguments used in each call to CryptoMock.SignSoftwareStatement.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmSignSoftwareStatement *mCryptoMockSignSoftwareStatement) Calls() []*CryptoMockSignSoftwareStatementParams {
+	mmSignSoftwareStatement.mutex.RLock()
+
+	argCopy := make([]*CryptoMockSignSoftwareStatementParams, len(mmSignSoftwareStatement.callArgs))
+	copy(argCopy, mmSignSoftwareStatement.callArgs)
+
+	mmSignSoftwareStatement.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockSignSoftwareStatementDone returns true if the count of the SignSoftwareStatement invocations corresponds
+// the number of defined expectations
+func (m *CryptoMock) MinimockSignSoftwareStatementDone() bool {
+	if m.SignSoftwareStatementMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.SignSoftwareStatementMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.SignSoftwareStatementMock.invocationsDone()
+}
+
+// MinimockSignSoftwareStatementInspect logs each unmet expectation
+func (m *CryptoMock) MinimockSignSoftwareStatementInspect() {
+	for _, e := range m.SignSoftwareStatementMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to CryptoMock.SignSoftwareStatement at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterSignSoftwareStatementCounter := mm_atomic.LoadUint64(&m.afterSignSoftwareStatementCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.SignSoftwareStatementMock.defaultExpectation != nil && afterSignSoftwareStatementCounter < 1 {
+		if m.SignSoftwareStatementMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to CryptoMock.SignSoftwareStatement at\n%s", m.SignSoftwareStatementMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to CryptoMock.SignSoftwareStatement at\n%s with params: %#v", m.SignSoftwareStatementMock.defaultExpectation.expectationOrigins.origin, *m.SignSoftwareStatementMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcSignSoftwareStatement != nil && afterSignSoftwareStatementCounter < 1 {
+		m.t.Errorf("Expected call to CryptoMock.SignSoftwareStatement at\n%s", m.funcSignSoftwareStatementOrigin)
+	}
+
+	if !m.SignSoftwareStatementMock.invocationsDone() && afterSignSoftwareStatementCounter > 0 {
+		m.t.Errorf("Expected %d calls to CryptoMock.SignSoftwareStatement at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.SignSoftwareStatementMock.expectedInvocations), m.SignSoftwareStatementMock.expectedInvocationsOrigin, afterSignSoftwareStatementCounter)
+	}
+}
+
+type mCryptoMockVerifyExternalTokenWithProvider struct {
+	optional           bool
+	mock               *CryptoMock
+	defaultExpectation *CryptoMockVerifyExternalTokenWithProviderExpectation
+	expectations       []*CryptoMockVerifyExternalTokenWithProviderExpectation
+
+	callArgs []*CryptoMockVerifyExternalTokenWithProviderParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// CryptoMockVerifyExternalTokenWithProviderExpectation specifies expectation struct of the Crypto.VerifyExternalTokenWithProvider
+type CryptoMockVerifyExternalTokenWithProviderExpectation struct {
+	mock               *CryptoMock
+	params             *CryptoMockVerifyExternalTokenWithProviderParams
+	paramPtrs          *CryptoMockVerifyExternalTokenWithProviderParamPtrs
+	expectationOrigins CryptoMockVerifyExternalTokenWithProviderExpectationOrigins
+	results            *CryptoMockVerifyExternalTokenWithProviderResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// CryptoMockVerifyExternalTokenWithProviderParams contains parameters of the Crypto.VerifyExternalTokenWithProvider
+type CryptoMockVerifyExternalTokenWithProviderParams struct {
+	ctx            context.Context
+	tokenStr       string
+	jwksURI        string
+	expectedIssuer string
+}
+
+// CryptoMockVerifyExternalTokenWithProviderParamPtrs contains pointers to parameters of the Crypto.VerifyExternalTokenWithProvider
+type CryptoMockVerifyExternalTokenWithProviderParamPtrs struct {
+	ctx            *context.Context
+	tokenStr       *string
+	jwksURI        *string
+	expectedIssuer *string
+}
+
+// CryptoMockVerifyExternalTokenWithProviderResults contains results of the Crypto.VerifyExternalTokenWithProvider
+type CryptoMockVerifyExternalTokenWithProviderResults struct {
+	m1  map[string]any
+	err error
+}
+
+// CryptoMockVerifyExternalTokenWithProviderOrigins contains origins of expectations of the Crypto.VerifyExternalTokenWithProvider
+type CryptoMockVerifyExternalTokenWithProviderExpectationOrigins struct {
+	origin               string
+	originCtx            string
+	originTokenStr       string
+	originJwksURI        string
+	originExpectedIssuer string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmVerifyExternalTokenWithProvider *mCryptoMockVerifyExternalTokenWithProvider) Optional() *mCryptoMockVerifyExternalTokenWithProvider {
+	mmVerifyExternalTokenWithProvider.optional = true
+	return mmVerifyExternalTokenWithProvider
+}
+
+// Expect sets up expected params for Crypto.VerifyExternalTokenWithProvider
+func (mmVerifyExternalTokenWithProvider *mCryptoMockVerifyExternalTokenWithProvider) Expect(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string) *mCryptoMockVerifyExternalTokenWithProvider {
+	if mmVerifyExternalTokenWithProvider.mock.funcVerifyExternalTokenWithProvider != nil {
+		mmVerifyExternalTokenWithProvider.mock.t.Fatalf("CryptoMock.VerifyExternalTokenWithProvider mock is already set by Set")
+	}
+
+	if mmVerifyExternalTokenWithProvider.defaultExpectation == nil {
+		mmVerifyExternalTokenWithProvider.defaultExpectation = &CryptoMockVerifyExternalTokenWithProviderExpectation{}
+	}
+
+	if mmVerifyExternalTokenWithProvider.defaultExpectation.paramPtrs != nil {
+		mmVerifyExternalTokenWithProvider.mock.t.Fatalf("CryptoMock.VerifyExternalTokenWithProvider mock is already set by ExpectParams functions")
+	}
+
+	mmVerifyExternalTokenWithProvider.defaultExpectation.params = &CryptoMockVerifyExternalTokenWithProviderParams{ctx, tokenStr, jwksURI, expectedIssuer}
+	mmVerifyExternalTokenWithProvider.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmVerifyExternalTokenWithProvider.expectations {
+		if minimock.Equal(e.params, mmVerifyExternalTokenWithProvider.defaultExpectation.params) {
+			mmVerifyExternalTokenWithProvider.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmVerifyExternalTokenWithProvider.defaultExpectation.params)
+		}
+	}
+
+	return mmVerifyExternalTokenWithProvider
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Crypto.VerifyExternalTokenWithProvider
+func (mmVerifyExternalTokenWithProvider *mCryptoMockVerifyExternalTokenWithProvider) ExpectCtxParam1(ctx context.Context) *mCryptoMockVerifyExternalTokenWithProvider {
+	if mmVerifyExternalTokenWithProvider.mock.funcVerifyExternalTokenWithProvider != nil {
+		mmVerifyExternalTokenWithProvider.mock.t.Fatalf("CryptoMock.VerifyExternalTokenWithProvider mock is already set by Set")
+	}
+
+	if mmVerifyExternalTokenWithProvider.defaultExpectation == nil {
+		mmVerifyExternalTokenWithProvider.defaultExpectation = &CryptoMockVerifyExternalTokenWithProviderExpectation{}
+	}
+
+	if mmVerifyExternalTokenWithProvider.defaultExpectation.params != nil {
+		mmVerifyExternalTokenWithProvider.mock.t.Fatalf("CryptoMock.VerifyExternalTokenWithProvider mock is already set by Expect")
+	}
+
+	if mmVerifyExternalTokenWithProvider.defaultExpectation.paramPtrs == nil {
+		mmVerifyExternalTokenWithProvider.defaultExpectation.paramPtrs = &CryptoMockVerifyExternalTokenWithProviderParamPtrs{}
+	}
+	mmVerifyExternalTokenWithProvider.defaultExpectation.paramPtrs.ctx = &ctx
+	mmVerifyExternalTokenWithProvider.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmVerifyExternalTokenWithProvider
+}
+
+// ExpectTokenStrParam2 sets up expected param tokenStr for Crypto.VerifyExternalTokenWithProvider
+func (mmVerifyExternalTokenWithProvider *mCryptoMockVerifyExternalTokenWithProvider) ExpectTokenStrParam2(tokenStr string) *mCryptoMockVerifyExternalTokenWithProvider {
+	if mmVerifyExternalTokenWithProvider.mock.funcVerifyExternalTokenWithProvider != nil {
+		mmVerifyExternalTokenWithProvider.mock.t.Fatalf("CryptoMock.VerifyExternalTokenWithProvider mock is already set by Set")
+	}
+
+	if mmVerifyExternalTokenWithProvider.defaultExpectation == nil {
+		mmVerifyExternalTokenWithProvider.defaultExpectation = &CryptoMockVerifyExternalTokenWithProviderExpectation{}
+	}
+
+	if mmVerifyExternalTokenWithProvider.defaultExpectation.params != nil {
+		mmVerifyExternalTokenWithProvider.mock.t.Fatalf("CryptoMock.VerifyExternalTokenWithProvider mock is already set by Expect")
+	}
+
+	if mmVerifyExternalTokenWithProvider.defaultExpectation.paramPtrs == nil {
+		mmVerifyExternalTokenWithProvider.defaultExpectation.paramPtrs = &CryptoMockVerifyExternalTokenWithProviderParamPtrs{}
+	}
+	mmVerifyExternalTokenWithProvider.defaultExpectation.paramPtrs.tokenStr = &tokenStr
+	mmVerifyExternalTokenWithProvider.defaultExpectation.expectationOrigins.originTokenStr = minimock.CallerInfo(1)
+
+	return mmVerifyExternalTokenWithProvider
+}
+
+// ExpectJwksURIParam3 sets up expected param jwksURI for Crypto.VerifyExternalTokenWithProvider
+func (mmVerifyExternalTokenWithProvider *mCryptoMockVerifyExternalTokenWithProvider) ExpectJwksURIParam3(jwksURI string) *mCryptoMockVerifyExternalTokenWithProvider {
+	if mmVerifyExternalTokenWithProvider.mock.funcVerifyExternalTokenWithProvider != nil {
+		mmVerifyExternalTokenWithProvider.mock.t.Fatalf("CryptoMock.VerifyExternalTokenWithProvider mock is already set by Set")
+	}
+
+	if mmVerifyExternalTokenWithProvider.defaultExpectation == nil {
+		mmVerifyExternalTokenWithProvider.defaultExpectation = &CryptoMockVerifyExternalTokenWithProviderExpectation{}
+	}
+
+	if mmVerifyExternalTokenWithProvider.defaultExpectation.params != nil {
+		mmVerifyExternalTokenWithProvider.mock.t.Fatalf("CryptoMock.VerifyExternalTokenWithProvider mock is already set by Expect")
+	}
+
+	if mmVerifyExternalTokenWithProvider.defaultExpectation.paramPtrs == nil {
+		mmVerifyExternalTokenWithProvider.defaultExpectation.paramPtrs = &CryptoMockVerifyExternalTokenWithProviderParamPtrs{}
+	}
+	mmVerifyExternalTokenWithProvider.defaultExpectation.paramPtrs.jwksURI = &jwksURI
+	mmVerifyExternalTokenWithProvider.defaultExpectation.expectationOrigins.originJwksURI = minimock.CallerInfo(1)
+
+	return mmVerifyExternalTokenWithProvider
+}
+
+// ExpectExpectedIssuerParam4 sets up expected param expectedIssuer for Crypto.VerifyExternalTokenWithProvider
+func (mmVerifyExternalTokenWithProvider *mCryptoMockVerifyExternalTokenWithProvider) ExpectExpectedIssuerParam4(expectedIssuer string) *mCryptoMockVerifyExternalTokenWithProvider {
+	if mmVerifyExternalTokenWithProvider.mock.funcVerifyExternalTokenWithProvider != nil {
+		mmVerifyExternalTokenWithProvider.mock.t.Fatalf("CryptoMock.VerifyExternalTokenWithProvider mock is already set by Set")
+	}
+
+	if mmVerifyExternalTokenWithProvider.defaultExpectation == nil {
+		mmVerifyExternalTokenWithProvider.defaultExpectation = &CryptoMockVerifyExternalTokenWithProviderExpectation{}
+	}
+
+	if mmVerifyExternalTokenWithProvider.defaultExpectation.params != nil {
+		mmVerifyExternalTokenWithProvider.mock.t.Fatalf("CryptoMock.VerifyExternalTokenWithProvider mock is already set by Expect")
+	}
+
+	if mmVerifyExternalTokenWithProvider.defaultExpectation.paramPtrs == nil {
+		mmVerifyExternalTokenWithProvider.defaultExpectation.paramPtrs = &CryptoMockVerifyExternalTokenWithProviderParamPtrs{}
+	}
+	mmVerifyExternalTokenWithProvider.defaultExpectation.paramPtrs.expectedIssuer = &expectedIssuer
+	mmVerifyExternalTokenWithProvider.defaultExpectation.expectationOrigins.originExpectedIssuer = minimock.CallerInfo(1)
+
+	return mmVerifyExternalTokenWithProvider
+}
+
+// Inspect accepts an inspector function that has same arguments as the Crypto.VerifyExternalTokenWithProvider
+func (mmVerifyExternalTokenWithProvider *mCryptoMockVerifyExternalTokenWithProvider) Inspect(f func(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string)) *mCryptoMockVerifyExternalTokenWithProvider {
+	if mmVerifyExternalTokenWithProvider.mock.inspectFuncVerifyExternalTokenWithProvider != nil {
+		mmVerifyExternalTokenWithProvider.mock.t.Fatalf("Inspect function is already set for CryptoMock.VerifyExternalTokenWithProvider")
+	}
+
+	mmVerifyExternalTokenWithProvider.mock.inspectFuncVerifyExternalTokenWithProvider = f
+
+	return mmVerifyExternalTokenWithProvider
+}
+
+// Return sets up results that will be returned by Crypto.VerifyExternalTokenWithProvider
+func (mmVerifyExternalTokenWithProvider *mCryptoMockVerifyExternalTokenWithProvider) Return(m1 map[string]any, err error) *CryptoMock {
+	if mmVerifyExternalTokenWithProvider.mock.funcVerifyExternalTokenWithProvider != nil {
+		mmVerifyExternalTokenWithProvider.mock.t.Fatalf("CryptoMock.VerifyExternalTokenWithProvider mock is already set by Set")
+	}
+
+	if mmVerifyExternalTokenWithProvider.defaultExpectation == nil {
+		mmVerifyExternalTokenWithProvider.defaultExpectation = &CryptoMockVerifyExternalTokenWithProviderExpectation{mock: mmVerifyExternalTokenWithProvider.mock}
+	}
+	mmVerifyExternalTokenWithProvider.defaultExpectation.results = &CryptoMockVerifyExternalTokenWithProviderResults{m1, err}
+	mmVerifyExternalTokenWithProvider.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmVerifyExternalTokenWithProvider.mock
+}
+
+// Set uses given function f to mock the Crypto.VerifyExternalTokenWithProvider method
+func (mmVerifyExternalTokenWithProvider *mCryptoMockVerifyExternalTokenWithProvider) Set(f func(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string) (m1 map[string]any, err error)) *CryptoMock {
+	if mmVerifyExternalTokenWithProvider.defaultExpectation != nil {
+		mmVerifyExternalTokenWithProvider.mock.t.Fatalf("Default expectation is already set for the Crypto.VerifyExternalTokenWithProvider method")
+	}
+
+	if len(mmVerifyExternalTokenWithProvider.expectations) > 0 {
+		mmVerifyExternalTokenWithProvider.mock.t.Fatalf("Some expectations are already set for the Crypto.VerifyExternalTokenWithProvider method")
+	}
+
+	mmVerifyExternalTokenWithProvider.mock.funcVerifyExternalTokenWithProvider = f
+	mmVerifyExternalTokenWithProvider.mock.funcVerifyExternalTokenWithProviderOrigin = minimock.CallerInfo(1)
+	return mmVerifyExternalTokenWithProvider.mock
+}
+
+// When sets expectation for the Crypto.VerifyExternalTokenWithProvider which will trigger the result defined by the following
+// Then helper
+func (mmVerifyExternalTokenWithProvider *mCryptoMockVerifyExternalTokenWithProvider) When(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string) *CryptoMockVerifyExternalTokenWithProviderExpectation {
+	if mmVerifyExternalTokenWithProvider.mock.funcVerifyExternalTokenWithProvider != nil {
+		mmVerifyExternalTokenWithProvider.mock.t.Fatalf("CryptoMock.VerifyExternalTokenWithProvider mock is already set by Set")
+	}
+
+	expectation := &CryptoMockVerifyExternalTokenWithProviderExpectation{
+		mock:               mmVerifyExternalTokenWithProvider.mock,
+		params:             &CryptoMockVerifyExternalTokenWithProviderParams{ctx, tokenStr, jwksURI, expectedIssuer},
+		expectationOrigins: CryptoMockVerifyExternalTokenWithProviderExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmVerifyExternalTokenWithProvider.expectations = append(mmVerifyExternalTokenWithProvider.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Crypto.VerifyExternalTokenWithProvider return parameters for the expectation previously defined by the When method
+func (e *CryptoMockVerifyExternalTokenWithProviderExpectation) Then(m1 map[string]any, err error) *CryptoMock {
+	e.results = &CryptoMockVerifyExternalTokenWithProviderResults{m1, err}
+	return e.mock
+}
+
+// Times sets number of times Crypto.VerifyExternalTokenWithProvider should be invoked
+func (mmVerifyExternalTokenWithProvider *mCryptoMockVerifyExternalTokenWithProvider) Times(n uint64) *mCryptoMockVerifyExternalTokenWithProvider {
+	if n == 0 {
+		mmVerifyExternalTokenWithProvider.mock.t.Fatalf("Times of CryptoMock.VerifyExternalTokenWithProvider mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmVerifyExternalTokenWithProvider.expectedInvocations, n)
+	mmVerifyExternalTokenWithProvider.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmVerifyExternalTokenWithProvider
+}
+
+func (mmVerifyExternalTokenWithProvider *mCryptoMockVerifyExternalTokenWithProvider) invocationsDone() bool {
+	if len(mmVerifyExternalTokenWithProvider.expectations) == 0 && mmVerifyExternalTokenWithProvider.defaultExpectation == nil && mmVerifyExternalTokenWithProvider.mock.funcVerifyExternalTokenWithProvider == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmVerifyExternalTokenWithProvider.mock.afterVerifyExternalTokenWithProviderCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmVerifyExternalTokenWithProvider.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// VerifyExternalTokenWithProvider implements mm_port.Crypto
+func (mmVerifyExternalTokenWithProvider *CryptoMock) VerifyExternalTokenWithProvider(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string) (m1 map[string]any, err error) {
+	mm_atomic.AddUint64(&mmVerifyExternalTokenWithProvider.beforeVerifyExternalTokenWithProviderCounter, 1)
+	defer mm_atomic.AddUint64(&mmVerifyExternalTokenWithProvider.afterVerifyExternalTokenWithProviderCounter, 1)
+
+	mmVerifyExternalTokenWithProvider.t.Helper()
+
+	if mmVerifyExternalTokenWithProvider.inspectFuncVerifyExternalTokenWithProvider != nil {
+		mmVerifyExternalTokenWithProvider.inspectFuncVerifyExternalTokenWithProvider(ctx, tokenStr, jwksURI, expectedIssuer)
+	}
+
+	mm_params := CryptoMockVerifyExternalTokenWithProviderParams{ctx, tokenStr, jwksURI, expectedIssuer}
+
+	// Record call args
+	mmVerifyExternalTokenWithProvider.VerifyExternalTokenWithProviderMock.mutex.Lock()
+	mmVerifyExternalTokenWithProvider.VerifyExternalTokenWithProviderMock.callArgs = append(mmVerifyExternalTokenWithProvider.VerifyExternalTokenWithProviderMock.callArgs, &mm_params)
+	mmVerifyExternalTokenWithProvider.VerifyExternalTokenWithProviderMock.mutex.Unlock()
+
+	for _, e := range mmVerifyExternalTokenWithProvider.VerifyExternalTokenWithProviderMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.m1, e.results.err
+		}
+	}
+
+	if mmVerifyExternalTokenWithProvider.VerifyExternalTokenWithProviderMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmVerifyExternalTokenWithProvider.VerifyExternalTokenWithProviderMock.defaultExpectation.Counter, 1)
+		mm_want := mmVerifyExternalTokenWithProvider.VerifyExternalTokenWithProviderMock.defaultExpectation.params
+		mm_want_ptrs := mmVerifyExternalTokenWithProvider.VerifyExternalTokenWithProviderMock.defaultExpectation.paramPtrs
+
+		mm_got := CryptoMockVerifyExternalTokenWithProviderParams{ctx, tokenStr, jwksURI, expectedIssuer}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmVerifyExternalTokenWithProvider.t.Errorf("CryptoMock.VerifyExternalTokenWithProvider got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmVerifyExternalTokenWithProvider.VerifyExternalTokenWithProviderMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tokenStr != nil && !minimock.Equal(*mm_want_ptrs.tokenStr, mm_got.tokenStr) {
+				mmVerifyExternalTokenWithProvider.t.Errorf("CryptoMock.VerifyExternalTokenWithProvider got unexpected parameter tokenStr, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmVerifyExternalTokenWithProvider.VerifyExternalTokenWithProviderMock.defaultExpectation.expectationOrigins.originTokenStr, *mm_want_ptrs.tokenStr, mm_got.tokenStr, minimock.Diff(*mm_want_ptrs.tokenStr, mm_got.tokenStr))
+			}
+
+			if mm_want_ptrs.jwksURI != nil && !minimock.Equal(*mm_want_ptrs.jwksURI, mm_got.jwksURI) {
+				mmVerifyExternalTokenWithProvider.t.Errorf("CryptoMock.VerifyExternalTokenWithProvider got unexpected parameter jwksURI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmVerifyExternalTokenWithProvider.VerifyExternalTokenWithProviderMock.defaultExpectation.expectationOrigins.originJwksURI, *mm_want_ptrs.jwksURI, mm_got.jwksURI, minimock.Diff(*mm_want_ptrs.jwksURI, mm_got.jwksURI))
+			}
+
+			if mm_want_ptrs.expectedIssuer != nil && !minimock.Equal(*mm_want_ptrs.expectedIssuer, mm_got.expectedIssuer) {
+				mmVerifyExternalTokenWithProvider.t.Errorf("CryptoMock.VerifyExternalTokenWithProvider got unexpected parameter expectedIssuer, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmVerifyExternalTokenWithProvider.VerifyExternalTokenWithProviderMock.defaultExpectation.expectationOrigins.originExpectedIssuer, *mm_want_ptrs.expectedIssuer, mm_got.expectedIssuer, minimock.Diff(*mm_want_ptrs.expectedIssuer, mm_got.expectedIssuer))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmVerifyExternalTokenWithProvider.t.Errorf("CryptoMock.VerifyExternalTokenWithProvider got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmVerifyExternalTokenWithProvider.VerifyExternalTokenWithProviderMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmVerifyExternalTokenWithProvider.VerifyExternalTokenWithProviderMock.defaultExpectation.results
+		if mm_results == nil {
+			mmVerifyExternalTokenWithProvider.t.Fatal("No results are set for the CryptoMock.VerifyExternalTokenWithProvider")
+		}
+		return (*mm_results).m1, (*mm_results).err
+	}
+	if mmVerifyExternalTokenWithProvider.funcVerifyExternalTokenWithProvider != nil {
+		return mmVerifyExternalTokenWithProvider.funcVerifyExternalTokenWithProvider(ctx, tokenStr, jwksURI, expectedIssuer)
+	}
+	mmVerifyExternalTokenWithProvider.t.Fatalf("Unexpected call to CryptoMock.VerifyExternalTokenWithProvider. %v %v %v %v", ctx, tokenStr, jwksURI, expectedIssuer)
+	return
+}
+
+// VerifyExternalTokenWithProviderAfterCounter returns a count of finished CryptoMock.VerifyExternalTokenWithProvider invocations
+func (mmVerifyExternalTokenWithProvider *CryptoMock) VerifyExternalTokenWithProviderAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmVerifyExternalTokenWithProvider.afterVerifyExternalTokenWithProviderCounter)
+}
+
+// VerifyExternalTokenWithProviderBeforeCounter returns a count of CryptoMock.VerifyExternalTokenWithProvider invocations
+func (mmVerifyExternalTokenWithProvider *CryptoMock) VerifyExternalTokenWithProviderBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmVerifyExternalTokenWithProvider.beforeVerifyExternalTokenWithProviderCounter)
+}
+
+// Calls returns a list of arguments used in each call to CryptoMock.VerifyExternalTokenWithProvider.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmVerifyExternalTokenWithProvider *mCryptoMockVerifyExternalTokenWithProvider) Calls() []*CryptoMockVerifyExternalTokenWithProviderParams {
+	mmVerifyExternalTokenWithProvider.mutex.RLock()
+
+	argCopy := make([]*CryptoMockVerifyExternalTokenWithProviderParams, len(mmVerifyExternalTokenWithProvider.callArgs))
+	copy(argCopy, mmVerifyExternalTokenWithProvider.callArgs)
+
+	mmVerifyExternalTokenWithProvider.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockVerifyExternalTokenWithProviderDone returns true if the count of the VerifyExternalTokenWithProvider invocations corresponds
+// the number of defined expectations
+func (m *CryptoMock) MinimockVerifyExternalTokenWithProviderDone() bool {
+	if m.VerifyExternalTokenWithProviderMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.VerifyExternalTokenWithProviderMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.VerifyExternalTokenWithProviderMock.invocationsDone()
+}
+
+// MinimockVerifyExternalTokenWithProviderInspect logs each unmet expectation
+func (m *CryptoMock) MinimockVerifyExternalTokenWithProviderInspect() {
+	for _, e := range m.VerifyExternalTokenWithProviderMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to CryptoMock.VerifyExternalTokenWithProvider at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterVerifyExternalTokenWithProviderCounter := mm_atomic.LoadUint64(&m.afterVerifyExternalTokenWithProviderCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.VerifyExternalTokenWithProviderMock.defaultExpectation != nil && afterVerifyExternalTokenWithProviderCounter < 1 {
+		if m.VerifyExternalTokenWithProviderMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to CryptoMock.VerifyExternalTokenWithProvider at\n%s", m.VerifyExternalTokenWithProviderMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to CryptoMock.VerifyExternalTokenWithProvider at\n%s with params: %#v", m.VerifyExternalTokenWithProviderMock.defaultExpectation.expectationOrigins.origin, *m.VerifyExternalTokenWithProviderMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcVerifyExternalTokenWithProvider != nil && afterVerifyExternalTokenWithProviderCounter < 1 {
+		m.t.Errorf("Expected call to CryptoMock.VerifyExternalTokenWithProvider at\n%s", m.funcVerifyExternalTokenWithProviderOrigin)
+	}
+
+	if !m.VerifyExternalTokenWithProviderMock.invocationsDone() && afterVerifyExternalTokenWithProviderCounter > 0 {
+		m.t.Errorf("Expected %d calls to CryptoMock.VerifyExternalTokenWithProvider at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.VerifyExternalTokenWithProviderMock.expectedInvocations), m.VerifyExternalTokenWithProviderMock.expectedInvocationsOrigin, afterVerifyExternalTokenWithProviderCounter)
+	}
+}
+
 type mCryptoMockVerifyToken struct {
 	optional           bool
 	mock               *CryptoMock
@@ -2924,7 +4428,11 @@ func (m *CryptoMock) MinimockFinish() {
 		if !m.minimockDone() {
 			m.MinimockCompareCredentialInspect()
 
+			m.MinimockGetMasterRegistrationPublicKeyInspect()
+
 			m.MinimockHashCredentialInspect()
+
+			m.MinimockJWKSForTenantInspect()
 
 			m.MinimockMarshalJWKSetInspect()
 
@@ -2935,6 +4443,10 @@ func (m *CryptoMock) MinimockFinish() {
 			m.MinimockSignIDTokenInspect()
 
 			m.MinimockSignLogoutTokenInspect()
+
+			m.MinimockSignSoftwareStatementInspect()
+
+			m.MinimockVerifyExternalTokenWithProviderInspect()
 
 			m.MinimockVerifyTokenInspect()
 		}
@@ -2961,11 +4473,15 @@ func (m *CryptoMock) minimockDone() bool {
 	done := true
 	return done &&
 		m.MinimockCompareCredentialDone() &&
+		m.MinimockGetMasterRegistrationPublicKeyDone() &&
 		m.MinimockHashCredentialDone() &&
+		m.MinimockJWKSForTenantDone() &&
 		m.MinimockMarshalJWKSetDone() &&
 		m.MinimockRotateKeysDone() &&
 		m.MinimockSignAccessTokenDone() &&
 		m.MinimockSignIDTokenDone() &&
 		m.MinimockSignLogoutTokenDone() &&
+		m.MinimockSignSoftwareStatementDone() &&
+		m.MinimockVerifyExternalTokenWithProviderDone() &&
 		m.MinimockVerifyTokenDone()
 }

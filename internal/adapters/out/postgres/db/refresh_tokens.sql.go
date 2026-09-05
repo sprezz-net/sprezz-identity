@@ -8,37 +8,42 @@ package db
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getRefreshToken = `-- name: GetRefreshToken :one
 SELECT
     rt.token_id,
-    t.tenant_uuid AS tenant_uuid,
     rt.client_id,
     rt.subject,
     rt.scopes,
     rt.token_family_id,
     rt.is_used,
     rt.expires_at,
-    rt.created_at
-FROM refresh_tokens AS rt
-JOIN tenants AS t ON t.id = rt.tenant_id
+    rt.created_at,
+    rt.identity_provider_id,
+    rt.identity_provider_alias,
+    rt.session_id,
+    t.tenant_uuid
+FROM refresh_tokens rt
+JOIN tenants t ON t.id = rt.tenant_id
 WHERE rt.token_id = $1
 LIMIT 1
 `
 
 type GetRefreshTokenRow struct {
-	TokenID       string             `json:"token_id"`
-	TenantUuid    pgtype.UUID        `json:"tenant_uuid"`
-	ClientID      string             `json:"client_id"`
-	Subject       string             `json:"subject"`
-	Scopes        []string           `json:"scopes"`
-	TokenFamilyID string             `json:"token_family_id"`
-	IsUsed        bool               `json:"is_used"`
-	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	TokenID               string             `json:"token_id"`
+	ClientID              string             `json:"client_id"`
+	Subject               string             `json:"subject"`
+	Scopes                []string           `json:"scopes"`
+	TokenFamilyID         string             `json:"token_family_id"`
+	IsUsed                bool               `json:"is_used"`
+	ExpiresAt             pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	IdentityProviderID    pgtype.UUID        `json:"identity_provider_id"`
+	IdentityProviderAlias *string            `json:"identity_provider_alias"`
+	SessionID             *string            `json:"session_id"`
+	TenantUuid            pgtype.UUID        `json:"tenant_uuid"`
 }
 
 func (q *Queries) GetRefreshToken(ctx context.Context, tokenID string) (GetRefreshTokenRow, error) {
@@ -46,7 +51,6 @@ func (q *Queries) GetRefreshToken(ctx context.Context, tokenID string) (GetRefre
 	var i GetRefreshTokenRow
 	err := row.Scan(
 		&i.TokenID,
-		&i.TenantUuid,
 		&i.ClientID,
 		&i.Subject,
 		&i.Scopes,
@@ -54,34 +58,73 @@ func (q *Queries) GetRefreshToken(ctx context.Context, tokenID string) (GetRefre
 		&i.IsUsed,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		&i.IdentityProviderID,
+		&i.IdentityProviderAlias,
+		&i.SessionID,
+		&i.TenantUuid,
 	)
 	return i, err
 }
 
-const markRefreshTokenUsed = `-- name: MarkRefreshTokenUsed :execresult
+const markRefreshTokenUsed = `-- name: MarkRefreshTokenUsed :exec
 UPDATE refresh_tokens
 SET is_used = TRUE
 WHERE token_id = $1
 `
 
-func (q *Queries) MarkRefreshTokenUsed(ctx context.Context, tokenID string) (pgconn.CommandTag, error) {
-	return q.db.Exec(ctx, markRefreshTokenUsed, tokenID)
+func (q *Queries) MarkRefreshTokenUsed(ctx context.Context, tokenID string) error {
+	_, err := q.db.Exec(ctx, markRefreshTokenUsed, tokenID)
+	return err
 }
 
-const revokeRefreshTokenFamily = `-- name: RevokeRefreshTokenFamily :execresult
+const purgeRefreshTokensByTenant = `-- name: PurgeRefreshTokensByTenant :exec
+DELETE FROM refresh_tokens
+WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
+`
+
+func (q *Queries) PurgeRefreshTokensByTenant(ctx context.Context, tenantUuid pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, purgeRefreshTokensByTenant, tenantUuid)
+	return err
+}
+
+const revokeRefreshTokenFamily = `-- name: RevokeRefreshTokenFamily :exec
 DELETE FROM refresh_tokens
 WHERE token_family_id = $1
 `
 
-func (q *Queries) RevokeRefreshTokenFamily(ctx context.Context, tokenFamilyID string) (pgconn.CommandTag, error) {
-	return q.db.Exec(ctx, revokeRefreshTokenFamily, tokenFamilyID)
+func (q *Queries) RevokeRefreshTokenFamily(ctx context.Context, tokenFamilyID string) error {
+	_, err := q.db.Exec(ctx, revokeRefreshTokenFamily, tokenFamilyID)
+	return err
 }
 
-const saveRefreshToken = `-- name: SaveRefreshToken :execresult
+const revokeRefreshTokens = `-- name: RevokeRefreshTokens :exec
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $1
+    WHERE tenant_uuid = $3::uuid LIMIT 1
+)
+DELETE FROM refresh_tokens
+WHERE tenant_id = tenant.id
+  AND subject = $1
+  AND client_id = $2
+`
+
+type RevokeRefreshTokensParams struct {
+	Subject    string      `json:"subject"`
+	ClientID   string      `json:"client_id"`
+	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+}
+
+func (q *Queries) RevokeRefreshTokens(ctx context.Context, arg RevokeRefreshTokensParams) error {
+	_, err := q.db.Exec(ctx, revokeRefreshTokens, arg.Subject, arg.ClientID, arg.TenantUuid)
+	return err
+}
+
+const saveRefreshToken = `-- name: SaveRefreshToken :exec
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $11::uuid
 )
 INSERT INTO refresh_tokens (
     token_id,
@@ -91,34 +134,42 @@ INSERT INTO refresh_tokens (
     scopes,
     token_family_id,
     is_used,
-    expires_at
+    expires_at,
+    identity_provider_id,
+    identity_provider_alias,
+    session_id
 )
 SELECT
-    $2,
+    $1,
     tenant.id,
+    $2,
     $3,
     $4,
     $5,
     $6,
-    $7,
-    $8
+    $7::timestamptz,
+    $8::uuid,
+    $9,
+    $10
 FROM tenant
 `
 
 type SaveRefreshTokenParams struct {
-	TenantUuid    pgtype.UUID        `json:"tenant_uuid"`
-	TokenID       string             `json:"token_id"`
-	ClientID      string             `json:"client_id"`
-	Subject       string             `json:"subject"`
-	Scopes        []string           `json:"scopes"`
-	TokenFamilyID string             `json:"token_family_id"`
-	IsUsed        bool               `json:"is_used"`
-	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	TokenID               string             `json:"token_id"`
+	ClientID              string             `json:"client_id"`
+	Subject               string             `json:"subject"`
+	Scopes                []string           `json:"scopes"`
+	TokenFamilyID         string             `json:"token_family_id"`
+	IsUsed                bool               `json:"is_used"`
+	ExpiresAt             pgtype.Timestamptz `json:"expires_at"`
+	IdentityProviderID    pgtype.UUID        `json:"identity_provider_id"`
+	IdentityProviderAlias *string            `json:"identity_provider_alias"`
+	SessionID             *string            `json:"session_id"`
+	TenantUuid            pgtype.UUID        `json:"tenant_uuid"`
 }
 
-func (q *Queries) SaveRefreshToken(ctx context.Context, arg SaveRefreshTokenParams) (pgconn.CommandTag, error) {
-	return q.db.Exec(ctx, saveRefreshToken,
-		arg.TenantUuid,
+func (q *Queries) SaveRefreshToken(ctx context.Context, arg SaveRefreshTokenParams) error {
+	_, err := q.db.Exec(ctx, saveRefreshToken,
 		arg.TokenID,
 		arg.ClientID,
 		arg.Subject,
@@ -126,5 +177,10 @@ func (q *Queries) SaveRefreshToken(ctx context.Context, arg SaveRefreshTokenPara
 		arg.TokenFamilyID,
 		arg.IsUsed,
 		arg.ExpiresAt,
+		arg.IdentityProviderID,
+		arg.IdentityProviderAlias,
+		arg.SessionID,
+		arg.TenantUuid,
 	)
+	return err
 }

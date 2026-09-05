@@ -8,254 +8,789 @@ package db
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const getClient = `-- name: GetClient :one
+type BindIdentityProvidersToGroupParams struct {
+	GroupID  pgtype.UUID `json:"group_id"`
+	IdpID    pgtype.UUID `json:"idp_id"`
+	TenantID pgtype.UUID `json:"tenant_id"`
+}
+
+const clearIdentityProvidersFromGroup = `-- name: ClearIdentityProvidersFromGroup :exec
+DELETE FROM application_group_idps
+WHERE group_id = $1::uuid AND tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $2::uuid LIMIT 1)
+`
+
+type ClearIdentityProvidersFromGroupParams struct {
+	GroupID    pgtype.UUID `json:"group_id"`
+	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+}
+
+// ClearIdentityProvidersFromGroup drops permission relations before rewriting values during updates.
+func (q *Queries) ClearIdentityProvidersFromGroup(ctx context.Context, arg ClearIdentityProvidersFromGroupParams) error {
+	_, err := q.db.Exec(ctx, clearIdentityProvidersFromGroup, arg.GroupID, arg.TenantUuid)
+	return err
+}
+
+const createApplication = `-- name: CreateApplication :exec
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $7::uuid
+    LIMIT 1
+)
+INSERT INTO applications (
+    id,
+    tenant_id,
+    profile_id,
+    group_id,
+    client_id,
+    client_secret_hash,
+    application_name
+)
 SELECT
-    a.id,
+    $1::uuid,
+    tenant.id,
+    $2::uuid,
+    $3::uuid,
+    $4,
+    $5,
+    $6
+FROM tenant
+`
+
+type CreateApplicationParams struct {
+	ID               pgtype.UUID `json:"id"`
+	ProfileID        pgtype.UUID `json:"profile_id"`
+	GroupID          pgtype.UUID `json:"group_id"`
+	ClientID         string      `json:"client_id"`
+	ClientSecretHash *string     `json:"client_secret_hash"`
+	ApplicationName  string      `json:"application_name"`
+	TenantUuid       pgtype.UUID `json:"tenant_uuid"`
+}
+
+// CreateApplication establishes core relational boundaries coupling structural definitions.
+func (q *Queries) CreateApplication(ctx context.Context, arg CreateApplicationParams) error {
+	_, err := q.db.Exec(ctx, createApplication,
+		arg.ID,
+		arg.ProfileID,
+		arg.GroupID,
+		arg.ClientID,
+		arg.ClientSecretHash,
+		arg.ApplicationName,
+		arg.TenantUuid,
+	)
+	return err
+}
+
+const createApplicationGroup = `-- name: CreateApplicationGroup :exec
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $10::uuid
+    LIMIT 1
+)
+INSERT INTO application_groups (
+    id,
+    tenant_id,
+    group_name,
+    is_enabled,
+    allowed_scopes,
+    default_scopes,
+    allowed_audiences,
+    default_idp_id, -- Cleaned name matching normalization schema updates
+    redirect_uris,
+    post_logout_redirect_uris
+)
+SELECT
+    $1::uuid,
+    tenant.id,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6,
+    $7::uuid, -- Type-safe UUID input parameter mapping
+    $8,
+    $9
+FROM tenant
+`
+
+type CreateApplicationGroupParams struct {
+	ID                     pgtype.UUID `json:"id"`
+	GroupName              string      `json:"group_name"`
+	IsEnabled              bool        `json:"is_enabled"`
+	AllowedScopes          []string    `json:"allowed_scopes"`
+	DefaultScopes          []string    `json:"default_scopes"`
+	AllowedAudiences       []string    `json:"allowed_audiences"`
+	DefaultIdpID           pgtype.UUID `json:"default_idp_id"`
+	RedirectUris           []string    `json:"redirect_uris"`
+	PostLogoutRedirectUris []string    `json:"post_logout_redirect_uris"`
+	TenantUuid             pgtype.UUID `json:"tenant_uuid"`
+}
+
+// CreateApplicationGroup records base attributes into your group table using the updated relational column suffix.
+func (q *Queries) CreateApplicationGroup(ctx context.Context, arg CreateApplicationGroupParams) error {
+	_, err := q.db.Exec(ctx, createApplicationGroup,
+		arg.ID,
+		arg.GroupName,
+		arg.IsEnabled,
+		arg.AllowedScopes,
+		arg.DefaultScopes,
+		arg.AllowedAudiences,
+		arg.DefaultIdpID,
+		arg.RedirectUris,
+		arg.PostLogoutRedirectUris,
+		arg.TenantUuid,
+	)
+	return err
+}
+
+const createApplicationProfile = `-- name: CreateApplicationProfile :exec
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $12::uuid
+    LIMIT 1
+)
+INSERT INTO application_profiles (
+    id,
+    tenant_id,
+    profile_name,
+    is_enabled,
+    token_endpoint_auth_method,
+    grant_types,
+    response_types,
+    access_token_lifetime,
+    id_token_lifetime,
+    refresh_token_lifetime,
+    enforce_rtr,
+    signing_algorithm
+)
+SELECT
+    $1::uuid,
+    tenant.id,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6,
+    $7::integer,
+    $8::integer,
+    $9::integer,
+    $10,
+    $11
+FROM tenant
+`
+
+type CreateApplicationProfileParams struct {
+	ID                      pgtype.UUID `json:"id"`
+	ProfileName             string      `json:"profile_name"`
+	IsEnabled               bool        `json:"is_enabled"`
+	TokenEndpointAuthMethod string      `json:"token_endpoint_auth_method"`
+	GrantTypes              []string    `json:"grant_types"`
+	ResponseTypes           []string    `json:"response_types"`
+	AccessTokenLifetime     int32       `json:"access_token_lifetime"`
+	IDTokenLifetime         int32       `json:"id_token_lifetime"`
+	RefreshTokenLifetime    int32       `json:"refresh_token_lifetime"`
+	EnforceRtr              bool        `json:"enforce_rtr"`
+	SigningAlgorithm        string      `json:"signing_algorithm"`
+	TenantUuid              pgtype.UUID `json:"tenant_uuid"`
+}
+
+// CreateApplicationProfile handles initial initialization parameters for structural lifetimes.
+func (q *Queries) CreateApplicationProfile(ctx context.Context, arg CreateApplicationProfileParams) error {
+	_, err := q.db.Exec(ctx, createApplicationProfile,
+		arg.ID,
+		arg.ProfileName,
+		arg.IsEnabled,
+		arg.TokenEndpointAuthMethod,
+		arg.GrantTypes,
+		arg.ResponseTypes,
+		arg.AccessTokenLifetime,
+		arg.IDTokenLifetime,
+		arg.RefreshTokenLifetime,
+		arg.EnforceRtr,
+		arg.SigningAlgorithm,
+		arg.TenantUuid,
+	)
+	return err
+}
+
+const deleteApplication = `-- name: DeleteApplication :exec
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $2::uuid
+    LIMIT 1
+)
+DELETE FROM applications
+WHERE client_id = $1
+  AND tenant_id = (SELECT id FROM tenant)
+`
+
+type DeleteApplicationParams struct {
+	ClientID   string      `json:"client_id"`
+	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+}
+
+// DeleteApplication executes hard deletions on individual application profiles.
+func (q *Queries) DeleteApplication(ctx context.Context, arg DeleteApplicationParams) error {
+	_, err := q.db.Exec(ctx, deleteApplication, arg.ClientID, arg.TenantUuid)
+	return err
+}
+
+const getApplicationByClientID = `-- name: GetApplicationByClientID :one
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $2::uuid
+    LIMIT 1
+)
+SELECT
+    a.id AS app_id,
     a.tenant_id,
     a.client_id,
     a.client_secret_hash,
-    a.client_name,
-    a.redirect_uri,
-    a.redirect_uris,
-    a.post_logout_redirect_uris,
-    a.front_channel_logout_uri,
-    a.back_channel_logout_uri,
-    a.grant_types,
-    a.response_types,
-    a.idp_signing_algorithm,
-    a.access_token_lifetime,
-    a.refresh_token_lifetime,
-    a.id_token_lifetime,
-    a.allowed_scopes,
-    a.default_scopes,
-    a.allowed_idps,
-    a.default_idp,
-    a.allowed_audiences,
-    a.client_type,
-    a.enforce_rtr,
-    a.created_at,
-    a.updated_at
-FROM applications AS a
-JOIN tenants AS t ON t.id = a.tenant_id
-WHERE t.tenant_uuid = $1
-  AND a.client_id = $2
+    a.application_name,
+    a.is_enabled AS app_enabled,
+    a.is_dynamic,
+    a.created_at AS app_created_at,
+    a.updated_at AS app_updated_at,
+    a.last_used_at,
+    p.id AS profile_id,
+    p.profile_name,
+    p.is_enabled AS profile_enabled,
+    p.token_endpoint_auth_method,
+    p.grant_types,
+    p.response_types,
+    p.access_token_lifetime,
+    p.refresh_token_lifetime,
+    p.id_token_lifetime,
+    p.enforce_rtr,
+    p.signing_algorithm,
+    p.updated_at AS profile_updated_at,
+    g.id AS group_id,
+    g.group_name,
+    g.is_enabled AS group_enabled,
+    g.redirect_uri,
+    g.redirect_uris,
+    g.post_logout_redirect_uris,
+    g.front_channel_logout_uri,
+    g.back_channel_logout_uri,
+    g.allowed_scopes,
+    g.default_scopes,
+    g.allowed_audiences,
+    g.default_idp_id, -- Cleaned name pointing to the type-safe column link
+    g.updated_at AS group_updated_at,
+    -- Aggregate allowed provider UUIDs directly into a type-safe Go array slice
+    COALESCE(
+        (SELECT ARRAY_AGG(agi.idp_id)
+         FROM application_group_idps agi
+         WHERE agi.group_id = g.id),
+        '{}'::uuid[]
+    )::uuid[] AS allowed_idp_ids
+FROM applications a
+JOIN tenant ON a.tenant_id = tenant.id
+JOIN application_profiles p ON a.profile_id = p.id AND a.tenant_id = p.tenant_id
+JOIN application_groups g ON a.group_id = g.id AND a.tenant_id = g.tenant_id
+WHERE a.client_id = $1
 LIMIT 1
 `
 
-type GetClientParams struct {
-	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+type GetApplicationByClientIDParams struct {
 	ClientID   string      `json:"client_id"`
+	TenantUuid pgtype.UUID `json:"tenant_uuid"`
 }
 
-type GetClientRow struct {
-	ID                     pgtype.UUID        `json:"id"`
-	TenantID               int32              `json:"tenant_id"`
-	ClientID               string             `json:"client_id"`
-	ClientSecretHash       *string            `json:"client_secret_hash"`
-	ClientName             string             `json:"client_name"`
-	RedirectUri            string             `json:"redirect_uri"`
-	RedirectUris           []string           `json:"redirect_uris"`
-	PostLogoutRedirectUris []string           `json:"post_logout_redirect_uris"`
-	FrontChannelLogoutUri  *string            `json:"front_channel_logout_uri"`
-	BackChannelLogoutUri   *string            `json:"back_channel_logout_uri"`
-	GrantTypes             []string           `json:"grant_types"`
-	ResponseTypes          []string           `json:"response_types"`
-	IdpSigningAlgorithm    string             `json:"idp_signing_algorithm"`
-	AccessTokenLifetime    pgtype.Interval    `json:"access_token_lifetime"`
-	RefreshTokenLifetime   pgtype.Interval    `json:"refresh_token_lifetime"`
-	IDTokenLifetime        pgtype.Interval    `json:"id_token_lifetime"`
-	AllowedScopes          []string           `json:"allowed_scopes"`
-	DefaultScopes          []string           `json:"default_scopes"`
-	AllowedIdps            []string           `json:"allowed_idps"`
-	DefaultIdp             *string            `json:"default_idp"`
-	AllowedAudiences       []string           `json:"allowed_audiences"`
-	ClientType             string             `json:"client_type"`
-	EnforceRtr             bool               `json:"enforce_rtr"`
-	CreatedAt              pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+type GetApplicationByClientIDRow struct {
+	AppID                   pgtype.UUID        `json:"app_id"`
+	TenantID                int32              `json:"tenant_id"`
+	ClientID                string             `json:"client_id"`
+	ClientSecretHash        *string            `json:"client_secret_hash"`
+	ApplicationName         string             `json:"application_name"`
+	AppEnabled              bool               `json:"app_enabled"`
+	IsDynamic               bool               `json:"is_dynamic"`
+	AppCreatedAt            pgtype.Timestamptz `json:"app_created_at"`
+	AppUpdatedAt            pgtype.Timestamptz `json:"app_updated_at"`
+	LastUsedAt              pgtype.Timestamptz `json:"last_used_at"`
+	ProfileID               pgtype.UUID        `json:"profile_id"`
+	ProfileName             string             `json:"profile_name"`
+	ProfileEnabled          bool               `json:"profile_enabled"`
+	TokenEndpointAuthMethod string             `json:"token_endpoint_auth_method"`
+	GrantTypes              []string           `json:"grant_types"`
+	ResponseTypes           []string           `json:"response_types"`
+	AccessTokenLifetime     pgtype.Interval    `json:"access_token_lifetime"`
+	RefreshTokenLifetime    pgtype.Interval    `json:"refresh_token_lifetime"`
+	IDTokenLifetime         pgtype.Interval    `json:"id_token_lifetime"`
+	EnforceRtr              bool               `json:"enforce_rtr"`
+	SigningAlgorithm        string             `json:"signing_algorithm"`
+	ProfileUpdatedAt        pgtype.Timestamptz `json:"profile_updated_at"`
+	GroupID                 pgtype.UUID        `json:"group_id"`
+	GroupName               string             `json:"group_name"`
+	GroupEnabled            bool               `json:"group_enabled"`
+	RedirectUri             string             `json:"redirect_uri"`
+	RedirectUris            []string           `json:"redirect_uris"`
+	PostLogoutRedirectUris  []string           `json:"post_logout_redirect_uris"`
+	FrontChannelLogoutUri   *string            `json:"front_channel_logout_uri"`
+	BackChannelLogoutUri    *string            `json:"back_channel_logout_uri"`
+	AllowedScopes           []string           `json:"allowed_scopes"`
+	DefaultScopes           []string           `json:"default_scopes"`
+	AllowedAudiences        []string           `json:"allowed_audiences"`
+	DefaultIdpID            pgtype.UUID        `json:"default_idp_id"`
+	GroupUpdatedAt          pgtype.Timestamptz `json:"group_updated_at"`
+	AllowedIdpIds           []pgtype.UUID      `json:"allowed_idp_ids"`
 }
 
-func (q *Queries) GetClient(ctx context.Context, arg GetClientParams) (GetClientRow, error) {
-	row := q.db.QueryRow(ctx, getClient, arg.TenantUuid, arg.ClientID)
-	var i GetClientRow
+// GetApplicationByClientID resolves an application, its profile, and its group (including permitted IDP UUIDs) in a single database roundtrip.
+func (q *Queries) GetApplicationByClientID(ctx context.Context, arg GetApplicationByClientIDParams) (GetApplicationByClientIDRow, error) {
+	row := q.db.QueryRow(ctx, getApplicationByClientID, arg.ClientID, arg.TenantUuid)
+	var i GetApplicationByClientIDRow
 	err := row.Scan(
-		&i.ID,
+		&i.AppID,
 		&i.TenantID,
 		&i.ClientID,
 		&i.ClientSecretHash,
-		&i.ClientName,
+		&i.ApplicationName,
+		&i.AppEnabled,
+		&i.IsDynamic,
+		&i.AppCreatedAt,
+		&i.AppUpdatedAt,
+		&i.LastUsedAt,
+		&i.ProfileID,
+		&i.ProfileName,
+		&i.ProfileEnabled,
+		&i.TokenEndpointAuthMethod,
+		&i.GrantTypes,
+		&i.ResponseTypes,
+		&i.AccessTokenLifetime,
+		&i.RefreshTokenLifetime,
+		&i.IDTokenLifetime,
+		&i.EnforceRtr,
+		&i.SigningAlgorithm,
+		&i.ProfileUpdatedAt,
+		&i.GroupID,
+		&i.GroupName,
+		&i.GroupEnabled,
 		&i.RedirectUri,
 		&i.RedirectUris,
 		&i.PostLogoutRedirectUris,
 		&i.FrontChannelLogoutUri,
 		&i.BackChannelLogoutUri,
+		&i.AllowedScopes,
+		&i.DefaultScopes,
+		&i.AllowedAudiences,
+		&i.DefaultIdpID,
+		&i.GroupUpdatedAt,
+		&i.AllowedIdpIds,
+	)
+	return i, err
+}
+
+const getApplicationsLogoutContextByTenant = `-- name: GetApplicationsLogoutContextByTenant :many
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $1::uuid
+    LIMIT 1
+)
+SELECT
+    a.id,
+    a.client_id,
+    g.front_channel_logout_uri,
+    g.back_channel_logout_uri,
+    p.signing_algorithm
+FROM applications a
+JOIN tenant ON a.tenant_id = tenant.id
+JOIN application_groups g ON a.group_id = g.id AND a.tenant_id = g.tenant_id
+JOIN application_profiles p ON a.profile_id = p.id AND a.tenant_id = p.tenant_id
+WHERE a.is_enabled = TRUE
+  AND g.is_enabled = TRUE
+  AND p.is_enabled = TRUE
+`
+
+type GetApplicationsLogoutContextByTenantRow struct {
+	ID                    pgtype.UUID `json:"id"`
+	ClientID              string      `json:"client_id"`
+	FrontChannelLogoutUri *string     `json:"front_channel_logout_uri"`
+	BackChannelLogoutUri  *string     `json:"back_channel_logout_uri"`
+	SigningAlgorithm      string      `json:"signing_algorithm"`
+}
+
+// GetApplicationsLogoutContextByTenant pulls lightweight registration metrics required to drive clean back-channel single sign-out trees.
+func (q *Queries) GetApplicationsLogoutContextByTenant(ctx context.Context, tenantUuid pgtype.UUID) ([]GetApplicationsLogoutContextByTenantRow, error) {
+	rows, err := q.db.Query(ctx, getApplicationsLogoutContextByTenant, tenantUuid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetApplicationsLogoutContextByTenantRow{}
+	for rows.Next() {
+		var i GetApplicationsLogoutContextByTenantRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClientID,
+			&i.FrontChannelLogoutUri,
+			&i.BackChannelLogoutUri,
+			&i.SigningAlgorithm,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getGroupByName = `-- name: GetGroupByName :one
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $2::uuid
+    LIMIT 1
+)
+SELECT
+    g.id,
+    g.tenant_id,
+    g.group_name,
+    g.is_enabled,
+    g.redirect_uri,
+    g.redirect_uris,
+    g.post_logout_redirect_uris,
+    g.front_channel_logout_uri,
+    g.back_channel_logout_uri,
+    g.allowed_scopes,
+    g.default_scopes,
+    g.allowed_audiences,
+    g.default_idp_id,
+    g.created_at,
+    g.updated_at,
+    COALESCE(
+        (SELECT ARRAY_AGG(agi.idp_id)
+         FROM application_group_idps agi
+         WHERE agi.group_id = g.id),
+        '{}'::uuid[]
+    )::uuid[] AS allowed_idp_ids
+FROM application_groups g
+WHERE g.group_name = $1 AND g.tenant_id = tenant.id
+LIMIT 1
+`
+
+type GetGroupByNameParams struct {
+	GroupName  string      `json:"group_name"`
+	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+}
+
+type GetGroupByNameRow struct {
+	ID                     pgtype.UUID        `json:"id"`
+	TenantID               int32              `json:"tenant_id"`
+	GroupName              string             `json:"group_name"`
+	IsEnabled              bool               `json:"is_enabled"`
+	RedirectUri            string             `json:"redirect_uri"`
+	RedirectUris           []string           `json:"redirect_uris"`
+	PostLogoutRedirectUris []string           `json:"post_logout_redirect_uris"`
+	FrontChannelLogoutUri  *string            `json:"front_channel_logout_uri"`
+	BackChannelLogoutUri   *string            `json:"back_channel_logout_uri"`
+	AllowedScopes          []string           `json:"allowed_scopes"`
+	DefaultScopes          []string           `json:"default_scopes"`
+	AllowedAudiences       []string           `json:"allowed_audiences"`
+	DefaultIdpID           pgtype.UUID        `json:"default_idp_id"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	AllowedIdpIds          []pgtype.UUID      `json:"allowed_idp_ids"`
+}
+
+// GetGroupByName pulls basic routing whitelists and aggregates permission parameters matching clean variable names.
+func (q *Queries) GetGroupByName(ctx context.Context, arg GetGroupByNameParams) (GetGroupByNameRow, error) {
+	row := q.db.QueryRow(ctx, getGroupByName, arg.GroupName, arg.TenantUuid)
+	var i GetGroupByNameRow
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.GroupName,
+		&i.IsEnabled,
+		&i.RedirectUri,
+		&i.RedirectUris,
+		&i.PostLogoutRedirectUris,
+		&i.FrontChannelLogoutUri,
+		&i.BackChannelLogoutUri,
+		&i.AllowedScopes,
+		&i.DefaultScopes,
+		&i.AllowedAudiences,
+		&i.DefaultIdpID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AllowedIdpIds,
+	)
+	return i, err
+}
+
+const getProfileByName = `-- name: GetProfileByName :one
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $2::uuid
+    LIMIT 1
+)
+SELECT id, tenant_id, profile_name, is_enabled, token_endpoint_auth_method, grant_types, response_types, access_token_lifetime, refresh_token_lifetime, id_token_lifetime, enforce_rtr, signing_algorithm, created_at, updated_at
+FROM application_profiles
+WHERE profile_name = $1 AND tenant_id = tenant.id
+LIMIT 1
+`
+
+type GetProfileByNameParams struct {
+	ProfileName string      `json:"profile_name"`
+	TenantUuid  pgtype.UUID `json:"tenant_uuid"`
+}
+
+// GetProfileByName evaluates targeted token lifecycle thresholds assigned to an execution layout.
+func (q *Queries) GetProfileByName(ctx context.Context, arg GetProfileByNameParams) (ApplicationProfile, error) {
+	row := q.db.QueryRow(ctx, getProfileByName, arg.ProfileName, arg.TenantUuid)
+	var i ApplicationProfile
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.ProfileName,
+		&i.IsEnabled,
+		&i.TokenEndpointAuthMethod,
 		&i.GrantTypes,
 		&i.ResponseTypes,
-		&i.IdpSigningAlgorithm,
 		&i.AccessTokenLifetime,
 		&i.RefreshTokenLifetime,
 		&i.IDTokenLifetime,
-		&i.AllowedScopes,
-		&i.DefaultScopes,
-		&i.AllowedIdps,
-		&i.DefaultIdp,
-		&i.AllowedAudiences,
-		&i.ClientType,
 		&i.EnforceRtr,
+		&i.SigningAlgorithm,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const getTenantIDByUUID = `-- name: GetTenantIDByUUID :one
-SELECT id
-FROM tenants
-WHERE tenant_uuid = $1
-LIMIT 1
-`
-
-func (q *Queries) GetTenantIDByUUID(ctx context.Context, tenantUuid pgtype.UUID) (int32, error) {
-	row := q.db.QueryRow(ctx, getTenantIDByUUID, tenantUuid)
-	var id int32
-	err := row.Scan(&id)
-	return id, err
-}
-
-const saveClient = `-- name: SaveClient :execresult
+const registerApplication = `-- name: RegisterApplication :one
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $1
+    WHERE tenant_uuid = $12::uuid
+    LIMIT 1
 )
 INSERT INTO applications (
     id,
     tenant_id,
+    profile_id,
+    group_id,
+    application_name,
     client_id,
     client_secret_hash,
-    client_name,
-    redirect_uri,
-    redirect_uris,
-    post_logout_redirect_uris,
-    front_channel_logout_uri,
-    back_channel_logout_uri,
-    grant_types,
-    response_types,
-    idp_signing_algorithm,
-    access_token_lifetime,
-    refresh_token_lifetime,
-    id_token_lifetime,
-    allowed_scopes,
-    default_scopes,
-    allowed_idps,
-    default_idp,
-    allowed_audiences,
-    client_type,
-    enforce_rtr
+    is_dynamic,
+    is_enabled,
+    created_at,
+    updated_at,
+    last_used_at
 )
 SELECT
-    $2,
+    $1::uuid,
     tenant.id,
-    $3,
+    $2::uuid,
+    $3::uuid,
     $4,
     $5,
     $6,
     $7,
     $8,
-    $9,
-    $10,
-    $11,
-    $12,
-    $13,
-    $14,
-    $15,
-    $16,
-    $17,
-    $18,
-    $19,
-    $20,
-    $21,
-    $22,
-    $23
+    $9::timestamptz,
+    $10::timestamptz,
+    $11::timestamptz
 FROM tenant
-ON CONFLICT (tenant_id, client_id)
-DO UPDATE SET
-    client_secret_hash = EXCLUDED.client_secret_hash,
-    client_name = EXCLUDED.client_name,
-    redirect_uri = EXCLUDED.redirect_uri,
-    redirect_uris = EXCLUDED.redirect_uris,
-    post_logout_redirect_uris = EXCLUDED.post_logout_redirect_uris,
-    front_channel_logout_uri = EXCLUDED.front_channel_logout_uri,
-    back_channel_logout_uri = EXCLUDED.back_channel_logout_uri,
-    grant_types = EXCLUDED.grant_types,
-    response_types = EXCLUDED.response_types,
-    idp_signing_algorithm = EXCLUDED.idp_signing_algorithm,
-    access_token_lifetime = EXCLUDED.access_token_lifetime,
-    refresh_token_lifetime = EXCLUDED.refresh_token_lifetime,
-    id_token_lifetime = EXCLUDED.id_token_lifetime,
-    allowed_scopes = EXCLUDED.allowed_scopes,
-    default_scopes = EXCLUDED.default_scopes,
-    allowed_idps = EXCLUDED.allowed_idps,
-    default_idp = EXCLUDED.default_idp,
-    allowed_audiences = EXCLUDED.allowed_audiences,
-    client_type = EXCLUDED.client_type,
-    enforce_rtr = EXCLUDED.enforce_rtr
+RETURNING id
 `
 
-type SaveClientParams struct {
-	TenantUuid             pgtype.UUID     `json:"tenant_uuid"`
-	ID                     pgtype.UUID     `json:"id"`
-	ClientID               string          `json:"client_id"`
-	ClientSecretHash       *string         `json:"client_secret_hash"`
-	ClientName             string          `json:"client_name"`
-	RedirectUri            string          `json:"redirect_uri"`
-	RedirectUris           []string        `json:"redirect_uris"`
-	PostLogoutRedirectUris []string        `json:"post_logout_redirect_uris"`
-	FrontChannelLogoutUri  *string         `json:"front_channel_logout_uri"`
-	BackChannelLogoutUri   *string         `json:"back_channel_logout_uri"`
-	GrantTypes             []string        `json:"grant_types"`
-	ResponseTypes          []string        `json:"response_types"`
-	IdpSigningAlgorithm    string          `json:"idp_signing_algorithm"`
-	AccessTokenLifetime    pgtype.Interval `json:"access_token_lifetime"`
-	RefreshTokenLifetime   pgtype.Interval `json:"refresh_token_lifetime"`
-	IDTokenLifetime        pgtype.Interval `json:"id_token_lifetime"`
-	AllowedScopes          []string        `json:"allowed_scopes"`
-	DefaultScopes          []string        `json:"default_scopes"`
-	AllowedIdps            []string        `json:"allowed_idps"`
-	DefaultIdp             *string         `json:"default_idp"`
-	AllowedAudiences       []string        `json:"allowed_audiences"`
-	ClientType             string          `json:"client_type"`
-	EnforceRtr             bool            `json:"enforce_rtr"`
+type RegisterApplicationParams struct {
+	ID               pgtype.UUID        `json:"id"`
+	ProfileID        pgtype.UUID        `json:"profile_id"`
+	GroupID          pgtype.UUID        `json:"group_id"`
+	ApplicationName  string             `json:"application_name"`
+	ClientID         string             `json:"client_id"`
+	ClientSecretHash *string            `json:"client_secret_hash"`
+	IsDynamic        bool               `json:"is_dynamic"`
+	IsEnabled        bool               `json:"is_enabled"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
+	TenantUuid       pgtype.UUID        `json:"tenant_uuid"`
 }
 
-func (q *Queries) SaveClient(ctx context.Context, arg SaveClientParams) (pgconn.CommandTag, error) {
-	return q.db.Exec(ctx, saveClient,
-		arg.TenantUuid,
+// RegisterApplication inserts a new client registration mapping tightly bound to a multi-tenant isolation anchor.
+func (q *Queries) RegisterApplication(ctx context.Context, arg RegisterApplicationParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, registerApplication,
 		arg.ID,
+		arg.ProfileID,
+		arg.GroupID,
+		arg.ApplicationName,
 		arg.ClientID,
 		arg.ClientSecretHash,
-		arg.ClientName,
-		arg.RedirectUri,
+		arg.IsDynamic,
+		arg.IsEnabled,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+		arg.LastUsedAt,
+		arg.TenantUuid,
+	)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const updateApplication = `-- name: UpdateApplication :exec
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $6::uuid
+    LIMIT 1
+)
+UPDATE applications a
+SET
+    application_name = $1,
+    is_enabled = $2,
+    profile_id = $3::uuid,
+    group_id = $4::uuid
+FROM tenant
+WHERE a.client_id = $5
+  AND a.tenant_id = tenant.id
+`
+
+type UpdateApplicationParams struct {
+	ApplicationName string      `json:"application_name"`
+	IsEnabled       bool        `json:"is_enabled"`
+	ProfileID       pgtype.UUID `json:"profile_id"`
+	GroupID         pgtype.UUID `json:"group_id"`
+	ClientID        string      `json:"client_id"`
+	TenantUuid      pgtype.UUID `json:"tenant_uuid"`
+}
+
+// UpdateApplication modifies top-level client structural profile definitions.
+func (q *Queries) UpdateApplication(ctx context.Context, arg UpdateApplicationParams) error {
+	_, err := q.db.Exec(ctx, updateApplication,
+		arg.ApplicationName,
+		arg.IsEnabled,
+		arg.ProfileID,
+		arg.GroupID,
+		arg.ClientID,
+		arg.TenantUuid,
+	)
+	return err
+}
+
+const updateApplicationGroup = `-- name: UpdateApplicationGroup :exec
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $10::uuid
+    LIMIT 1
+)
+UPDATE application_groups g
+SET
+    group_name = $1,
+    is_enabled = $2,
+    allowed_scopes = $3,
+    default_scopes = $4,
+    allowed_audiences = $5,
+    default_idp_id = $6::uuid,
+    redirect_uris = $7,
+    post_logout_redirect_uris = $8,
+    updated_at = NOW()
+FROM tenant
+WHERE g.id = $9::uuid
+  AND g.tenant_id = tenant.id
+`
+
+type UpdateApplicationGroupParams struct {
+	GroupName              string      `json:"group_name"`
+	IsEnabled              bool        `json:"is_enabled"`
+	AllowedScopes          []string    `json:"allowed_scopes"`
+	DefaultScopes          []string    `json:"default_scopes"`
+	AllowedAudiences       []string    `json:"allowed_audiences"`
+	DefaultIdpID           pgtype.UUID `json:"default_idp_id"`
+	RedirectUris           []string    `json:"redirect_uris"`
+	PostLogoutRedirectUris []string    `json:"post_logout_redirect_uris"`
+	ID                     pgtype.UUID `json:"id"`
+	TenantUuid             pgtype.UUID `json:"tenant_uuid"`
+}
+
+// UpdateApplicationGroup modifies top-level group boundaries and whitelist configurations.
+func (q *Queries) UpdateApplicationGroup(ctx context.Context, arg UpdateApplicationGroupParams) error {
+	_, err := q.db.Exec(ctx, updateApplicationGroup,
+		arg.GroupName,
+		arg.IsEnabled,
+		arg.AllowedScopes,
+		arg.DefaultScopes,
+		arg.AllowedAudiences,
+		arg.DefaultIdpID,
 		arg.RedirectUris,
 		arg.PostLogoutRedirectUris,
-		arg.FrontChannelLogoutUri,
-		arg.BackChannelLogoutUri,
+		arg.ID,
+		arg.TenantUuid,
+	)
+	return err
+}
+
+const updateApplicationProfile = `-- name: UpdateApplicationProfile :exec
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $12::uuid
+    LIMIT 1
+)
+UPDATE application_profiles p
+SET
+    profile_name = $1,
+    is_enabled = $2,
+    token_endpoint_auth_method = $3,
+    grant_types = $4,
+    response_types = $5,
+    access_token_lifetime = $6::integer,
+    refresh_token_lifetime = $7::integer,
+    id_token_lifetime = $8::integer,
+    enforce_rtr = $9,
+    signing_algorithm = $10,
+    updated_at = NOW()
+FROM tenant
+WHERE p.id = $11::uuid
+  AND p.tenant_id = tenant.id
+`
+
+type UpdateApplicationProfileParams struct {
+	ProfileName             string      `json:"profile_name"`
+	IsEnabled               bool        `json:"is_enabled"`
+	TokenEndpointAuthMethod string      `json:"token_endpoint_auth_method"`
+	GrantTypes              []string    `json:"grant_types"`
+	ResponseTypes           []string    `json:"response_types"`
+	AccessTokenLifetime     int32       `json:"access_token_lifetime"`
+	RefreshTokenLifetime    int32       `json:"refresh_token_lifetime"`
+	IDTokenLifetime         int32       `json:"id_token_lifetime"`
+	EnforceRtr              bool        `json:"enforce_rtr"`
+	SigningAlgorithm        string      `json:"signing_algorithm"`
+	ID                      pgtype.UUID `json:"id"`
+	TenantUuid              pgtype.UUID `json:"tenant_uuid"`
+}
+
+// UpdateApplicationProfile modifies token lifecycle parameters and cryptographic signature constraints.
+func (q *Queries) UpdateApplicationProfile(ctx context.Context, arg UpdateApplicationProfileParams) error {
+	_, err := q.db.Exec(ctx, updateApplicationProfile,
+		arg.ProfileName,
+		arg.IsEnabled,
+		arg.TokenEndpointAuthMethod,
 		arg.GrantTypes,
 		arg.ResponseTypes,
-		arg.IdpSigningAlgorithm,
 		arg.AccessTokenLifetime,
 		arg.RefreshTokenLifetime,
 		arg.IDTokenLifetime,
-		arg.AllowedScopes,
-		arg.DefaultScopes,
-		arg.AllowedIdps,
-		arg.DefaultIdp,
-		arg.AllowedAudiences,
-		arg.ClientType,
 		arg.EnforceRtr,
+		arg.SigningAlgorithm,
+		arg.ID,
+		arg.TenantUuid,
 	)
+	return err
 }

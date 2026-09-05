@@ -16,8 +16,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
+	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -38,19 +41,25 @@ type Storage interface {
 }
 
 type JWTSigner struct {
-	mu        sync.RWMutex
-	keyrings  map[string]*tenantKeyring
-	storage   Storage
-	clock     port.Clock
-	masterKey []byte
+	mu          sync.RWMutex
+	keyrings    map[string]*tenantKeyring
+	storage     Storage
+	clock       port.Clock
+	httpClient  *http.Client
+	masterKey   []byte
+	adminDomain string
+	appEnv      string
 }
 
 // Ensure JWTSigner strictly satisfies port.Crypto at compile time.
 var _ port.Crypto = (*JWTSigner)(nil)
 
-func NewJWTSigner(storage Storage, cl port.Clock, masterKey string) (*JWTSigner, error) {
+func NewJWTSigner(storage Storage, cl port.Clock, httpClient *http.Client, masterKey string, adminDomain string, appEnv string) (*JWTSigner, error) {
 	if masterKey == "" {
 		return nil, errors.New("SPREZZ_MASTER_KEY must not be empty")
+	}
+	if adminDomain == "" {
+		return nil, errors.New("crypto_init: admin_tenant_domain must be explicitly provided")
 	}
 
 	keyBytes := []byte(masterKey)
@@ -96,10 +105,13 @@ func NewJWTSigner(storage Storage, cl port.Clock, masterKey string) (*JWTSigner,
 	}
 
 	return &JWTSigner{
-		keyrings:  make(map[string]*tenantKeyring),
-		storage:   storage,
-		clock:     cl,
-		masterKey: decodedBytes,
+		keyrings:    make(map[string]*tenantKeyring),
+		storage:     storage,
+		clock:       cl,
+		httpClient:  httpClient,
+		masterKey:   decodedBytes,
+		adminDomain: adminDomain,
+		appEnv:      appEnv,
 	}, nil
 }
 
@@ -167,16 +179,24 @@ func (s *JWTSigner) decryptDEK(encDEK, nonce []byte) ([]byte, error) {
 	return plainDEK, nil
 }
 
+// Internal mapper
+func (s *JWTSigner) mapAlgorithm(alg model.SignatureAlgorithm) jwt.SigningMethod {
+	if alg == model.AlgES256 {
+		return jwt.SigningMethodES256
+	}
+	return jwt.SigningMethodRS256
+}
+
+// SignAccessToken maps the pure model.TokenClaims struct directly to the jwt signing chain.
 func (s *JWTSigner) SignAccessToken(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
 	if alg != model.AlgRS256 && alg != model.AlgES256 {
 		return "", fmt.Errorf("unsupported signing algorithm %s", alg)
 	}
 
-	issuer := claims.Issuer
+	issuer := strings.TrimSuffix(claims.Issuer, "/")
 	if issuer == "" {
 		return "", errors.New("cannot sign access token: issuer claim is mandatory and cannot be empty")
 	}
-	issuer = strings.TrimSuffix(issuer, "/")
 	tenant := strings.TrimPrefix(issuer, model.SchemeHttps+"://")
 	tenant = strings.TrimPrefix(tenant, model.SchemeHttp+"://")
 
@@ -190,54 +210,24 @@ func (s *JWTSigner) SignAccessToken(ctx context.Context, claims model.TokenClaim
 	privateKey := keyring.Keys[kid]
 	s.mu.RUnlock()
 
-	audClaim := any(claims.ClientID)
-	if len(claims.Audiences) > 0 {
-		audClaim = claims.Audiences
-	}
-
-	mapClaims := jwt.MapClaims{
-		"iss":       issuer,
-		"sub":       claims.Subject,
-		"aud":       audClaim,
-		"jti":       claims.TokenID,
-		"tid":       claims.TenantID,
-		"client_id": claims.ClientID,
-		"scope":     strings.Join(claims.Scopes, " "),
-		"iat":       int64(claims.IssuedAt.Unix()),
-		"exp":       int64(claims.ExpiresAt.Unix()),
-		"nbf":       int64(claims.IssuedAt.Unix()),
-	}
-	if claims.DPoPHash != "" {
-		mapClaims["cnf"] = map[string]any{
-			"jkt": claims.DPoPHash,
-		}
-	}
-	if claims.ACR != "" {
-		mapClaims["acr"] = claims.ACR
-	}
-
-	var method jwt.SigningMethod
-	if alg == model.AlgES256 {
-		method = jwt.SigningMethodES256
-	} else {
-		method = jwt.SigningMethodRS256
-	}
-
-	token := jwt.NewWithClaims(method, mapClaims)
+	// The library natively marshals your structured type fields using Go's JSON metadata tags
+	// Natively leverages your existing internal s.mapAlgorithm(alg) helper method safely
+	token := jwt.NewWithClaims(s.mapAlgorithm(alg), claims)
 	token.Header["kid"] = kid
-	token.Header["typ"] = "JWT"
+	token.Header["typ"] = "at+jwt" // RFC 9068 spec-compliant explicit access token indicator profile
 
 	return token.SignedString(privateKey)
 }
 
-func (s *JWTSigner) SignIDToken(ctx context.Context, claims model.OIDCTokenClaims, alg model.SignatureAlgorithm) (string, error) {
+// SignIDToken signs OIDC identity statements while enforcing scope-dependent user privacy gates.
+func (s *JWTSigner) SignIDToken(ctx context.Context, claims model.OIDCTokenClaims, grantedScopes []string, alg model.SignatureAlgorithm) (string, error) {
 	if alg != model.AlgRS256 && alg != model.AlgES256 {
 		return "", fmt.Errorf("unsupported signing algorithm %s", alg)
 	}
 
 	issuer := claims.Issuer
 	if issuer == "" {
-		return "", errors.New("cannot sign access token: issuer claim is mandatory and cannot be empty")
+		return "", errors.New("cannot sign id token: issuer claim is mandatory and cannot be empty")
 	}
 	issuer = strings.TrimSuffix(issuer, "/")
 	tenant := strings.TrimPrefix(issuer, model.SchemeHttps+"://")
@@ -253,39 +243,18 @@ func (s *JWTSigner) SignIDToken(ctx context.Context, claims model.OIDCTokenClaim
 	privateKey := keyring.Keys[kid]
 	s.mu.RUnlock()
 
-	mapClaims := jwt.MapClaims{
-		"iss":       issuer,
-		"sub":       claims.Subject,
-		"aud":       claims.Audience,
-		"jti":       claims.TokenID,
-		"tid":       claims.TenantID,
-		"auth_time": int64(claims.AuthTime.Unix()),
-		"nonce":     claims.Nonce,
-		"iat":       int64(claims.IssuedAt.Unix()),
-		"exp":       int64(claims.ExpiresAt.Unix()),
-		"nbf":       int64(claims.IssuedAt.Unix()),
-	}
-	if claims.SessionID != "" {
-		mapClaims["sid"] = claims.SessionID
-	}
-	if claims.ACR != "" {
-		mapClaims["acr"] = claims.ACR
-	}
+	// Execute user data minimization scope filtering natively inside the infrastructure layer
+	filteredClaims := claims.FilterByScope(grantedScopes)
 
-	var method jwt.SigningMethod
-	if alg == model.AlgES256 {
-		method = jwt.SigningMethodES256
-	} else {
-		method = jwt.SigningMethodRS256
-	}
-
-	token := jwt.NewWithClaims(method, mapClaims)
+	// Passes the structured domain object directly into the library claims pipeline
+	token := jwt.NewWithClaims(s.mapAlgorithm(alg), filteredClaims)
 	token.Header["kid"] = kid
 	token.Header["typ"] = "JWT"
 
 	return token.SignedString(privateKey)
 }
 
+// SignLogoutToken signs back-channel session revocation tokens according to OIDC Back-Channel Logout profiles.
 func (s *JWTSigner) SignLogoutToken(ctx context.Context, claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (string, error) {
 	if alg != model.AlgRS256 && alg != model.AlgES256 {
 		return "", fmt.Errorf("unsupported signing algorithm %s", alg)
@@ -293,7 +262,7 @@ func (s *JWTSigner) SignLogoutToken(ctx context.Context, claims model.LogoutToke
 
 	issuer := claims.Issuer
 	if issuer == "" {
-		return "", errors.New("cannot sign access token: issuer claim is mandatory and cannot be empty")
+		return "", errors.New("cannot sign logout token: issuer claim is mandatory and cannot be empty")
 	}
 	issuer = strings.TrimSuffix(issuer, "/")
 	tenant := strings.TrimPrefix(issuer, model.SchemeHttps+"://")
@@ -309,83 +278,295 @@ func (s *JWTSigner) SignLogoutToken(ctx context.Context, claims model.LogoutToke
 	privateKey := keyring.Keys[kid]
 	s.mu.RUnlock()
 
-	var method jwt.SigningMethod
-	if alg == model.AlgES256 {
-		method = jwt.SigningMethodES256
-	} else {
-		method = jwt.SigningMethodRS256
+	// Assemble back-channel logout payload requirements using primitive mappings natively
+	logoutMapClaims := jwt.MapClaims{
+		"iss":    issuer,
+		"sub":    claims.Subject,
+		"aud":    claims.Audience,
+		"jti":    claims.TokenID,
+		"iat":    claims.IssuedAt,
+		"events": claims.Events,
 	}
 
-	token := jwt.NewWithClaims(method, jwt.MapClaims{
-		"iss": issuer,
-		"sub": claims.Subject,
-		"aud": claims.Audience,
-		"jti": claims.TokenID,
-		"iat": int64(claims.IssuedAt.Unix()),
-		"events": map[string]any{
-			"http://schemas.openid.net/event/back-channel-logout": map[string]any{},
-		},
+	// Conditionally append session identifier if active SSO tracing is tracked
+	if claims.SessionID != "" {
+		logoutMapClaims["sid"] = claims.SessionID
+	}
+
+	token := jwt.NewWithClaims(s.mapAlgorithm(alg), logoutMapClaims)
+	token.Header["kid"] = kid
+	token.Header["typ"] = "logout+jwt" // Explicit spec-compliant profile wrapper identifier
+
+	return token.SignedString(privateKey)
+}
+
+// VerifyToken decodes signatures and transforms third-party maps into clean Go primitives
+// to satisfy your decoupled pure domain port definitions seamlessly.
+func (s *JWTSigner) VerifyToken(tokenStr string) (map[string]any, error) {
+	var mapClaims jwt.MapClaims
+	token, err := jwt.ParseWithClaims(tokenStr, &mapClaims, func(t *jwt.Token) (any, error) {
+		kid, _ := t.Header["kid"].(string)
+		if kid == "" {
+			return nil, fmt.Errorf("missing kid in token header")
+		}
+
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		for _, keyring := range s.keyrings {
+			if key, exists := keyring.Keys[kid]; exists {
+				switch k := key.(type) {
+				case *rsa.PrivateKey:
+					if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
+						return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+					}
+					return &k.PublicKey, nil
+				case *ecdsa.PrivateKey:
+					if _, ok := t.Method.(*jwt.SigningMethodECDSA); !ok {
+						return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+					}
+					return &k.PublicKey, nil
+				}
+			}
+		}
+		return nil, fmt.Errorf("key not found for kid: %s", kid)
 	})
+
+	if err != nil || !token.Valid {
+		return nil, fmt.Errorf("crypto: validation failure: %w", err)
+	}
+
+	// Implicitly maps jwt.MapClaims straight into map[string]any natively with zero overhead
+	return mapClaims, nil
+}
+
+// VerifyExternalTokenWithProvider implements federated token validation.
+// It resolves public keys via a safe, size-limited JWKS network cache, verifies the asymmetric
+// signature, and returns pure primitive maps to decouple the core service domains.
+func (s *JWTSigner) VerifyExternalTokenWithProvider(
+	ctx context.Context,
+	tokenStr string,
+	jwksURI string,
+	expectedIssuer string,
+) (map[string]any, error) {
+	// 1. Guard input boundaries against massive buffer payload optimization exploits
+	if len(tokenStr) > 8192 {
+		return nil, errors.New("crypto: incoming assertion token length exceeds safe execution threshold")
+	}
+
+	hasHTTPS := strings.HasPrefix(jwksURI, model.SchemeHttps+"://")
+	hasHTTP := strings.HasPrefix(jwksURI, model.SchemeHttp+"://")
+
+	// Structural Guard: Ensure the incoming URL string contains a readable HTTP schema prefix
+	if !hasHTTPS && !hasHTTP {
+		return nil, errors.New("crypto: dynamic verification endpoints missing valid scheme descriptors")
+	}
+
+	// Dynamic Environment Rule: Reject plain-text unencrypted http lines instantly in production/staging environments
+	if s.appEnv != "local" && !hasHTTPS {
+		return nil, errors.New("crypto: secure boundary restriction rejected target scheme; non-local provider endpoints must utilize https://")
+	}
+
+	// 2. Resolve public keys from the target endpoint via secure network pooling
+	keys, err := s.resolveRemoteJWKSWithCache(ctx, jwksURI)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: failed resolving trusted token keys: %w", err)
+	}
+
+	// 3. Configure the parser engine using a secure key extraction routine
+	var mapClaims jwt.MapClaims
+	token, err := jwt.ParseWithClaims(tokenStr, &mapClaims, func(t *jwt.Token) (any, error) {
+		kidClaim, _ := t.Header["kid"].(string)
+		if kidClaim == "" {
+			return nil, errors.New("crypto: token signature verification rejected due to missing 'kid' property")
+		}
+
+		// Find the public key matching the token's key identifier
+		var targetKey *JWKSEntry
+		for _, k := range keys {
+			if k.Kid == kidClaim {
+				targetKey = &k
+				break
+			}
+		}
+		if targetKey == nil {
+			return nil, fmt.Errorf("crypto: active trust anchor catalog does not contain key %s", kidClaim)
+		}
+
+		// Build public validation matrices based on the target key type
+		switch targetKey.Kty {
+		case "RSA":
+			if !strings.HasPrefix(t.Method.Alg(), "RS") {
+				return nil, fmt.Errorf("crypto: signing algorithm family mismatch %s", t.Method.Alg())
+			}
+
+			rawN, err := base64.RawURLEncoding.DecodeString(targetKey.N)
+			if err != nil {
+				return nil, errors.New("crypto: corrupted key public modulus matrix layout")
+			}
+			rawE, err := base64.RawURLEncoding.DecodeString(targetKey.E)
+			if err != nil {
+				return nil, errors.New("crypto: corrupted key public exponent entry")
+			}
+
+			var bigE int
+			for _, b := range rawE {
+				bigE = (bigE << 8) | int(b)
+			}
+
+			return &rsa.PublicKey{
+				N: new(big.Int).SetBytes(rawN),
+				E: bigE,
+			}, nil
+
+		case "EC":
+			if !strings.HasPrefix(t.Method.Alg(), "ES") {
+				return nil, fmt.Errorf("crypto: signing algorithm family mismatch %s", t.Method.Alg())
+			}
+
+			rawX, err := base64.RawURLEncoding.DecodeString(targetKey.X)
+			if err != nil {
+				return nil, errors.New("crypto: corrupted elliptic curve public x coordinate")
+			}
+			rawY, err := base64.RawURLEncoding.DecodeString(targetKey.Y)
+			if err != nil {
+				return nil, errors.New("crypto: corrupted elliptic curve public y coordinate")
+			}
+
+			var curve elliptic.Curve
+			switch targetKey.Crv {
+			case "P-256":
+				curve = elliptic.P256()
+			default:
+				return nil, fmt.Errorf("crypto: unsupported elliptic curve profile %s", targetKey.Crv)
+			}
+
+			publicKeyBytes := make([]byte, 1+32+32)
+			publicKeyBytes[0] = 0x04
+			copy(publicKeyBytes[1+32-len(rawX):1+32], rawX)
+			copy(publicKeyBytes[1+32+32-len(rawY):1+32+32], rawY)
+
+			pubKey, err := ecdsa.ParseUncompressedPublicKey(curve, publicKeyBytes)
+			if err != nil {
+				return nil, fmt.Errorf("crypto: invalid elliptic curve public key coordinates: %w", err)
+			}
+			return pubKey, nil
+
+		default:
+			return nil, fmt.Errorf("crypto: unsupported key architecture family format %s", targetKey.Kty)
+		}
+	})
+
+	if err != nil || !token.Valid {
+		return nil, fmt.Errorf("crypto: asymmetric verification failed: %w", err)
+	}
+
+	tokenIssuer, _ := mapClaims["iss"].(string)
+	if tokenIssuer != expectedIssuer {
+		return nil, errors.New("crypto: foreign token contains mismatched issuer parameters")
+	}
+
+	return mapClaims, nil
+}
+
+// SignSoftwareStatement cryptographically signs a structured platform statement envelope
+// using the active ES256 key of the specified master administrative tenant domain [1.14].
+func (s *JWTSigner) SignSoftwareStatement(
+	ctx context.Context,
+	issuer string,
+	audience string,
+	claims model.SoftwareStatementClaims,
+	issuedAt time.Time,
+	expiresAt time.Time,
+) (string, error) {
+
+	// 1. Resolve the admin tenant metadata model straight from storage using the configured domain
+	tenantModel, err := s.storage.ResolveTenantByDomain(ctx, issuer)
+	if err != nil {
+		return "", fmt.Errorf("crypto: sign software statement failed: %w", err)
+	}
+
+	// 2. Fetch or bootstrap the administrative tenant's keyring matrix
+	baseURI := tenantModel.GetBaseURI()
+	keyring, err := s.getOrCreateKeyring(ctx, issuer, baseURI)
+	if err != nil {
+		return "", err
+	}
+
+	s.mu.RLock()
+	// Dynamic Registration Software Statements must always be signed using the ES256 algorithm
+	kid := keyring.ActiveKids[model.AlgES256]
+	privateKey := keyring.Keys[kid]
+	s.mu.RUnlock()
+
+	// 3. Hydrate standard OIDC temporal metadata parameters natively into the domain claims frame
+	claims.Issuer = issuer
+	claims.Audience = []string{audience}
+	claims.IssuedAt = jwt.NewNumericDate(issuedAt)
+	claims.ExpiresAt = jwt.NewNumericDate(expiresAt)
+
+	// 4. Flatten the structural domain object into library-compliant map layers natively
+	mapClaims := claims.ToMapClaims()
+
+	// 5. Build and sign the finalized cryptographic token envelope
+	token := jwt.NewWithClaims(s.mapAlgorithm(model.AlgES256), mapClaims)
 	token.Header["kid"] = kid
 	token.Header["typ"] = "JWT"
 
 	return token.SignedString(privateKey)
 }
 
-func (s *JWTSigner) lookupKeyByKid(kid string) (any, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for _, keyring := range s.keyrings {
-		if key, exists := keyring.Keys[kid]; exists {
-			return key, nil
-		}
-	}
-	return nil, fmt.Errorf("key not found for kid: %s", kid)
+// --- Supporting JWKS Structures & Network Ingestion Filters ---
+
+type JWKSEntry struct {
+	Kty string `json:"kty"`
+	Kid string `json:"kid"`
+	Use string `json:"use"`
+	Alg string `json:"alg"`
+	N   string `json:"n,omitempty"`
+	E   string `json:"e,omitempty"`
+	X   string `json:"x,omitempty"`
+	Y   string `json:"y,omitempty"`
+	Crv string `json:"crv,omitempty"`
 }
 
-func validateSigningMethod(t *jwt.Token, key any) (any, error) {
-	switch k := key.(type) {
-	case *rsa.PrivateKey:
-		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
-		return &k.PublicKey, nil
-	case *ecdsa.PrivateKey:
-		if _, ok := t.Method.(*jwt.SigningMethodECDSA); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
-		return &k.PublicKey, nil
-	default:
-		return nil, fmt.Errorf("unsupported key type")
-	}
+type JWKSCluster struct {
+	Keys []JWKSEntry `json:"keys"`
 }
 
-func (s *JWTSigner) getPublicKeyAndValidateMethod(t *jwt.Token) (any, error) {
-	kid, _ := t.Header["kid"].(string)
-	if kid == "" {
-		return nil, fmt.Errorf("missing kid in token header")
-	}
-
-	key, err := s.lookupKeyByKid(kid)
+// resolveRemoteJWKSWithCache fetches remote public keys while enforcing a strict 1MB response limit
+// and routes requests through the secure, SSRF-defended HTTP client pool [5.3].
+func (s *JWTSigner) resolveRemoteJWKSWithCache(ctx context.Context, jwksURI string) ([]JWKSEntry, error) {
+	// 1. Build the network query execution pass within the current request thread context
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jwksURI, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return validateSigningMethod(t, key)
-}
-
-func (s *JWTSigner) VerifyToken(tokenStr string) (map[string]any, error) {
-	token, err := jwt.Parse(tokenStr, s.getPublicKeyAndValidateMethod)
+	// 2. DEFENSIVE GUARD: Execute the request using the injected, secure HTTP client engine.
+	// This engine runs safe DialContext checks to completely block DNS rebinding and loopback hops.
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("crypto: secure back-channel connection tracking failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("crypto: remote key directory returned an invalid status code: %d", resp.StatusCode)
 	}
 
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || !token.Valid {
-		return nil, fmt.Errorf("invalid token claims")
+	// 3. Section 5.3 Compliance: Limit stream reader to exactly 1 Megabyte to prevent memory exhaustion [5.3]
+	safeLimitReader := io.LimitReader(resp.Body, 1024*1024)
+	payloadBytes, err := io.ReadAll(safeLimitReader)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: failed reading safe remote byte stream payload: %w", err)
 	}
 
-	return claims, nil
+	var cluster JWKSCluster
+	if err := json.Unmarshal(payloadBytes, &cluster); err != nil {
+		return nil, fmt.Errorf("crypto: failed parsing verified public targets structures: %w", err)
+	}
+
+	return cluster.Keys, nil
 }
 
 func (s *JWTSigner) JWKSForTenant(ctx context.Context, domain string, scheme string) ([]map[string]any, error) {
@@ -591,6 +772,7 @@ func (s *JWTSigner) buildECJWK(kid string, privateKey *ecdsa.PrivateKey) map[str
 }
 
 func (s *JWTSigner) getOrCreateKeyring(ctx context.Context, tenant string, issuer string) (*tenantKeyring, error) {
+	// 1. Read Lock: Fast check if this node already has the keys warm in memory
 	s.mu.RLock()
 	keyring, ok := s.keyrings[tenant]
 	s.mu.RUnlock()
@@ -598,26 +780,31 @@ func (s *JWTSigner) getOrCreateKeyring(ctx context.Context, tenant string, issue
 		return keyring, nil
 	}
 
+	// 2. Unlocked I/O: Resolve tenant details from the shared relational cluster store
 	tenantModel, err := s.storage.ResolveTenantByDomain(ctx, tenant)
 	if err != nil {
-		return nil, fmt.Errorf("resolve tenant by domain: %w", err)
+		return nil, fmt.Errorf("crypto: resolve tenant domain failed: %w", err)
 	}
 
+	// Resolve or seed the shared data encryption key (DEK) inside the DB cluster
 	rawDEK, err := s.resolveOrCreateDEK(ctx, tenantModel)
 	if err != nil {
 		return nil, err
 	}
 
+	// 3. Cluster Sync Check: Query the shared DB to see if another cluster node already made keys
 	activeKeys, err := s.storage.GetActiveSigningKeys(ctx, tenantModel.ID)
 	if err != nil {
-		return nil, fmt.Errorf("get active signing keys: %w", err)
+		return nil, fmt.Errorf("crypto: active signing keys fetch failed: %w", err)
 	}
 
-	if len(activeKeys) == 0 {
-		return s.bootstrapKeyring(ctx, tenant, issuer, tenantModel, rawDEK)
+	// CLUSTER GUARD: If keys exist in DB, load them natively instead of generating new ones on the fly!
+	if len(activeKeys) > 0 {
+		return s.loadKeyringFromDB(ctx, tenant, tenantModel, rawDEK, activeKeys)
 	}
 
-	return s.loadKeyringFromDB(ctx, tenant, tenantModel, rawDEK, activeKeys)
+	// 4. Fallback Bootstrap: Only execute generation if the DB cluster is completely fresh (Zero keys exist)
+	return s.bootstrapKeyring(ctx, tenant, issuer, tenantModel, rawDEK)
 }
 
 func (s *JWTSigner) resolveOrCreateDEK(ctx context.Context, tenantModel *model.Tenant) ([]byte, error) {
@@ -822,4 +1009,48 @@ func (s *JWTSigner) CompareCredential(hashedSecret, plainSecret string) (bool, e
 		return false, err
 	}
 	return match, nil
+}
+
+// GetMasterRegistrationPublicKey dynamically resolves the active verification public key
+// straight out of your bootstrapped admin tenant's in-memory/database keyring graph.
+func (s *JWTSigner) GetMasterRegistrationPublicKey() (any, error) {
+	ctx := context.Background()
+
+	// 1. Resolve the admin tenant metadata model straight from storage using the configured domain
+	adminTenant, err := s.storage.ResolveTenantByDomain(ctx, s.adminDomain)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: failed to resolve admin tenant metadata by domain '%s': %w", s.adminDomain, err)
+	}
+
+	// 2. Cleanly construct the admin tenant's canonical issuer identity URI
+	adminIssuer := adminTenant.GetBaseURI()
+
+	// 3. Fetch or bootstrap the admin tenant's keyring (auto-decrypting it via the masterKey KEK pattern)
+	keyring, err := s.getOrCreateKeyring(context.Background(), s.adminDomain, adminIssuer)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: failed to resolve admin tenant master keyring: %w", err)
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// 4. Extract the active asymmetric ECDSA (ES256) Key ID from the admin tenant's keyring matrix
+	activeKid, exists := keyring.ActiveKids[model.AlgES256]
+	if !exists {
+		return nil, fmt.Errorf("crypto: admin tenant lacks an active ES256 master capability key")
+	}
+
+	privateKey, exists := keyring.Keys[activeKid]
+	if !exists {
+		return nil, fmt.Errorf("crypto: admin private key instance missing from operational memory context caches")
+	}
+
+	// 5. Extract and assert type conformity onto the asymmetric public key component
+	ecdsaPrivKey, ok := privateKey.(*ecdsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("crypto: master admin key type mismatch - expected asymmetric *ecdsa.PrivateKey")
+	}
+
+	// 6. Natively expose the public component structure for the golang-jwt validator engine
+	return &ecdsaPrivKey.PublicKey, nil
 }

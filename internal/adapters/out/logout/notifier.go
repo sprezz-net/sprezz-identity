@@ -15,9 +15,9 @@ type LogoutHttpClient struct {
 	client *http.Client
 }
 
-func NewLogoutHttpClient() *LogoutHttpClient {
+func NewLogoutHttpClient(appEnv string) *LogoutHttpClient {
 	return &LogoutHttpClient{
-		client: httpclient.New(),
+		client: httpclient.New(appEnv),
 	}
 }
 
@@ -29,7 +29,7 @@ func (n *LogoutHttpClient) SendBackChannelLogout(ctx context.Context, logoutURI 
 	if err != nil {
 		return fmt.Errorf("create back-channel logout request: %w", err)
 	}
-	req.Header.Set("Content-Type", model.ContentTypeFormUrlEncoded)
+	req.Header.Set(model.HeaderContentType, model.ContentTypeFormUrlEncoded)
 
 	resp, err := n.client.Do(req)
 	if err != nil {

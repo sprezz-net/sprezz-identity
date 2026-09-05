@@ -2,44 +2,52 @@
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $1
+    WHERE tenant_uuid = @tenant_uuid::uuid
 )
 INSERT INTO outbound_handshake_sessions (
-    id, tenant_id, identity_provider_id, client_id, code_verifier, expires_at, access_token, target_uri
+    id,
+    tenant_id,
+    partition_id,
+    identity_provider_id,
+    client_id,
+    code_verifier,
+    created_at,
+    expires_at,
+    target_uri,
+    callback_uri
 )
 SELECT
-    $2,
+    @state_token,
     tenant.id,
-    $3, $4, $5, $6, $7, $8
+    @partition_id::bigint,
+    @identity_provider_id::uuid,
+    @client_id,
+    @code_verifier,
+    @created_at::timestamptz,
+    @expires_at::timestamptz,
+    @target_uri::text,
+    @callback_uri::text
 FROM tenant;
 
--- name: GetOutboundHandshake :one
+-- name: ConsumeOutboundHandshake :one
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $1
+    WHERE tenant_uuid = @tenant_uuid::uuid
 )
-SELECT
-    ohs.id, -- Fixed: Qualify column target to eliminate selection ambiguity
+DELETE FROM outbound_handshake_sessions ohs
+WHERE ohs.id = @state_token
+  AND ohs.tenant_id = (SELECT id FROM tenant)
+RETURNING
+    ohs.id,
+    ohs.partition_id,
     ohs.identity_provider_id,
     ohs.client_id,
     ohs.code_verifier,
+    ohs.created_at,
     ohs.expires_at,
-    ohs.access_token,
-    ohs.target_uri
-FROM outbound_handshake_sessions ohs
-WHERE ohs.id = $2
-  AND ohs.tenant_id = (SELECT id FROM tenant);
-
--- name: DeleteOutboundHandshake :exec
-WITH tenant AS (
-    SELECT id
-    FROM tenants
-    WHERE tenant_uuid = $1
-)
-DELETE FROM outbound_handshake_sessions
-WHERE outbound_handshake_sessions.id = $2
-  AND outbound_handshake_sessions.tenant_id = (SELECT id FROM tenant);
+    ohs.target_uri,
+    ohs.callback_uri;
 
 -- name: PruneExpiredOutboundHandshakes :exec
 DELETE FROM outbound_handshake_sessions

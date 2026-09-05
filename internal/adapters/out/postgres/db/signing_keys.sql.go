@@ -12,15 +12,21 @@ import (
 )
 
 const getActiveSigningKey = `-- name: GetActiveSigningKey :one
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $1::uuid
+    LIMIT 1
+)
 SELECT
-    id AS kid,
-    algorithm,
-    encrypted_private_key,
-    public_jwk_json,
-    nonce
-FROM tenant_signing_keys
-WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1)
-  AND is_active_signing = TRUE
+    tsk.id AS kid,
+    tsk.algorithm,
+    tsk.encrypted_private_key,
+    tsk.public_jwk_json,
+    tsk.nonce
+FROM tenant_signing_keys tsk
+INNER JOIN tenant t ON t.id = tsk.tenant_id
+WHERE tsk.is_active_signing = TRUE
 LIMIT 1
 `
 
@@ -46,15 +52,75 @@ func (q *Queries) GetActiveSigningKey(ctx context.Context, tenantUuid pgtype.UUI
 	return i, err
 }
 
-const getActiveVerificationKeys = `-- name: GetActiveVerificationKeys :many
+const getActiveSigningKeys = `-- name: GetActiveSigningKeys :many
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $1::uuid
+    LIMIT 1
+)
 SELECT
-    id AS kid,
-    algorithm,
-    public_jwk_json
-FROM tenant_signing_keys
-WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1)
-  AND is_active_verification = TRUE
-ORDER BY id DESC
+    tsk.id AS kid,
+    tsk.algorithm,
+    tsk.encrypted_private_key,
+    tsk.public_jwk_json,
+    tsk.nonce
+FROM tenant_signing_keys tsk
+INNER JOIN tenant t ON t.id = tsk.tenant_id
+WHERE tsk.is_active_signing = TRUE
+`
+
+type GetActiveSigningKeysRow struct {
+	Kid                 pgtype.UUID `json:"kid"`
+	Algorithm           string      `json:"algorithm"`
+	EncryptedPrivateKey []byte      `json:"encrypted_private_key"`
+	PublicJwkJson       string      `json:"public_jwk_json"`
+	Nonce               []byte      `json:"nonce"`
+}
+
+// Loads all private cryptographic keys currently required to sign stateless tokens.
+// Leverages a canonical CTE lookup to securely translate the public UUIDv4 perimeter anchor.
+func (q *Queries) GetActiveSigningKeys(ctx context.Context, tenantUuid pgtype.UUID) ([]GetActiveSigningKeysRow, error) {
+	rows, err := q.db.Query(ctx, getActiveSigningKeys, tenantUuid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetActiveSigningKeysRow{}
+	for rows.Next() {
+		var i GetActiveSigningKeysRow
+		if err := rows.Scan(
+			&i.Kid,
+			&i.Algorithm,
+			&i.EncryptedPrivateKey,
+			&i.PublicJwkJson,
+			&i.Nonce,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getActiveVerificationKeys = `-- name: GetActiveVerificationKeys :many
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $1::uuid
+    LIMIT 1
+)
+SELECT
+    tsk.id AS kid,
+    tsk.algorithm,
+    tsk.public_jwk_json
+FROM tenant_signing_keys tsk
+INNER JOIN tenant t ON t.id = tsk.tenant_id
+WHERE tsk.is_active_verification = TRUE
+ORDER BY tsk.id DESC
 `
 
 type GetActiveVerificationKeysRow struct {
@@ -85,7 +151,12 @@ func (q *Queries) GetActiveVerificationKeys(ctx context.Context, tenantUuid pgty
 }
 
 const insertSigningKey = `-- name: InsertSigningKey :one
-
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $8::uuid
+    LIMIT 1
+)
 INSERT INTO tenant_signing_keys (
     tenant_id,
     kid,
@@ -95,30 +166,34 @@ INSERT INTO tenant_signing_keys (
     nonce,
     is_active_signing,
     is_active_verification
-) VALUES (
-    (SELECT id FROM tenants WHERE tenant_uuid = $1),
-    $2, -- Temporary placeholder for kid string matching, fallback to ID if required
-    $3, $4, $5, $6, $7, $8
 )
+SELECT
+    t.id,
+    $1::uuid,
+    $2::varchar,
+    $3::bytea,
+    $4::varchar,
+    $5::bytea,
+    $6::boolean,
+    $7::boolean
+FROM tenant t
 RETURNING id
 `
 
 type InsertSigningKeyParams struct {
-	TenantUuid           pgtype.UUID `json:"tenant_uuid"`
-	Kid                  string      `json:"kid"`
+	Kid                  pgtype.UUID `json:"kid"`
 	Algorithm            string      `json:"algorithm"`
 	EncryptedPrivateKey  []byte      `json:"encrypted_private_key"`
 	PublicJwkJson        string      `json:"public_jwk_json"`
 	Nonce                []byte      `json:"nonce"`
 	IsActiveSigning      bool        `json:"is_active_signing"`
 	IsActiveVerification bool        `json:"is_active_verification"`
+	TenantUuid           pgtype.UUID `json:"tenant_uuid"`
 }
 
-// Implicitly sorts by creation time due to native UUIDv7
 // Inserts a new keypair generated at storage level by native Postgres 18 uuidv7().
 func (q *Queries) InsertSigningKey(ctx context.Context, arg InsertSigningKeyParams) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, insertSigningKey,
-		arg.TenantUuid,
 		arg.Kid,
 		arg.Algorithm,
 		arg.EncryptedPrivateKey,
@@ -126,6 +201,7 @@ func (q *Queries) InsertSigningKey(ctx context.Context, arg InsertSigningKeyPara
 		arg.Nonce,
 		arg.IsActiveSigning,
 		arg.IsActiveVerification,
+		arg.TenantUuid,
 	)
 	var id pgtype.UUID
 	err := row.Scan(&id)
@@ -133,11 +209,18 @@ func (q *Queries) InsertSigningKey(ctx context.Context, arg InsertSigningKeyPara
 }
 
 const rotateSigningKeysTransaction = `-- name: RotateSigningKeysTransaction :exec
-UPDATE tenant_signing_keys
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $1::uuid
+    LIMIT 1
+)
+UPDATE tenant_signing_keys tsk
 SET
     is_active_signing = FALSE
-WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1)
-  AND is_active_signing = TRUE
+FROM tenant t
+WHERE tsk.tenant_id = t.id
+  AND tsk.is_active_signing = TRUE
 `
 
 // Demotes the current active signing key to verification-only.

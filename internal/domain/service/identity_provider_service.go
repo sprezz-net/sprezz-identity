@@ -19,47 +19,24 @@ import (
 )
 
 type IdentityProviderService struct {
-	storage port.Storage
-	clock   port.Clock
+	storage      port.Storage
+	adminStorage port.AdminStorage
+	clock        port.Clock
 }
 
-func NewIdentityProviderService(storage port.Storage, cl port.Clock) *IdentityProviderService {
-	return &IdentityProviderService{storage: storage, clock: cl}
-}
-
-func (s *IdentityProviderService) getOrCreateIdentity(ctx context.Context, userID uuid.UUID, providerID uuid.UUID, now time.Time) (*model.UserIdentity, error) {
-	identity, err := s.storage.GetIdentityByProfileAndProvider(ctx, userID, providerID)
-	if err != nil {
-		if errors.Is(err, port.ErrIdentityNotFound) {
-			return &model.UserIdentity{
-				ID:                 uuid.New(),
-				UserProfileID:      userID,
-				IdentityProviderID: providerID,
-				ExternalIdentityID: userID.String(),
-				CoupledAt:          now,
-			}, nil
-		}
-		return nil, err
+func NewIdentityProviderService(storage port.Storage, adminStorage port.AdminStorage, cl port.Clock) *IdentityProviderService {
+	return &IdentityProviderService{
+		storage:      storage,
+		adminStorage: adminStorage,
+		clock:        cl,
 	}
-	return identity, nil
-}
-
-func (s *IdentityProviderService) checkPasswordCredential(ctx context.Context, userID uuid.UUID, providerID uuid.UUID, password string) (bool, error) {
-	passwordRecord, err := s.storage.GetPasswordCredential(ctx, userID, providerID)
-	if err != nil {
-		if errors.Is(err, port.ErrPasswordCredentialNotFound) {
-			return false, nil
-		}
-		return false, err
-	}
-	return verifyArgon2idPassword(password, passwordRecord.Argon2Hash), nil
 }
 
 func (s *IdentityProviderService) resolvePartitionID(ctx context.Context, tenantID uuid.UUID, partitionID int64) int64 {
 	if partitionID != 0 {
 		return partitionID
 	}
-	tenant, err := s.storage.ResolveTenantByID(ctx, tenantID)
+	tenant, err := s.storage.ResolveTenantByUUID(ctx, tenantID)
 	if err == nil && tenant.DefaultPartition != nil {
 		return *tenant.DefaultPartition
 	}
@@ -78,14 +55,14 @@ func (s *IdentityProviderService) findUsernamePasswordProvider(providers []model
 	return nil
 }
 
-func (s *IdentityProviderService) recordSuccessfulLogin(ctx context.Context, profileID uuid.UUID, providerID uuid.UUID, now time.Time) error {
+func (s *IdentityProviderService) recordSuccessfulLogin(ctx context.Context, tenantID uuid.UUID, partitionID int64, profileID uuid.UUID, providerID uuid.UUID, now time.Time) error {
 	identity, err := s.storage.GetIdentityByProfileAndProvider(ctx, profileID, providerID)
 	if err != nil {
 		return fmt.Errorf("lookup identity record: %w", err)
 	}
-	identity.LastLoginAt = now
+	identity.LastLoginAt = &now
 	identity.LoginCount++
-	if err := s.storage.UpsertIdentity(ctx, *identity); err != nil {
+	if err := s.storage.UpsertUserIdentity(ctx, tenantID, partitionID, *identity); err != nil {
 		return fmt.Errorf("upsert identity record: %w", err)
 	}
 	return nil
@@ -120,7 +97,7 @@ func (s *IdentityProviderService) AuthenticateUsernamePassword(ctx context.Conte
 	}
 
 	now := s.clock.Now()
-	if err := s.recordSuccessfulLogin(ctx, profile.ID, provider.ID, now); err != nil {
+	if err := s.recordSuccessfulLogin(ctx, tenantID, resolvedPartitionID, profile.ID, provider.ID, now); err != nil {
 		return nil, err
 	}
 
@@ -154,37 +131,16 @@ func (s *IdentityProviderService) resolveUserPartitionProvider(ctx context.Conte
 	return nil, errors.New("username-password provider not found for user partition")
 }
 
-func (s *IdentityProviderService) checkTemporalBlock(identity *model.UserIdentity, provider *model.IdentityProvider, now time.Time) bool {
-	if !identity.Blocked {
-		return false
-	}
-	blockedDuration := time.Duration(provider.Config.PasswordBlockedTime) * time.Second
-	if now.Sub(identity.LastVerificationAttemptAt) <= blockedDuration {
-		identity.LastVerificationAttemptAt = now
-		_ = s.storage.UpsertIdentity(context.Background(), *identity)
-		return true
-	}
-	return false
-}
-
-func (s *IdentityProviderService) updateFailedAttempts(identity *model.UserIdentity, provider *model.IdentityProvider, correct bool) {
-	if correct {
-		identity.Blocked = false
-		identity.FailedVerificationCount = 0
-		return
-	}
-	if !identity.Blocked {
-		identity.FailedVerificationCount++
-		if identity.FailedVerificationCount >= provider.Config.MaxFailedVerificationCount {
-			identity.Blocked = true
-		}
-	}
-}
-
 func (s *IdentityProviderService) VerifyPassword(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID, password string) (bool, error) {
-	profile, err := s.storage.GetUserProfileByID(ctx, tenantID, userID)
+	profile, err := s.storage.GetUserProfileByID(ctx, tenantID, 0, userID)
 	if err != nil {
 		return false, fmt.Errorf("get user profile: %w", err)
+	}
+
+	// Incorporate user profile level blocked override
+	allowed, loginErr := profile.IsLoginAllowed()
+	if !allowed || loginErr != nil {
+		return false, loginErr
 	}
 
 	provider, err := s.resolveUserPartitionProvider(ctx, tenantID, profile)
@@ -193,24 +149,41 @@ func (s *IdentityProviderService) VerifyPassword(ctx context.Context, tenantID u
 	}
 
 	now := s.clock.Now()
-	identity, err := s.getOrCreateIdentity(ctx, userID, provider.ID, now)
+	passwordCred, err := s.storage.GetPasswordCredentialByProfileID(ctx, tenantID, provider.PartitionID, userID, provider.ID)
 	if err != nil {
-		return false, fmt.Errorf("get or create identity: %w", err)
+		return false, fmt.Errorf("get password credential: %w", err)
 	}
 
-	if s.checkTemporalBlock(identity, provider, now) {
+	// Check if blocked
+	if passwordCred.IsBlocked(now) {
 		return false, nil
 	}
 
-	correct, err := s.checkPasswordCredential(ctx, userID, provider.ID, password)
-	if err != nil {
-		return false, fmt.Errorf("check password credential: %w", err)
+	// Option 2 (Fixed Window): reset if block has elapsed
+	if passwordCred.BlockedUntil != nil && now.After(*passwordCred.BlockedUntil) {
+		_ = s.storage.ResetPasswordCounters(ctx, tenantID, provider.PartitionID, userID, provider.ID)
+		passwordCred.FailedVerificationCount = 0
+		passwordCred.BlockedUntil = nil
 	}
 
-	identity.LastVerificationAttemptAt = now
-	s.updateFailedAttempts(identity, provider, correct)
+	correct := verifyArgon2idPassword(password, passwordCred.Argon2Hash)
 
-	_ = s.storage.UpsertIdentity(ctx, *identity)
+	// Update lockout counters on password record
+	if correct {
+		if passwordCred.FailedVerificationCount > 0 {
+			_ = s.storage.ResetPasswordCounters(ctx, tenantID, provider.PartitionID, userID, provider.ID)
+		}
+	} else {
+		nextFailedCount := passwordCred.FailedVerificationCount + 1
+		var blockedUntil *time.Time
+		if nextFailedCount >= provider.Config.MaxFailedVerificationCount {
+			cooldownDuration := time.Duration(provider.Config.PasswordBlockedTime) * time.Second
+			exp := now.Add(cooldownDuration)
+			blockedUntil = &exp
+		}
+		_ = s.storage.UpdatePasswordLockoutState(ctx, tenantID, provider.PartitionID, userID, provider.ID, nextFailedCount, &now, blockedUntil)
+	}
+
 	return correct, nil
 }
 
@@ -228,7 +201,7 @@ func (s *IdentityProviderService) ChangePassword(ctx context.Context, tenantID u
 		return errors.New("invalid username or password")
 	}
 
-	passwordRecord, err := s.storage.GetPasswordCredential(ctx, userID, provider.ID)
+	passwordRecord, err := s.storage.GetPasswordCredentialByProfileID(ctx, tenantID, provider.PartitionID, userID, provider.ID)
 	if err != nil {
 		return fmt.Errorf("lookup password credential: %w", err)
 	}
@@ -269,7 +242,7 @@ func (s *IdentityProviderService) CreateIdentityProvider(ctx context.Context, te
 	provider.ID = uuid.New()
 	provider.TenantID = tenantID
 
-	if err := s.storage.CreateIdentityProvider(ctx, tenantID, provider); err != nil {
+	if err := s.adminStorage.CreateIdentityProvider(ctx, tenantID, provider); err != nil {
 		return nil, err
 	}
 
@@ -277,7 +250,7 @@ func (s *IdentityProviderService) CreateIdentityProvider(ctx context.Context, te
 }
 
 func (s *IdentityProviderService) DeleteIdentityProvider(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) error {
-	return s.storage.DeleteIdentityProvider(ctx, tenantID, idpID)
+	return s.adminStorage.DeleteIdentityProvider(ctx, tenantID, idpID)
 }
 
 func (s *IdentityProviderService) UpdateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) (*model.IdentityProvider, error) {
@@ -302,7 +275,7 @@ func (s *IdentityProviderService) UpdateIdentityProvider(ctx context.Context, te
 
 	provider.TenantID = tenantID
 	// In our PostgresStorage implementation, CreateIdentityProvider uses ON CONFLICT DO UPDATE
-	if err := s.storage.CreateIdentityProvider(ctx, tenantID, provider); err != nil {
+	if err := s.adminStorage.CreateIdentityProvider(ctx, tenantID, provider); err != nil {
 		return nil, err
 	}
 
@@ -313,7 +286,7 @@ func (s *IdentityProviderService) DiscoverOIDC(ctx context.Context, endpoint str
 	if endpoint == "" {
 		return "", errors.New("discovery endpoint is required")
 	}
-	client := httpclient.New()
+	client := httpclient.New("sprezz-identity")
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)

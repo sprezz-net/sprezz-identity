@@ -12,6 +12,7 @@ import (
 	httpadapter "sprezz-identity/internal/adapters/in/http"
 	"sprezz-identity/internal/adapters/out/clock"
 	jwtcrypto "sprezz-identity/internal/adapters/out/crypto"
+	"sprezz-identity/internal/adapters/out/federation"
 	"sprezz-identity/internal/adapters/out/logout"
 	"sprezz-identity/internal/adapters/out/postgres"
 	"sprezz-identity/internal/config"
@@ -22,50 +23,181 @@ import (
 )
 
 type dependencies struct {
-	cfg     *config.Config
-	storage *postgres.PostgresStorage
+	cfg                     *config.Config
+	storage                 port.Storage
+	adminStorage            port.AdminStorage
+	signer                  *jwtcrypto.JWTSigner
+	sysClock                port.Clock
+	tenantUseCase           port.TenantUseCase
+	oauthService            port.AuthUseCase
+	federatedLoginService   port.FederatedLoginUseCase
+	ssoService              port.SSOSessionUseCase
+	userProfileUseCase      port.UserProfileUseCase
+	userRegistrationUseCase port.UserRegistrationUseCase
+	localAuthUseCase        port.LocalAuthUseCase
 }
 
 func main() {
 	log.Println("Starting Sprezz Identity server...")
-	deps := initDependencies()
 
+	// Create a cancelable root application context for background workers
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 1. PURE ENCAPSULATION: Load configuration, connect DB, run migrations, bootstrap tenants, and spin up workers
+	deps := initDependencies(ctx)
+
+	// 2. DECLARATIVE WIRING: Build central HttpAdapter using fully prepared dependencies
+	handler := httpadapter.NewHttpAdapter(
+		deps.tenantUseCase,
+		deps.oauthService,
+		deps.federatedLoginService,
+		deps.ssoService,
+		deps.userProfileUseCase,
+		deps.userRegistrationUseCase,
+		deps.localAuthUseCase,
+		deps.storage,
+		deps.signer,
+		deps.cfg.AppEnv,
+		deps.cfg.IdentityServer.AdminTenantDomain,
+	)
+
+	server := &http.Server{
+		Addr:    ":" + deps.cfg.Port,
+		Handler: handler.Router(),
+	}
+
+	log.Printf("Sprezz Identity server listening on :%s", deps.cfg.Port)
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatalf("Token server terminated: %v", err)
+	}
+}
+
+func initDependencies(ctx context.Context) *dependencies {
+	// 1. Load configuration file fragments
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		log.Fatalf("Configuration bootstrap error: %v", err)
+	}
+
+	// 2. Configure structured system logging parameters
 	logLevel := slog.LevelInfo
-	if deps.cfg.AppEnv == "local" {
+	if cfg.AppEnv == "local" {
 		logLevel = slog.LevelDebug
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: logLevel,
 	})))
+
 	sysClock := clock.NewSystemClock()
 
-	bootstrap := service.NewTenantBootstrapService(deps.storage, sysClock, deps.cfg.AppEnv)
-	_, err := bootstrap.BootstrapAdminTenant(context.Background(), deps.cfg.IdentityServer.AdminTenantDomain)
+	// 3. Establish connection pool properties for PostgreSQL
+	dbConfig, err := pgxpool.ParseConfig(cfg.GetDSN())
+	if err != nil {
+		log.Fatalf("Failed to parse postgres configuration: %v", err)
+	}
+	dbConfig.MaxConns = 25
+	dbConfig.MinConns = 10
+	dbConfig.MaxConnLifetime = 5 * time.Minute
+
+	timeoutMs := cfg.Database.StatementTimeout.Milliseconds()
+	if timeoutMs > 0 {
+		dbConfig.ConnConfig.RuntimeParams["statement_timeout"] = fmt.Sprintf("%d", timeoutMs)
+	}
+
+	log.Println("Connecting to database...")
+	db, err := pgxpool.NewWithConfig(ctx, dbConfig)
+	if err != nil {
+		log.Fatalf("Failed to connect to postgres: %v", err)
+	}
+
+	if err := db.Ping(ctx); err != nil {
+		log.Fatalf("Failed to ping postgres: %v", err)
+	}
+
+	// 4. Run database migrations to ensure table schemas match perfectly
+	log.Println("Executing database schema migration hooks...")
+	if err := postgres.RunDatabaseMigrations(ctx, db); err != nil {
+		log.Fatalf("Critical database schema migration failure: %v", err)
+	}
+	log.Println("Database schemas are synchronized and verified.")
+
+	storage := postgres.NewPostgresStorage(db, cfg.AppEnv)
+
+	// Needed for resolution and cross-layered bootstrapping references
+	idpService := service.NewIdentityProviderService(storage, storage, sysClock)
+	tenantUseCase := service.NewTenantService(storage, storage, sysClock, idpService, cfg.AppEnv, cfg.IdentityServer.AdminTenantDomain)
+
+	// 5. Execute system master data bootstrapping scripts
+	bootstrap := service.NewTenantBootstrapService(storage, storage, tenantUseCase, sysClock, cfg.AppEnv)
+	_, err = bootstrap.BootstrapAdminTenant(ctx, cfg.IdentityServer.AdminTenantDomain)
 	if err != nil {
 		log.Fatalf("Admin tenant bootstrap failed: %v", err)
 	}
 
-	signer, err := jwtcrypto.NewJWTSigner(deps.storage, sysClock, deps.cfg.MasterKey)
+	httpClient := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	// 6. Initialize cluster-resilient JWTSigner passing master encryption keys
+	signer, err := jwtcrypto.NewJWTSigner(
+		storage,
+		sysClock,
+		httpClient,
+		cfg.MasterKey,
+		cfg.IdentityServer.AdminTenantDomain,
+		cfg.AppEnv,
+	)
 	if err != nil {
 		log.Fatalf("Failed to initialize cryptographic boundaries: %v", err)
 	}
 
-	// Start the background token and session pruning worker (15-Minute Ticks)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	startTokenPruningWorker(ctx, deps.storage, deps.cfg.IdentityServer.TokenPruningInterval)
-	startKeyRotationWorker(ctx, signer, deps.cfg.IdentityServer.AdminTenantDomain, deps.cfg.IdentityServer.KeyRotationInterval)
+	// 7. Start the continuous asynchronous background loop worker instances
+	startTokenPruningWorker(ctx, storage, cfg.IdentityServer.TokenPruningInterval)
+	startKeyRotationWorker(ctx, signer, cfg.IdentityServer.AdminTenantDomain, cfg.IdentityServer.KeyRotationInterval)
 
-	notifier := logout.NewLogoutHttpClient()
-	oauthService := service.NewOAuthService(deps.storage, signer, nil, notifier, sysClock)
-	handler := httpadapter.NewHttpAdapter(oauthService, deps.storage, signer, sysClock, deps.cfg.AppEnv, deps.cfg.IdentityServer.AdminTenantDomain)
-	server := &http.Server{
-		Addr:    ":" + deps.cfg.Port,
-		Handler: handler.Router(),
-	}
-	log.Printf("Sprezz Identity server listening on :%s", deps.cfg.Port)
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatalf("Token server terminated: %v", err)
+	notifier := logout.NewLogoutHttpClient(cfg.AppEnv)
+	validator := service.NewOAuthValidatorService()
+
+	// 8. Instantiate core domain use cases
+	userProfileUseCase := service.NewUserProfileService(storage, signer, sysClock)
+	userRegistrationUseCase := service.NewUserRegistrationService(storage, userProfileUseCase, sysClock)
+
+	ssoService := service.NewSSOSessionService(storage, cfg.AppEnv)
+
+	fedClient := federation.NewFederationHTTPAdapter(http.DefaultClient, cfg.AppEnv)
+	federatedLoginService := service.NewFederationService(
+		storage,
+		fedClient,
+		signer,
+		sysClock,
+	)
+
+	oauthService := service.NewOAuthService(
+		storage,
+		signer,
+		nil,
+		notifier,
+		sysClock,
+		ssoService,
+		validator,
+	)
+
+	localAuthService := service.NewLocalAuthService(storage, signer, sysClock)
+
+	return &dependencies{
+		cfg:                     cfg,
+		storage:                 storage,
+		adminStorage:            storage,
+		signer:                  signer,
+		sysClock:                sysClock,
+		tenantUseCase:           tenantUseCase,
+		oauthService:            oauthService,
+		federatedLoginService:   federatedLoginService,
+		ssoService:              ssoService,
+		userProfileUseCase:      userProfileUseCase,
+		userRegistrationUseCase: userRegistrationUseCase,
+		localAuthUseCase:        localAuthService,
 	}
 }
 
@@ -110,45 +242,4 @@ func startKeyRotationWorker(ctx context.Context, signer port.Crypto, domain stri
 			}
 		}
 	}()
-}
-
-func initDependencies() *dependencies {
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		log.Fatalf("Configuration bootstrap error: %v", err)
-	}
-
-	dbConfig, err := pgxpool.ParseConfig(cfg.GetDSN())
-	if err != nil {
-		log.Fatalf("Failed to parse postgres configuration: %v", err)
-	}
-	dbConfig.MaxConns = 25
-	dbConfig.MinConns = 10
-	dbConfig.MaxConnLifetime = 5 * time.Minute
-
-	timeoutMs := cfg.Database.StatementTimeout.Milliseconds()
-	if timeoutMs > 0 {
-		dbConfig.ConnConfig.RuntimeParams["statement_timeout"] = fmt.Sprintf("%d", timeoutMs)
-	}
-
-	log.Println("Connecting to database...")
-	db, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
-	if err != nil {
-		log.Fatalf("Failed to connect to postgres: %v", err)
-	}
-
-	if err := db.Ping(context.Background()); err != nil {
-		log.Fatalf("Failed to ping postgres: %v", err)
-	}
-
-	log.Println("Executing database schema migration hooks...")
-	if err := postgres.RunDatabaseMigrations(context.Background(), db); err != nil {
-		log.Fatalf("Critical database schema migration failure: %v", err)
-	}
-	log.Println("Database schemas are synchronized and verified.")
-
-	return &dependencies{
-		cfg:     cfg,
-		storage: postgres.NewPostgresStorage(db, cfg.AppEnv),
-	}
 }

@@ -27,7 +27,7 @@ type IdentityProvider struct {
 	Alias       string
 	Name        string
 	PartitionID int64
-	IssuerURL   string
+	Issuer      string
 	Config      IdentityProviderConfig
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -49,7 +49,6 @@ type IdentityProviderConfig struct {
 
 	// OIDC-specific configurations
 	DiscoveryEndpoint           string              `json:"discovery_endpoint,omitempty"`
-	Issuer                      string              `json:"issuer,omitempty"`
 	AuthorizationEndpoint       string              `json:"authorization_endpoint,omitempty"`
 	TokenEndpoint               string              `json:"token_endpoint,omitempty"`
 	UserinfoEndpoint            string              `json:"userinfo_endpoint,omitempty"`
@@ -74,24 +73,31 @@ type IdentityProviderConfig struct {
 }
 
 type UserIdentity struct {
-	ID                        uuid.UUID
-	UserProfileID             uuid.UUID
-	IdentityProviderID        uuid.UUID
-	ExternalIdentityID        string
-	LoginCount                int
-	LastLoginAt               time.Time
-	LastVerificationAttemptAt time.Time
-	FailedVerificationCount   int
-	Blocked                   bool
-	CoupledAt                 time.Time
+	ID                 uuid.UUID
+	UserProfileID      uuid.UUID
+	IdentityProviderID uuid.UUID
+	ExternalIdentityID string
+	LoginCount         int
+	LastLoginAt        *time.Time
+	CoupledAt          time.Time
 }
 
 type PasswordCredential struct {
-	UserProfileID      uuid.UUID
-	IdentityProviderID uuid.UUID
-	Argon2Hash         string
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	UserProfileID           uuid.UUID
+	IdentityProviderID      uuid.UUID
+	Argon2Hash              string
+	FailedVerificationCount int
+	LastVerificationAttempt *time.Time
+	BlockedUntil            *time.Time
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+}
+
+func (p *PasswordCredential) IsBlocked(now time.Time) bool {
+	if p.BlockedUntil == nil {
+		return false
+	}
+	return now.Before(*p.BlockedUntil)
 }
 
 type LoginResult struct {

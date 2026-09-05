@@ -13,21 +13,35 @@ import (
 )
 
 const (
-	routeAdmin               = "/admin"
-	routeCallback            = "/admin/callback"
+	routeAdmin               = port.RouteAdmin
+	routeCallback            = port.RouteFederationCallback
 	usernamePasswordIDPAlias = "username-password"
 )
 
 // TenantBootstrapService is the domain-level orchestration point that ensures
 // the configured admin tenant domain resolves to a tenant record.
 type TenantBootstrapService struct {
-	storage port.Storage
-	clock   port.Clock
-	appEnv  string
+	storage       port.Storage
+	adminStorage  port.AdminStorage
+	tenantUseCase port.TenantUseCase
+	clock         port.Clock
+	appEnv        string
 }
 
-func NewTenantBootstrapService(storage port.Storage, cl port.Clock, appEnv string) *TenantBootstrapService {
-	return &TenantBootstrapService{storage: storage, clock: cl, appEnv: appEnv}
+func NewTenantBootstrapService(
+	storage port.Storage,
+	adminStorage port.AdminStorage,
+	tenantUseCase port.TenantUseCase,
+	cl port.Clock,
+	appEnv string,
+) *TenantBootstrapService {
+	return &TenantBootstrapService{
+		storage:       storage,
+		adminStorage:  adminStorage,
+		tenantUseCase: tenantUseCase,
+		clock:         cl,
+		appEnv:        appEnv,
+	}
 }
 
 func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domain string) (*model.Tenant, error) {
@@ -45,21 +59,21 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 
 func (s *TenantBootstrapService) bootstrapExistingTenant(ctx context.Context, tenant *model.Tenant, domain string) (*model.Tenant, error) {
 	baseURL := tenant.GetBaseURI()
+
 	expectedRedirect := baseURL + routeAdmin
 	if tenant.Config.DefaultRedirectURI != expectedRedirect {
 		tenant.Config.DefaultRedirectURI = expectedRedirect
 		tenant.Config.RedirectWhitelist = []string{baseURL + routeAdmin, baseURL + routeCallback}
-		if err := s.storage.CreateTenant(ctx, *tenant); err != nil {
+		if err := s.adminStorage.CreateTenant(ctx, *tenant); err != nil {
 			return nil, err
 		}
 	}
 
-	// Add local username-password identity provider if not present
 	if err := s.ensureDefaultIdentityProvider(ctx, tenant.ID); err != nil {
 		return nil, err
 	}
 
-	if err := s.ensureAdminClient(ctx, tenant.ID, domain); err != nil {
+	if err := s.ensureAdminApplicationProfileAndGroup(ctx, tenant.ID, domain); err != nil {
 		return nil, err
 	}
 
@@ -67,55 +81,46 @@ func (s *TenantBootstrapService) bootstrapExistingTenant(ctx context.Context, te
 }
 
 func (s *TenantBootstrapService) bootstrapNewTenant(ctx context.Context, domain string) (*model.Tenant, error) {
-	scheme := model.SchemeHttps
-	if s.appEnv == "local" {
-		// Allow to listen on localhost for local development on non-secure port
-		scheme = model.SchemeHttp
-	}
-	baseURL := scheme + "://" + domain
-	newTenant := &model.Tenant{
-		ID:        uuid.New(),
-		Name:      "Administrative Tenant",
-		Domain:    domain,
-		Scheme:    scheme,
-		IsActive:  true,
-		CreatedAt: s.clock.Now(),
-		Config: model.TenantConfig{
-			PredefinedScopes:    []string{"openid", "profile", "email", "offline_access"},
-			PredefinedAudiences: []string{},
-			DefaultRedirectURI:  baseURL + routeAdmin,
-			RedirectWhitelist:   []string{baseURL + routeAdmin, baseURL + routeCallback},
-			ACRToLevels: map[string]model.Levels{
-				"aal1": {AAL: 1},
-				"ial1": {IAL: 1},
-			},
-			AllowSignup: true,
-		},
+	cmd := port.CreateTenantCommand{
+		TenantName:  "Administrative Tenant",
+		DomainName:  domain,
+		AllowSignup: false,
 	}
 
-	if err := s.storage.CreateTenant(ctx, *newTenant); err != nil {
-		return nil, err
-	}
-
-	p1, err := s.storage.CreatePartition(ctx, newTenant.ID, newTenant.Name, "default")
+	// 1. Delegate creation natively down to the TenantUseCase driving port execution path
+	// This automatically persists the tenant, resolves postgres trigger partitions,
+	// creates the "sprezz_admin" partition, and hooks up the "admin-sso" identity link.
+	createdTenant, err := s.tenantUseCase.CreateTenant(ctx, cmd)
 	if err != nil {
-		return nil, fmt.Errorf("create default partition: %w", err)
+		return nil, fmt.Errorf("bootstrap: failed to delegate root tenant creation sequence: %w", err)
 	}
 
-	newTenant.DefaultPartition = &p1.ID
-	if err := s.storage.CreateTenant(ctx, *newTenant); err != nil {
-		return nil, fmt.Errorf("update tenant default partition: %w", err)
+	// 2. STAGE 2: Apply master-tenant specific configurations overriding standard business ceilings [5.7]
+	createdTenant.Config.AllowSignup = true
+	createdTenant.Config.DefaultRedirectURI = createdTenant.GetBaseURI() + routeAdmin
+	createdTenant.Config.RedirectWhitelist = []string{
+		createdTenant.GetBaseURI() + routeAdmin,
+		createdTenant.GetBaseURI() + routeCallback,
+	}
+	createdTenant.Config.DCRMode = model.DCRModeSoftwareStatement
+	createdTenant.Config.PublicSoftwareStatement = model.AdminUIProfileName + ";" + model.AdminUIGroupName
+
+	// Save the administrative parameter adjustments back to storage
+	if err := s.adminStorage.CreateTenant(ctx, *createdTenant); err != nil {
+		return nil, fmt.Errorf("bootstrap: failed to finalize master tenant configuration: %w", err)
 	}
 
-	if err := s.ensureDefaultIdentityProvider(ctx, newTenant.ID); err != nil {
+	// 3. STAGE 3: Build local password directories inside the implicit default partition layout
+	if err := s.ensureDefaultIdentityProvider(ctx, createdTenant.ID); err != nil {
 		return nil, err
 	}
 
-	if err := s.ensureAdminClient(ctx, newTenant.ID, domain); err != nil {
+	// 4. STAGE 4: Register client application profile entities for the platform control UI panels
+	if err := s.ensureAdminApplicationProfileAndGroup(ctx, createdTenant.ID, domain); err != nil {
 		return nil, err
 	}
 
-	return newTenant, nil
+	return s.storage.ResolveTenantByUUID(ctx, createdTenant.ID)
 }
 
 func (s *TenantBootstrapService) ensureDefaultIdentityProvider(ctx context.Context, tenantID uuid.UUID) error {
@@ -124,7 +129,7 @@ func (s *TenantBootstrapService) ensureDefaultIdentityProvider(ctx context.Conte
 		return nil
 	}
 
-	tenant, err := s.storage.ResolveTenantByID(ctx, tenantID)
+	tenant, err := s.storage.ResolveTenantByUUID(ctx, tenantID)
 	if err != nil {
 		return err
 	}
@@ -150,47 +155,96 @@ func (s *TenantBootstrapService) ensureDefaultIdentityProvider(ctx context.Conte
 		PartitionID: partitionID,
 		Config: model.IdentityProviderConfig{
 			UsernameField: "preferredUsername",
+			AAL:           1,
+			IAL:           1,
 		},
 	}
-	return s.storage.CreateIdentityProvider(ctx, tenantID, defaultProvider)
+	return s.adminStorage.CreateIdentityProvider(ctx, tenantID, defaultProvider)
 }
 
-func (s *TenantBootstrapService) ensureAdminClient(ctx context.Context, tenantID uuid.UUID, domain string) error {
-	_, err := s.storage.GetClient(ctx, tenantID, "admin_ui")
+// ensureAdminApplicationGroupAndProfile provisions the multi-table profile, group, and app layers.
+func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx context.Context, tenantID uuid.UUID, domain string) error {
+	// 1. Verify whether the admin client already exists within the decoupled database tables
+	_, _, _, err := s.storage.GetApplicationByClientID(ctx, tenantID, "admin_ui")
 	if err == nil {
 		return nil
 	}
-	if !errors.Is(err, port.ErrClientNotFound) {
+	if !errors.Is(err, port.ErrApplicationNotFound) {
 		return err
 	}
 
-	scheme := model.SchemeHttps
-	if s.appEnv == "local" {
-		// Allow to listen on localhost for local development on non-secure port
-		scheme = model.SchemeHttp
+	// 2. Load the newly provisioned Local Accounts Identity Provider to capture its UUID key
+	providers, err := s.storage.GetEnabledIdentityProviders(ctx, tenantID)
+	if err != nil || len(providers) == 0 {
+		return fmt.Errorf("bootstrap admin group: unable to resolve default identity provider context: %w", err)
 	}
 
-	adminClient := model.ClientApplication{
-		ID:                     uuid.New().String(),
+	// Extract the real uuid primary key from your local provider instead of utilizing strings
+	localProviderUUID := providers[0].ID
+
+	scheme := "https://"
+	if s.appEnv == "local" {
+		scheme = "http://"
+	}
+
+	profileID := uuid.New()
+	groupID := uuid.New()
+
+	// 3. Build the Global Platform Application Profile for the Admin Hub
+	adminProfile := model.ApplicationProfile{
+		ID:                      profileID,
+		TenantID:                tenantID,
+		ProfileName:             model.AdminUIProfileName,
+		IsEnabled:               true,
+		TokenEndpointAuthMethod: model.AuthMethodNone, // Public SPA Frontend
+		GrantTypes:              []model.GrantType{model.GrantTypeAuthorizationCode, model.GrantTypeRefreshToken},
+		ResponseTypes:           []model.ResponseType{model.ResponseTypeCode},
+		AccessTokenLifetime:     900 * time.Second,
+		IDTokenLifetime:         900 * time.Second,
+		RefreshTokenLifetime:    1209600 * time.Second,
+		EnforceRTR:              true,
+		SigningAlgorithm:        model.AlgRS256,
+	}
+
+	// 4. Build the Global Platform Application Authorization Group for the Admin Hub
+	adminGroup := model.ApplicationGroup{
+		ID:                     groupID,
 		TenantID:               tenantID,
-		ClientID:               "admin_ui",
-		ClientSecret:           nil,
-		ClientName:             "Admin Interface",
+		GroupName:              model.AdminUIGroupName,
+		IsEnabled:              true,
+		AllowedScopes:          []string{"openid", "profile", "email", "offline_access"},
+		DefaultScopes:          []string{"openid", "profile", "email"},
+		AllowedAudiences:       []string{},
+		AllowedIDPIDs:          []uuid.UUID{localProviderUUID},
+		DefaultIDPID:           &localProviderUUID,
 		RedirectURIs:           []string{scheme + domain + routeCallback},
 		PostLogoutRedirectURIs: []string{scheme + domain + routeAdmin},
-		GrantTypes:             []string{"authorization_code"},
-		ResponseTypes:          []string{"code"},
-		Algorithm:              model.AlgRS256,
-		AccessTokenLifetime:    900 * time.Second,
-		IDTokenLifetime:        900 * time.Second,
-		RefreshTokenLifetime:   1209600 * time.Second,
-		AllowedScopes:          []string{"openid", "profile", "email"},
-		DefaultScopes:          []string{"openid", "profile", "email"},
-		AllowedIDPs:            []string{usernamePasswordIDPAlias},
-		DefaultIDP:             usernamePasswordIDPAlias,
-		AllowedAudiences:       []string{},
-		ClientType:             model.ClientTypePublic,
 	}
 
-	return s.storage.SaveClient(ctx, adminClient)
+	// 5. Build the core Application Instance referencing the decoupled entity nodes
+	adminApp := model.Application{
+		ID:               uuid.New(),
+		TenantID:         tenantID,
+		ProfileID:        profileID,
+		GroupID:          groupID,
+		ClientID:         "admin_ui",
+		ClientSecretHash: nil, // Public client mapping
+		ApplicationName:  "Admin Interface",
+		IsEnabled:        true,
+	}
+
+	// 6. Commit everything cleanly through the explicit tenant-bounded signatures
+	if err := s.adminStorage.CreateApplicationProfile(ctx, tenantID, adminProfile); err != nil {
+		return fmt.Errorf("bootstrap admin profile: %w", err)
+	}
+
+	if err := s.adminStorage.CreateApplicationGroup(ctx, tenantID, adminGroup); err != nil {
+		return fmt.Errorf("bootstrap admin group: %w", err)
+	}
+
+	if err := s.adminStorage.CreateApplication(ctx, tenantID, adminApp); err != nil {
+		return fmt.Errorf("bootstrap admin application instance: %w", err)
+	}
+
+	return nil
 }
