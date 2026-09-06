@@ -19,7 +19,7 @@ WITH tenant AS (
     LIMIT 1
 )
 SELECT
-    tsk.id AS kid,
+    tsk.kid,
     tsk.algorithm,
     tsk.encrypted_private_key,
     tsk.public_jwk_json,
@@ -31,11 +31,11 @@ LIMIT 1
 `
 
 type GetActiveSigningKeyRow struct {
-	Kid                 pgtype.UUID `json:"kid"`
-	Algorithm           string      `json:"algorithm"`
-	EncryptedPrivateKey []byte      `json:"encrypted_private_key"`
-	PublicJwkJson       string      `json:"public_jwk_json"`
-	Nonce               []byte      `json:"nonce"`
+	Kid                 string `json:"kid"`
+	Algorithm           string `json:"algorithm"`
+	EncryptedPrivateKey []byte `json:"encrypted_private_key"`
+	PublicJwkJson       string `json:"public_jwk_json"`
+	Nonce               []byte `json:"nonce"`
 }
 
 // Fetches the single asymmetric key currently active for signing new tokens.
@@ -60,7 +60,7 @@ WITH tenant AS (
     LIMIT 1
 )
 SELECT
-    tsk.id AS kid,
+    tsk.kid,
     tsk.algorithm,
     tsk.encrypted_private_key,
     tsk.public_jwk_json,
@@ -71,11 +71,11 @@ WHERE tsk.is_active_signing = TRUE
 `
 
 type GetActiveSigningKeysRow struct {
-	Kid                 pgtype.UUID `json:"kid"`
-	Algorithm           string      `json:"algorithm"`
-	EncryptedPrivateKey []byte      `json:"encrypted_private_key"`
-	PublicJwkJson       string      `json:"public_jwk_json"`
-	Nonce               []byte      `json:"nonce"`
+	Kid                 string `json:"kid"`
+	Algorithm           string `json:"algorithm"`
+	EncryptedPrivateKey []byte `json:"encrypted_private_key"`
+	PublicJwkJson       string `json:"public_jwk_json"`
+	Nonce               []byte `json:"nonce"`
 }
 
 // Loads all private cryptographic keys currently required to sign stateless tokens.
@@ -114,7 +114,7 @@ WITH tenant AS (
     LIMIT 1
 )
 SELECT
-    tsk.id AS kid,
+    tsk.kid,
     tsk.algorithm,
     tsk.public_jwk_json
 FROM tenant_signing_keys tsk
@@ -124,12 +124,12 @@ ORDER BY tsk.id DESC
 `
 
 type GetActiveVerificationKeysRow struct {
-	Kid           pgtype.UUID `json:"kid"`
-	Algorithm     string      `json:"algorithm"`
-	PublicJwkJson string      `json:"public_jwk_json"`
+	Kid           string `json:"kid"`
+	Algorithm     string `json:"algorithm"`
+	PublicJwkJson string `json:"public_jwk_json"`
 }
 
-// Fetches all keys valid for token validation (overlapping lifecycle).
+// Loads all keys valid for token validation (overlapping lifecycle).
 func (q *Queries) GetActiveVerificationKeys(ctx context.Context, tenantUuid pgtype.UUID) ([]GetActiveVerificationKeysRow, error) {
 	rows, err := q.db.Query(ctx, getActiveVerificationKeys, tenantUuid)
 	if err != nil {
@@ -169,7 +169,7 @@ INSERT INTO tenant_signing_keys (
 )
 SELECT
     t.id,
-    $1::uuid,
+    $1::varchar,
     $2::varchar,
     $3::bytea,
     $4::varchar,
@@ -181,7 +181,7 @@ RETURNING id
 `
 
 type InsertSigningKeyParams struct {
-	Kid                  pgtype.UUID `json:"kid"`
+	Kid                  string      `json:"kid"`
 	Algorithm            string      `json:"algorithm"`
 	EncryptedPrivateKey  []byte      `json:"encrypted_private_key"`
 	PublicJwkJson        string      `json:"public_jwk_json"`

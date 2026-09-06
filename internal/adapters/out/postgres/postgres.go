@@ -933,13 +933,8 @@ func (s *PostgresStorage) GetActiveSigningKeys(ctx context.Context, tenantUUID u
 			}
 		}
 
-		parsedKid, err := uuid.Parse(row.Kid.String())
-		if err != nil {
-			continue
-		}
-
 		keys = append(keys, model.SigningKey{
-			Kid:                    parsedKid.String(),
+			Kid:                    row.Kid,
 			Algorithm:              row.Algorithm,
 			PublicJWK:              jwk,
 			RawEncryptedPrivateKey: row.EncryptedPrivateKey,
@@ -965,7 +960,7 @@ func (s *PostgresStorage) GetActiveVerificationKeys(ctx context.Context, tenantU
 		}
 
 		keys = append(keys, model.SigningKey{
-			Kid:       row.Kid.String(),
+			Kid:       row.Kid,
 			Algorithm: row.Algorithm,
 			PublicJWK: jwk,
 		})
@@ -980,15 +975,10 @@ func (s *PostgresStorage) InsertSigningKey(ctx context.Context, tenantUUID uuid.
 		return "", err
 	}
 
-	parsedKid, err := uuid.Parse(key.Kid)
-	if err != nil {
-		return "", fmt.Errorf("invalid key ID format: %w", err)
-	}
-
 	// Insert the record. Postgres 18 automatically computes the UUIDv7 primary key.
 	generatedID, err := s.queries.InsertSigningKey(ctx, sqlcdb.InsertSigningKeyParams{ // Swapped to sqlcdb.
 		TenantUuid:           toPGUUID(tenantUUID),
-		Kid:                  toPGUUID(parsedKid),
+		Kid:                  key.Kid,
 		Algorithm:            key.Algorithm,
 		EncryptedPrivateKey:  encryptedPrivateKey,
 		PublicJwkJson:        string(jwkBytes),

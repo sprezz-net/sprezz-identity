@@ -7,7 +7,7 @@ WITH tenant AS (
     LIMIT 1
 )
 SELECT
-    tsk.id AS kid,
+    tsk.kid,
     tsk.algorithm,
     tsk.encrypted_private_key,
     tsk.public_jwk_json,
@@ -27,7 +27,7 @@ WITH tenant AS (
     LIMIT 1
 )
 SELECT
-    tsk.id AS kid,
+    tsk.kid,
     tsk.algorithm,
     tsk.encrypted_private_key,
     tsk.public_jwk_json,
@@ -37,7 +37,7 @@ INNER JOIN tenant t ON t.id = tsk.tenant_id
 WHERE tsk.is_active_signing = TRUE;
 
 -- name: GetActiveVerificationKeys :many
--- Fetches all keys valid for token validation (overlapping lifecycle).
+-- Loads all keys valid for token validation (overlapping lifecycle).
 WITH tenant AS (
     SELECT id
     FROM tenants
@@ -45,7 +45,7 @@ WITH tenant AS (
     LIMIT 1
 )
 SELECT
-    tsk.id AS kid,
+    tsk.kid,
     tsk.algorithm,
     tsk.public_jwk_json
 FROM tenant_signing_keys tsk
@@ -73,7 +73,7 @@ INSERT INTO tenant_signing_keys (
 )
 SELECT
     t.id,
-    @kid::uuid,
+    @kid::varchar,
     @algorithm::varchar,
     @encrypted_private_key::bytea,
     @public_jwk_json::varchar,
