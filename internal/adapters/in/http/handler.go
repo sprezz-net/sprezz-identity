@@ -16,129 +16,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-/*
 const (
-	routeAuthorize          = "/oauth/authorize" // DONE
-	routeToken              = "/oauth/token" // DONE
-	routeUserInfo           = "/oauth/userinfo" // DONE
-	routeRegister           = "/oauth/register" // DONE
-	routeAuthServer         = "/.well-known/oauth-authorization-server" // DONE
-	routeOpenIDConfig       = "/.well-known/openid-configuration" // DONE
-	routeKeys               = "/.well-known/jwks.json" // DONE
-	routeRevoke             = "/oauth/revoke" // DONE
-	routeIntrospect         = "/oauth/introspect" // DONE
-	routeLogout             = "/oauth/logout" // DONE
-	routePAR                = "/oauth/par" // DONE
-	routeCallback           = "/oauth/callback" // DONE
-	routeAdmin              = port.RouteAdmin
-	routeFederationCallback = port.RouteFederationCallback // DONE
-	contentTypeHeader       = "Content-Type"
-	contentTypeJSON         = "application/json"
-	contentTypeHtml         = "text/html; charset=utf-8"
-	errInvalidDPoP          = "invalid DPoP proof: "
-	errClientAuthFailed     = "client authentication failed"
-	xForwardedProto         = "X-Forwarded-Proto"
-
-	routeRoot      = "/" // DONE
-	routeWebLogin  = "/login" // DONE
-	routeWebLogout = "/logout" // DONE
-	routeWebSignUp = "/sign-up"
-
 	errTenantNotResolved = "tenant not resolved"
-)
-
-func (h *HttpAdapter) registerRoutes() {
-	h.router.Get(routeRoot, h.loginRoot)
-	h.router.Get(routeCallback, h.oauthCallback)
-	h.router.Get(routeFederationCallback, h.HandleOutboundCallback)
-	h.router.Post(routeWebLogin, h.login)
-	h.router.Get(routeWebSignUp, h.signUpForm)
-	h.router.Post(routeWebSignUp, h.signUpSubmit)
-	h.router.Get(routeOpenIDConfig, h.openIDConfiguration)
-	h.router.Get(routeAuthServer, h.oauthAuthorizationServer)
-	h.router.Get(routeKeys, h.jwks)
-	h.router.Post(routeRegister, h.register)
-	h.router.Get(routeAuthorize, h.authorize)
-	h.router.Post(routeAuthorize, h.authorize)
-	h.router.Post(routeToken, h.token)
-	h.router.Get(routeUserInfo, h.userinfo)
-	h.router.Post(routeUserInfo, h.userinfo)
-	h.router.Get(routeLogout, h.logout)
-	h.router.Get(routeWebLogout, h.webLogout)
-
-	// Admin Routes
-	h.router.Route("/admin", func(r chi.Router) {
-		r.Get("/", h.adminDashboardView)
-		r.Get("/dashboard", h.adminDashboardView)
-
-		r.Get("/tenants", h.adminTenantsPage)
-		r.Get("/tenants/new", h.adminNewTenantForm)
-		r.Post("/tenants", h.adminCreateTenant)
-		r.Post("/tenants/settings", h.adminSaveTenantSettings)
-		r.Patch("/tenants/{id}/toggle-signup", h.adminToggleSignup)
-
-		r.Get("/applications", h.adminApplicationsPage)
-		r.Get("/applications/new", h.adminNewApplicationForm)
-		r.Get("/applications/edit", h.adminEditApplicationForm)
-		r.Get("/applications/view", h.adminViewApplication)
-		r.Post("/applications", h.adminSaveApplication)
-		r.Post("/applications/{id}/toggle-status", h.adminToggleApplicationStatus)
-		r.Post("/applications/{id}/reset-secret", h.adminResetApplicationSecret)
-		r.Delete("/applications/{id}", h.adminDeleteApplication)
-
-		r.Get("/applications/profiles/new", h.adminNewProfileForm)
-		r.Get("/applications/profiles/edit", h.adminEditProfileForm)
-		r.Post("/applications/profiles", h.adminSaveProfile)
-
-		r.Get("/applications/groups/new", h.adminNewGroupForm)
-		r.Get("/applications/groups/edit", h.adminEditGroupForm)
-		r.Post("/applications/groups", h.adminSaveGroup)
-
-		r.Get("/idps", h.adminIDPsPage)
-		r.Get("/idps/discover", h.adminDiscoverIDP)
-		r.Get("/idps/new", h.adminNewIDPForm)
-		r.Get("/idps/edit", h.adminEditIDPForm)
-		r.Post("/idps", h.adminSaveIDP)
-		r.Delete("/idps/{id}", h.adminDeleteIDP)
-
-		r.Get("/users", h.adminUsersPage)
-		r.Get("/users/view", h.adminViewUser)
-		r.Get("/users/edit", h.adminEditUserForm)
-		r.Post("/users", h.adminSaveUser)
-		r.Delete("/users/{id}", h.adminDeleteUser)
-		r.Delete("/users/{id}/identities/{idp}", h.adminDecoupleIdentity)
-	})
-
-	// Profile Routes
-	h.router.Route("/profile", func(r chi.Router) {
-		r.Get("/", h.profileDashboard)
-		r.Get("/password", h.changePasswordForm)
-		r.Post("/password", h.changePasswordSubmit)
-		r.Get("/email", h.changeEmailForm)
-		r.Post("/email", h.changeEmailSubmit)
-		r.Get("/name", h.changeNameForm)
-		r.Post("/name", h.changeNameSubmit)
-		r.Delete("/identities/{idp}", h.decoupleIdentitySubmit)
-	})
-
-	// Routes requiring mandatory client authentication
-	h.router.Group(func(r chi.Router) {
-		r.Use(h.clientAuthMiddleware)
-		r.Post(routeRevoke, h.revoke)
-		r.Post(routeIntrospect, h.introspect)
-		r.Post(routePAR, h.par)
-	})
-}
-*/
-
-const (
-	contentTypeHeader    = "Content-Type"
-	contentTypeJSON      = "application/json"
-	contentTypeHtml      = "text/html; charset=utf-8"
-	errTenantNotResolved = "tenant not resolved"
-	routeAdmin           = port.RouteAdmin
-	routeCallback        = "/oauth/callback"
-	xForwardedProto      = "X-Forwarded-Proto"
 )
 
 type HttpAdapter struct {
@@ -295,7 +174,7 @@ func (h *HttpAdapter) respondJSON(w http.ResponseWriter, status int, payload any
 	if status >= 400 {
 		slog.Error("JSON API error response", "status", status, "payload", payload)
 	}
-	w.Header().Set(contentTypeHeader, contentTypeJSON)
+	w.Header().Set(model.HeaderContentType, model.ContentTypeJSON)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
 }

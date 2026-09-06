@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"sprezz-identity/internal/domain/model"
+	"sprezz-identity/internal/domain/port"
 	"sprezz-identity/internal/views/admin"
 
 	"github.com/go-chi/chi/v5"
@@ -21,15 +22,17 @@ func NewAdminTenantHandler(adapter *HttpAdapter) *AdminTenantHandler {
 }
 
 func (h *AdminTenantHandler) Routes(r chi.Router) {
-	r.Get("/tenants", h.adminTenantsPage)
-	r.Get("/tenants/new", h.adminNewTenantForm)
-	r.Post("/tenants", h.adminCreateTenant)
-	r.Post("/tenants/settings", h.adminSaveTenantSettings)
-	r.Patch("/tenants/{id}/toggle-signup", h.adminToggleSignup)
+	r.Route(port.RouteAdminTenants, func(r chi.Router) {
+		r.Get("/", h.adminTenantsPage)
+		r.Get("/new", h.adminNewTenantForm)
+		r.Post("/", h.adminCreateTenant)
+		r.Post("/settings", h.adminSaveTenantSettings)
+		r.Patch("/{id}/toggle-signup", h.adminToggleSignup)
+	})
 }
 
 func (h *AdminTenantHandler) adminNewTenantForm(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set(contentTypeHeader, contentTypeHtml)
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	if r.URL.Query().Get("modal") == "true" {
 		component := admin.Modal("Create Tenant", "/admin/tenants/new")
 		_ = component.Render(r.Context(), w)
@@ -52,7 +55,7 @@ func (h *AdminTenantHandler) adminCreateTenant(w http.ResponseWriter, r *http.Re
 	}
 
 	if len(errs) > 0 {
-		w.Header().Set(contentTypeHeader, contentTypeHtml)
+		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		component := admin.CreateTenantForm(errs)
 		_ = component.Render(r.Context(), w)
@@ -60,7 +63,7 @@ func (h *AdminTenantHandler) adminCreateTenant(w http.ResponseWriter, r *http.Re
 	}
 
 	scheme := model.SchemeHttp + "://"
-	if r.TLS != nil || r.Header.Get(xForwardedProto) == "https" {
+	if r.TLS != nil || r.Header.Get(model.HeaderXForwardedProto) == model.SchemeHttps {
 		scheme = model.SchemeHttps + "://"
 	}
 
@@ -81,7 +84,7 @@ func (h *AdminTenantHandler) adminCreateTenant(w http.ResponseWriter, r *http.Re
 
 	if err := h.adminStorage.CreateTenant(r.Context(), newTenant); err != nil {
 		errs["name"] = err.Error()
-		w.Header().Set(contentTypeHeader, contentTypeHtml)
+		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 		component := admin.CreateTenantForm(errs)
 		_ = component.Render(r.Context(), w)
 		return
@@ -100,7 +103,7 @@ func (h *AdminTenantHandler) adminCreateTenant(w http.ResponseWriter, r *http.Re
 	}
 	_ = h.adminStorage.CreateIdentityProvider(r.Context(), newTenant.ID, defaultProvider)
 
-	w.Header().Set(hxRedirectHeader, routeAdmin+"?msg=Tenant+created+successfully")
+	w.Header().Set(model.HeaderHXRedirect, port.RouteAdmin+"?msg=Tenant+created+successfully")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -126,7 +129,7 @@ func (h *AdminTenantHandler) adminToggleSignup(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	w.Header().Set(contentTypeHeader, contentTypeHtml)
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	var label, severity string
 	if tenant.Config.AllowSignup {
 		label, severity = "Active", "active"
@@ -137,7 +140,7 @@ func (h *AdminTenantHandler) adminToggleSignup(w http.ResponseWriter, r *http.Re
 	_ = component.Render(r.Context(), w)
 
 	// We use HX-Redirect to natively trigger a full page refresh with the success message
-	w.Header().Set(hxRedirectHeader, routeAdmin+"?msg=Registration+status+updated+successfully")
+	w.Header().Set(model.HeaderHXRedirect, port.RouteAdmin+"?msg=Registration+status+updated+successfully")
 }
 
 func (h *AdminTenantHandler) adminTenantsPage(w http.ResponseWriter, r *http.Request) {
@@ -154,7 +157,7 @@ func (h *AdminTenantHandler) adminTenantsPage(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	w.Header().Set(contentTypeHeader, contentTypeHtml)
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	msg := r.URL.Query().Get("msg")
 	props := admin.TenantsPageProps{
 		ActiveTenant:  *tenant,
@@ -163,7 +166,7 @@ func (h *AdminTenantHandler) adminTenantsPage(w http.ResponseWriter, r *http.Req
 		Msg:           msg,
 		Errors:        make(map[string]string),
 	}
-	if r.Header.Get(hxRequestHeader) == "true" {
+	if r.Header.Get(model.HeaderHXRequest) == "true" {
 		_ = admin.TenantsContent(props).Render(r.Context(), w)
 	} else {
 		_ = admin.TenantsPage(props).Render(r.Context(), w)
@@ -238,7 +241,7 @@ func (h *AdminTenantHandler) adminSaveTenantSettings(w http.ResponseWriter, r *h
 	config.PredefinedAudiences = predefinedAudiences
 
 	if len(errs) > 0 {
-		w.Header().Set(contentTypeHeader, contentTypeHtml)
+		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		isAdminTenant := tenant.Name == adminTenantName
 		allTenants := []model.Tenant{}

@@ -136,7 +136,7 @@ func runRegisterTestCase(t *testing.T, tt registerTestCase) {
 
 	body, _ := json.Marshal(payload)
 	req := httptest.NewRequest(http.MethodPost, "/oauth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(model.HeaderContentType, model.ContentTypeJSON)
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
 

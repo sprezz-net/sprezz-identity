@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
 	"sprezz-identity/internal/views/public"
 
@@ -24,8 +25,8 @@ func NewLogoutHandler(auc port.AuthUseCase, suc port.SSOSessionUseCase) *LogoutH
 }
 
 func (h *LogoutHandler) Routes(r chi.Router) {
-	r.Get("/oauth/logout", h.HandleLogoutRequest)
-	r.Get("/logout", h.HandleLogoutRequest)
+	r.Get(port.RouteLogout, h.HandleLogoutRequest)
+	r.Get(port.RouteWebLogout, h.HandleLogoutRequest)
 }
 
 func (h *LogoutHandler) HandleLogoutRequest(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +62,7 @@ func (h *LogoutHandler) HandleLogoutRequest(w http.ResponseWriter, r *http.Reque
 	// 3. Pure Corporate Delegation: Fire use case execution across the driving perimeter
 	result, err := h.authUseCase.ProcessLogoutRequest(r.Context(), cmd)
 	if err != nil {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 		w.WriteHeader(http.StatusBadRequest)
 		_ = public.Error(err.Error()).Render(r.Context(), w)
 		return
@@ -82,7 +83,7 @@ func (h *LogoutHandler) HandleLogoutRequest(w http.ResponseWriter, r *http.Reque
 
 	// 5. Spec Compliance Section 7.1: If front-channel iframe URIs exist, render a hidden frame block page
 	if len(result.FrontChannelLogoutURIs) > 0 {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 		w.WriteHeader(http.StatusOK)
 
 		component := public.Logout(result.FrontChannelLogoutURIs, result.PostLogoutRedirectURI)

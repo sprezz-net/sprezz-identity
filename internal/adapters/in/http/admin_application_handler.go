@@ -26,23 +26,29 @@ func NewAdminApplicationHandler(adapter *HttpAdapter) *AdminApplicationHandler {
 }
 
 func (h *AdminApplicationHandler) Routes(r chi.Router) {
-	r.Get("/applications/generate-secret", h.adminGenerateSecret)
-	r.Get("/applications", h.adminApplicationsPage)
-	r.Get("/applications/new", h.adminNewApplicationForm)
-	r.Get("/applications/edit", h.adminEditApplicationForm)
-	r.Get("/applications/view", h.adminViewApplication)
-	r.Post("/applications", h.adminSaveApplication)
-	r.Post("/applications/{id}/toggle-status", h.adminToggleApplicationStatus)
-	r.Post("/applications/{id}/reset-secret", h.adminResetApplicationSecret)
-	r.Delete("/applications/{id}", h.adminDeleteApplication)
+	r.Route(port.RouteAdminApplications, func(r chi.Router) {
+		r.Get("/generate-secret", h.adminGenerateSecret)
+		r.Get("/", h.adminApplicationsPage)
+		r.Get("/new", h.adminNewApplicationForm)
+		r.Get("/edit", h.adminEditApplicationForm)
+		r.Get("/view", h.adminViewApplication)
+		r.Post("/", h.adminSaveApplication)
+		r.Post("/{id}/toggle-status", h.adminToggleApplicationStatus)
+		r.Post("/{id}/reset-secret", h.adminResetApplicationSecret)
+		r.Delete("/{id}", h.adminDeleteApplication)
 
-	r.Get("/applications/profiles/new", h.adminNewProfileForm)
-	r.Get("/applications/profiles/edit", h.adminEditProfileForm)
-	r.Post("/applications/profiles", h.adminSaveProfile)
+		r.Route(port.RouteAdminApplicationsProfiles, func(r chi.Router) {
+			r.Get("/new", h.adminNewProfileForm)
+			r.Get("/edit", h.adminEditProfileForm)
+			r.Post("/", h.adminSaveProfile)
+		})
 
-	r.Get("/applications/groups/new", h.adminNewGroupForm)
-	r.Get("/applications/groups/edit", h.adminEditGroupForm)
-	r.Post("/applications/groups", h.adminSaveGroup)
+		r.Route(port.RouteAdminApplicationsGroups, func(r chi.Router) {
+			r.Get("/new", h.adminNewGroupForm)
+			r.Get("/edit", h.adminEditGroupForm)
+			r.Post("/", h.adminSaveGroup)
+		})
+	})
 }
 
 func (h *AdminApplicationHandler) adminApplicationsPage(w http.ResponseWriter, r *http.Request) {
@@ -698,6 +704,6 @@ func (h *AdminApplicationHandler) adminGenerateSecret(w http.ResponseWriter, r *
 		return
 	}
 	secret := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(bytes)
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set(model.HeaderContentType, model.ContentTypePlainText)
 	_, _ = w.Write([]byte(secret))
 }

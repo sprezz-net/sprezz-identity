@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
 
 	"github.com/go-chi/chi/v5"
@@ -24,9 +25,9 @@ func NewWellKnownHandler(auc port.AuthUseCase, appEnv string) *WellKnownHandler 
 }
 
 func (h *WellKnownHandler) Routes(r chi.Router) {
-	r.Get("/.well-known/openid-configuration", h.HandleOIDCDiscovery)
-	r.Get("/.well-known/oauth-authorization-server", h.HandleOAuthMetadata)
-	r.Get("/.well-known/jwks.json", h.HandleJWKS)
+	r.Get(port.RouteWellKnownOpenIDConfig, h.HandleOIDCDiscovery)
+	r.Get(port.RouteWellKnownOAuthServer, h.HandleOAuthMetadata)
+	r.Get(port.RouteWellKnownKeys, h.HandleJWKS)
 }
 
 func (h *WellKnownHandler) HandleOIDCDiscovery(w http.ResponseWriter, r *http.Request) {
@@ -56,9 +57,9 @@ func (h *WellKnownHandler) HandleOAuthMetadata(w http.ResponseWriter, r *http.Re
 func (h *WellKnownHandler) HandleJWKS(w http.ResponseWriter, r *http.Request) {
 	tenantUUID := h.mustResolveTenant(r.Context())
 
-	scheme := "https"
+	scheme := model.SchemeHttps
 	if h.appEnv == "local" {
-		scheme = "http"
+		scheme = model.SchemeHttp
 	}
 
 	jwks, err := h.authUseCase.ProcessJWKSetRetrieval(r.Context(), tenantUUID, r.Host, scheme)
@@ -80,7 +81,7 @@ func (h *WellKnownHandler) mustResolveTenant(ctx context.Context) uuid.UUID {
 }
 
 func (h *WellKnownHandler) writeJSONResponse(w http.ResponseWriter, status int, cacheControl string, data any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set(model.HeaderContentType, model.ContentTypeJSON)
 	if cacheControl != "" {
 		w.Header().Set("Cache-Control", cacheControl)
 	}
@@ -89,7 +90,7 @@ func (h *WellKnownHandler) writeJSONResponse(w http.ResponseWriter, status int, 
 }
 
 func (h *WellKnownHandler) writePlainError(w http.ResponseWriter, status int, desc string) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set(model.HeaderContentType, model.ContentTypePlainText)
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(desc))
 }

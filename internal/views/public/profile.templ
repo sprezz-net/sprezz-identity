@@ -3,6 +3,7 @@ package public
 import (
 	"fmt"
 	"sprezz-identity/internal/domain/model"
+	"sprezz-identity/internal/domain/port"
 )
 
 templ ProfileDashboard(user model.UserProfile, identities []model.UserIdentity, providers []model.IdentityProvider, hasPasswordIdp bool, errorMsg, successMsg string) {
@@ -23,7 +24,7 @@ templ ProfileDashboard(user model.UserProfile, identities []model.UserIdentity, 
 					<h1 class="text-2xl font-bold tracking-wider">MY PROFILE</h1>
 					<p class="text-sm text-slate-400 mt-1">Manage your account details and connected identities</p>
 				</div>
-				<a href="/logout" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-semibold transition">
+				<a href={ port.RouteWebLogout } class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-semibold transition">
 					Sign Out
 				</a>
 			</div>
@@ -72,13 +73,13 @@ templ ProfileDashboard(user model.UserProfile, identities []model.UserIdentity, 
 
 					if hasPasswordIdp {
 						<div class="pt-4 flex flex-wrap gap-3">
-							<a href="/profile/name" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm transition">
+							<a href={ port.RouteWebProfile + port.RouteWebProfileName } class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm transition">
 								Change Name
 							</a>
-							<a href="/profile/email" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm transition">
+							<a href={ port.RouteWebProfile + port.RouteWebProfileEmail } class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm transition">
 								Change Email
 							</a>
-							<a href="/profile/password" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm transition">
+							<a href={ port.RouteWebProfile + port.RouteWebProfilePassword } class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm transition">
 								Change Password
 							</a>
 						</div>
@@ -116,7 +117,7 @@ templ ProfileDashboard(user model.UserProfile, identities []model.UserIdentity, 
 									for _, p := range providers {
 										if p.ID == ident.IdentityProviderID && (p.IDPType != model.UsernamePasswordIDPType || p.Config.AllowDecoupling) {
 											<button
-												hx-delete={ fmt.Sprintf("/profile/identities/%s", ident.IdentityProviderID.String()) }
+												hx-delete={ fmt.Sprintf("%s%s/%s", port.RouteWebProfile, port.RouteWebProfileIdentities, ident.IdentityProviderID.String()) }
 												hx-confirm="Are you sure you want to decouple this identity from your profile?"
 												hx-target="body"
 												class="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs font-semibold transition"
@@ -168,7 +169,7 @@ templ ChangePasswordPage(user model.UserProfile, errorMsg, successMsg string) {
 					}
 				</div>
 
-				<form method="POST" action="/profile/password" class="space-y-4">
+				<form method="POST" action={ port.RouteWebProfile + port.RouteWebProfilePassword } class="space-y-4">
 					<div>
 						<label class="block text-sm font-medium text-slate-700 mb-1">New Password</label>
 						<input
@@ -212,7 +213,7 @@ templ ChangePasswordPage(user model.UserProfile, errorMsg, successMsg string) {
 							Save Password
 						</button>
 						<a
-							href="/profile"
+							href={ port.RouteWebProfile }
 							class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold transition text-center"
 						>
 							Cancel
@@ -257,7 +258,7 @@ templ ChangeEmailPage(user model.UserProfile, errorMsg, successMsg string) {
 					}
 				</div>
 
-				<form method="POST" action="/profile/email" class="space-y-4">
+				<form method="POST" action={ port.RouteWebProfile + port.RouteWebProfileEmail } class="space-y-4">
 					<div>
 						<label class="block text-sm font-medium text-slate-700 mb-1">New Email Address</label>
 						<input
@@ -310,7 +311,7 @@ templ ChangeEmailPage(user model.UserProfile, errorMsg, successMsg string) {
 							Save Email
 						</button>
 						<a
-							href="/profile"
+							href={ port.RouteWebProfile }
 							class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold transition text-center"
 						>
 							Cancel
@@ -355,7 +356,7 @@ templ ChangeNamePage(user model.UserProfile, errorMsg, successMsg string) {
 					}
 				</div>
 
-				<form method="POST" action="/profile/name" class="space-y-4">
+				<form method="POST" action={ port.RouteWebProfile + port.RouteWebProfileName } class="space-y-4">
 					<div>
 						<label class="block text-sm font-medium text-slate-700 mb-1">New Full Name</label>
 						<input
@@ -386,7 +387,7 @@ templ ChangeNamePage(user model.UserProfile, errorMsg, successMsg string) {
 							Save Name
 						</button>
 						<a
-							href="/profile"
+							href={ port.RouteWebProfile }
 							class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold transition text-center"
 						>
 							Cancel

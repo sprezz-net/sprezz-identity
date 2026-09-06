@@ -192,9 +192,9 @@ func (s *PostgresStorage) ResolveTenantByUUID(ctx context.Context, tenantID uuid
 		}
 	}
 
-	scheme := "https"
+	scheme := model.SchemeHttps
 	if s.appEnv == "local" {
-		scheme = "http"
+		scheme = model.SchemeHttp
 	}
 
 	return &model.Tenant{

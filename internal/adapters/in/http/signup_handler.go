@@ -29,8 +29,8 @@ func NewSignupHandler(ruc port.UserRegistrationUseCase, suc port.SSOSessionUseCa
 }
 
 func (h *SignupHandler) Routes(r chi.Router) {
-	r.Get("/signup", h.HandleSignUpForm)
-	r.Post("/signup", h.HandleSignUpSubmit)
+	r.Get(port.RouteWebSignUp, h.HandleSignUpForm)
+	r.Post(port.RouteWebSignUp, h.HandleSignUpSubmit)
 }
 
 func (h *SignupHandler) HandleSignUpForm(w http.ResponseWriter, r *http.Request) {

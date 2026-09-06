@@ -43,9 +43,9 @@ func NewAdminHandler(adapter *HttpAdapter) *AdminHandler {
 }
 
 func (h *AdminHandler) Routes(r chi.Router) {
-	r.Route("/admin", func(r chi.Router) {
+	r.Route(port.RouteAdmin, func(r chi.Router) {
 		r.Get("/", h.adminDashboardView)
-		r.Get("/dashboard", h.adminDashboardView)
+		r.Get(port.RouteAdminDashboard, h.adminDashboardView)
 
 		h.tenantHandler.Routes(r)
 		h.applicationHandler.Routes(r)
@@ -80,11 +80,11 @@ func (h *AdminHandler) adminDashboardView(w http.ResponseWriter, r *http.Request
 	// 3. Verify the access token extracted out of the unified tracking session slot
 	_, err = h.cryptoPort.VerifyToken(accessToken)
 	if err != nil {
-		h.clearCookieAndRedirect(w, r, name, routeAdmin)
+		h.clearCookieAndRedirect(w, r, name, port.RouteAdmin)
 		return
 	}
 
-	w.Header().Set(contentTypeHeader, contentTypeHtml)
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	msg := r.URL.Query().Get("msg")
 	component := admin.AdminDashboard(admin.AdminDashboardProps{
 		ActiveTenant:  *tenant,
@@ -104,7 +104,7 @@ func (h *HttpAdapter) initiateAdminOIDC(w http.ResponseWriter, r *http.Request) 
 
 	// Dynamic Resolution: Sourced from canonical tenant configuration instead of hardcoded headers
 	tenantBaseURI := tenant.GetBaseURI()
-	redirectURI := tenantBaseURI + routeCallback
+	redirectURI := tenantBaseURI + port.RouteCallback
 
 	providers, err := h.storagePort.GetIdentityProviders(r.Context(), tenant.ID)
 	if err != nil {
@@ -133,7 +133,7 @@ func (h *HttpAdapter) initiateAdminOIDC(w http.ResponseWriter, r *http.Request) 
 		ClientID:           adminIDP.Config.ClientID,
 		RequestedScopes:    adminIDP.Config.Scopes,
 		LocalCallbackURI:   redirectURI,
-		FinalTargetURI:     tenantBaseURI + routeAdmin,
+		FinalTargetURI:     tenantBaseURI + port.RouteAdmin,
 	}
 
 	// 3. Trigger our clean data-driven domain federation service

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
 
 	"github.com/go-chi/chi/v5"
@@ -101,7 +102,7 @@ func (h *AuthorizeHandler) mustResolveTenant(ctx context.Context) uuid.UUID {
 }
 
 func (h *AuthorizeHandler) writeWebPlainError(w http.ResponseWriter, status int, code, desc string) {
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set(model.HeaderContentType, model.ContentTypePlainText)
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(code + ": " + desc))
 }

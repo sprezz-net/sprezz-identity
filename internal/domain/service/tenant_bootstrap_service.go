@@ -197,9 +197,9 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 	// Extract the real uuid primary key from your local provider instead of utilizing strings
 	localProviderUUID := providers[0].ID
 
-	scheme := "https://"
+	scheme := model.SchemeHttps
 	if s.appEnv == "local" {
-		scheme = "http://"
+		scheme = model.SchemeHttp
 	}
 
 	profileID := uuid.New()
@@ -232,8 +232,8 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 		AllowedAudiences:       []string{},
 		AllowedIDPIDs:          []uuid.UUID{localProviderUUID},
 		DefaultIDPID:           &localProviderUUID,
-		RedirectURIs:           []string{scheme + domain + routeCallback},
-		PostLogoutRedirectURIs: []string{scheme + domain + routeAdmin},
+		RedirectURIs:           []string{scheme + "://" + domain + routeCallback},
+		PostLogoutRedirectURIs: []string{scheme + "://" + domain + routeAdmin},
 	}
 
 	// 5. Build the core Application Instance referencing the decoupled entity nodes

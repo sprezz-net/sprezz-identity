@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"sprezz-identity/internal/domain/model"
+	"sprezz-identity/internal/domain/port"
 	"sprezz-identity/internal/views/admin"
 
 	"github.com/go-chi/chi/v5"
@@ -21,12 +22,14 @@ func NewAdminIDPHandler(adapter *HttpAdapter) *AdminIDPHandler {
 }
 
 func (h *AdminIDPHandler) Routes(r chi.Router) {
-	r.Get("/idps", h.adminIDPsPage)
-	r.Get("/idps/discover", h.adminDiscoverIDP)
-	r.Get("/idps/new", h.adminNewIDPForm)
-	r.Get("/idps/edit", h.adminEditIDPForm)
-	r.Post("/idps", h.adminSaveIDP)
-	r.Delete("/idps/{id}", h.adminDeleteIDP)
+	r.Route(port.RouteAdminIdentityProviders, func(r chi.Router) {
+		r.Get("/", h.adminIDPsPage)
+		r.Get("/discover", h.adminDiscoverIDP)
+		r.Get("/new", h.adminNewIDPForm)
+		r.Get("/edit", h.adminEditIDPForm)
+		r.Post("/", h.adminSaveIDP)
+		r.Delete("/{id}", h.adminDeleteIDP)
+	})
 }
 
 func (h *AdminIDPHandler) adminIDPsPage(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +61,7 @@ func (h *AdminIDPHandler) adminIDPsPage(w http.ResponseWriter, r *http.Request) 
 		idps = filtered
 	}
 
-	w.Header().Set(contentTypeHeader, contentTypeHtml)
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	msg := r.URL.Query().Get("msg")
 	props := admin.IDPsPageProps{
 		ActiveTenant:      *tenant,
@@ -67,7 +70,7 @@ func (h *AdminIDPHandler) adminIDPsPage(w http.ResponseWriter, r *http.Request) 
 		FilterPartitionID: filterPartitionID,
 		Msg:               msg,
 	}
-	if r.Header.Get(hxRequestHeader) == "true" {
+	if r.Header.Get(model.HeaderHXRequest) == "true" {
 		_ = admin.IDPsContent(props).Render(r.Context(), w)
 	} else {
 		_ = admin.IDPsPage(props).Render(r.Context(), w)
@@ -76,7 +79,7 @@ func (h *AdminIDPHandler) adminIDPsPage(w http.ResponseWriter, r *http.Request) 
 
 func (h *AdminIDPHandler) adminNewIDPForm(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
-	w.Header().Set(contentTypeHeader, contentTypeHtml)
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	if r.URL.Query().Get("modal") == "true" {
 		component := admin.Modal("Add Identity Provider", "/admin/idps/new")
 		_ = component.Render(r.Context(), w)
@@ -115,7 +118,7 @@ func (h *AdminIDPHandler) adminEditIDPForm(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	w.Header().Set(contentTypeHeader, contentTypeHtml)
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	if r.URL.Query().Get("modal") == "true" {
 		component := admin.Modal("Edit Identity Provider", fmt.Sprintf("/admin/idps/edit?id=%s", idpIDStr))
 		_ = component.Render(r.Context(), w)
@@ -204,7 +207,7 @@ func (h *AdminIDPHandler) adminSaveIDP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(errs) > 0 {
-		w.Header().Set(contentTypeHeader, contentTypeHtml)
+		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		partitions, _ := h.storagePort.GetPartitions(r.Context(), tenant.ID)
 		var formIdp model.IdentityProvider

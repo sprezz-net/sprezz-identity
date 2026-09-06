@@ -28,8 +28,8 @@ func NewCallbackHandler(fuc port.FederatedLoginUseCase, auc port.AuthUseCase, su
 
 // Routes registers both the inbound local application and outbound federation callback vectors.
 func (h *CallbackHandler) Routes(r chi.Router) {
-	r.Get("/oauth/federation/callback", h.HandleFederationCallback)
-	r.Get("/oauth/callback", h.HandleOAuthCallbackRequest)
+	r.Get(port.RouteCallback, h.HandleOAuthCallbackRequest)
+	r.Get(port.RouteFederationCallback, h.HandleFederationCallback)
 }
 
 // HandleFederationCallback processes incoming responses from upstream external Identity Providers (egress loop).

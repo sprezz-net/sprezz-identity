@@ -31,7 +31,7 @@ func NewLoginHandler(auc port.AuthUseCase, fuc port.FederatedLoginUseCase, suc p
 
 func (h *LoginHandler) Routes(r chi.Router) {
 	r.Get("/", h.HandleLoginRoot)
-	r.Get("/login", h.HandleLoginSubmit)
+	r.Get(port.RouteWebLogin, h.HandleLoginSubmit)
 }
 
 func (h *LoginHandler) HandleLoginRoot(w http.ResponseWriter, r *http.Request) {
@@ -133,7 +133,7 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *LoginHandler) renderInlineFormError(w http.ResponseWriter, r *http.Request, message string) {
-	w.Header().Set(model.HeaderContentType, "text/html; charset=utf-8")
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	w.WriteHeader(http.StatusOK)
 	_, _ = fmt.Fprintf(w, `<div class="p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg text-sm font-medium">%s</div>`, message)
 }
@@ -195,7 +195,7 @@ func (h *LoginHandler) triggerExternalFederationRedirection(w http.ResponseWrite
 	})
 
 	if err != nil {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 		w.WriteHeader(http.StatusBadRequest)
 		_ = public.Error(err.Error()).Render(r.Context(), w)
 		return

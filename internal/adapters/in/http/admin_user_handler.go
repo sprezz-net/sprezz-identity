@@ -23,12 +23,14 @@ func NewAdminUserHandler(adapter *HttpAdapter) *AdminUserHandler {
 }
 
 func (h *AdminUserHandler) Routes(r chi.Router) {
-	r.Get("/users", h.adminUsersPage)
-	r.Get("/users/view", h.adminViewUser)
-	r.Get("/users/edit", h.adminEditUserForm)
-	r.Post("/users", h.adminSaveUser)
-	r.Delete("/users/{id}", h.adminDeleteUser)
-	r.Delete("/users/{id}/identities/{idp}", h.adminDecoupleIdentity)
+	r.Route(port.RouteAdminUsers, func(r chi.Router) {
+		r.Get("/", h.adminUsersPage)
+		r.Get("/view", h.adminViewUser)
+		r.Get("/edit", h.adminEditUserForm)
+		r.Post("/", h.adminSaveUser)
+		r.Delete("/{id}", h.adminDeleteUser)
+		r.Delete("/{id}/" + port.RouteAdminUsersIdentities + "/{idp}", h.adminDecoupleIdentity)
+	})
 }
 
 func (h *AdminUserHandler) adminUsersPage(w http.ResponseWriter, r *http.Request) {
@@ -62,7 +64,7 @@ func (h *AdminUserHandler) adminUsersPage(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	w.Header().Set(contentTypeHeader, contentTypeHtml)
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	msg := r.URL.Query().Get("msg")
 	props := admin.UsersPageProps{
 		ActiveTenant:      *tenant,
@@ -71,7 +73,7 @@ func (h *AdminUserHandler) adminUsersPage(w http.ResponseWriter, r *http.Request
 		FilterPartitionID: filterPartitionID,
 		Msg:               msg,
 	}
-	if r.Header.Get(hxRequestHeader) == "true" {
+	if r.Header.Get(model.HeaderHXRequest) == "true" {
 		_ = admin.UsersContent(props).Render(r.Context(), w)
 	} else {
 		_ = admin.UsersPage(props).Render(r.Context(), w)
@@ -108,7 +110,7 @@ func (h *AdminUserHandler) adminViewUser(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.Header().Set(contentTypeHeader, contentTypeHtml)
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	if r.URL.Query().Get("modal") == "true" {
 		component := admin.Modal(user.Name, fmt.Sprintf("/admin/users/view?id=%s&partition_id=%d", userIDStr, partitionID))
 		_ = component.Render(r.Context(), w)
@@ -146,7 +148,7 @@ func (h *AdminUserHandler) adminEditUserForm(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	w.Header().Set(contentTypeHeader, contentTypeHtml)
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	if r.URL.Query().Get("modal") == "true" {
 		component := admin.Modal("Edit User", fmt.Sprintf("/admin/users/edit?id=%s&partition_id=%d", userIDStr, partitionID))
 		_ = component.Render(r.Context(), w)
@@ -191,7 +193,7 @@ func (h *AdminUserHandler) adminSaveUser(w http.ResponseWriter, r *http.Request)
 	}
 
 	if len(errs) > 0 {
-		w.Header().Set(contentTypeHeader, contentTypeHtml)
+		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		partitions, _ := h.storagePort.GetPartitions(r.Context(), tenant.ID)
 		component := admin.UserForm(admin.UserFormProps{
@@ -246,7 +248,7 @@ func (h *AdminUserHandler) adminSaveUser(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.Header().Set(hxRedirectHeader, fmt.Sprintf("/admin/users?msg=User+%s+updated+successfully", url.QueryEscape(user.Name)))
+	w.Header().Set(model.HeaderHXRedirect		, fmt.Sprintf("/admin/users?msg=User+%s+updated+successfully", url.QueryEscape(user.Name)))
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -321,7 +323,7 @@ func (h *AdminUserHandler) adminDecoupleIdentity(w http.ResponseWriter, r *http.
 		return
 	}
 
-	w.Header().Set(contentTypeHeader, contentTypeHtml)
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	component := admin.UserDetails(admin.UserDetailsProps{
 		User:       *user,
 		Identities: identities,

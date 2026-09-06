@@ -43,7 +43,7 @@ func TestHttpAdapter_Introspect_Success(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/introspect", strings.NewReader("client_id=test-client&token=token-to-introspect"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(model.HeaderContentType, model.ContentTypeFormUrlEncoded)
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
 

@@ -41,7 +41,7 @@ func TestHttpAdapter_PAR_Success(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/par", strings.NewReader("client_id=test-client&redirect_uri=https://test.com/callback&scope=openid"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(model.HeaderContentType, model.ContentTypeFormUrlEncoded)
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
 

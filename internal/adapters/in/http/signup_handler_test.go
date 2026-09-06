@@ -37,7 +37,7 @@ func TestHttpAdapter_SignUpForm_Success(t *testing.T) {
 		}, nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/signup", nil)
+	req := httptest.NewRequest(http.MethodGet, port.RouteWebSignUp, nil)
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
 
@@ -64,7 +64,7 @@ func TestHttpAdapter_SignUpForm_Forbidden(t *testing.T) {
 		return &port.SignupContextResponse{}, nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/signup", nil)
+	req := httptest.NewRequest(http.MethodGet, port.RouteWebSignUp, nil)
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
 

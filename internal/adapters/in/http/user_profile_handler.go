@@ -28,15 +28,15 @@ func NewProfileHandler(suc port.SSOSessionUseCase, upuc port.UserProfileUseCase)
 }
 
 func (h *ProfileHandler) Routes(r chi.Router) {
-	r.Route("/profile", func(r chi.Router) {
+	r.Route(port.RouteWebProfile, func(r chi.Router) {
 		r.Get("/", h.HandleViewDashboard)
-		r.Get("/password", h.HandleChangePasswordForm)
-		r.Post("/password", h.HandleChangePasswordSubmit)
-		r.Get("/email", h.HandleChangeEmailForm)
-		r.Post("/email", h.HandleChangeEmailSubmit)
-		r.Get("/name", h.HandleChangeNameForm)
-		r.Post("/name", h.HandleChangeNameSubmit)
-		r.Delete("/identities/{idpID}", h.HandleDecoupleIdentitySubmit)
+		r.Get(port.RouteWebProfilePassword, h.HandleChangePasswordForm)
+		r.Post(port.RouteWebProfilePassword, h.HandleChangePasswordSubmit)
+		r.Get(port.RouteWebProfileEmail, h.HandleChangeEmailForm)
+		r.Post(port.RouteWebProfileEmail, h.HandleChangeEmailSubmit)
+		r.Get(port.RouteWebProfileName, h.HandleChangeNameForm)
+		r.Post(port.RouteWebProfileName, h.HandleChangeNameSubmit)
+		r.Delete(port.RouteWebProfileIdentities+"/{idpID}", h.HandleDecoupleIdentitySubmit)
 	})
 }
 
@@ -44,7 +44,7 @@ func (h *ProfileHandler) HandleViewDashboard(w http.ResponseWriter, r *http.Requ
 	tenantUUID := h.mustResolveTenant(r.Context())
 	subjectID, partitionID, err := h.authenticateSessionUser(r, tenantUUID)
 	if err != nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, port.RouteRoot, http.StatusSeeOther)
 		return
 	}
 
@@ -64,7 +64,7 @@ func (h *ProfileHandler) HandleViewDashboard(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	w.Header().Set(model.HeaderContentType, "text/html; charset=utf-8")
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	w.WriteHeader(http.StatusOK)
 
 	component := public.ProfileDashboard(dashboardResp.UserProfile, dashboardResp.Identities, dashboardResp.Providers, dashboardResp.HasPasswordIDP, "", "")
@@ -75,11 +75,11 @@ func (h *ProfileHandler) HandleChangePasswordForm(w http.ResponseWriter, r *http
 	tenantUUID := h.mustResolveTenant(r.Context())
 	userProfile, _, err := h.resolveAuthenticatedUser(r, tenantUUID)
 	if err != nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, port.RouteRoot, http.StatusSeeOther)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	_ = public.ChangePasswordPage(*userProfile, "", "").Render(r.Context(), w)
 }
 
@@ -87,7 +87,7 @@ func (h *ProfileHandler) HandleChangePasswordSubmit(w http.ResponseWriter, r *ht
 	tenantUUID := h.mustResolveTenant(r.Context())
 	userProfile, partitionID, err := h.resolveAuthenticatedUser(r, tenantUUID)
 	if err != nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, port.RouteRoot, http.StatusSeeOther)
 		return
 	}
 
@@ -127,11 +127,11 @@ func (h *ProfileHandler) HandleChangeEmailForm(w http.ResponseWriter, r *http.Re
 	tenantUUID := h.mustResolveTenant(r.Context())
 	userProfile, _, err := h.resolveAuthenticatedUser(r, tenantUUID)
 	if err != nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, port.RouteRoot, http.StatusSeeOther)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	_ = public.ChangeEmailPage(*userProfile, "", "").Render(r.Context(), w)
 }
 
@@ -139,7 +139,7 @@ func (h *ProfileHandler) HandleChangeEmailSubmit(w http.ResponseWriter, r *http.
 	tenantUUID := h.mustResolveTenant(r.Context())
 	userProfile, partitionID, err := h.resolveAuthenticatedUser(r, tenantUUID)
 	if err != nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, port.RouteRoot, http.StatusSeeOther)
 		return
 	}
 
@@ -180,11 +180,11 @@ func (h *ProfileHandler) HandleChangeNameForm(w http.ResponseWriter, r *http.Req
 	tenantUUID := h.mustResolveTenant(r.Context())
 	userProfile, _, err := h.resolveAuthenticatedUser(r, tenantUUID)
 	if err != nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, port.RouteRoot, http.StatusSeeOther)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	_ = public.ChangeNamePage(*userProfile, "", "").Render(r.Context(), w)
 }
 
@@ -192,7 +192,7 @@ func (h *ProfileHandler) HandleChangeNameSubmit(w http.ResponseWriter, r *http.R
 	tenantUUID := h.mustResolveTenant(r.Context())
 	userProfile, partitionID, err := h.resolveAuthenticatedUser(r, tenantUUID)
 	if err != nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, port.RouteRoot, http.StatusSeeOther)
 		return
 	}
 
@@ -203,7 +203,6 @@ func (h *ProfileHandler) HandleChangeNameSubmit(w http.ResponseWriter, r *http.R
 
 	newName := r.FormValue("new_name")
 
-	// 🌟 FIXED: Map elements straight into a type-safe Command struct
 	cmd := port.ChangeNameCommand{
 		TenantID:      tenantUUID,
 		PartitionID:   partitionID,
@@ -225,7 +224,7 @@ func (h *ProfileHandler) HandleDecoupleIdentitySubmit(w http.ResponseWriter, r *
 	tenantUUID := h.mustResolveTenant(r.Context())
 	userProfile, partitionID, err := h.resolveAuthenticatedUser(r, tenantUUID)
 	if err != nil {
-		w.Header().Set("HX-Redirect", "/")
+		w.Header().Set("HX-Redirect", port.RouteRoot)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -233,13 +232,12 @@ func (h *ProfileHandler) HandleDecoupleIdentitySubmit(w http.ResponseWriter, r *
 	idpIDStr := chi.URLParam(r, "idpID")
 	targetProviderUUID, err := uuid.Parse(idpIDStr)
 	if err != nil {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`<script>alert("Invalid identity provider identifier constraint");</script>`))
 		return
 	}
 
-	// 🌟 FIXED: Map elements straight into a type-safe Command struct
 	cmd := port.DecoupleIdentityCommand{
 		TenantID:           tenantUUID,
 		PartitionID:        partitionID,
@@ -249,13 +247,13 @@ func (h *ProfileHandler) HandleDecoupleIdentitySubmit(w http.ResponseWriter, r *
 
 	err = h.userProfileUseCase.DecoupleUserIdentity(r.Context(), cmd)
 	if err != nil {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprintf(w, `<script>alert("%s");</script>`, err.Error())
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/profile")
+	w.Header().Set("HX-Redirect", port.RouteWebProfile)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -316,19 +314,19 @@ func (h *ProfileHandler) resolveAuthenticatedUser(r *http.Request, tenantID uuid
 }
 
 func (h *ProfileHandler) renderPasswordPageStatus(w http.ResponseWriter, r *http.Request, user model.UserProfile, err, success string) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	w.WriteHeader(http.StatusOK)
 	_ = public.ChangePasswordPage(user, err, success).Render(r.Context(), w)
 }
 
 func (h *ProfileHandler) renderEmailPageStatus(w http.ResponseWriter, r *http.Request, user model.UserProfile, err, success string) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	w.WriteHeader(http.StatusOK)
 	_ = public.ChangeEmailPage(user, err, success).Render(r.Context(), w)
 }
 
 func (h *ProfileHandler) renderNamePageStatus(w http.ResponseWriter, r *http.Request, user model.UserProfile, err, success string) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	w.WriteHeader(http.StatusOK)
 	_ = public.ChangeNamePage(user, err, success).Render(r.Context(), w)
 }
@@ -343,7 +341,7 @@ func (h *ProfileHandler) mustResolveTenant(ctx context.Context) uuid.UUID {
 }
 
 func (h *ProfileHandler) writeWebHTMLError(w http.ResponseWriter, status int, desc string) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	w.WriteHeader(status)
 	_ = public.Error(desc).Render(context.Background(), w)
 }

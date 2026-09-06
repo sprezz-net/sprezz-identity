@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sprezz-identity/internal/domain/model"
+	"sprezz-identity/internal/domain/port"
 )
 
 func marshalProviders(providers []model.IdentityProvider) string {
@@ -76,10 +77,10 @@ type NavItem struct {
 }
 
 var navItems = []NavItem{
-	{Label: "Tenants", URL: "/admin/tenants", Key: "tenants"},
-	{Label: "Applications", URL: "/admin/applications", Key: "clients"},
-	{Label: "Identity Providers", URL: "/admin/idps", Key: "idps"},
-	{Label: "Users", URL: "/admin/users", Key: "users"},
+	{Label: "Tenants", URL: port.RouteAdmin + port.RouteAdminTenants, Key: "tenants"},
+	{Label: "Applications", URL: port.RouteAdmin + port.RouteAdminApplications, Key: "clients"},
+	{Label: "Identity Providers", URL: port.RouteAdmin + port.RouteAdminIdentityProviders, Key: "idps"},
+	{Label: "Users", URL: port.RouteAdmin + port.RouteAdminUsers, Key: "users"},
 }
 
 templ AdminLayout(props AdminLayoutProps) {
