@@ -126,18 +126,8 @@ func (h *HttpAdapter) initiateAdminOIDC(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// 2. Map tracking parameters pulling configuration data purely from your administrative IDP metadata
-	cmd := port.InitiateFederatedLoginCommand{
-		TenantID:           tenant.ID,
-		IdentityProviderID: adminIDP.ID,
-		ClientID:           adminIDP.Config.ClientID,
-		RequestedScopes:    adminIDP.Config.Scopes,
-		LocalCallbackURI:   redirectURI,
-		FinalTargetURI:     tenantBaseURI + port.RouteAdmin,
-	}
-
-	// 3. Trigger our clean data-driven domain federation service
-	response, err := h.federatedUseCase.InitiateFederatedLogin(r.Context(), cmd)
+	// 2. Trigger our clean data-driven administrative logon usecase that coordinates dynamic DCR setup on-demand
+	response, err := h.adminLogonUseCase.InitiateAdminLogon(r.Context(), tenant.ID, redirectURI, tenantBaseURI+port.RouteAdmin)
 	if err != nil {
 		h.renderError(w, r, http.StatusInternalServerError, "failed to initiate secure administrative session: "+err.Error())
 		return

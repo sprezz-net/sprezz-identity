@@ -59,7 +59,7 @@ func TestHttpAdapter_Token_ClientCredentials_Success(t *testing.T) {
 		}, nil
 	})
 
-	adapter := NewHttpAdapter(tuc, auth, fuc, suc, upuc, uruc, portmock.NewLocalAuthUseCaseMock(ctrl), nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
+	adapter := NewHttpAdapter(tuc, auth, fuc, nil, suc, upuc, uruc, portmock.NewLocalAuthUseCaseMock(ctrl), nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", bytes.NewBufferString("grant_type=client_credentials&client_id=cc-client&client_secret=supersecret"))
 	req.Header.Set(model.HeaderContentType, model.ContentTypeFormUrlEncoded)
@@ -112,7 +112,7 @@ func TestHttpAdapter_Token_AuthCodeExchange_Success(t *testing.T) {
 		}, nil
 	})
 
-	adapter := NewHttpAdapter(tuc, auth, fuc, suc, upuc, uruc, portmock.NewLocalAuthUseCaseMock(ctrl), nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
+	adapter := NewHttpAdapter(tuc, auth, fuc, nil, suc, upuc, uruc, portmock.NewLocalAuthUseCaseMock(ctrl), nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", bytes.NewBufferString("grant_type=authorization_code&client_id=ac-client&code=code123&code_verifier=verifier123"))
 	req.Header.Set(model.HeaderContentType, model.ContentTypeFormUrlEncoded)
@@ -155,7 +155,7 @@ func TestHttpAdapter_Token_InvalidGrantType(t *testing.T) {
 			nil
 	})
 
-	adapter := NewHttpAdapter(tuc, auth, fuc, suc, upuc, uruc, portmock.NewLocalAuthUseCaseMock(ctrl), nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
+	adapter := NewHttpAdapter(tuc, auth, fuc, nil, suc, upuc, uruc, portmock.NewLocalAuthUseCaseMock(ctrl), nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", bytes.NewBufferString("grant_type=invalid_grant&client_id=cc-client"))
 	req.Header.Set(model.HeaderContentType, model.ContentTypeFormUrlEncoded)

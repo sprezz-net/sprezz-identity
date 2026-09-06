@@ -125,7 +125,7 @@ func TestHttpAdapter_JWKS_CacheControl(t *testing.T) {
 		t.Fatalf("failed to create signer: %v", err)
 	}
 
-	adapter := NewHttpAdapter(tuc, auth, fuc, suc, upuc, uruc, portmock.NewLocalAuthUseCaseMock(ctrl), nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
+	adapter := NewHttpAdapter(tuc, auth, fuc, nil, suc, upuc, uruc, portmock.NewLocalAuthUseCaseMock(ctrl), nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/jwks.json", nil)
 	req.Host = "test.com"

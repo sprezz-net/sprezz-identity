@@ -66,7 +66,7 @@ func buildTestAdapter(ctrl *minimock.Controller) (*HttpAdapter, *model.Tenant) {
 		return resp, nil
 	})
 
-	return NewHttpAdapter(tuc, auth, fuc, suc, upuc, uruc, lauc, nil, nil, nil, storage, crypto, "unittest", "admin-domain.com"), tenant
+	return NewHttpAdapter(tuc, auth, fuc, nil, suc, upuc, uruc, lauc, nil, nil, nil, storage, crypto, "unittest", "admin-domain.com"), tenant
 }
 
 func TestHttpAdapter_CSPNonce(t *testing.T) {
@@ -107,7 +107,7 @@ func TestHttpAdapter_CSPNonce(t *testing.T) {
 		}, nil
 	})
 
-	adapter := NewHttpAdapter(tuc, auth, fuc, suc, upuc, uruc, lauc, nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
+	adapter := NewHttpAdapter(tuc, auth, fuc, nil, suc, upuc, uruc, lauc, nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
 
 	// Request 1
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -153,7 +153,7 @@ func TestHttpAdapter_Tenant_Middleware_Failure(t *testing.T) {
 		return nil, errors.New("unbootstrapped tenant")
 	})
 
-	adapter := NewHttpAdapter(tuc, auth, fuc, suc, upuc, uruc, portmock.NewLocalAuthUseCaseMock(ctrl), nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
+	adapter := NewHttpAdapter(tuc, auth, fuc, nil, suc, upuc, uruc, portmock.NewLocalAuthUseCaseMock(ctrl), nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/openid-configuration", nil)
 	req.Host = "unknown.com"

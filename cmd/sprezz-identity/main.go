@@ -31,6 +31,7 @@ type dependencies struct {
 	tenantUseCase           port.TenantUseCase
 	oauthService            port.AuthUseCase
 	federatedLoginService   port.FederatedLoginUseCase
+	adminLogonUseCase       port.AdminLogonUseCase
 	ssoService              port.SSOSessionUseCase
 	userProfileUseCase      port.UserProfileUseCase
 	userRegistrationUseCase port.UserRegistrationUseCase
@@ -54,6 +55,7 @@ func main() {
 		deps.tenantUseCase,
 		deps.oauthService,
 		deps.federatedLoginService,
+		deps.adminLogonUseCase,
 		deps.ssoService,
 		deps.userProfileUseCase,
 		deps.userRegistrationUseCase,
@@ -191,6 +193,18 @@ func initDependencies(ctx context.Context) *dependencies {
 	localAuthService := service.NewLocalAuthService(storage, signer, sysClock)
 	appService := service.NewApplicationService(storage, storage, sysClock, signer)
 
+	adminLogonService := service.NewAdminLogonService(
+		storage,
+		storage,
+		oauthService,
+		signer,
+		fedClient,
+		federatedLoginService,
+		sysClock,
+		cfg.AppEnv,
+		cfg.IdentityServer.AdminTenantDomain,
+	)
+
 	return &dependencies{
 		cfg:                     cfg,
 		storage:                 storage,
@@ -200,6 +214,7 @@ func initDependencies(ctx context.Context) *dependencies {
 		tenantUseCase:           tenantUseCase,
 		oauthService:            oauthService,
 		federatedLoginService:   federatedLoginService,
+		adminLogonUseCase:       adminLogonService,
 		ssoService:              ssoService,
 		userProfileUseCase:      userProfileUseCase,
 		userRegistrationUseCase: userRegistrationUseCase,

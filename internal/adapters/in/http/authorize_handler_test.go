@@ -36,7 +36,7 @@ func setupTestEnv(ctrl *minimock.Controller) (
 	uruc := portmock.NewUserRegistrationUseCaseMock(ctrl)
 	lauc := portmock.NewLocalAuthUseCaseMock(ctrl)
 
-	adapter := NewHttpAdapter(tuc, auth, fuc, suc, upuc, uruc, lauc, nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
+	adapter := NewHttpAdapter(tuc, auth, fuc, nil, suc, upuc, uruc, lauc, nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
 	return adapter, storage, auth, crypto, tuc, fuc, suc, upuc, uruc
 }
 func mockSessionCookie(suc *portmock.SSOSessionUseCaseMock) {

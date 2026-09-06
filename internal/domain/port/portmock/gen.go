@@ -14,3 +14,4 @@ package portmock
 //go:generate go run github.com/gojuno/minimock/v3/cmd/minimock@v3.4.7 -i sprezz-identity/internal/domain/port.UserRegistrationUseCase -o user_registration_usecase_mock.go -n UserRegistrationUseCaseMock
 //go:generate go run github.com/gojuno/minimock/v3/cmd/minimock@v3.4.7 -i sprezz-identity/internal/domain/port.LocalAuthUseCase -o local_auth_usecase_mock.go -n LocalAuthUseCaseMock
 //go:generate go run github.com/gojuno/minimock/v3/cmd/minimock@v3.4.7 -i sprezz-identity/internal/domain/port.FederationClient -o federation_client_mock.go -n FederationClientMock
+//go:generate go run github.com/gojuno/minimock/v3/cmd/minimock@v3.4.7 -i sprezz-identity/internal/domain/port.AdminLogonUseCase -o admin_logon_usecase_mock.go -n AdminLogonUseCaseMock

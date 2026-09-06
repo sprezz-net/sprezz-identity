@@ -29,7 +29,7 @@ func (h *AdminUserHandler) Routes(r chi.Router) {
 		r.Get("/edit", h.adminEditUserForm)
 		r.Post("/", h.adminSaveUser)
 		r.Delete("/{id}", h.adminDeleteUser)
-		r.Delete("/{id}/" + port.RouteAdminUsersIdentities + "/{idp}", h.adminDecoupleIdentity)
+		r.Delete("/{id}/"+port.RouteAdminUsersIdentities+"/{idp}", h.adminDecoupleIdentity)
 	})
 }
 
@@ -248,7 +248,7 @@ func (h *AdminUserHandler) adminSaveUser(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.Header().Set(model.HeaderHXRedirect		, fmt.Sprintf("/admin/users?msg=User+%s+updated+successfully", url.QueryEscape(user.Name)))
+	w.Header().Set(model.HeaderHXRedirect, fmt.Sprintf("/admin/users?msg=User+%s+updated+successfully", url.QueryEscape(user.Name)))
 	w.WriteHeader(http.StatusOK)
 }
 

@@ -25,6 +25,7 @@ type HttpAdapter struct {
 	tenantService           port.TenantUseCase
 	authUseCase             port.AuthUseCase
 	federatedUseCase        port.FederatedLoginUseCase
+	adminLogonUseCase       port.AdminLogonUseCase
 	ssoUseCase              port.SSOSessionUseCase
 	userProfileUseCase      port.UserProfileUseCase
 	userRegistrationUseCase port.UserRegistrationUseCase
@@ -55,6 +56,7 @@ func NewHttpAdapter(
 	tuc port.TenantUseCase,
 	auc port.AuthUseCase,
 	fuc port.FederatedLoginUseCase,
+	aluc port.AdminLogonUseCase,
 	suc port.SSOSessionUseCase,
 	upuc port.UserProfileUseCase,
 	uruc port.UserRegistrationUseCase,
@@ -72,6 +74,7 @@ func NewHttpAdapter(
 		tenantService:           tuc,
 		authUseCase:             auc,
 		federatedUseCase:        fuc,
+		adminLogonUseCase:       aluc,
 		ssoUseCase:              suc,
 		userProfileUseCase:      upuc,
 		userRegistrationUseCase: uruc,
