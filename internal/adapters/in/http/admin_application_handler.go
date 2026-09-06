@@ -672,8 +672,6 @@ func (h *HttpAdapter) renderError(w http.ResponseWriter, r *http.Request, status
 	_ = component.Render(r.Context(), w)
 }
 
-
-
 func (h *AdminApplicationHandler) adminGenerateSecret(w http.ResponseWriter, r *http.Request) {
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {

@@ -111,7 +111,7 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 	}
 
 	// 1. Authenticate local credentials first (verifies password and handles lockouts)
-	_, err := h.localAuthUseCase.AuthenticateLocalCredentials(r.Context(), port.LocalLoginCommand{
+	loginResp, err := h.localAuthUseCase.AuthenticateLocalCredentials(r.Context(), port.LocalLoginCommand{
 		TenantID:          tenantUUID,
 		PartitionID:       partitionID,
 		ProviderID:        providerID,
@@ -123,11 +123,11 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// 2. Provision the single sign-on bearer session cookie on the browser
+	// 2. Provision the single sign-on bearer session cookie on the browser using the user's unique stable UUID
 	cookieIntent, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
 		TenantID:       tenantUUID,
 		PartitionID:    partitionID,
-		PayloadValue:   fmt.Sprintf("%s:%d", username, partitionID),
+		PayloadValue:   fmt.Sprintf("%s:%d", loginResp.Subject, partitionID),
 		LifecycleStage: "bearer",
 		RequestHost:    r.Host,
 	})
@@ -156,7 +156,7 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 			ACRValues:       interactionSession.ACRValues,
 			RequestHost:     r.Host,
 			RequestURI:      model.URIPrefixPAR + interactionSession.ID.String(),
-			ActiveSessionID: fmt.Sprintf("%s:%d", username, partitionID),
+			ActiveSessionID: fmt.Sprintf("%s:%d", loginResp.Subject, partitionID),
 		})
 		if err != nil {
 			h.renderInlineFormError(w, r, err.Error())
