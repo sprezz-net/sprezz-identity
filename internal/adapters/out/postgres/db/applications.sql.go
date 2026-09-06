@@ -474,7 +474,7 @@ SELECT
          WHERE agi.group_id = g.id),
         '{}'::uuid[]
     )::uuid[] AS allowed_idp_ids
-FROM application_groups g
+FROM application_groups g, tenant
 WHERE g.group_name = $1 AND g.tenant_id = tenant.id
 LIMIT 1
 `
@@ -535,9 +535,9 @@ WITH tenant AS (
     WHERE tenant_uuid = $2::uuid
     LIMIT 1
 )
-SELECT id, tenant_id, profile_name, is_enabled, token_endpoint_auth_method, grant_types, response_types, access_token_lifetime, refresh_token_lifetime, id_token_lifetime, enforce_rtr, signing_algorithm, created_at, updated_at
-FROM application_profiles
-WHERE profile_name = $1 AND tenant_id = tenant.id
+SELECT ap.id, ap.tenant_id, ap.profile_name, ap.is_enabled, ap.token_endpoint_auth_method, ap.grant_types, ap.response_types, ap.access_token_lifetime, ap.refresh_token_lifetime, ap.id_token_lifetime, ap.enforce_rtr, ap.signing_algorithm, ap.created_at, ap.updated_at
+FROM application_profiles ap, tenant
+WHERE ap.profile_name = $1 AND ap.tenant_id = tenant.id
 LIMIT 1
 `
 

@@ -104,7 +104,7 @@ func (h *HttpAdapter) initiateAdminOIDC(w http.ResponseWriter, r *http.Request) 
 
 	// Dynamic Resolution: Sourced from canonical tenant configuration instead of hardcoded headers
 	tenantBaseURI := tenant.GetBaseURI()
-	redirectURI := tenantBaseURI + port.RouteCallback
+	redirectURI := tenantBaseURI + port.RouteFederationCallback
 
 	providers, err := h.storagePort.GetIdentityProviders(r.Context(), tenant.ID)
 	if err != nil {

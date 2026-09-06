@@ -53,7 +53,7 @@ func TestHttpAdapter_AdminOIDC_Initiation_Success(t *testing.T) {
 		},
 	}, nil)
 
-	aluc.InitiateAdminLogonMock.Expect(minimock.AnyContext, tenantID, "http://admin-domain.com/oauth/callback", "http://admin-domain.com/admin").Return(&port.InitiateFederatedLoginResponse{
+	aluc.InitiateAdminLogonMock.Expect(minimock.AnyContext, tenantID, "http://admin-domain.com/oauth/federation/callback", "http://admin-domain.com/admin").Return(&port.InitiateFederatedLoginResponse{
 		TargetRedirectURL: "https://admin.com/oauth/authorize?client_id=registered-client-id",
 		StateToken:        "test-state-token",
 	}, nil)

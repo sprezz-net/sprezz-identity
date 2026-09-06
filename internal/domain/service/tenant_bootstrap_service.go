@@ -13,8 +13,6 @@ import (
 )
 
 const (
-	routeAdmin               = port.RouteAdmin
-	routeCallback            = port.RouteFederationCallback
 	usernamePasswordIDPAlias = "username-password"
 )
 
@@ -60,10 +58,10 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 func (s *TenantBootstrapService) bootstrapExistingTenant(ctx context.Context, tenant *model.Tenant, domain string) (*model.Tenant, error) {
 	baseURL := tenant.GetBaseURI()
 
-	expectedRedirect := baseURL + routeAdmin
+	expectedRedirect := baseURL + port.RouteAdmin
 	if tenant.Config.DefaultRedirectURI != expectedRedirect {
 		tenant.Config.DefaultRedirectURI = expectedRedirect
-		tenant.Config.RedirectWhitelist = []string{baseURL + routeAdmin, baseURL + routeCallback}
+		tenant.Config.RedirectWhitelist = []string{baseURL + port.RouteAdmin, baseURL + port.RouteFederationCallback}
 		if err := s.adminStorage.CreateTenant(ctx, *tenant); err != nil {
 			return nil, err
 		}
@@ -108,10 +106,10 @@ func (s *TenantBootstrapService) bootstrapNewTenant(ctx context.Context, domain 
 
 	// 2. STAGE 2: Apply master-tenant specific configurations overriding standard business ceilings [5.7]
 	createdTenant.Config.AllowSignup = true
-	createdTenant.Config.DefaultRedirectURI = createdTenant.GetBaseURI() + routeAdmin
+	createdTenant.Config.DefaultRedirectURI = createdTenant.GetBaseURI() + port.RouteAdmin
 	createdTenant.Config.RedirectWhitelist = []string{
-		createdTenant.GetBaseURI() + routeAdmin,
-		createdTenant.GetBaseURI() + routeCallback,
+		createdTenant.GetBaseURI() + port.RouteAdmin,
+		createdTenant.GetBaseURI() + port.RouteFederationCallback,
 	}
 	createdTenant.Config.DCRMode = model.DCRModeSoftwareStatement
 	createdTenant.Config.PublicSoftwareStatement = model.AdminUIProfileName + ";" + model.AdminUIGroupName
@@ -232,8 +230,8 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 		AllowedAudiences:       []string{},
 		AllowedIDPIDs:          []uuid.UUID{localProviderUUID},
 		DefaultIDPID:           &localProviderUUID,
-		RedirectURIs:           []string{scheme + "://" + domain + routeCallback},
-		PostLogoutRedirectURIs: []string{scheme + "://" + domain + routeAdmin},
+		RedirectURIs:           []string{scheme + "://" + domain + port.RouteFederationCallback},
+		PostLogoutRedirectURIs: []string{scheme + "://" + domain + port.RouteAdmin},
 	}
 
 	// 5. Build the core Application Instance referencing the decoupled entity nodes
