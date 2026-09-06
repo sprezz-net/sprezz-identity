@@ -37,10 +37,9 @@ func (s *SSOSessionService) BuildSessionCookie(ctx context.Context, cmd port.Coo
 	cookieName := "spz_session_" + partition.AliasName
 
 	// 3. Evaluate network guards and local development environment exception loops [8.3]
-	isLocalhost := cmd.RequestHost == "localhost" || strings.HasPrefix(cmd.RequestHost, "127.0.0.1")
 	useSecureTransport := true
 
-	if s.appEnv == "local" && isLocalhost {
+	if s.appEnv == "local" {
 		useSecureTransport = false // Local unencrypted debugging loop permitted [8.3]
 	} else {
 		// Production/Staging: Enforce watertight domain-locked prefix isolation wrappers [8.3]

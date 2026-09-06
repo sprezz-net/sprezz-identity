@@ -298,6 +298,21 @@ func (s *JWTSigner) SignLogoutToken(ctx context.Context, claims model.LogoutToke
 // VerifyToken decodes signatures and transforms third-party maps into clean Go primitives
 // to satisfy your decoupled pure domain port definitions seamlessly.
 func (s *JWTSigner) VerifyToken(tokenStr string) (map[string]any, error) {
+	// 1. Unverified parse to safely extract issuer for keyring warm-up
+	var unverifiedClaims jwt.MapClaims
+	parser := jwt.NewParser()
+	_, _, err := parser.ParseUnverified(tokenStr, &unverifiedClaims)
+	if err == nil {
+		if iss, ok := unverifiedClaims["iss"].(string); ok && iss != "" {
+			iss = strings.TrimSuffix(iss, "/")
+			tenantDomain := strings.TrimPrefix(iss, model.SchemeHttps+"://")
+			tenantDomain = strings.TrimPrefix(tenantDomain, model.SchemeHttp+"://")
+
+			// Dynamically warm up the keyring from DB if not already warm
+			_, _ = s.getOrCreateKeyring(context.Background(), tenantDomain, iss)
+		}
+	}
+
 	var mapClaims jwt.MapClaims
 	token, err := jwt.ParseWithClaims(tokenStr, &mapClaims, func(t *jwt.Token) (any, error) {
 		kid, _ := t.Header["kid"].(string)
