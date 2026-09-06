@@ -87,7 +87,8 @@ func TestHttpAdapter_LoginSubmit_MissingCredentials(t *testing.T) {
 		return tenant, nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/login?username=&password=", nil)
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("username=&password="))
+	req.Header.Set(model.HeaderContentType, model.ContentTypeFormUrlEncoded)
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
 

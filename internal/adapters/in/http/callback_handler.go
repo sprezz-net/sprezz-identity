@@ -130,7 +130,7 @@ func (h *CallbackHandler) HandleOAuthCallbackRequest(w http.ResponseWriter, r *h
 		ActiveSessionID: activeSessionPayload,
 		State:           r.URL.Query().Get("state"),
 		RequestHost:     r.Host,
-		RequestURI:      "urn:ietf:params:oauth:request_uri:" + sessionUUID.String(),
+		RequestURI:      model.URIPrefixPAR + sessionUUID.String(),
 	}
 
 	result, err := h.authUseCase.ProcessAuthorizeRequest(r.Context(), cmd)

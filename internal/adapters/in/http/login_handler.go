@@ -31,7 +31,7 @@ func NewLoginHandler(auc port.AuthUseCase, fuc port.FederatedLoginUseCase, suc p
 
 func (h *LoginHandler) Routes(r chi.Router) {
 	r.Get("/", h.HandleLoginRoot)
-	r.Get(port.RouteWebLogin, h.HandleLoginSubmit)
+	r.Post(port.RouteWebLogin, h.HandleLoginSubmit)
 }
 
 func (h *LoginHandler) HandleLoginRoot(w http.ResponseWriter, r *http.Request) {
@@ -97,6 +97,40 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// 1. Authenticate local credentials first (verifies password and handles lockouts)
+	_, err = h.localAuthUseCase.AuthenticateLocalCredentials(r.Context(), port.LocalLoginCommand{
+		TenantID:          tenantUUID,
+		PartitionID:       interactionSession.PartitionID,
+		ProviderID:        interactionSession.IdentityProviderID,
+		Identifier:        username,
+		PlaintextPassword: password,
+	})
+	if err != nil {
+		h.renderInlineFormError(w, r, err.Error())
+		return
+	}
+
+	// 2. Provision the single sign-on bearer session cookie on the browser
+	cookieIntent, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
+		TenantID:       tenantUUID,
+		PartitionID:    interactionSession.PartitionID,
+		PayloadValue:   fmt.Sprintf("%s:%d", username, interactionSession.PartitionID),
+		LifecycleStage: "bearer",
+		RequestHost:    r.Host,
+	})
+	if err == nil {
+		http.SetCookie(w, &http.Cookie{
+			Name:     cookieIntent.CookieName,
+			Value:    cookieIntent.CookieValue,
+			Path:     "/",
+			MaxAge:   cookieIntent.MaxAge,
+			HttpOnly: true,
+			Secure:   cookieIntent.Secure,
+			SameSite: http.SameSiteLaxMode,
+		})
+	}
+
+	// 3. Delegate to the core authUseCase to fetch authorization targets
 	result, err := h.authUseCase.ProcessAuthorizeRequest(r.Context(), port.AuthorizeRequestCommand{
 		TenantID:        tenantUUID,
 		ClientID:        interactionSession.ClientID,
@@ -107,7 +141,7 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 		Nonce:           interactionSession.Nonce,
 		ACRValues:       interactionSession.ACRValues,
 		RequestHost:     r.Host,
-		RequestURI:      "urn:ietf:params:oauth:request_uri:" + interactionSession.ID.String(),
+		RequestURI:      model.URIPrefixPAR + interactionSession.ID.String(),
 		ActiveSessionID: fmt.Sprintf("%s:%d", username, interactionSession.PartitionID),
 	})
 
@@ -128,7 +162,7 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 		})
 	}
 
-	w.Header().Set("HX-Redirect", result.RedirectURL)
+	w.Header().Set(model.HeaderHXRedirect, result.RedirectURL)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -182,7 +216,7 @@ func (h *LoginHandler) hasActiveBearerSession(r *http.Request, tenantID uuid.UUI
 
 func (h *LoginHandler) triggerExternalFederationRedirection(w http.ResponseWriter, r *http.Request, tenantID uuid.UUID, provider model.IdentityProvider, session *model.InteractionSession, baseURI string) {
 	// Assemble the fully qualified absolute redirection URL loop per RFC 6749 constraints
-	absoluteCallbackURI := baseURI + "/oauth/federation/callback"
+	absoluteCallbackURI := baseURI + port.RouteFederationCallback
 
 	// Delegate the initiation of the external federation payload directly down to the use case port
 	response, err := h.federatedUseCase.InitiateFederatedLogin(r.Context(), port.InitiateFederatedLoginCommand{

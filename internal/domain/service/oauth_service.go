@@ -160,8 +160,7 @@ func (s *OAuthService) ProcessJWKSetRetrieval(ctx context.Context, tenantID uuid
 // and execution routing for standard browser-initiated authorization requests.
 func (s *OAuthService) ProcessAuthorizeRequest(ctx context.Context, cmd port.AuthorizeRequestCommand) (*port.AuthorizeExecutionResult, error) {
 	if cmd.RequestURI != "" {
-		const parPrefix = "urn:ietf:params:oauth:request_uri:"
-		if !strings.HasPrefix(cmd.RequestURI, parPrefix) {
+		if !strings.HasPrefix(cmd.RequestURI, model.URIPrefixPAR) {
 			return nil, fmt.Errorf("%w: invalid request_uri scheme prefix", port.ErrInvalidRequest)
 		}
 
@@ -1079,7 +1078,7 @@ func (s *OAuthService) ProcessPushedAuthorization(ctx context.Context, cmd port.
 
 	// 4. Generate high-entropy single-use request token handle strings
 	requestUUID := uuid.New().String()
-	requestURI := "urn:ietf:params:oauth:request_uri:" + requestUUID
+	requestURI := model.URIPrefixPAR + requestUUID
 	lifespan := 5 * time.Minute
 	expirationWindow := s.clock.Now().Add(lifespan)
 

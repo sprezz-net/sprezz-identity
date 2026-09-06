@@ -29,4 +29,5 @@ const (
 	HeaderHXRequest           = "HX-Request"
 	SchemeHttp                = "http"
 	SchemeHttps               = "https"
+	URIPrefixPAR              = "urn:ietf:params:oauth:request_uri:"
 )

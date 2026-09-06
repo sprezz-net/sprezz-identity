@@ -43,7 +43,7 @@ func TestHttpAdapter_HandleFederationCallback_Success(t *testing.T) {
 		}, nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/oauth/federation/callback?state=mock-state&code=mock-code", nil)
+	req := httptest.NewRequest(http.MethodGet, port.RouteFederationCallback+"?state=mock-state&code=mock-code", nil)
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
 
@@ -74,7 +74,7 @@ func TestHttpAdapter_HandleFederationCallback_Error(t *testing.T) {
 		return nil, errors.New("invalid state token exchange")
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/oauth/federation/callback?state=bad-state&code=bad-code", nil)
+	req := httptest.NewRequest(http.MethodGet, port.RouteFederationCallback+"?state=bad-state&code=bad-code", nil)
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
 
