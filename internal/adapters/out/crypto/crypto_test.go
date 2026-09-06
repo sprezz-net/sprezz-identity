@@ -760,6 +760,18 @@ func TestNewJWTSignerMasterKeyParsing(t *testing.T) {
 			if len(signer.masterKey) != tt.expectedLen {
 				t.Errorf("signer internal key footprint mismatch: expected %d bytes, got %d", tt.expectedLen, len(signer.masterKey))
 			}
+
+			if signer.adminDomain != "default" {
+				t.Errorf("signer adminDomain not initialized correctly: expected 'default', got '%s'", signer.adminDomain)
+			}
+
+			if signer.appEnv != "unittest" {
+				t.Errorf("signer appEnv not initialized correctly: expected 'unittest', got '%s'", signer.appEnv)
+			}
+
+			if signer.httpClient != http.DefaultClient {
+				t.Errorf("signer httpClient was not initialized correctly")
+			}
 		})
 	}
 }

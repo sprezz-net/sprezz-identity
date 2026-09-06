@@ -65,37 +65,32 @@ func NewJWTSigner(storage Storage, cl port.Clock, httpClient *http.Client, maste
 	keyBytes := []byte(masterKey)
 	keyLen := len(keyBytes)
 
+	var decodedBytes []byte
+
 	// 1. If the raw string is already directly 16, 24, or 32 binary bytes, use it immediately
 	if keyLen == 16 || keyLen == 24 || keyLen == 32 {
-		return &JWTSigner{
-			keyrings:  make(map[string]*tenantKeyring),
-			storage:   storage,
-			clock:     cl,
-			masterKey: keyBytes,
-		}, nil
-	}
-
-	// 2. If it is 64 characters long, it's likely an openssl rand -hex 32 string! Try Hex Decoding.
-	if decodedBytes, err := hex.DecodeString(masterKey); err == nil {
-		decodedLen := len(decodedBytes)
-		if decodedLen == 16 || decodedLen == 24 || decodedLen == 32 {
-			return &JWTSigner{
-				keyrings:  make(map[string]*tenantKeyring),
-				storage:   storage,
-				clock:     cl,
-				masterKey: decodedBytes, // Correctly resolved to 32 pure binary bytes
-			}, nil
+		decodedBytes = keyBytes
+	} else if len(masterKey) == 64 {
+		// 2. If it is 64 characters long, it's likely an openssl rand -hex 32 string! Try Hex Decoding.
+		if db, err := hex.DecodeString(masterKey); err == nil {
+			decodedLen := len(db)
+			if decodedLen == 16 || decodedLen == 24 || decodedLen == 32 {
+				decodedBytes = db
+			}
 		}
 	}
 
-	// 3. Fallback: Treat as Base64 encoded transport layout string
-	decodedBytes, err := base64.StdEncoding.DecodeString(masterKey)
-	if err != nil {
-		var fallbackErr error
-		decodedBytes, fallbackErr = base64.RawStdEncoding.DecodeString(masterKey)
-		if fallbackErr != nil {
-			return nil, fmt.Errorf("SPREZZ_MASTER_KEY string configuration layout is invalid (size: %d) and cannot be decoded via Hex or Base64 formats", keyLen)
+	if decodedBytes == nil {
+		// 3. Fallback: Treat as Base64 encoded transport layout string
+		db, err := base64.StdEncoding.DecodeString(masterKey)
+		if err != nil {
+			var fallbackErr error
+			db, fallbackErr = base64.RawStdEncoding.DecodeString(masterKey)
+			if fallbackErr != nil {
+				return nil, fmt.Errorf("SPREZZ_MASTER_KEY string configuration layout is invalid (size: %d) and cannot be decoded via Hex or Base64 formats", keyLen)
+			}
 		}
+		decodedBytes = db
 	}
 
 	// 4. Enforce strict constraint checking on Base64 payload output data
