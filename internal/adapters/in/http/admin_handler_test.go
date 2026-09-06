@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func buildLocalAdminTestAdapter(ctrl *minimock.Controller) (*HttpAdapter, *portmock.AdminLogonUseCaseMock, *portmock.TenantUseCaseMock, *portmock.StorageMock) {
+func buildLocalAdminTestAdapter(ctrl *minimock.Controller) (*HttpAdapter, *portmock.AdminLogonUseCaseMock, *portmock.TenantUseCaseMock, *portmock.StorageMock, *portmock.SSOSessionUseCaseMock) {
 	storage := portmock.NewStorageMock(ctrl)
 	auth := portmock.NewAuthMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
@@ -27,12 +27,12 @@ func buildLocalAdminTestAdapter(ctrl *minimock.Controller) (*HttpAdapter, *portm
 	lauc := portmock.NewLocalAuthUseCaseMock(ctrl)
 
 	adapter := NewHttpAdapter(tuc, auth, fuc, aluc, suc, upuc, uruc, lauc, nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
-	return adapter, aluc, tuc, storage
+	return adapter, aluc, tuc, storage, suc
 }
 
 func TestHttpAdapter_AdminOIDC_Initiation_Success(t *testing.T) {
 	ctrl := minimock.NewController(t)
-	adapter, aluc, tuc, storage := buildLocalAdminTestAdapter(ctrl)
+	adapter, aluc, tuc, storage, suc := buildLocalAdminTestAdapter(ctrl)
 
 	tenantID := uuid.New()
 	tenant := &model.Tenant{ID: tenantID, Domain: "admin-domain.com", Name: "Administrative Tenant", Scheme: "http"}
@@ -40,6 +40,16 @@ func TestHttpAdapter_AdminOIDC_Initiation_Success(t *testing.T) {
 
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
 		return tenant, nil
+	})
+
+	suc.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
+		if cmd.LifecycleStage == "clear" {
+			return &port.CookieIntentResponse{CookieName: "spz_session_sprezz_admin"}, nil
+		}
+		if cmd.LifecycleStage == "handshake" {
+			return &port.CookieIntentResponse{CookieName: "spz_session_sprezz_admin", CookieValue: "handshake:test-state-token"}, nil
+		}
+		return nil, nil
 	})
 
 	storage.GetIdentityProvidersMock.Expect(minimock.AnyContext, tenantID).Return([]model.IdentityProvider{

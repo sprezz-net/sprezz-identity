@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"sprezz-identity/internal/domain/model"
@@ -673,29 +672,7 @@ func (h *HttpAdapter) renderError(w http.ResponseWriter, r *http.Request, status
 	_ = component.Render(r.Context(), w)
 }
 
-func (h *HttpAdapter) resolveSessionCookieConfig(r *http.Request) (string, bool) {
-	name := model.CookieSessionNameProd
-	secure := true
 
-	currentEnv := h.appEnv
-	if currentEnv == "" {
-		currentEnv = "prod"
-	}
-
-	host := r.Host
-	if strings.Contains(host, ":") {
-		host = strings.Split(host, ":")[0]
-	}
-
-	isLocalHost := host == "localhost" || host == "127.0.0.1"
-
-	if currentEnv == "local" && isLocalHost {
-		name = model.CookieSessionNameDev
-		secure = false
-	}
-
-	return name, secure
-}
 
 func (h *AdminApplicationHandler) adminGenerateSecret(w http.ResponseWriter, r *http.Request) {
 	bytes := make([]byte, 32)

@@ -61,9 +61,18 @@ func (h *AdminHandler) adminDashboardView(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// 1. Call your established configuration tool dynamically
-	name, _ := h.resolveSessionCookieConfig(r)
-	cookie, err := r.Cookie(name)
+	// 1. Resolve the expected namespaced session cookie dynamically from the SSO use case
+	cookieSpec, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
+		TenantID:       tenant.ID,
+		LifecycleStage: "clear", // Resolves bearer cookie name
+		RequestHost:    r.Host,
+	})
+	if err != nil {
+		h.initiateAdminOIDC(w, r)
+		return
+	}
+
+	cookie, err := r.Cookie(cookieSpec.CookieName)
 	if err != nil || cookie.Value == "" {
 		h.initiateAdminOIDC(w, r)
 		return
@@ -71,16 +80,16 @@ func (h *AdminHandler) adminDashboardView(w http.ResponseWriter, r *http.Request
 
 	// 2. Parse colon string format to extract the local user token asset safely
 	parts := strings.Split(cookie.Value, ":")
-	if len(parts) != 3 || parts[0] == "" {
+	if len(parts) != 3 || parts[0] != "bearer" || parts[1] == "" {
 		h.initiateAdminOIDC(w, r)
 		return
 	}
-	accessToken := parts[0]
+	accessToken := parts[1]
 
 	// 3. Verify the access token extracted out of the unified tracking session slot
 	_, err = h.cryptoPort.VerifyToken(accessToken)
 	if err != nil {
-		h.clearCookieAndRedirect(w, r, name, port.RouteAdmin)
+		h.clearCookieAndRedirect(w, r, cookieSpec.CookieName, port.RouteAdmin)
 		return
 	}
 
@@ -133,18 +142,24 @@ func (h *HttpAdapter) initiateAdminOIDC(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// 4. Leverage established environment logic configurations completely (appEnv and host rules)
-	name, isSecureCookie := h.resolveSessionCookieConfig(r)
-
-	// 5. Structure payload to bypass strings.Split alignment bugs down-funnel
-	cookieVal := fmt.Sprintf("::%s", response.StateToken)
+	// 4. Provision the namespaced transient handshake session cookie on the browser
+	cookieSpec, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
+		TenantID:       tenant.ID,
+		LifecycleStage: "handshake",
+		PayloadValue:   response.StateToken,
+		RequestHost:    r.Host,
+	})
+	if err != nil {
+		h.renderError(w, r, http.StatusInternalServerError, "failed to structure transient handshake session cookie")
+		return
+	}
 
 	cookie := &http.Cookie{
-		Name:     name,
-		Value:    cookieVal,
+		Name:     cookieSpec.CookieName,
+		Value:    cookieSpec.CookieValue,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   isSecureCookie,
+		Secure:   cookieSpec.Secure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   300,
 	}
