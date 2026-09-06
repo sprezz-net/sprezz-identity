@@ -182,7 +182,7 @@ func (s *AdminLogonService) provisionViaSoftwareStatement(ctx context.Context, l
 	now := s.clock.Now()
 
 	statementClaims := model.SoftwareStatementClaims{
-		SoftwareID:   localTenantID.String(),
+		SoftwareID:   model.AdminUIProfileName + ";" + model.AdminUIGroupName,
 		ClientName:   fmt.Sprintf("Sprezz Admin Client [%s]", localTenantID.String()),
 		RedirectURIs: []string{callbackURI},
 		Scopes:       []string{"openid", "profile", "email"},

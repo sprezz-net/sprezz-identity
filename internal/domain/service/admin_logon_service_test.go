@@ -98,6 +98,10 @@ func TestAdminLogonService_InitiateAdminLogon_OnDemandDCR_Success(t *testing.T) 
 	}, nil)
 
 	crypto.SignSoftwareStatementMock.Set(func(ctx context.Context, issuer string, audience string, claims model.SoftwareStatementClaims, issuedAt time.Time, expiresAt time.Time) (string, error) {
+		expectedSoftwareID := model.AdminUIProfileName + ";" + model.AdminUIGroupName
+		if claims.SoftwareID != expectedSoftwareID {
+			t.Errorf("expected software ID '%s', got '%s'", expectedSoftwareID, claims.SoftwareID)
+		}
 		return "signed-statement-jwt", nil
 	})
 
