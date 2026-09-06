@@ -1,5 +1,3 @@
-//go:build dashboard
-
 package service
 
 import (
@@ -24,7 +22,7 @@ func TestOAuthValidatorService_ValidateRedirect(t *testing.T) {
 		},
 	}
 
-	client := &model.ClientApplication{
+	group := &model.ApplicationGroup{
 		RedirectURIs: []string{
 			"https://example.com/callback",
 			"https://app-123.example.com/auth",
@@ -115,9 +113,9 @@ func TestOAuthValidatorService_ValidateRedirect(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var cl *model.ClientApplication
+			var cl *model.ApplicationGroup
 			if tt.useClient {
-				cl = client
+				cl = group
 			}
 			err := v.ValidateRedirect(ctx, tenant, cl, tt.redirectURL)
 			if err != tt.wantErr {
@@ -137,7 +135,7 @@ func TestOAuthValidatorService_ValidateScopes(t *testing.T) {
 		},
 	}
 
-	client := &model.ClientApplication{
+	group := &model.ApplicationGroup{
 		AllowedScopes: []string{"openid", "profile", "email"},
 	}
 
@@ -175,9 +173,9 @@ func TestOAuthValidatorService_ValidateScopes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var cl *model.ClientApplication
+			var cl *model.ApplicationGroup
 			if tt.useClient {
-				cl = client
+				cl = group
 			}
 			err := v.ValidateScopes(ctx, tenant, cl, tt.scopes)
 			if err != tt.wantErr {
@@ -197,7 +195,7 @@ func TestOAuthValidatorService_ValidateAudiences(t *testing.T) {
 		},
 	}
 
-	client := &model.ClientApplication{
+	group := &model.ApplicationGroup{
 		AllowedAudiences: []string{"https://api.example.com"},
 	}
 
@@ -241,9 +239,9 @@ func TestOAuthValidatorService_ValidateAudiences(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var cl *model.ClientApplication
+			var cl *model.ApplicationGroup
 			if tt.useClient {
-				cl = client
+				cl = group
 			}
 			err := v.ValidateAudiences(ctx, tenant, cl, tt.audiences)
 			if err != tt.wantErr {
@@ -275,7 +273,7 @@ func TestOAuthValidatorService_ValidateACR_Default(t *testing.T) {
 		},
 	}
 
-	reached, err := v.ValidateACR(ctx, tenant, provider, "aal3", "")
+	reached, err := v.ValidateClientACR(ctx, tenant, provider, "aal3", "", "", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -312,7 +310,7 @@ func TestOAuthValidatorService_ValidateACR_Essential_OR(t *testing.T) {
 		},
 	}
 
-	reached, err := v.ValidateACR(ctx, tenant, providerMet, "aal3 aal2", "")
+	reached, err := v.ValidateClientACR(ctx, tenant, providerMet, "aal3 aal2", "", "", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -320,7 +318,7 @@ func TestOAuthValidatorService_ValidateACR_Essential_OR(t *testing.T) {
 		t.Fatalf("expected reached acr to contain aal2, got %q", reached)
 	}
 
-	_, err = v.ValidateACR(ctx, tenant, providerUnmet, "aal3 aal2", "")
+	_, err = v.ValidateClientACR(ctx, tenant, providerUnmet, "aal3 aal2", "", "", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -354,7 +352,7 @@ func TestOAuthValidatorService_ValidateACR_Essential_AND(t *testing.T) {
 		},
 	}
 
-	reached, err := v.ValidateACR(ctx, tenant, providerMet, "ial3-aal2", "")
+	reached, err := v.ValidateClientACR(ctx, tenant, providerMet, "ial3-aal2", "", "", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -362,7 +360,7 @@ func TestOAuthValidatorService_ValidateACR_Essential_AND(t *testing.T) {
 		t.Fatalf("expected reached acr to contain aal2 and ial3, got %q", reached)
 	}
 
-	_, err = v.ValidateACR(ctx, tenant, providerUnmet, "ial3-aal2", "")
+	_, err = v.ValidateClientACR(ctx, tenant, providerUnmet, "ial3-aal2", "", "", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -398,7 +396,7 @@ func TestOAuthValidatorService_ValidateACR_ClaimsJSON(t *testing.T) {
 
 	claims := `{"id_token":{"acr":{"essential":true,"values":["aal3","aal2"]}}}`
 
-	reached, err := v.ValidateACR(ctx, tenant, providerMet, "", claims)
+	reached, err := v.ValidateClientACR(ctx, tenant, providerMet, "", claims, "", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -406,7 +404,7 @@ func TestOAuthValidatorService_ValidateACR_ClaimsJSON(t *testing.T) {
 		t.Fatalf("expected reached acr to contain aal2 and aal3, got %q", reached)
 	}
 
-	_, err = v.ValidateACR(ctx, tenant, providerUnmet, "", claims)
+	_, err = v.ValidateClientACR(ctx, tenant, providerUnmet, "", claims, "", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

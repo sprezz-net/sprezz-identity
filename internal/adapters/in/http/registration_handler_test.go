@@ -124,7 +124,7 @@ func runRegisterTestCase(t *testing.T, tt registerTestCase) {
 		})
 	}
 
-	adapter := NewHttpAdapter(tuc, auth, fuc, suc, upuc, uruc, portmock.NewLocalAuthUseCaseMock(ctrl), storage, crypto, "unittest", "admin-domain.com")
+	adapter := NewHttpAdapter(tuc, auth, fuc, suc, upuc, uruc, portmock.NewLocalAuthUseCaseMock(ctrl), nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
 
 	payload := registerRequest{
 		ClientName:       "test-app",

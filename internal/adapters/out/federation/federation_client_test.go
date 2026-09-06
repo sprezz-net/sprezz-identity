@@ -140,7 +140,6 @@ func TestFetchOIDCDiscoveryMetadata(t *testing.T) {
 	}
 }
 
-
 func TestExecutePushedAuthorization(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -295,7 +294,6 @@ func TestExecutePushedAuthorization(t *testing.T) {
 	}
 }
 
-
 func TestExchangeAuthorizationCode(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -323,7 +321,7 @@ func TestExchangeAuthorizationCode(t *testing.T) {
 			expectTokens: true,
 		},
 		{
-			name: "http client connection error",
+			name:    "http client connection error",
 			mockErr: errors.New("network failure"),
 			mockResp: &http.Response{
 				StatusCode: http.StatusOK,

@@ -1,5 +1,3 @@
-//go:build dashboard
-
 package service
 
 import (
@@ -8,6 +6,7 @@ import (
 	"time"
 
 	"sprezz-identity/internal/domain/model"
+	"sprezz-identity/internal/domain/port"
 	"sprezz-identity/internal/domain/port/portmock"
 
 	"github.com/gojuno/minimock/v3"
@@ -18,21 +17,26 @@ func TestTenantService_CreateTenant(t *testing.T) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idpService := NewIdentityProviderService(storage, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, clock)
 
-	svc := NewTenantService(storage, clock, idpService, "unittest", "admin-domain.com")
+	svc := NewTenantService(storage, adminStorage, clock, idpService, "unittest", "admin-domain.com")
 
-	storage.CreateTenantMock.Set(func(ctx context.Context, tenant model.Tenant) error {
+	storage.ResolveTenantByUUIDMock.Set(func(ctx context.Context, id uuid.UUID) (*model.Tenant, error) {
+		return &model.Tenant{ID: id, Name: "My Tenant", Domain: "my-tenant.com"}, nil
+	})
+
+	adminStorage.CreateTenantMock.Set(func(ctx context.Context, tenant model.Tenant) error {
 		return nil
 	})
 
-	storage.CreatePartitionMock.Set(func(ctx context.Context, tenantID uuid.UUID, name, aliasName string) (*model.Partition, error) {
+	adminStorage.CreatePartitionMock.Set(func(ctx context.Context, tenantID uuid.UUID, name, aliasName string) (*model.Partition, error) {
 		return &model.Partition{ID: 1, TenantID: tenantID, Name: name, AliasName: aliasName}, nil
 	})
 
-	storage.CreateIdentityProviderMock.Set(func(ctx context.Context, tenantID uuid.UUID, idp model.IdentityProvider) error {
+	adminStorage.CreateIdentityProviderMock.Set(func(ctx context.Context, tenantID uuid.UUID, idp model.IdentityProvider) error {
 		if idp.Alias != "admin-sso" {
 			t.Errorf("expected provider alias 'admin-sso', got %s", idp.Alias)
 		}
@@ -42,7 +46,12 @@ func TestTenantService_CreateTenant(t *testing.T) {
 		return nil
 	})
 
-	tenant, err := svc.CreateTenant(context.Background(), "My Tenant", "my-tenant.com")
+	cmd := port.CreateTenantCommand{
+		TenantName:  "My Tenant",
+		DomainName:  "my-tenant.com",
+		AllowSignup: false,
+	}
+	tenant, err := svc.CreateTenant(context.Background(), cmd)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,14 +64,15 @@ func TestTenantService_GetTenant(t *testing.T) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idpService := NewIdentityProviderService(storage, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, clock)
 
-	svc := NewTenantService(storage, clock, idpService, "unittest", "admin-domain.com")
+	svc := NewTenantService(storage, adminStorage, clock, idpService, "unittest", "admin-domain.com")
 
 	id := uuid.New()
-	storage.ResolveTenantByIDMock.Expect(context.Background(), id).Return(&model.Tenant{ID: id, Name: "Hello"}, nil)
+	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, id).Return(&model.Tenant{ID: id, Name: "Hello"}, nil)
 
 	tenant, err := svc.GetTenant(context.Background(), id)
 	if err != nil {
@@ -77,26 +87,27 @@ func TestTenantService_ToggleSignup(t *testing.T) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idpService := NewIdentityProviderService(storage, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, clock)
 
-	svc := NewTenantService(storage, clock, idpService, "unittest", "admin-domain.com")
+	svc := NewTenantService(storage, adminStorage, clock, idpService, "unittest", "admin-domain.com")
 
 	id := uuid.New()
-	storage.ResolveTenantByIDMock.Expect(context.Background(), id).Return(&model.Tenant{
+	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, id).Return(&model.Tenant{
 		ID:     id,
 		Name:   "Hello",
 		Config: model.TenantConfig{AllowSignup: false},
 	}, nil)
-	storage.CreateTenantMock.Set(func(ctx context.Context, tenant model.Tenant) error {
+	adminStorage.CreateTenantMock.Set(func(ctx context.Context, tenant model.Tenant) error {
 		if !tenant.Config.AllowSignup {
 			t.Error("expected allow signup to be toggled to true")
 		}
 		return nil
 	})
 
-	tenant, err := svc.ToggleSignup(context.Background(), id)
+	tenant, err := svc.ToggleSignup(context.Background(), id, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,15 +120,16 @@ func TestTenantService_UpdateTenant(t *testing.T) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idpService := NewIdentityProviderService(storage, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, clock)
 
-	svc := NewTenantService(storage, clock, idpService, "unittest", "admin-domain.com")
+	svc := NewTenantService(storage, adminStorage, clock, idpService, "unittest", "admin-domain.com")
 
 	id := uuid.New()
-	storage.ResolveTenantByIDMock.Expect(context.Background(), id).Return(&model.Tenant{ID: id, Name: "Hello"}, nil)
-	storage.CreateTenantMock.Set(func(ctx context.Context, tenant model.Tenant) error {
+	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, id).Return(&model.Tenant{ID: id, Name: "Hello"}, nil)
+	adminStorage.CreateTenantMock.Set(func(ctx context.Context, tenant model.Tenant) error {
 		if tenant.Name != "Updated" {
 			t.Errorf("expected updated name, got %s", tenant.Name)
 		}

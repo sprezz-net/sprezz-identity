@@ -26,7 +26,7 @@ func buildLocalLoginTestAdapter(ctrl *minimock.Controller) (*HttpAdapter, *portm
 	uruc := portmock.NewUserRegistrationUseCaseMock(ctrl)
 	lauc := portmock.NewLocalAuthUseCaseMock(ctrl)
 
-	adapter := NewHttpAdapter(tuc, auth, fuc, suc, upuc, uruc, lauc, storage, crypto, "unittest", "admin-domain.com")
+	adapter := NewHttpAdapter(tuc, auth, fuc, suc, upuc, uruc, lauc, nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
 	return adapter, lauc, suc, tuc
 }
 
