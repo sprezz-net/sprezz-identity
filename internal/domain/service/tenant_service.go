@@ -89,12 +89,15 @@ func (s *TenantService) CreateTenant(ctx context.Context, cmd port.CreateTenantC
 
 	// 3. Secure the admin partition with an OIDC identity provider pointing to the root admin domain
 	adminIssuerURL := scheme + "://" + s.adminDomain
-	adminDiscoveryEndpoint := adminIssuerURL + "/.well-known/openid-configuration"
+	adminDiscoveryEndpoint := adminIssuerURL + port.RouteWellKnownOpenIDConfig
 
 	idpConfig := model.IdentityProviderConfig{
-		DiscoveryEndpoint: adminDiscoveryEndpoint,
-		DCRMode:           model.DCRModeSoftwareStatement,
-		Scopes:            []string{"openid", "profile", "email"},
+		DiscoveryEndpoint:     adminDiscoveryEndpoint,
+		AuthorizationEndpoint: adminIssuerURL + port.RouteAuthorize,
+		TokenEndpoint:         adminIssuerURL + port.RouteToken,
+		JwksURI:               adminIssuerURL + port.RouteWellKnownKeys,
+		DCRMode:               model.DCRModeSoftwareStatement,
+		Scopes:                []string{"openid", "profile", "email"},
 	}
 
 	idp := model.IdentityProvider{

@@ -89,6 +89,12 @@ func (s *AdminLogonService) InitiateAdminLogon(ctx context.Context, localTenantI
 		adminOidcProvider.Config.AuthorizationEndpoint = metadata.AuthorizationEndpoint
 		adminOidcProvider.Config.TokenEndpoint = metadata.TokenEndpoint
 		adminOidcProvider.Config.JwksURI = metadata.JwksURI
+
+		// Persist the discovered metadata permanently to the database so callbacks can load them
+		err = s.adminStorage.CreateIdentityProvider(ctx, localTenantID, *adminOidcProvider)
+		if err != nil {
+			return nil, fmt.Errorf("admin_logon: failed persisting discovered admin sso metadata endpoints: %w", err)
+		}
 	}
 
 	// Invoke core FederationService engine directly using standard models [1.14]

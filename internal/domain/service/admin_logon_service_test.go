@@ -148,3 +148,76 @@ func TestAdminLogonService_InitiateAdminLogon_OnDemandDCR_Success(t *testing.T) 
 		t.Errorf("expected redirect URL 'https://admin.com/oauth/authorize?client_id=registered-client-id', got '%s'", resp.TargetRedirectURL)
 	}
 }
+
+func TestAdminLogonService_InitiateAdminLogon_DiscoveryPersist_Success(t *testing.T) {
+	ctrl := minimock.NewController(t)
+
+	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
+	auth := portmock.NewAuthMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+	fedClient := portmock.NewFederationClientMock(ctrl)
+	fedLogin := portmock.NewFederatedLoginUseCaseMock(ctrl)
+	now := time.Now()
+	clock := portmock.NewMockClock(now)
+
+	svc := NewAdminLogonService(storage, adminStorage, auth, crypto, fedClient, fedLogin, clock, "local", "admin.com")
+
+	tenantUUID := uuid.New()
+	providerUUID := uuid.New()
+
+	storage.GetIdentityProvidersMock.Expect(minimock.AnyContext, tenantUUID).Return([]model.IdentityProvider{
+		{
+			ID:      providerUUID,
+			IDPType: model.OpenIDConnectIDPType,
+			Alias:   "admin-sso",
+			Enabled: true,
+			Config: model.IdentityProviderConfig{
+				DiscoveryEndpoint:     "https://admin.com/.well-known/openid-configuration",
+				ClientID:              "already-provisioned-id", // Bypasses DCR!
+				AuthorizationEndpoint: "",                       // Triggers Discovery!
+				TokenEndpoint:         "",                       // Triggers Discovery!
+			},
+		},
+	}, nil)
+
+	fedClient.FetchOIDCDiscoveryMetadataMock.Expect(minimock.AnyContext, "https://admin.com/.well-known/openid-configuration").Return(&model.OIDCDiscoveryMetadata{
+		AuthorizationEndpoint: "https://admin.com/oauth/authorize",
+		TokenEndpoint:         "https://admin.com/oauth/token",
+		JwksURI:               "https://admin.com/.well-known/jwks.json",
+	}, nil)
+
+	// ASSERTION: Ensure CreateIdentityProvider is called to persist the discovered metadata back to the DB!
+	adminStorage.CreateIdentityProviderMock.Set(func(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) error {
+		if provider.Config.AuthorizationEndpoint != "https://admin.com/oauth/authorize" {
+			t.Errorf("expected auth endpoint 'https://admin.com/oauth/authorize', got '%s'", provider.Config.AuthorizationEndpoint)
+		}
+		if provider.Config.TokenEndpoint != "https://admin.com/oauth/token" {
+			t.Errorf("expected token endpoint 'https://admin.com/oauth/token', got '%s'", provider.Config.TokenEndpoint)
+		}
+		if provider.Config.JwksURI != "https://admin.com/.well-known/jwks.json" {
+			t.Errorf("expected jwks uri 'https://admin.com/.well-known/jwks.json', got '%s'", provider.Config.JwksURI)
+		}
+		return nil
+	})
+
+	fedLogin.InitiateFederatedLoginMock.Expect(minimock.AnyContext, port.InitiateFederatedLoginCommand{
+		TenantID:           tenantUUID,
+		IdentityProviderID: providerUUID,
+		ClientID:           "admin_ui",
+		RequestedScopes:    []string{"openid", "profile", "email"},
+		LocalCallbackURI:   "https://callback",
+		FinalTargetURI:     "https://final",
+	}).Return(&port.InitiateFederatedLoginResponse{
+		TargetRedirectURL: "https://admin.com/oauth/authorize?client_id=already-provisioned-id",
+	}, nil)
+
+	resp, err := svc.InitiateAdminLogon(context.Background(), tenantUUID, "https://callback", "https://final")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if resp.TargetRedirectURL != "https://admin.com/oauth/authorize?client_id=already-provisioned-id" {
+		t.Errorf("expected redirect URL 'https://admin.com/oauth/authorize?client_id=already-provisioned-id', got '%s'", resp.TargetRedirectURL)
+	}
+}
