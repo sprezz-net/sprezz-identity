@@ -14,7 +14,7 @@ import (
 type BindIdentityProvidersToGroupParams struct {
 	GroupID  pgtype.UUID `json:"group_id"`
 	IdpID    pgtype.UUID `json:"idp_id"`
-	TenantID pgtype.UUID `json:"tenant_id"`
+	TenantID int32       `json:"tenant_id"`
 }
 
 const clearIdentityProvidersFromGroup = `-- name: ClearIdentityProvidersFromGroup :exec
@@ -176,9 +176,9 @@ SELECT
     $4,
     $5,
     $6,
-    $7::integer,
-    $8::integer,
-    $9::integer,
+    ($7::integer || ' seconds')::interval,
+    ($8::integer || ' seconds')::interval,
+    ($9::integer || ' seconds')::interval,
     $10,
     $11
 FROM tenant
@@ -750,9 +750,9 @@ SET
     token_endpoint_auth_method = $3,
     grant_types = $4,
     response_types = $5,
-    access_token_lifetime = $6::integer,
-    refresh_token_lifetime = $7::integer,
-    id_token_lifetime = $8::integer,
+    access_token_lifetime = ($6::integer || ' seconds')::interval,
+    refresh_token_lifetime = ($7::integer || ' seconds')::interval,
+    id_token_lifetime = ($8::integer || ' seconds')::interval,
     enforce_rtr = $9,
     signing_algorithm = $10,
     updated_at = NOW()

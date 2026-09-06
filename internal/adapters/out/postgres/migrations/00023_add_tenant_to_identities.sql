@@ -3,7 +3,7 @@
 
 -- 1. Add tenant_id and partition_id as nullable fields initially to permit safe data backfilling
 ALTER TABLE identities
-    ADD COLUMN tenant_id BIGINT,
+    ADD COLUMN tenant_id INTEGER,
     ADD COLUMN partition_id BIGINT;
 
 -- 2. Transactionally backfill existing records by mapping transitively through identity provider configurations
@@ -23,6 +23,10 @@ ALTER TABLE identities
 ALTER TABLE identities
     DROP CONSTRAINT IF EXISTS fk_identities_identity_provider,
     DROP CONSTRAINT IF EXISTS fk_identities_tenant_provider_integrity;
+
+-- 4.5 Ensure identity_providers has a unique constraint covering (tenant_id, partition_id, id) to satisfy foreign key rules
+ALTER TABLE identity_providers
+    ADD CONSTRAINT uq_identity_providers_tenant_partition_id UNIQUE (tenant_id, partition_id, id);
 
 -- 5. Establish the multi-column relational integrity safety wall.
 -- This structurally guarantees an identity cannot point to a provider belonging to a different tenant OR partition.
@@ -47,6 +51,10 @@ DROP INDEX IF EXISTS idx_identities_hot_path_lookup;
 -- 2. Drop the multi-column relational integrity constraint
 ALTER TABLE identities
     DROP CONSTRAINT IF EXISTS fk_identities_tenant_partition_provider_integrity;
+
+-- 2.5 Drop the unique constraint from identity_providers
+ALTER TABLE identity_providers
+    DROP CONSTRAINT IF EXISTS uq_identity_providers_tenant_partition_id;
 
 -- 3. Restore the classic single-column foreign key restriction
 ALTER TABLE identities

@@ -77,7 +77,7 @@ type NavItem struct {
 
 var navItems = []NavItem{
 	{Label: "Tenants", URL: "/admin/tenants", Key: "tenants"},
-	{Label: "Applications", URL: "/admin/clients", Key: "clients"},
+	{Label: "Applications", URL: "/admin/applications", Key: "clients"},
 	{Label: "Identity Providers", URL: "/admin/idps", Key: "idps"},
 	{Label: "Users", URL: "/admin/users", Key: "users"},
 }
@@ -211,11 +211,12 @@ templ AdminLayout(props AdminLayoutProps) {
 					}
 				}));
 
-				Alpine.data('lifetimeCalculator', (initialSeconds) => ({
-					seconds: initialSeconds || 3600,
+				Alpine.data('lifetimeCalculator', () => ({
+					seconds: 3600,
 					value: 1,
 					unit: 'hours',
 					init() {
+						this.seconds = parseInt(this.$el.dataset.initialSeconds) || 3600;
 						const totalSec = parseInt(this.seconds) || 0;
 						if (totalSec % 86400 === 0 && totalSec > 0) {
 							this.value = totalSec / 86400;
@@ -270,102 +271,109 @@ templ AdminLayout(props AdminLayoutProps) {
 					}
 				}));
 
-				Alpine.data('clientFormManager', (initialType, initialAuthCode, initialClientCredentials, initialRtr, initialIdpCount) => ({
-					clientType: initialType || 'confidential',
-					authCode: !!initialAuthCode,
-					clientCredentials: !!initialClientCredentials,
-					enforceRtr: !!initialRtr,
-					idpCount: parseInt(initialIdpCount) || 0,
-					isSubmitDisabled: false,
-					isConfidential: false,
-					isPublic: false,
-					showUrisAndIdps: false,
-
+				Alpine.data('applicationFormManager', () => ({
+					authMethod: 'client_secret_post',
+					enforceRtr: false,
 					init() {
-						this.syncComputedStates();
-						this.$watch('clientType', (val) => {
-							if (val === 'public') {
-								this.clientCredentials = false;
-								this.authCode = true;
-								this.enforceRtr = true; // Public applications strictly mandate RTR
+						this.authMethod = this.$el.dataset.initialAuthMethod || 'client_secret_post';
+						this.enforceRtr = this.$el.dataset.enforceRtr === 'true';
+
+						// Watch authMethod to automatically cascade zero-trust RTR locking rules
+						this.$watch('authMethod', (val) => {
+							if (val === 'none') {
+								this.enforceRtr = true;
 							}
-							this.syncComputedStates();
 						});
-						this.$watch('authCode', (val) => { this.syncComputedStates(); });
-						this.$watch('clientCredentials', (val) => { this.syncComputedStates(); });
-						this.$watch('enforceRtr', (val) => { this.syncComputedStates(); });
-					},
-
-					syncComputedStates() {
-						this.isConfidential = (this.clientType === 'confidential');
-						this.isPublic = (this.clientType === 'public');
-						this.showUrisAndIdps = (this.isPublic || this.authCode);
-						this.isSubmitDisabled = (this.isPublic || this.authCode) ? (this.idpCount === 0) : false;
-					},
-
-					handleClientType(type) { this.clientType = type; },
-					handleAuthCodeChange(checked) { this.authCode = checked; },
-					handleClientCredentialsChange(checked) { this.clientCredentials = checked; },
-					handleIdpChange(count) { this.idpCount = count; },
-					handleRtrChange(checked) { this.enforceRtr = checked; }
+					}
 				}));
 
-				Alpine.data('oidcFormManager', (initialIdpType, initialAlias, initialName, initialConfig) => {
-					let cfg = {};
-					try {
-						cfg = JSON.parse(initialConfig) || {};
-					} catch(e) {}
-
+				Alpine.data('oidcFormManager', () => {
 					return {
-						idpType: initialIdpType || 'username-password',
-						alias: initialAlias || '',
-						name: initialName || '',
+						idpType: 'username-password',
+						alias: '',
+						name: '',
 
-						discoveryEndpoint: cfg.discovery_endpoint || '',
-						issuer: cfg.issuer || '',
+						discoveryEndpoint: '',
+						issuer: '',
 						discoveryResult: null,
-						discoveryRaw: cfg.discovery_result || '',
+						discoveryRaw: '',
 						discoveryError: '',
 						isDiscovering: false,
 
-						clientID: cfg.client_id || '',
-						clientSecret: cfg.client_secret || '',
-						authMethod: cfg.authentication_method || 'client_secret_basic',
+						clientID: '',
+						clientSecret: '',
+						authMethod: 'client_secret_basic',
 
-						pkceEnabled: !!cfg.pkce_enabled,
+						pkceEnabled: false,
 						pkceLocked: false,
 
-						parEnabled: !!cfg.par_enabled,
+						parEnabled: false,
 						parLocked: false,
 						parEnforced: false,
 
-						sloEnabled: !!cfg.slo_enabled,
+						sloEnabled: false,
 						sloSupported: false,
 
-						selectedScopes: cfg.scopes || [],
-						selectedAcrValues: cfg.acr_values || [],
-						selectedClaims: cfg.claims || [],
-						selectedDomainAliases: cfg.domain_aliases || [],
-						userIdentifierClaim: cfg.user_identifier_claim || 'sub',
+						selectedScopes: [],
+						selectedAcrValues: [],
+						selectedClaims: [],
+						selectedDomainAliases: [],
+						userIdentifierClaim: 'sub',
 
 						discoveredScopes: [],
 						discoveredAcrValues: [],
 
-						ial: cfg.ial || 1,
-						aal: cfg.aal || 1,
+						ial: 1,
+						aal: 1,
 
 						// Advanced Multi-Dimensional Mapping Grid Store
 						// Schema: { "raw_acr": { aal: number, ial: number } }
-						acrToTuple: cfg.acr_to_tuple || {},
+						acrToTuple: {},
 
-						amrToAAL: cfg.amr_to_aal && Object.keys(cfg.amr_to_aal).length > 0 ? cfg.amr_to_aal : {
+						amrToAAL: {
 							pwd: 1, mfa: 2, otp: 2, sms: 2, hwk: 3
 						},
-						customAmrs: Object.keys(cfg.amr_to_aal || {})
-							.filter(k => !['pwd', 'mfa', 'otp', 'sms', 'hwk'].includes(k))
-							.map(k => ({ key: k, value: String(cfg.amr_to_aal[k]) })) || [],
+						customAmrs: [],
 
-							init() {
+						init() {
+							this.idpType = this.$el.dataset.idpType || 'username-password';
+							this.alias = this.$el.dataset.alias || '';
+							this.name = this.$el.dataset.name || '';
+
+							let cfg = {};
+							try {
+								cfg = JSON.parse(this.$el.dataset.config || '{}') || {};
+							} catch(e) {}
+
+							this.discoveryEndpoint = cfg.discovery_endpoint || '';
+							this.issuer = cfg.issuer || '';
+							this.discoveryRaw = cfg.discovery_result || '';
+							this.clientID = cfg.client_id || '';
+							this.clientSecret = cfg.client_secret || '';
+							this.authMethod = cfg.authentication_method || 'client_secret_basic';
+
+							this.pkceEnabled = !!cfg.pkce_enabled;
+							this.parEnabled = !!cfg.par_enabled;
+							this.sloEnabled = !!cfg.slo_enabled;
+
+							this.selectedScopes = cfg.scopes || [];
+							this.selectedAcrValues = cfg.acr_values || [];
+							this.selectedClaims = cfg.claims || [];
+							this.selectedDomainAliases = cfg.domain_aliases || [];
+							this.userIdentifierClaim = cfg.user_identifier_claim || 'sub';
+
+							this.ial = cfg.ial || 1;
+							this.aal = cfg.aal || 1;
+
+							this.acrToTuple = cfg.acr_to_tuple || {};
+
+							this.amrToAAL = cfg.amr_to_aal && Object.keys(cfg.amr_to_aal).length > 0 ? cfg.amr_to_aal : {
+								pwd: 1, mfa: 2, otp: 2, sms: 2, hwk: 3
+							};
+							this.customAmrs = Object.keys(cfg.amr_to_aal || {})
+								.filter(k => !['pwd', 'mfa', 'otp', 'sms', 'hwk'].includes(k))
+								.map(k => ({ key: k, value: String(cfg.amr_to_aal[k]) })) || [];
+
 							if (this.discoveryRaw) {
 								try {
 									const result = JSON.parse(this.discoveryRaw);
@@ -735,11 +743,14 @@ templ AdminLayout(props AdminLayoutProps) {
 				}));
 
 				// 6. CSP-Compliant Async ID & Secret Generator
-				Alpine.data('idSecretGenerator', (initialVal) => ({
-					value: initialVal || '',
+				Alpine.data('idSecretGenerator', () => ({
+					value: '',
 					showSecret: false,
+					init() {
+						this.value = this.$el.dataset.initialValue || '';
+					},
 					generate() {
-						window.fetch('/admin/clients/generate-secret')
+						window.fetch('/admin/applications/generate-secret')
 							.then(response => response.text())
 							.then(text => {
 								this.value = text;

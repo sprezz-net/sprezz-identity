@@ -69,6 +69,17 @@ func (s *TenantBootstrapService) bootstrapExistingTenant(ctx context.Context, te
 		}
 	}
 
+	if tenant.DefaultPartition == nil || *tenant.DefaultPartition == 0 {
+		parts, err := s.storage.GetPartitions(ctx, tenant.ID)
+		if err == nil && len(parts) > 0 {
+			partID := parts[0].ID
+			tenant.DefaultPartition = &partID
+			if err := s.adminStorage.CreateTenant(ctx, *tenant); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	if err := s.ensureDefaultIdentityProvider(ctx, tenant.ID); err != nil {
 		return nil, err
 	}
@@ -125,8 +136,12 @@ func (s *TenantBootstrapService) bootstrapNewTenant(ctx context.Context, domain 
 
 func (s *TenantBootstrapService) ensureDefaultIdentityProvider(ctx context.Context, tenantID uuid.UUID) error {
 	providers, err := s.storage.GetEnabledIdentityProviders(ctx, tenantID)
-	if err == nil && len(providers) > 0 {
-		return nil
+	if err == nil {
+		for _, p := range providers {
+			if p.IDPType == model.UsernamePasswordIDPType {
+				return nil
+			}
+		}
 	}
 
 	tenant, err := s.storage.ResolveTenantByUUID(ctx, tenantID)

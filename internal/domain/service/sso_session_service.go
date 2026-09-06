@@ -19,8 +19,16 @@ func NewSSOSessionService(s port.Storage, appEnv string) *SSOSessionService {
 
 // BuildSessionCookie enforces partition namespacing and environmental security prefix gates [8.3, 8.3.1, 8.3.2]
 func (s *SSOSessionService) BuildSessionCookie(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
+	partitionID := cmd.PartitionID
+	if partitionID == 0 {
+		tenant, tenantErr := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
+		if tenantErr == nil && tenant.DefaultPartition != nil {
+			partitionID = *tenant.DefaultPartition
+		}
+	}
+
 	// 1. Resolve internal Partition metadata to pull its canonical text alias name [3.1]
-	partition, err := s.storage.GetPartitionByID(ctx, cmd.TenantID, cmd.PartitionID)
+	partition, err := s.storage.GetPartitionByID(ctx, cmd.TenantID, partitionID)
 	if err != nil {
 		return nil, port.ErrPartitionNotFound
 	}

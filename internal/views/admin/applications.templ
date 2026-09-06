@@ -1,0 +1,863 @@
+package admin
+
+import (
+	"fmt"
+	"strings"
+	"time"
+	"sprezz-identity/internal/domain/model"
+	"github.com/google/uuid"
+)
+
+func getSelectedAuthMethod(application *model.Application, profiles []model.ApplicationProfile) string {
+	if application == nil {
+		return "client_secret_post"
+	}
+	for _, prof := range profiles {
+		if prof.ID == application.ProfileID {
+			return string(prof.TokenEndpointAuthMethod)
+		}
+	}
+	return "client_secret_post"
+}
+
+
+type ApplicationsPageProps struct {
+	ActiveTenant model.Tenant
+	Applications []model.ApplicationSummary
+	Profiles     []model.ApplicationProfile
+	Groups       []model.ApplicationGroup
+	Msg          string
+}
+
+templ ApplicationsContent(props ApplicationsPageProps) {
+	<div class="space-y-6" x-data="{ currentTab: 'apps', filterType: 'all' }">
+		if props.Msg != "" {
+			<div class="p-4 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm font-medium">
+				{ props.Msg }
+			</div>
+		}
+
+		<!-- Tabs Bar Selector -->
+		<div class="border-b border-gray-200">
+			<nav class="-mb-px flex space-x-8" aria-label="Tabs">
+				<button
+					type="button"
+					@click="currentTab = 'apps'"
+					class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition"
+					:class="currentTab === 'apps' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+				>
+					Applications ({ fmt.Sprintf("%d", len(props.Applications)) })
+				</button>
+				<button
+					type="button"
+					@click="currentTab = 'profiles'"
+					class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition"
+					:class="currentTab === 'profiles' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+				>
+					Security Profiles ({ fmt.Sprintf("%d", len(props.Profiles)) })
+				</button>
+				<button
+					type="button"
+					@click="currentTab = 'groups'"
+					class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition"
+					:class="currentTab === 'groups' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+				>
+					Authorization Groups ({ fmt.Sprintf("%d", len(props.Groups)) })
+				</button>
+			</nav>
+		</div>
+
+		<!-- SUB-TAB 1: Applications Overview -->
+		<div x-show="currentTab === 'apps'" class="space-y-4">
+			<div class="flex items-center justify-between">
+				<!-- Instant DCR Filter Buttons -->
+				<div class="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+					<button
+						type="button"
+						@click="filterType = 'all'"
+						class="px-3 py-1.5 rounded-md text-xs font-semibold transition"
+						:class="filterType === 'all' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+					>
+						Show All
+					</button>
+					<button
+						type="button"
+						@click="filterType = 'static'"
+						class="px-3 py-1.5 rounded-md text-xs font-semibold transition"
+						:class="filterType === 'static' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+					>
+						Static Configs
+					</button>
+					<button
+						type="button"
+						@click="filterType = 'dynamic'"
+						class="px-3 py-1.5 rounded-md text-xs font-semibold transition"
+						:class="filterType === 'dynamic' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+					>
+						DCR Registrations
+					</button>
+				</div>
+
+				<button
+					hx-get="/admin/applications/new?modal=true"
+					hx-target="#modal-container"
+					class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm"
+				>
+					+ Add Application
+				</button>
+			</div>
+
+			<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+				<div class="overflow-x-auto">
+					<table class="min-w-full divide-y divide-gray-200 text-sm">
+						<thead>
+							<tr class="bg-gray-50 text-gray-500 font-semibold border-b border-gray-200">
+								<th class="px-6 py-3 text-left">Client ID</th>
+								<th class="px-6 py-3 text-left">Application Name</th>
+								<th class="px-6 py-3 text-left">Classification</th>
+								<th class="px-6 py-3 text-left">Profile</th>
+								<th class="px-6 py-3 text-left">Group</th>
+								<th class="px-6 py-3 text-left">Status</th>
+								<th class="px-6 py-3 text-right">Actions</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-gray-200">
+							for _, app := range props.Applications {
+								<tr
+									class="hover:bg-gray-50 transition cursor-pointer"
+									hx-get={ fmt.Sprintf("/admin/applications/view?id=%s&modal=true", app.ClientID) }
+									hx-target="#modal-container"
+									x-show={ fmt.Sprintf("filterType === 'all' || (filterType === 'dynamic' && %t) || (filterType === 'static' && %t)", app.IsDynamic, !app.IsDynamic) }
+								>
+									<td class="px-6 py-4 font-mono font-medium text-gray-900">{ app.ClientID }</td>
+									<td class="px-6 py-4 text-gray-500">{ app.ApplicationName }</td>
+									<td class="px-6 py-4">
+										if app.IsDynamic {
+											<span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">DCR</span>
+										} else {
+											<span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-700">Static</span>
+										}
+									</td>
+									<td class="px-6 py-4 text-gray-500">
+										<span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-purple-50 text-purple-700 border border-purple-100">
+											{ app.ProfileName }
+										</span>
+									</td>
+									<td class="px-6 py-4 text-gray-500">
+										<span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+											{ app.GroupName }
+										</span>
+									</td>
+									<td class="px-6 py-4" id={ fmt.Sprintf("app-status-%s", app.ClientID) } @click.stop="">
+										@StatusBadge(app.IsEnabled)
+									</td>
+									<td class="px-6 py-4 text-right space-x-2" @click.stop="">
+										<button
+											hx-get={ fmt.Sprintf("/admin/applications/view?id=%s&modal=true", app.ClientID) }
+											hx-target="#modal-container"
+											class="text-blue-600 hover:text-blue-800 font-medium"
+										>
+											View
+										</button>
+										<button
+											hx-get={ fmt.Sprintf("/admin/applications/edit?id=%s&modal=true", app.ClientID) }
+											hx-target="#modal-container"
+											class="text-green-600 hover:text-green-800 font-medium"
+										>
+											Edit
+										</button>
+										<button
+											hx-post={ fmt.Sprintf("/admin/applications/%s/toggle-status", app.ClientID) }
+											hx-target={ fmt.Sprintf("#app-status-%s", app.ClientID) }
+											class="text-slate-600 hover:text-slate-800 font-medium"
+										>
+											Toggle
+										</button>
+										<button
+											hx-delete={ fmt.Sprintf("/admin/applications/%s", app.ClientID) }
+											hx-confirm={ fmt.Sprintf("Are you sure you want to delete application '%s'?", app.ApplicationName) }
+											hx-target="body"
+											class="text-red-600 hover:text-red-800 font-medium"
+										>
+											Delete
+										</button>
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+
+		<!-- SUB-TAB 2: Profiles Overview -->
+		<div x-show="currentTab === 'profiles'" class="space-y-4">
+			<div class="flex items-center justify-end">
+				<button
+					hx-get="/admin/applications/profiles/new?modal=true"
+					hx-target="#modal-container"
+					class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm"
+				>
+					+ Add Profile Policy
+				</button>
+			</div>
+
+			<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+				<table class="min-w-full divide-y divide-gray-200 text-sm">
+					<thead>
+						<tr class="bg-gray-50 text-gray-500 font-semibold border-b border-gray-200">
+							<th class="px-6 py-3 text-left">Profile Name</th>
+							<th class="px-6 py-3 text-left">Auth Method</th>
+							<th class="px-6 py-3 text-left">Signing Algorithm</th>
+							<th class="px-6 py-3 text-left">RTR</th>
+							<th class="px-6 py-3 text-right">Actions</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-gray-200">
+						for _, prof := range props.Profiles {
+							<tr class="hover:bg-gray-50 transition cursor-pointer" hx-get={ fmt.Sprintf("/admin/applications/profiles/edit?id=%s&modal=true", prof.ID.String()) } hx-target="#modal-container">
+								<td class="px-6 py-4 font-semibold text-gray-900">{ prof.ProfileName }</td>
+								<td class="px-6 py-4 text-gray-500 capitalize">{ strings.ReplaceAll(string(prof.TokenEndpointAuthMethod), "_", " ") }</td>
+								<td class="px-6 py-4 font-mono text-gray-500">{ string(prof.SigningAlgorithm) }</td>
+								<td class="px-6 py-4">
+									if prof.EnforceRTR {
+										<span class="text-green-600 font-medium">On</span>
+									} else {
+										<span class="text-slate-400">Off</span>
+									}
+								</td>
+								<td class="px-6 py-4 text-right" @click.stop="">
+									<button hx-get={ fmt.Sprintf("/admin/applications/profiles/edit?id=%s&modal=true", prof.ID.String()) } hx-target="#modal-container" class="text-green-600 hover:text-green-800 font-medium">Edit</button>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+
+
+		<!-- SUB-TAB 3: Groups Overview -->
+		<div x-show="currentTab === 'groups'" class="space-y-4">
+			<div class="flex items-center justify-end">
+				<button
+					hx-get="/admin/applications/groups/new?modal=true"
+					hx-target="#modal-container"
+					class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm"
+				>
+					+ Add Group Bounds
+				</button>
+			</div>
+
+			<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+				<table class="min-w-full divide-y divide-gray-200 text-sm">
+					<thead>
+						<tr class="bg-gray-50 text-gray-500 font-semibold border-b border-gray-200">
+							<th class="px-6 py-3 text-left">Group Name</th>
+							<th class="px-6 py-3 text-left">Redirect Whitelist</th>
+							<th class="px-6 py-3 text-left">Logout Propagations</th>
+							<th class="px-6 py-3 text-right">Actions</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-gray-200">
+						for _, grp := range props.Groups {
+							<tr class="hover:bg-gray-50 transition cursor-pointer" hx-get={ fmt.Sprintf("/admin/applications/groups/edit?id=%s&modal=true", grp.ID.String()) } hx-target="#modal-container">
+								<td class="px-6 py-4 font-semibold text-gray-900">{ grp.GroupName }</td>
+								<td class="px-6 py-4 text-gray-500 text-xs">
+									<div class="flex flex-wrap gap-1 max-w-sm">
+										for _, u := range grp.RedirectURIs {
+											<span class="inline-flex px-1.5 py-0.5 rounded font-mono bg-slate-100">{ u }</span>
+										}
+									</div>
+								</td>
+								<td class="px-6 py-4 text-gray-500 text-xs">
+									if grp.FrontChannelLogoutURI != "" {
+										<div>Front: <span class="font-mono bg-slate-50 p-0.5 rounded">{ grp.FrontChannelLogoutURI }</span></div>
+									}
+									if grp.BackChannelLogoutURI != "" {
+										<div>Back: <span class="font-mono bg-slate-50 p-0.5 rounded">{ grp.BackChannelLogoutURI }</span></div>
+									}
+								</td>
+								<td class="px-6 py-4 text-right" @click.stop="">
+									<button hx-get={ fmt.Sprintf("/admin/applications/groups/edit?id=%s&modal=true", grp.ID.String()) } hx-target="#modal-container" class="text-green-600 hover:text-green-800 font-medium">Edit</button>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</div>
+}
+
+templ ApplicationsPage(props ApplicationsPageProps) {
+	@AdminLayout(AdminLayoutProps{Title: "Applications Portal", CurrentTab: "clients", TenantName: props.ActiveTenant.Name}) {
+		@ApplicationsContent(props)
+	}
+}
+
+
+type ApplicationFormProps struct {
+	Application *model.Application
+	Profiles    []model.ApplicationProfile
+	Groups      []model.ApplicationGroup
+	Errors      map[string]string
+	IsEdit      bool
+	ReadOnly    bool
+}
+
+templ ApplicationForm(props ApplicationFormProps) {
+	<form
+		hx-post="/admin/applications"
+		hx-target="#modal-container"
+		class="space-y-6"
+		x-data="applicationFormManager"
+		data-initial-auth-method={ getSelectedAuthMethod(props.Application, props.Profiles) }
+		data-enforce-rtr={ fmt.Sprintf("%t", props.Application.ProfileID != uuid.Nil) }
+	>
+		if props.IsEdit {
+			<input type="hidden" name="is_edit" value="true"/>
+		} else {
+			<input type="hidden" name="is_edit" value="false"/>
+		}
+
+		<div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4 max-w-xl mx-auto">
+			<h3 class="text-base font-bold text-gray-900 border-b pb-2 flex items-center">
+				<span class="w-2.5 h-2.5 bg-blue-600 rounded-full mr-2"></span>
+				Application Configurations
+			</h3>
+
+			@InputField("Application Name", "application_name", "text", props.Application.ApplicationName, props.Errors["application_name"])
+
+			if props.IsEdit {
+				<input type="hidden" name="client_id" value={ props.Application.ClientID }/>
+				<div>
+					<label class="block text-sm font-medium text-slate-700 mb-1">Client ID</label>
+					<div class="font-mono text-gray-800 bg-gray-50 px-3 py-2 border border-slate-300 rounded-lg select-all">{ props.Application.ClientID }</div>
+				</div>
+			} else {
+				<div x-data="idSecretGenerator" data-initial-value="">
+					<label class="block text-sm font-medium text-slate-700 mb-1">Client ID</label>
+					<div class="flex space-x-2">
+						<input
+							type="text"
+							name="client_id"
+							x-model="value"
+							placeholder="Enter Client ID or generate one"
+							pattern="^[a-zA-Z0-9\-_\.~]+$"
+							title="Only RFC 3986 unreserved characters allowed (A-Z, a-z, 0-9, -, _, ., ~)"
+							class="flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono"
+							required
+						/>
+						<button
+							type="button"
+							@click="generate()"
+							class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm font-semibold transition cursor-pointer"
+						>
+							Generate
+						</button>
+					</div>
+					<p class="text-xs text-slate-500 mt-1">Unique identifier. Restricted to unreserved characters (RFC 3986 Section 2.3).</p>
+				</div>
+			}
+
+			<!-- Dropdown select for standalone profiles -->
+			<div>
+				<label class="block text-sm font-medium text-slate-700 mb-1">Security Profile Policy</label>
+				<select
+					name="profile_id"
+					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+					if props.ReadOnly { disabled }
+				>
+					<option value="">-- Select Security Profile Policy --</option>
+					for _, prof := range props.Profiles {
+						<option value={ prof.ID.String() } selected?={ props.Application.ProfileID == prof.ID }>
+							{ prof.ProfileName } ({ string(prof.TokenEndpointAuthMethod) })
+						</option>
+					}
+				</select>
+				if props.Errors["profile_id"] != "" {
+					<p class="text-xs text-red-500 mt-1">{ props.Errors["profile_id"] }</p>
+				}
+			</div>
+
+			<!-- Dropdown select for standalone groups -->
+			<div>
+				<label class="block text-sm font-medium text-slate-700 mb-1">Authorization Bounds Group</label>
+				<select
+					name="group_id"
+					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+					if props.ReadOnly { disabled }
+				>
+					<option value="">-- Select Authorization Bounds Group --</option>
+					for _, grp := range props.Groups {
+						<option value={ grp.ID.String() } selected?={ props.Application.GroupID == grp.ID }>
+							{ grp.GroupName }
+						</option>
+					}
+				</select>
+				if props.Errors["group_id"] != "" {
+					<p class="text-xs text-red-500 mt-1">{ props.Errors["group_id"] }</p>
+				}
+			</div>
+
+			<!-- Secret reset warnings if client is confidential (not none) and isEdit -->
+			if props.IsEdit && !props.ReadOnly && len(props.Profiles) > 0 {
+				<!-- Will render reset secret button inside if profile allows it -->
+				<div class="pt-2">
+					<label class="block text-sm font-medium text-slate-700 mb-1">Client Secret Keys</label>
+					<div id="client-secret-container" class="flex items-center space-x-2">
+						<div class="font-mono text-gray-400 bg-gray-50 px-3 py-2 border border-slate-300 rounded-lg flex-1">••••••••••••••••</div>
+						<button
+							type="button"
+							hx-post={ fmt.Sprintf("/admin/applications/%s/reset-secret", props.Application.ClientID) }
+							hx-target="#client-secret-container"
+							hx-confirm="Are you sure you want to reset the Client Secret?"
+							class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-semibold transition cursor-pointer"
+						>
+							Reset Secret
+						</button>
+					</div>
+				</div>
+			}
+		</div>
+
+		<!-- Form Actions Bar -->
+		<div class="flex justify-end space-x-3 border-t pt-4 bg-gray-50 px-6 py-4 rounded-b-xl -mx-6 -mb-6">
+			<button
+				type="button"
+				class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 transition cursor-pointer"
+				@click="isOpen = false"
+			>
+				Cancel
+			</button>
+			if !props.ReadOnly {
+				<button
+					type="submit"
+					class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition cursor-pointer"
+				>
+					if props.IsEdit {
+						Save Changes
+					} else {
+						Create Application
+					}
+				</button>
+			}
+		</div>
+	</form>
+}
+
+
+type ProfileFormProps struct {
+	Profile *model.ApplicationProfile
+	Errors  map[string]string
+	IsEdit  bool
+}
+
+templ ProfileForm(props ProfileFormProps) {
+	<form
+		hx-post="/admin/applications/profiles"
+		hx-target="#modal-container"
+		class="space-y-6"
+		x-data="applicationFormManager"
+		data-initial-auth-method={ string(props.Profile.TokenEndpointAuthMethod) }
+		data-enforce-rtr={ fmt.Sprintf("%t", props.Profile.EnforceRTR) }
+	>
+		if props.IsEdit {
+			<input type="hidden" name="is_edit" value="true"/>
+			<input type="hidden" name="id" value={ props.Profile.ID.String() }/>
+		}
+
+		<div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4 max-w-xl mx-auto">
+			<h3 class="text-base font-bold text-gray-900 border-b pb-2 flex items-center">
+				<span class="w-2.5 h-2.5 bg-purple-600 rounded-full mr-2"></span>
+				Security Profile Policy
+			</h3>
+
+			@InputField("Profile Name", "profile_name", "text", props.Profile.ProfileName, props.Errors["profile_name"])
+
+			<div>
+				<label class="block text-sm font-medium text-slate-700 mb-1">Token Endpoint Auth Method</label>
+				<select
+					name="token_endpoint_auth_method"
+					x-model="authMethod"
+					@change="if($el.value === 'none') { enforceRtr = true }"
+					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+				>
+					<option value="client_secret_post">Client Secret Post (Form Parameters)</option>
+					<option value="client_secret_basic">Client Secret Basic (HTTP Basic Auth Header)</option>
+					<option value="none">None (Public Client Auth)</option>
+				</select>
+			</div>
+
+			<div>
+				<label class="block text-sm font-medium text-slate-700 mb-1">Token Signing Algorithm</label>
+				<select
+					name="signing_algorithm"
+					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+				>
+					<option value="RS256" if props.Profile.SigningAlgorithm == model.AlgRS256 { selected }>RS256 (RSA with SHA-256)</option>
+					<option value="ES256" if props.Profile.SigningAlgorithm == model.AlgES256 { selected }>ES256 (ECDSA with SHA-256)</option>
+					<option value="EdDSA" if props.Profile.SigningAlgorithm == model.AlgEdDSA { selected }>EdDSA (Ed25519 Curve)</option>
+				</select>
+			</div>
+
+			<!-- Access Token Lifetime -->
+			<div x-data="lifetimeCalculator" data-initial-seconds={ fmt.Sprintf("%d", int(props.Profile.AccessTokenLifetime/time.Second)) }>
+				<input type="hidden" name="access_token_lifetime" :value="seconds"/>
+				<label class="block text-sm font-medium text-slate-700 mb-1">Access Token Lifetime</label>
+				<div class="flex space-x-2">
+					<input
+						type="number"
+						min="1"
+						x-model="value"
+						@input="updateSeconds()"
+						class="w-24 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+					/>
+					<select
+						x-model="unit"
+						@change="updateSeconds()"
+						class="flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+					>
+						<option value="seconds">Seconds</option>
+						<option value="minutes">Minutes</option>
+						<option value="hours">Hours</option>
+						<option value="days">Days</option>
+					</select>
+				</div>
+			</div>
+
+
+			<!-- ID Token Lifetime -->
+			<div x-data="lifetimeCalculator" data-initial-seconds={ fmt.Sprintf("%d", int(props.Profile.IDTokenLifetime/time.Second)) }>
+				<input type="hidden" name="id_token_lifetime" :value="seconds"/>
+				<label class="block text-sm font-medium text-slate-700 mb-1">ID Token Lifetime</label>
+				<div class="flex space-x-2">
+					<input
+						type="number"
+						min="1"
+						x-model="value"
+						@input="updateSeconds()"
+						class="w-24 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+					/>
+					<select
+						x-model="unit"
+						@change="updateSeconds()"
+						class="flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+					>
+						<option value="seconds">Seconds</option>
+						<option value="minutes">Minutes</option>
+						<option value="hours">Hours</option>
+						<option value="days">Days</option>
+					</select>
+				</div>
+			</div>
+
+			<!-- Refresh Token Lifetime -->
+			<div x-data="lifetimeCalculator" data-initial-seconds={ fmt.Sprintf("%d", int(props.Profile.RefreshTokenLifetime/time.Second)) }>
+				<input type="hidden" name="refresh_token_lifetime" :value="seconds"/>
+				<label class="block text-sm font-medium text-slate-700 mb-1">Refresh Token Lifetime</label>
+				<div class="flex space-x-2">
+					<input
+						type="number"
+						min="1"
+						x-model="value"
+						@input="updateSeconds()"
+						class="w-24 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+					/>
+					<select
+						x-model="unit"
+						@change="updateSeconds()"
+						class="flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+					>
+						<option value="seconds">Seconds</option>
+						<option value="minutes">Minutes</option>
+						<option value="hours">Hours</option>
+						<option value="days">Days</option>
+					</select>
+				</div>
+			</div>
+
+			<!-- Enforce RTR Option -->
+			<div class="flex items-center pt-2">
+				<input
+					type="checkbox"
+					id="enforce_rtr"
+					name="enforce_rtr"
+					value="true"
+					x-model="enforceRtr"
+					:disabled="authMethod === 'none'"
+					class="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+				/>
+				<label for="enforce_rtr" class="ml-2 block text-sm font-medium text-slate-700 select-none">
+					Enforce Refresh Token Rotation (RTR)
+				</label>
+			</div>
+		</div>
+
+		<!-- Form Actions Bar -->
+		<div class="flex justify-end space-x-3 border-t pt-4 bg-gray-50 px-6 py-4 rounded-b-xl -mx-6 -mb-6">
+			<button
+				type="button"
+				class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 transition cursor-pointer"
+				@click="isOpen = false"
+			>
+				Cancel
+			</button>
+			<button
+				type="submit"
+				class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition cursor-pointer"
+			>
+				if props.IsEdit {
+					Save Changes
+				} else {
+					Create Profile
+				}
+			</button>
+		</div>
+	</form>
+}
+
+
+type GroupFormProps struct {
+	Group     *model.ApplicationGroup
+	Errors    map[string]string
+	IsEdit    bool
+	Providers []model.IdentityProvider
+}
+
+templ GroupForm(props GroupFormProps) {
+	<form
+		hx-post="/admin/applications/groups"
+		hx-target="#modal-container"
+		class="space-y-6"
+	>
+		if props.IsEdit {
+			<input type="hidden" name="is_edit" value="true"/>
+			<input type="hidden" name="id" value={ props.Group.ID.String() }/>
+		}
+
+		<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl mx-auto">
+			<!-- CARD 1: Basic Group Info -->
+			<div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4">
+				<h3 class="text-base font-bold text-gray-900 border-b pb-2 flex items-center">
+					<span class="w-2.5 h-2.5 bg-green-600 rounded-full mr-2"></span>
+					Group Details
+				</h3>
+
+				@InputField("Group Name", "group_name", "text", props.Group.GroupName, props.Errors["group_name"])
+
+				<!-- Redirect URIs URL list manager -->
+				<div x-data={ fmt.Sprintf("urlManager(%s)", marshalURLs(props.Group.RedirectURIs)) }>
+					<label class="block text-sm font-medium text-slate-700 mb-1">Redirect URIs</label>
+					<div class="flex space-x-2 mb-2">
+						<input
+							type="text"
+							x-model="newUrl"
+							placeholder="https://example.com/callback"
+							class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"
+							@keydown.enter.prevent="addUrl()"
+						/>
+						<button
+							type="button"
+							@click="addUrl()"
+							class="px-3 py-2 bg-slate-800 text-white rounded-lg text-sm font-semibold hover:bg-slate-900 transition"
+						>
+							Add
+						</button>
+					</div>
+					<p x-show="error" x-text="error" class="text-xs text-red-500 mb-2"></p>
+					<div class="space-y-1 max-h-32 overflow-y-auto border border-slate-100 p-2 rounded-lg bg-slate-50">
+						<template x-for="(url, index) in urls" :key="index">
+							<div class="flex items-center justify-between text-xs font-mono bg-white px-2 py-1 rounded border border-slate-200">
+								<span x-text="url" class="text-slate-800"></span>
+								<input type="hidden" name="redirect_uris" :value="url"/>
+								<button type="button" @click="removeUrl(index)" class="text-red-500 hover:text-red-700 font-bold ml-2">×</button>
+							</div>
+						</template>
+					</div>
+				</div>
+
+				<!-- Post Logout Redirect URIs URL list manager -->
+				<div x-data={ fmt.Sprintf("urlManager(%s)", marshalURLs(props.Group.PostLogoutRedirectURIs)) }>
+					<label class="block text-sm font-medium text-slate-700 mb-1">Post-Logout Redirect URIs</label>
+					<div class="flex space-x-2 mb-2">
+						<input
+							type="text"
+							x-model="newUrl"
+							placeholder="https://example.com/logout-callback"
+							class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"
+							@keydown.enter.prevent="addUrl()"
+						/>
+						<button
+							type="button"
+							@click="addUrl()"
+							class="px-3 py-2 bg-slate-800 text-white rounded-lg text-sm font-semibold hover:bg-slate-900 transition"
+						>
+							Add
+						</button>
+					</div>
+					<p x-show="error" x-text="error" class="text-xs text-red-500 mb-2"></p>
+					<div class="space-y-1 max-h-32 overflow-y-auto border border-slate-100 p-2 rounded-lg bg-slate-50">
+						<template x-for="(url, index) in urls" :key="index">
+							<div class="flex items-center justify-between text-xs font-mono bg-white px-2 py-1 rounded border border-slate-200">
+								<span x-text="url" class="text-slate-800"></span>
+								<input type="hidden" name="post_logout_redirect_uris" :value="url"/>
+								<button type="button" @click="removeUrl(index)" class="text-red-500 hover:text-red-700 font-bold ml-2">×</button>
+							</div>
+						</template>
+					</div>
+				</div>
+			</div>
+
+
+			<!-- CARD 2: Protocols, Scopes & IDPs -->
+			<div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4">
+				<h3 class="text-base font-bold text-gray-900 border-b pb-2 flex items-center">
+					<span class="w-2.5 h-2.5 bg-blue-600 rounded-full mr-2"></span>
+					Scoping & Identity Routing
+				</h3>
+
+				@InputField("Front-Channel Logout URI", "front_channel_logout_uri", "text", props.Group.FrontChannelLogoutURI, props.Errors["front_channel_logout_uri"])
+				@InputField("Back-Channel Logout URI", "back_channel_logout_uri", "text", props.Group.BackChannelLogoutURI, props.Errors["back_channel_logout_uri"])
+
+				<!-- Allowed Scopes Tag List -->
+				<div
+					x-data="tagListManager"
+					data-input-name="scopes"
+					data-initial-tags={ marshalStringSlice(props.Group.AllowedScopes) }
+					data-built-in='["openid", "profile", "email", "offline_access", "phone", "address"]'
+					class="space-y-2"
+				>
+					<label class="block text-sm font-medium text-slate-700 mb-1">Allowed Scopes</label>
+					<div class="flex flex-wrap gap-2 mb-2">
+						<template x-for="b in builtIn" :key="b">
+							<label class="inline-flex items-center px-2.5 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer select-none" :class="selectedBuiltIn.includes(b) ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-white border-slate-200 text-slate-600'">
+								<input
+									type="checkbox"
+									name="scopes"
+									:value="b"
+									:checked="selectedBuiltIn.includes(b)"
+									@change="if($el.checked) { if(!selectedBuiltIn.includes(b)) selectedBuiltIn.push(b) } else { selectedBuiltIn = selectedBuiltIn.filter(x => x !== b) }"
+									class="hidden"
+								/>
+								<span x-text="b"></span>
+							</label>
+						</template>
+					</div>
+				</div>
+
+				<!-- Identity Providers Checkboxes -->
+				<div class="space-y-2 pt-2">
+					<label class="block text-sm font-medium text-slate-700">Identity Providers</label>
+					<div class="space-y-1.5 bg-slate-50 border border-slate-100 p-3 rounded-lg max-h-40 overflow-y-auto">
+						<div class="flex items-center">
+							<input
+								type="checkbox"
+								id="idp-local"
+								name="allowed_idps"
+								value="username-password"
+								class="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+								checked
+								disabled
+							/>
+							<label for="idp-local" class="ml-2 block text-sm font-medium text-slate-700 select-none">Local Accounts</label>
+						</div>
+
+						for _, idp := range props.Providers {
+							if idp.IDPType != "username-password" {
+								<div class="flex items-center">
+									<input
+										type="checkbox"
+										id={ fmt.Sprintf("idp-%s", idp.ID.String()) }
+										name="allowed_idps"
+										value={ idp.ID.String() }
+										class="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+										if containsUUID(props.Group.AllowedIDPIDs, idp.ID) { checked }
+									/>
+									<label for={ fmt.Sprintf("idp-%s", idp.ID.String()) } class="ml-2 block text-sm font-medium text-slate-700 select-none">
+										{ idp.Alias } <span class="text-xs text-slate-400 capitalize">({ idp.IDPType })</span>
+									</label>
+								</div>
+							}
+						}
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Form Actions Bar -->
+		<div class="flex justify-end space-x-3 border-t pt-4 bg-gray-50 px-6 py-4 rounded-b-xl -mx-6 -mb-6">
+			<button
+				type="button"
+				class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 transition cursor-pointer"
+				@click="isOpen = false"
+			>
+				Cancel
+			</button>
+			<button
+				type="submit"
+				class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition cursor-pointer"
+			>
+				if props.IsEdit {
+					Save Changes
+				} else {
+					Create Group
+				}
+			</button>
+		</div>
+	</form>
+}
+
+
+templ StatusBadge(isEnabled bool) {
+	if isEnabled {
+		<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-100">
+			Active
+		</span>
+	} else {
+		<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-100">
+			Disabled
+		</span>
+	}
+}
+
+func containsUUID(list []uuid.UUID, target uuid.UUID) bool {
+	for _, id := range list {
+		if id == target {
+			return true
+		}
+	}
+	return false
+}
+
+
+
+templ ApplicationCredentialsResetPanel(clientID string, plainSecret string) {
+	<div class="bg-white p-6 rounded-xl shadow-xl max-w-lg mx-auto border border-yellow-200">
+		<div class="flex items-center space-x-3 text-yellow-600 mb-4">
+			<svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+			</svg>
+			<h3 class="text-lg font-bold text-gray-900">Application Secret Generated</h3>
+		</div>
+		<p class="text-sm text-slate-600 mb-4">
+			A new client secret has been generated for application <strong class="font-mono">{ clientID }</strong>.
+			You must copy and save this secret now. <strong class="text-red-600">It will never be shown again!</strong>
+		</p>
+		<div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm font-mono text-slate-800 break-all select-all mb-6">
+			{ plainSecret }
+		</div>
+		<div class="flex justify-end">
+			<button
+				type="button"
+				class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-sm font-semibold transition"
+				@click="isOpen = false"
+			>
+				I Have Saved It
+			</button>
+		</div>
+	</div>
+}
+
+

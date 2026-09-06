@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS application_group_idps (
     group_id   UUID NOT NULL,
     idp_id     UUID NOT NULL,
-    tenant_id  UUID NOT NULL,
+    tenant_id  INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     -- Composite primary key blocks duplicate mapping tracks automatically

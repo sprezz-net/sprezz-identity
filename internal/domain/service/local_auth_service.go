@@ -139,17 +139,41 @@ func (s *LocalAuthService) handleFailedPasswordAttempt(
 }
 
 func (s *LocalAuthService) GetLoginContext(ctx context.Context, cmd port.GetLoginContextCommand) (*port.LoginContextResponse, error) {
-	// 1. Fetch enabled providers for the tenant
+	// 1. Fetch Tenant configuration permissions
+	tenant, err := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("local_auth_service: failed resolving tenant context: %w", err)
+	}
+
+	var allowSignup bool
+	var tenantBaseURI string
+	if tenant != nil {
+		allowSignup = tenant.Config.AllowSignup
+		tenantBaseURI = tenant.GetBaseURI()
+	}
+
+	// 2. Fetch enabled providers for the tenant
 	allProviders, err := s.storage.GetEnabledIdentityProviders(ctx, cmd.TenantID)
 	if err != nil {
 		return nil, fmt.Errorf("local_auth_service: failed gathering enabled providers: %w", err)
 	}
 
-	// 2. Fetch interaction session if interaction ID is provided
+	// 3. Fetch interaction session if interaction ID is provided
 	var interactionSession *model.InteractionSession
 	var allowedIDPs []string
 	var partitionID int64
 	var isDirectAccess = true
+
+	if tenant != nil {
+		if tenant.DefaultPartition != nil && *tenant.DefaultPartition != 0 {
+			partitionID = *tenant.DefaultPartition
+		} else {
+			parts, err := s.storage.GetPartitions(ctx, cmd.TenantID)
+			if err == nil && len(parts) > 0 {
+				partitionID = parts[0].ID
+			}
+		}
+	}
 
 	if cmd.InteractionID != "" {
 		sessionUUID, err := uuid.Parse(cmd.InteractionID)
@@ -166,7 +190,7 @@ func (s *LocalAuthService) GetLoginContext(ctx context.Context, cmd port.GetLogi
 		}
 	}
 
-	// 3. Apply provider filtering matching lineage logic
+	// 4. Apply provider filtering matching lineage logic
 	var finalProviders []model.IdentityProvider
 	if isDirectAccess {
 		for _, p := range allProviders {
@@ -185,7 +209,7 @@ func (s *LocalAuthService) GetLoginContext(ctx context.Context, cmd port.GetLogi
 		}
 	}
 
-	// 4. Resolve default client/group default provider and idp hint redirects
+	// 5. Resolve default client/group default provider and idp hint redirects
 	var group *model.ApplicationGroup
 	if interactionSession != nil {
 		_, _, grp, _ := s.storage.GetApplicationByClientID(ctx, cmd.TenantID, interactionSession.ClientID)
@@ -222,15 +246,6 @@ func (s *LocalAuthService) GetLoginContext(ctx context.Context, cmd port.GetLogi
 			matchedPartition = p.PartitionID
 			break
 		}
-	}
-
-	// 5. Fetch Tenant configuration permissions
-	tenant, err := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
-	var allowSignup bool
-	var tenantBaseURI string
-	if err == nil && tenant != nil {
-		allowSignup = tenant.Config.AllowSignup
-		tenantBaseURI = tenant.GetBaseURI()
 	}
 
 	return &port.LoginContextResponse{

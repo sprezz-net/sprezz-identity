@@ -43,7 +43,7 @@ VALUES (
     @is_active,
     @created_at::timestamptz,
     @config,
-    @default_partition::bigint,
+    NULLIF(@default_partition::bigint, 0),
     @encrypted_dek,
     @dek_nonce
 )

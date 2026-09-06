@@ -1335,3 +1335,19 @@ func (s *Storage) IncrementUserIdentityLoginTracker(ctx context.Context, tenantI
 func (s *Storage) RecordClientSessionLink(ctx context.Context, tenantID uuid.UUID, sessionID string, clientID string, associatedAt time.Time) error {
 	return nil
 }
+
+func (s *Storage) GetApplicationProfiles(ctx context.Context, tenantUUID uuid.UUID) ([]model.ApplicationProfile, error) {
+	return nil, nil
+}
+
+func (s *Storage) GetApplicationGroups(ctx context.Context, tenantUUID uuid.UUID) ([]model.ApplicationGroup, error) {
+	return nil, nil
+}
+
+func (s *Storage) GetApplicationProfileByID(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) (*model.ApplicationProfile, error) {
+	return nil, nil
+}
+
+func (s *Storage) GetApplicationGroupByID(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) (*model.ApplicationGroup, error) {
+	return nil, nil
+}

@@ -62,7 +62,7 @@ func (s *AdminLogonService) InitiateAdminLogon(ctx context.Context, localTenantI
 
 	var adminOidcProvider *model.IdentityProvider
 	for _, p := range providers {
-		if p.IDPType == model.OpenIDConnectIDPType && p.Alias == "admin-sso" {      // TODO Maybe fetch directly via alias from storage
+		if p.IDPType == model.OpenIDConnectIDPType && p.Alias == "admin-sso" { // TODO Maybe fetch directly via alias from storage
 			adminOidcProvider = &p
 			break
 		}
@@ -131,13 +131,12 @@ func (s *AdminLogonService) CompleteAdminLogon(ctx context.Context, localTenantI
 	}
 
 	// Pass localTenantID to accurately look up the local callback transaction parameters [5.7]
-	upstreamTokens, err := s.oauthService.ExchangeCodeForTokens(
-		ctx,
-		localTenantID,
-		matchedProvider.Config.ClientID,
-		incomingCode,
-		handshake.CodeVerifier,
-	)
+	upstreamTokens, err := s.oauthService.ExchangeCodeForTokens(ctx, port.ExchangeCodeForTokensCommand{
+		TenantID:     localTenantID,
+		ClientID:     matchedProvider.Config.ClientID,
+		Code:         incomingCode,
+		CodeVerifier: handshake.CodeVerifier,
+	})
 	if err != nil {
 		return nil, "", fmt.Errorf("admin_logon: back-channel token trade rejected by upstream idp: %w", err)
 	}

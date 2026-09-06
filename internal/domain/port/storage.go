@@ -110,6 +110,11 @@ type AdminStorage interface {
 	GetDynamicApplicationsSummary(ctx context.Context, tenantUUID uuid.UUID) ([]model.ApplicationSummary, error)
 	GetStaticApplicationsSummary(ctx context.Context, tenantUUID uuid.UUID) ([]model.ApplicationSummary, error)
 
+	GetApplicationProfiles(ctx context.Context, tenantUUID uuid.UUID) ([]model.ApplicationProfile, error)
+	GetApplicationGroups(ctx context.Context, tenantUUID uuid.UUID) ([]model.ApplicationGroup, error)
+	GetApplicationProfileByID(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) (*model.ApplicationProfile, error)
+	GetApplicationGroupByID(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) (*model.ApplicationGroup, error)
+
 	CreateApplication(ctx context.Context, tenantUUID uuid.UUID, app model.Application) error
 	UpdateApplication(ctx context.Context, tenantUUID uuid.UUID, clientID string, app model.Application) error
 	DeleteApplication(ctx context.Context, tenantID uuid.UUID, clientID string) error

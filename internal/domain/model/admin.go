@@ -25,3 +25,10 @@ type ApplicationSummary struct {
 	GroupID     uuid.UUID `json:"group_id"`
 	GroupName   string    `json:"group_name"`
 }
+
+// ApplicationDetailsProps wraps Application, ApplicationProfile, and ApplicationGroup into a unified layout for edit/view workflows.
+type ApplicationDetailsProps struct {
+	Application        *Application        `json:"application"`
+	ApplicationProfile *ApplicationProfile `json:"application_profile"`
+	ApplicationGroup   *ApplicationGroup   `json:"application_group"`
+}

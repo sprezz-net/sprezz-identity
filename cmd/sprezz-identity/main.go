@@ -35,6 +35,8 @@ type dependencies struct {
 	userProfileUseCase      port.UserProfileUseCase
 	userRegistrationUseCase port.UserRegistrationUseCase
 	localAuthUseCase        port.LocalAuthUseCase
+	adminApplicationUseCase port.AdminApplicationUseCase
+	idpService              port.IdentityProviderUseCase
 }
 
 func main() {
@@ -56,6 +58,9 @@ func main() {
 		deps.userProfileUseCase,
 		deps.userRegistrationUseCase,
 		deps.localAuthUseCase,
+		deps.adminApplicationUseCase,
+		deps.adminStorage,
+		deps.idpService,
 		deps.storage,
 		deps.signer,
 		deps.cfg.AppEnv,
@@ -184,6 +189,7 @@ func initDependencies(ctx context.Context) *dependencies {
 	)
 
 	localAuthService := service.NewLocalAuthService(storage, signer, sysClock)
+	appService := service.NewApplicationService(storage, storage, sysClock, signer)
 
 	return &dependencies{
 		cfg:                     cfg,
@@ -198,6 +204,8 @@ func initDependencies(ctx context.Context) *dependencies {
 		userProfileUseCase:      userProfileUseCase,
 		userRegistrationUseCase: userRegistrationUseCase,
 		localAuthUseCase:        localAuthService,
+		adminApplicationUseCase: appService,
+		idpService:              idpService,
 	}
 }
 

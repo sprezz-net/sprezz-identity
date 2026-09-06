@@ -132,11 +132,11 @@ templ IDPForm(props IDPFormProps) {
 		hx-post="/admin/idps"
 		hx-target="#modal-body"
 		class="space-y-6 max-w-4xl mx-auto p-2"
-		data-idp-type={ props.Provider.IDPType }
+		data-idp-type={ string(props.Provider.IDPType) }
 		data-alias={ props.Provider.Alias }
 		data-name={ props.Provider.Name }
 		data-config={ getProviderConfigJSON(props.Provider) }
-		x-data="oidcFormManager($el.dataset.idpType, $el.dataset.alias, $el.dataset.name, $el.dataset.config)"
+		x-data="oidcFormManager"
 	>
 		<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 			if props.IsEdit {

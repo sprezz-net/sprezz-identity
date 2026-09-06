@@ -92,7 +92,7 @@ type ApplicationGroup struct {
 type ApplicationGroupIdp struct {
 	GroupID   pgtype.UUID        `json:"group_id"`
 	IdpID     pgtype.UUID        `json:"idp_id"`
-	TenantID  pgtype.UUID        `json:"tenant_id"`
+	TenantID  int32              `json:"tenant_id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
@@ -155,7 +155,7 @@ type DpopProof struct {
 
 type FederatedSession struct {
 	ID                   pgtype.UUID        `json:"id"`
-	TenantID             pgtype.UUID        `json:"tenant_id"`
+	TenantID             int32              `json:"tenant_id"`
 	PartitionID          int64              `json:"partition_id"`
 	SessionID            string             `json:"session_id"`
 	IdentityProviderID   pgtype.UUID        `json:"identity_provider_id"`
@@ -306,7 +306,7 @@ type UserIdentity struct {
 	LoginCount         int32              `json:"login_count"`
 	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
 	CoupledAt          pgtype.Timestamptz `json:"coupled_at"`
-	TenantID           int64              `json:"tenant_id"`
+	TenantID           int32              `json:"tenant_id"`
 	PartitionID        int64              `json:"partition_id"`
 }
 

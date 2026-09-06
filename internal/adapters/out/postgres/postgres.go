@@ -1227,14 +1227,17 @@ func (s *PostgresStorage) UpdateApplicationGroup(ctx context.Context, tenantUUID
 
 	// 4. Batch Re-Inscription Phase: Stream the updated whitelist array into the join table
 	if len(group.AllowedIDPIDs) > 0 {
-		batchEntries := make([]sqlcdb.BindIdentityProvidersToGroupParams, len(group.AllowedIDPIDs))
-		pgTenantUUID := toPGUUID(tenantUUID)
+		tenantID, err := txQueries.GetTenantIDByUUID(ctx, toPGUUID(tenantUUID))
+		if err != nil {
+			return fmt.Errorf("storage: failed to resolve tenant internal ID: %w", err)
+		}
 
+		batchEntries := make([]sqlcdb.BindIdentityProvidersToGroupParams, len(group.AllowedIDPIDs))
 		for i, idpID := range group.AllowedIDPIDs {
 			batchEntries[i] = sqlcdb.BindIdentityProvidersToGroupParams{
 				GroupID:  pgGroupUUID,
 				IdpID:    toPGUUID(idpID),
-				TenantID: pgTenantUUID,
+				TenantID: tenantID,
 			}
 		}
 
@@ -1347,6 +1350,206 @@ func (s *PostgresStorage) PruneExpiredFederatedSessions(ctx context.Context, now
 		return 0, fmt.Errorf("storage: clear task runtime failure on expired federated records: %w", err)
 	}
 	return rowsAffected, nil
+}
+
+// GetApplicationProfiles retrieves all standalone security policies for a tenant.
+func (s *PostgresStorage) GetApplicationProfiles(ctx context.Context, tenantUUID uuid.UUID) ([]model.ApplicationProfile, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, profile_name, is_enabled, token_endpoint_auth_method, grant_types, response_types,
+		       access_token_lifetime, refresh_token_lifetime, id_token_lifetime, enforce_rtr, signing_algorithm, updated_at
+		FROM application_profiles
+		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1 LIMIT 1)
+		ORDER BY profile_name ASC
+	`, toPGUUID(tenantUUID))
+	if err != nil {
+		return nil, fmt.Errorf("storage: select application profiles: %w", err)
+	}
+	defer rows.Close()
+
+	var list []model.ApplicationProfile
+	for rows.Next() {
+		var p model.ApplicationProfile
+		var pgID pgtype.UUID
+		var authMethod string
+		var grantTypes, responseTypes []string
+		var accessSec, refreshSec, idSec int32
+		var signingAlg string
+		var updatedAt pgtype.Timestamptz
+
+		if err := rows.Scan(&pgID, &p.ProfileName, &p.IsEnabled, &authMethod, &grantTypes, &responseTypes,
+			&accessSec, &refreshSec, &idSec, &p.EnforceRTR, &signingAlg, &updatedAt); err != nil {
+			return nil, fmt.Errorf("storage: scan profile row: %w", err)
+		}
+
+		p.ID, _ = pgUUIDToUUID(pgID)
+		p.TenantID = tenantUUID
+		p.TokenEndpointAuthMethod = model.TokenEndpointAuthMethod(authMethod)
+		p.AccessTokenLifetime = time.Duration(accessSec) * time.Second
+		p.RefreshTokenLifetime = time.Duration(refreshSec) * time.Second
+		p.IDTokenLifetime = time.Duration(idSec) * time.Second
+		p.SigningAlgorithm = model.SignatureAlgorithm(signingAlg)
+		p.UpdatedAt = pgTimestamptzToTimeOrZero(updatedAt)
+
+		p.GrantTypes = make([]model.GrantType, len(grantTypes))
+		for i, gt := range grantTypes {
+			p.GrantTypes[i] = model.GrantType(gt)
+		}
+		p.ResponseTypes = make([]model.ResponseType, len(responseTypes))
+		for i, rt := range responseTypes {
+			p.ResponseTypes[i] = model.ResponseType(rt)
+		}
+
+		list = append(list, p)
+	}
+	return list, nil
+}
+
+// GetApplicationGroups retrieves all standalone routing / authorization groups for a tenant.
+func (s *PostgresStorage) GetApplicationGroups(ctx context.Context, tenantUUID uuid.UUID) ([]model.ApplicationGroup, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, group_name, is_enabled, redirect_uris, post_logout_redirect_uris,
+		       front_channel_logout_uri, back_channel_logout_uri, allowed_scopes, default_scopes, allowed_audiences, default_idp_id, updated_at
+		FROM application_groups
+		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1 LIMIT 1)
+		ORDER BY group_name ASC
+	`, toPGUUID(tenantUUID))
+	if err != nil {
+		return nil, fmt.Errorf("storage: select application groups: %w", err)
+	}
+	defer rows.Close()
+
+	var list []model.ApplicationGroup
+	for rows.Next() {
+		var g model.ApplicationGroup
+		var pgID pgtype.UUID
+		var defaultIdpID pgtype.UUID
+		var updatedAt pgtype.Timestamptz
+
+		if err := rows.Scan(&pgID, &g.GroupName, &g.IsEnabled, &g.RedirectURIs, &g.PostLogoutRedirectURIs,
+			&g.FrontChannelLogoutURI, &g.BackChannelLogoutURI, &g.AllowedScopes, &g.DefaultScopes, &g.AllowedAudiences, &defaultIdpID, &updatedAt); err != nil {
+			return nil, fmt.Errorf("storage: scan group row: %w", err)
+		}
+
+		g.ID, _ = pgUUIDToUUID(pgID)
+		g.TenantID = tenantUUID
+		g.UpdatedAt = pgTimestamptzToTimeOrZero(updatedAt)
+
+		if defaultIdpID.Valid {
+			parsed, _ := pgUUIDToUUID(defaultIdpID)
+			g.DefaultIDPID = &parsed
+		}
+
+		// Load group IDP join relation array
+		idpRows, err := s.pool.Query(ctx, "SELECT idp_id FROM application_group_idps WHERE group_id = $1", pgID)
+		if err == nil {
+			var idps []uuid.UUID
+			for idpRows.Next() {
+				var pgIDP pgtype.UUID
+				if err := idpRows.Scan(&pgIDP); err == nil {
+					parsed, _ := pgUUIDToUUID(pgIDP)
+					idps = append(idps, parsed)
+				}
+			}
+			idpRows.Close()
+			g.AllowedIDPIDs = idps
+		}
+
+		list = append(list, g)
+	}
+	return list, nil
+}
+
+// GetApplicationProfileByID retrieves a single application profile policy.
+func (s *PostgresStorage) GetApplicationProfileByID(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) (*model.ApplicationProfile, error) {
+	var p model.ApplicationProfile
+	var pgID pgtype.UUID
+	var authMethod string
+	var grantTypes, responseTypes []string
+	var accessSec, refreshSec, idSec int32
+	var signingAlg string
+	var updatedAt pgtype.Timestamptz
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, profile_name, is_enabled, token_endpoint_auth_method, grant_types, response_types,
+		       access_token_lifetime, refresh_token_lifetime, id_token_lifetime, enforce_rtr, signing_algorithm, updated_at
+		FROM application_profiles
+		WHERE id = $1 AND tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $2 LIMIT 1)
+	`, toPGUUID(id), toPGUUID(tenantUUID)).Scan(&pgID, &p.ProfileName, &p.IsEnabled, &authMethod, &grantTypes, &responseTypes,
+		&accessSec, &refreshSec, &idSec, &p.EnforceRTR, &signingAlg, &updatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("profile not found")
+		}
+		return nil, fmt.Errorf("storage: get profile by id: %w", err)
+	}
+
+	p.ID = id
+	p.TenantID = tenantUUID
+	p.TokenEndpointAuthMethod = model.TokenEndpointAuthMethod(authMethod)
+	p.AccessTokenLifetime = time.Duration(accessSec) * time.Second
+	p.RefreshTokenLifetime = time.Duration(refreshSec) * time.Second
+	p.IDTokenLifetime = time.Duration(idSec) * time.Second
+	p.SigningAlgorithm = model.SignatureAlgorithm(signingAlg)
+	p.UpdatedAt = pgTimestamptzToTimeOrZero(updatedAt)
+
+	p.GrantTypes = make([]model.GrantType, len(grantTypes))
+	for i, gt := range grantTypes {
+		p.GrantTypes[i] = model.GrantType(gt)
+	}
+	p.ResponseTypes = make([]model.ResponseType, len(responseTypes))
+	for i, rt := range responseTypes {
+		p.ResponseTypes[i] = model.ResponseType(rt)
+	}
+
+	return &p, nil
+}
+
+// GetApplicationGroupByID retrieves a single authorization group.
+func (s *PostgresStorage) GetApplicationGroupByID(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) (*model.ApplicationGroup, error) {
+	var g model.ApplicationGroup
+	var pgID pgtype.UUID
+	var defaultIdpID pgtype.UUID
+	var updatedAt pgtype.Timestamptz
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, group_name, is_enabled, redirect_uris, post_logout_redirect_uris,
+		       front_channel_logout_uri, back_channel_logout_uri, allowed_scopes, default_scopes, allowed_audiences, default_idp_id, updated_at
+		FROM application_groups
+		WHERE id = $1 AND tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $2 LIMIT 1)
+	`, toPGUUID(id), toPGUUID(tenantUUID)).Scan(&pgID, &g.GroupName, &g.IsEnabled, &g.RedirectURIs, &g.PostLogoutRedirectURIs,
+		&g.FrontChannelLogoutURI, &g.BackChannelLogoutURI, &g.AllowedScopes, &g.DefaultScopes, &g.AllowedAudiences, &defaultIdpID, &updatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("group not found")
+		}
+		return nil, fmt.Errorf("storage: get group by id: %w", err)
+	}
+
+	g.ID = id
+	g.TenantID = tenantUUID
+	g.UpdatedAt = pgTimestamptzToTimeOrZero(updatedAt)
+
+	if defaultIdpID.Valid {
+		parsed, _ := pgUUIDToUUID(defaultIdpID)
+		g.DefaultIDPID = &parsed
+	}
+
+	// Load group IDP join relation array
+	idpRows, err := s.pool.Query(ctx, "SELECT idp_id FROM application_group_idps WHERE group_id = $1", pgID)
+	if err == nil {
+		var idps []uuid.UUID
+		for idpRows.Next() {
+			var pgIDP pgtype.UUID
+			if err := idpRows.Scan(&pgIDP); err == nil {
+				parsed, _ := pgUUIDToUUID(pgIDP)
+				idps = append(idps, parsed)
+			}
+		}
+		idpRows.Close()
+		g.AllowedIDPIDs = idps
+	}
+
+	return &g, nil
 }
 
 // --- Dynamic Mapping Internal Converter ---
@@ -1576,6 +1779,11 @@ func (s *PostgresStorage) GetIdentityProviders(ctx context.Context, tenantID uui
 			_ = json.Unmarshal(row.Config, &providerCfg)
 		}
 
+		var issuer string
+		if row.Issuer != nil {
+			issuer = *row.Issuer
+		}
+
 		providers[i] = model.IdentityProvider{
 			ID:          providerUUID,
 			TenantID:    tenantID,
@@ -1584,7 +1792,7 @@ func (s *PostgresStorage) GetIdentityProviders(ctx context.Context, tenantID uui
 			Alias:       row.Alias,
 			Name:        row.Name,
 			PartitionID: row.PartitionID,
-			Issuer:      *row.Issuer,
+			Issuer:      issuer,
 			Config:      providerCfg,
 			CreatedAt:   parsedCreatedAt,
 			UpdatedAt:   parsedUpdatedAt,
@@ -1622,6 +1830,11 @@ func (s *PostgresStorage) GetIdentityProvidersByUUIDs(ctx context.Context, tenan
 			_ = json.Unmarshal(row.Config, &providerCfg)
 		}
 
+		var issuer string
+		if row.Issuer != nil {
+			issuer = *row.Issuer
+		}
+
 		providers[i] = model.IdentityProvider{
 			ID:          providerUUID,
 			TenantID:    tenantID,
@@ -1630,7 +1843,7 @@ func (s *PostgresStorage) GetIdentityProvidersByUUIDs(ctx context.Context, tenan
 			Alias:       row.Alias,
 			Name:        row.Name,
 			PartitionID: row.PartitionID,
-			Issuer:      *row.Issuer,
+			Issuer:      issuer,
 			Config:      providerCfg,
 			CreatedAt:   parsedCreatedAt,
 			UpdatedAt:   parsedUpdatedAt,
@@ -1713,6 +1926,11 @@ func (s *PostgresStorage) GetIdentityProviderByAlias(ctx context.Context, tenant
 		}
 	}
 
+	var issuer string
+	if row.Issuer != nil {
+		issuer = *row.Issuer
+	}
+
 	return &model.IdentityProvider{
 		ID:          providerUUID,
 		TenantID:    tenantID,
@@ -1721,7 +1939,7 @@ func (s *PostgresStorage) GetIdentityProviderByAlias(ctx context.Context, tenant
 		Alias:       row.Alias,
 		Name:        row.Name,
 		PartitionID: row.PartitionID,
-		Issuer:      *row.Issuer,
+		Issuer:      issuer,
 		Config:      providerCfg,
 		CreatedAt:   parsedCreatedAt,
 		UpdatedAt:   parsedUpdatedAt,
@@ -1758,6 +1976,11 @@ func (s *PostgresStorage) GetIdentityProviderByUUID(ctx context.Context, tenantI
 		}
 	}
 
+	var issuer string
+	if row.Issuer != nil {
+		issuer = *row.Issuer
+	}
+
 	// 3. Reconstruct your clean, unpolluted core domain model instance matching structural rules
 	return &model.IdentityProvider{
 		ID:          providerUUID,
@@ -1767,7 +1990,7 @@ func (s *PostgresStorage) GetIdentityProviderByUUID(ctx context.Context, tenantI
 		Alias:       row.Alias,
 		Name:        row.Name,
 		PartitionID: row.PartitionID,
-		Issuer:      *row.Issuer,
+		Issuer:      issuer,
 		Config:      providerCfg,
 		CreatedAt:   parsedCreatedAt,
 		UpdatedAt:   parsedUpdatedAt,
@@ -1794,6 +2017,11 @@ func (s *PostgresStorage) GetEnabledIdentityProviders(ctx context.Context, tenan
 			_ = json.Unmarshal(row.Config, &providerCfg)
 		}
 
+		var issuer string
+		if row.Issuer != nil {
+			issuer = *row.Issuer
+		}
+
 		providers[i] = model.IdentityProvider{
 			ID:          providerUUID,
 			TenantID:    tenantID,
@@ -1802,7 +2030,7 @@ func (s *PostgresStorage) GetEnabledIdentityProviders(ctx context.Context, tenan
 			Alias:       row.Alias,
 			Name:        row.Name,
 			PartitionID: row.PartitionID,
-			Issuer:      *row.Issuer,
+			Issuer:      issuer,
 			Config:      providerCfg,
 			CreatedAt:   parsedCreatedAt,
 			UpdatedAt:   parsedUpdatedAt,
@@ -2515,17 +2743,21 @@ func (s *PostgresStorage) CreateApplicationGroup(ctx context.Context, tenantUUID
 
 	// 3. Conditional Batch Step: Only stream join entries if whitelisted providers are specified
 	if len(group.AllowedIDPIDs) > 0 {
+		tenantID, err := txQueries.GetTenantIDByUUID(ctx, toPGUUID(tenantUUID))
+		if err != nil {
+			return fmt.Errorf("storage: failed to resolve tenant internal ID: %w", err)
+		}
+
 		// Map our type-safe Go domain slices into the SQLC-generated COPY layout schema matrix
 		batchEntries := make([]sqlcdb.BindIdentityProvidersToGroupParams, len(group.AllowedIDPIDs))
 
 		pgGroupUUID := toPGUUID(group.ID)
-		pgTenantUUID := toPGUUID(tenantUUID)
 
 		for i, idpID := range group.AllowedIDPIDs {
 			batchEntries[i] = sqlcdb.BindIdentityProvidersToGroupParams{
 				GroupID:  pgGroupUUID,
 				IdpID:    toPGUUID(idpID),
-				TenantID: pgTenantUUID,
+				TenantID: tenantID,
 			}
 		}
 

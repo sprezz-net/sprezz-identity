@@ -1,6 +1,10 @@
 -- +goose Up
 -- +goose StatementBegin
 
+-- 0. Ensure partitions has a composite unique constraint to support foreign key referential integrity
+ALTER TABLE partitions
+    ADD CONSTRAINT uq_partitions_tenant_id UNIQUE (tenant_id, id);
+
 -- 1. Rectify the outbound_handshake_sessions table structure
 -- Enforces partition boundaries while evicting the redundant transient token column
 ALTER TABLE outbound_handshake_sessions
@@ -19,7 +23,7 @@ ALTER TABLE outbound_handshake_sessions
 -- This fully isolates upstream cryptos from your native session metadata
 CREATE TABLE federated_sessions (
     id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
+    tenant_id INTEGER NOT NULL,
     partition_id BIGINT NOT NULL,
     session_id VARCHAR(255) NOT NULL, -- References your local active session table
     identity_provider_id UUID NOT NULL,
@@ -60,5 +64,8 @@ ALTER TABLE outbound_handshake_sessions
     DROP COLUMN IF EXISTS created_at,
     DROP COLUMN IF EXISTS partition_id,
     ADD COLUMN access_token TEXT; -- Restores the column layout signature for historic rolling consistency
+
+ALTER TABLE partitions
+    DROP CONSTRAINT IF EXISTS uq_partitions_tenant_id;
 
 -- +goose StatementEnd

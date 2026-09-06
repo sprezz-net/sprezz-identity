@@ -77,14 +77,22 @@ func (h *HttpAdapter) registerRoutes() {
 		r.Post("/tenants/settings", h.adminSaveTenantSettings)
 		r.Patch("/tenants/{id}/toggle-signup", h.adminToggleSignup)
 
-		r.Get("/clients", h.adminClientsPage)
-		r.Get("/clients/generate-secret", h.adminGenerateSecret)
-		r.Get("/clients/new", h.adminNewClientForm)
-		r.Get("/clients/edit", h.adminEditClientForm)
-		r.Get("/clients/view", h.adminViewClient)
-		r.Post("/clients", h.adminSaveClient)
-		r.Post("/clients/{id}/reset-secret", h.adminResetClientSecret)
-		r.Delete("/clients/{id}", h.adminDeleteClient)
+		r.Get("/applications", h.adminApplicationsPage)
+		r.Get("/applications/new", h.adminNewApplicationForm)
+		r.Get("/applications/edit", h.adminEditApplicationForm)
+		r.Get("/applications/view", h.adminViewApplication)
+		r.Post("/applications", h.adminSaveApplication)
+		r.Post("/applications/{id}/toggle-status", h.adminToggleApplicationStatus)
+		r.Post("/applications/{id}/reset-secret", h.adminResetApplicationSecret)
+		r.Delete("/applications/{id}", h.adminDeleteApplication)
+
+		r.Get("/applications/profiles/new", h.adminNewProfileForm)
+		r.Get("/applications/profiles/edit", h.adminEditProfileForm)
+		r.Post("/applications/profiles", h.adminSaveProfile)
+
+		r.Get("/applications/groups/new", h.adminNewGroupForm)
+		r.Get("/applications/groups/edit", h.adminEditGroupForm)
+		r.Post("/applications/groups", h.adminSaveGroup)
 
 		r.Get("/idps", h.adminIDPsPage)
 		r.Get("/idps/discover", h.adminDiscoverIDP)
@@ -126,17 +134,25 @@ func (h *HttpAdapter) registerRoutes() {
 const (
 	contentTypeHeader    = "Content-Type"
 	contentTypeJSON      = "application/json"
+	contentTypeHtml      = "text/html; charset=utf-8"
 	errTenantNotResolved = "tenant not resolved"
+	routeAdmin           = port.RouteAdmin
+	routeCallback        = "/oauth/callback"
+	xForwardedProto      = "X-Forwarded-Proto"
 )
 
 type HttpAdapter struct {
 	tenantUseCase           port.TenantUseCase
+	tenantService           port.TenantUseCase
 	authUseCase             port.AuthUseCase
 	federatedUseCase        port.FederatedLoginUseCase
 	ssoUseCase              port.SSOSessionUseCase
 	userProfileUseCase      port.UserProfileUseCase
 	userRegistrationUseCase port.UserRegistrationUseCase
 	localAuthUseCase        port.LocalAuthUseCase
+	adminApplicationUseCase port.AdminApplicationUseCase
+	adminStorage            port.AdminStorage
+	idpService              port.IdentityProviderUseCase
 	storagePort             port.Storage
 	cryptoPort              port.Crypto
 	router                  chi.Router
@@ -164,6 +180,9 @@ func NewHttpAdapter(
 	upuc port.UserProfileUseCase,
 	uruc port.UserRegistrationUseCase,
 	lauc port.LocalAuthUseCase,
+	aauc port.AdminApplicationUseCase,
+	as port.AdminStorage,
+	idp port.IdentityProviderUseCase,
 	s port.Storage,
 	c port.Crypto,
 	appEnv string,
@@ -171,12 +190,16 @@ func NewHttpAdapter(
 ) *HttpAdapter {
 	h := &HttpAdapter{
 		tenantUseCase:           tuc,
+		tenantService:           tuc,
 		authUseCase:             auc,
 		federatedUseCase:        fuc,
 		ssoUseCase:              suc,
 		userProfileUseCase:      upuc,
 		userRegistrationUseCase: uruc,
 		localAuthUseCase:        lauc,
+		adminApplicationUseCase: aauc,
+		adminStorage:            as,
+		idpService:              idp,
 		storagePort:             s,
 		cryptoPort:              c,
 		router:                  chi.NewRouter(),
@@ -209,6 +232,7 @@ func (h *HttpAdapter) registerRoutes() {
 	registrationHandler := NewRegistrationHandler(h.authUseCase)
 	revocationHandler := NewRevocationHandler(h.authUseCase, h.cryptoPort, h.storagePort)
 	parHandler := NewPARHandler(h.authUseCase, h.cryptoPort, h.storagePort)
+	adminHandler := NewAdminHandler(h)
 
 	// Mount the standalone route engines
 	wellKnownHandler.Routes(h.router)
@@ -224,6 +248,7 @@ func (h *HttpAdapter) registerRoutes() {
 	registrationHandler.Routes(h.router)
 	revocationHandler.Routes(h.router)
 	parHandler.Routes(h.router)
+	adminHandler.Routes(h.router)
 }
 
 func (h *HttpAdapter) tenantMiddleware(next http.Handler) http.Handler {

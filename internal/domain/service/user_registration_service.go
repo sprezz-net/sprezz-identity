@@ -135,8 +135,23 @@ func (s *UserRegistrationService) GetSignupContext(ctx context.Context, cmd port
 		}
 	}
 
+	resolvedPartitionID := partitionID
+	if isDirectAccess {
+		tenant, tenantErr := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
+		if tenantErr == nil {
+			if tenant.DefaultPartition != nil && *tenant.DefaultPartition != 0 {
+				resolvedPartitionID = *tenant.DefaultPartition
+			} else {
+				parts, err := s.storage.GetPartitions(ctx, cmd.TenantID)
+				if err == nil && len(parts) > 0 {
+					resolvedPartitionID = parts[0].ID
+				}
+			}
+		}
+	}
+
 	// Fetch partition-confined username-password providers
-	providers, err := s.storage.GetIdentityProvidersByTypeAndPartition(ctx, cmd.TenantID, partitionID, model.UsernamePasswordIDPType)
+	providers, err := s.storage.GetIdentityProvidersByTypeAndPartition(ctx, cmd.TenantID, resolvedPartitionID, model.UsernamePasswordIDPType)
 	if err != nil || len(providers) == 0 {
 		if isDirectAccess {
 			allProviders, fallbackErr := s.storage.GetEnabledIdentityProviders(ctx, cmd.TenantID)

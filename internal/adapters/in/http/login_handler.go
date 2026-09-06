@@ -38,6 +38,15 @@ func (h *LoginHandler) HandleLoginRoot(w http.ResponseWriter, r *http.Request) {
 	tenantUUID := h.mustResolveTenant(r.Context())
 	interactionID := h.parseInteractionCookie(r, tenantUUID)
 
+	if interactionID == "" {
+		if h.hasActiveBearerSession(r, tenantUUID) {
+			if tenant, ok := TenantFromContext(r.Context()); ok && tenant.Config.DefaultRedirectURI != "" {
+				http.Redirect(w, r, tenant.Config.DefaultRedirectURI, http.StatusFound)
+				return
+			}
+		}
+	}
+
 	ctxResp, err := h.localAuthUseCase.GetLoginContext(r.Context(), port.GetLoginContextCommand{
 		TenantID:      tenantUUID,
 		InteractionID: interactionID,
@@ -150,6 +159,25 @@ func (h *LoginHandler) parseInteractionCookie(r *http.Request, tenantID uuid.UUI
 	}
 
 	return payload
+}
+
+func (h *LoginHandler) hasActiveBearerSession(r *http.Request, tenantID uuid.UUID) bool {
+	cookieSpec, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
+		TenantID:       tenantID,
+		LifecycleStage: "clear",
+		RequestHost:    r.Host,
+	})
+	if err != nil {
+		return false
+	}
+
+	cookie, err := r.Cookie(cookieSpec.CookieName)
+	if err != nil {
+		return false
+	}
+
+	stage, _, err := h.ssoUseCase.ParseSessionCookie(r.Context(), cookie.Value)
+	return err == nil && stage == "bearer"
 }
 
 func (h *LoginHandler) triggerExternalFederationRedirection(w http.ResponseWriter, r *http.Request, tenantID uuid.UUID, provider model.IdentityProvider, session *model.InteractionSession, baseURI string) {

@@ -211,9 +211,9 @@ SELECT
     @token_endpoint_auth_method,
     @grant_types,
     @response_types,
-    @access_token_lifetime::integer,
-    @id_token_lifetime::integer,
-    @refresh_token_lifetime::integer,
+    (@access_token_lifetime::integer || ' seconds')::interval,
+    (@id_token_lifetime::integer || ' seconds')::interval,
+    (@refresh_token_lifetime::integer || ' seconds')::interval,
     @enforce_rtr,
     @signing_algorithm
 FROM tenant;
@@ -305,9 +305,9 @@ SET
     token_endpoint_auth_method = @token_endpoint_auth_method,
     grant_types = @grant_types,
     response_types = @response_types,
-    access_token_lifetime = @access_token_lifetime::integer,
-    refresh_token_lifetime = @refresh_token_lifetime::integer,
-    id_token_lifetime = @id_token_lifetime::integer,
+    access_token_lifetime = (@access_token_lifetime::integer || ' seconds')::interval,
+    refresh_token_lifetime = (@refresh_token_lifetime::integer || ' seconds')::interval,
+    id_token_lifetime = (@id_token_lifetime::integer || ' seconds')::interval,
     enforce_rtr = @enforce_rtr,
     signing_algorithm = @signing_algorithm,
     updated_at = NOW()

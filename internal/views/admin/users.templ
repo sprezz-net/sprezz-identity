@@ -58,7 +58,7 @@ templ UsersContent(props UsersPageProps) {
 						for _, u := range props.Users {
 							<tr
 								class="hover:bg-gray-50 transition cursor-pointer"
-								hx-get={ fmt.Sprintf("/admin/users/view?id=%s&modal=true", u.ID.String()) }
+								hx-get={ fmt.Sprintf("/admin/users/view?id=%s&partition_id=%d&modal=true", u.ID.String(), u.PartitionID) }
 								hx-target="#modal-container"
 							>
 								<td class="px-6 py-4 font-mono font-medium text-gray-900">{ u.PreferredUsername }</td>
@@ -66,7 +66,7 @@ templ UsersContent(props UsersPageProps) {
 								<td class="px-6 py-4 text-gray-500">{ u.Email }</td>
 								<td class="px-6 py-4 text-right space-x-2">
 									<button
-										hx-get={ fmt.Sprintf("/admin/users/view?id=%s&modal=true", u.ID.String()) }
+										hx-get={ fmt.Sprintf("/admin/users/view?id=%s&partition_id=%d&modal=true", u.ID.String(), u.PartitionID) }
 										hx-target="#modal-container"
 										class="text-blue-600 hover:text-blue-800 font-medium"
 										@click.stop=""
@@ -74,7 +74,7 @@ templ UsersContent(props UsersPageProps) {
 										View
 									</button>
 									<button
-										hx-get={ fmt.Sprintf("/admin/users/edit?id=%s&modal=true", u.ID.String()) }
+										hx-get={ fmt.Sprintf("/admin/users/edit?id=%s&partition_id=%d&modal=true", u.ID.String(), u.PartitionID) }
 										hx-target="#modal-container"
 										class="text-green-600 hover:text-green-800 font-medium"
 										@click.stop=""
@@ -82,7 +82,7 @@ templ UsersContent(props UsersPageProps) {
 										Edit
 									</button>
 									<button
-										hx-delete={ fmt.Sprintf("/admin/users/%s", u.ID.String()) }
+										hx-delete={ fmt.Sprintf("/admin/users/%s?partition_id=%d", u.ID.String(), u.PartitionID) }
 										hx-confirm={ fmt.Sprintf("Are you sure you want to delete user '%s'?", u.PreferredUsername) }
 										hx-target="body"
 										class="text-red-600 hover:text-red-800 font-medium"
@@ -222,18 +222,14 @@ templ UserDetails(props UserDetailsProps) {
 									<span>Login Count: { fmt.Sprintf("%d", ident.LoginCount) }</span>
 									<span>|</span>
 									<span>Status:</span>
-									if ident.Blocked {
-										@Badge("Blocked", "locked")
-									} else {
-										@Badge("Active", "active")
-									}
+									@Badge("Active", "active")
 								</p>
 								<p class="text-xs text-gray-400 mt-1">Coupled at: { ident.CoupledAt.Format("2006-01-02 15:04:05") }</p>
 							</div>
 							for _, p := range props.Providers {
 								if p.ID == ident.IdentityProviderID && (p.IDPType != model.UsernamePasswordIDPType || p.Config.AllowDecoupling) {
 									<button
-										hx-delete={ fmt.Sprintf("/admin/users/%s/identities/%s", props.User.ID.String(), ident.IdentityProviderID.String()) }
+										hx-delete={ fmt.Sprintf("/admin/users/%s/identities/%s?partition_id=%d", props.User.ID.String(), ident.IdentityProviderID.String(), props.User.PartitionID) }
 										hx-confirm="Are you sure you want to decouple this identity from the user's profile?"
 										hx-target="#modal-body"
 										class="px-2.5 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs font-semibold transition"

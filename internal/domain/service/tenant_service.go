@@ -88,7 +88,7 @@ func (s *TenantService) CreateTenant(ctx context.Context, cmd port.CreateTenantC
 	}
 
 	// 3. Secure the admin partition with an OIDC identity provider pointing to the root admin domain
-	adminIssuerURL := scheme + s.adminDomain
+	adminIssuerURL := scheme + "://" + s.adminDomain
 	adminDiscoveryEndpoint := adminIssuerURL + "/.well-known/openid-configuration"
 
 	idpConfig := model.IdentityProviderConfig{
@@ -115,7 +115,7 @@ func (s *TenantService) CreateTenant(ctx context.Context, cmd port.CreateTenantC
 		return nil, fmt.Errorf("failed to broker secure administrative idp configuration: %w", err)
 	}
 
-	return &newTenant, nil
+	return s.storage.ResolveTenantByUUID(ctx, newTenant.ID)
 }
 
 // ResolveTenantContext handles runtime domain-to-tenant verification mappings.

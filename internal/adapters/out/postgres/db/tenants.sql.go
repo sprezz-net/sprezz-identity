@@ -30,7 +30,7 @@ VALUES (
     $4,
     $5::timestamptz,
     $6,
-    $7::bigint,
+    NULLIF($7::bigint, 0),
     $8,
     $9
 )
