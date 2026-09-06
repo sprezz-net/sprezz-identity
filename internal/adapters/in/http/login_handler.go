@@ -91,17 +91,30 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 	}
 
 	interactionID := h.parseInteractionCookie(r, tenantUUID)
-	interactionSession, err := h.localAuthUseCase.GetInteractionSession(r.Context(), tenantUUID, interactionID)
-	if err != nil || interactionSession == nil {
-		h.renderInlineFormError(w, r, "Your login session context has expired. Please restart the request from your application.")
-		return
+	interactionSession, _ := h.localAuthUseCase.GetInteractionSession(r.Context(), tenantUUID, interactionID)
+
+	var partitionID int64
+	var providerID uuid.UUID
+	var redirectURL string
+
+	if interactionSession != nil {
+		partitionID = interactionSession.PartitionID
+		providerID = interactionSession.IdentityProviderID
+	} else {
+		tenant, ok := TenantFromContext(r.Context())
+		if ok {
+			if tenant.DefaultPartition != nil {
+				partitionID = *tenant.DefaultPartition
+			}
+			redirectURL = tenant.Config.DefaultRedirectURI
+		}
 	}
 
 	// 1. Authenticate local credentials first (verifies password and handles lockouts)
-	_, err = h.localAuthUseCase.AuthenticateLocalCredentials(r.Context(), port.LocalLoginCommand{
+	_, err := h.localAuthUseCase.AuthenticateLocalCredentials(r.Context(), port.LocalLoginCommand{
 		TenantID:          tenantUUID,
-		PartitionID:       interactionSession.PartitionID,
-		ProviderID:        interactionSession.IdentityProviderID,
+		PartitionID:       partitionID,
+		ProviderID:        providerID,
 		Identifier:        username,
 		PlaintextPassword: password,
 	})
@@ -113,8 +126,8 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 	// 2. Provision the single sign-on bearer session cookie on the browser
 	cookieIntent, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
 		TenantID:       tenantUUID,
-		PartitionID:    interactionSession.PartitionID,
-		PayloadValue:   fmt.Sprintf("%s:%d", username, interactionSession.PartitionID),
+		PartitionID:    partitionID,
+		PayloadValue:   fmt.Sprintf("%s:%d", username, partitionID),
 		LifecycleStage: "bearer",
 		RequestHost:    r.Host,
 	})
@@ -130,39 +143,45 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 		})
 	}
 
-	// 3. Delegate to the core authUseCase to fetch authorization targets
-	result, err := h.authUseCase.ProcessAuthorizeRequest(r.Context(), port.AuthorizeRequestCommand{
-		TenantID:        tenantUUID,
-		ClientID:        interactionSession.ClientID,
-		RedirectURI:     interactionSession.RedirectURI,
-		CodeChallenge:   interactionSession.CodeChallenge,
-		ChallengeMethod: interactionSession.ChallengeMethod,
-		State:           interactionSession.State,
-		Nonce:           interactionSession.Nonce,
-		ACRValues:       interactionSession.ACRValues,
-		RequestHost:     r.Host,
-		RequestURI:      model.URIPrefixPAR + interactionSession.ID.String(),
-		ActiveSessionID: fmt.Sprintf("%s:%d", username, interactionSession.PartitionID),
-	})
-
-	if err != nil {
-		h.renderInlineFormError(w, r, err.Error())
-		return
-	}
-
-	if result.HasCookieIntent {
-		http.SetCookie(w, &http.Cookie{
-			Name:     result.CookieName,
-			Value:    result.CookieValue,
-			Path:     "/",
-			MaxAge:   result.CookieMaxAge,
-			HttpOnly: true,
-			Secure:   result.CookieSecure,
-			SameSite: http.SameSiteLaxMode,
+	// 3. If there is an active interaction session, delegate to OIDC authorize flow completion
+	if interactionSession != nil {
+		result, err := h.authUseCase.ProcessAuthorizeRequest(r.Context(), port.AuthorizeRequestCommand{
+			TenantID:        tenantUUID,
+			ClientID:        interactionSession.ClientID,
+			RedirectURI:     interactionSession.RedirectURI,
+			CodeChallenge:   interactionSession.CodeChallenge,
+			ChallengeMethod: interactionSession.ChallengeMethod,
+			State:           interactionSession.State,
+			Nonce:           interactionSession.Nonce,
+			ACRValues:       interactionSession.ACRValues,
+			RequestHost:     r.Host,
+			RequestURI:      model.URIPrefixPAR + interactionSession.ID.String(),
+			ActiveSessionID: fmt.Sprintf("%s:%d", username, partitionID),
 		})
+		if err != nil {
+			h.renderInlineFormError(w, r, err.Error())
+			return
+		}
+		redirectURL = result.RedirectURL
+
+		if result.HasCookieIntent {
+			http.SetCookie(w, &http.Cookie{
+				Name:     result.CookieName,
+				Value:    result.CookieValue,
+				Path:     "/",
+				MaxAge:   result.CookieMaxAge,
+				HttpOnly: true,
+				Secure:   result.CookieSecure,
+				SameSite: http.SameSiteLaxMode,
+			})
+		}
 	}
 
-	w.Header().Set(model.HeaderHXRedirect, result.RedirectURL)
+	if redirectURL == "" {
+		redirectURL = "/"
+	}
+
+	w.Header().Set(model.HeaderHXRedirect, redirectURL)
 	w.WriteHeader(http.StatusOK)
 }
 

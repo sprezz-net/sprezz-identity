@@ -32,6 +32,27 @@ func (s *LocalAuthService) AuthenticateLocalCredentials(ctx context.Context, cmd
 	// This forces a consistent CPU execution time when a user profile does not exist
 	const dummyArgon2Hash = "$argon2id$v=19$m=65536,t=1,p=4$NDg4bVUzcmM2M1NxM2I0Yg$d2U4M3I2M3FzYTQ4OG11M3JjNjNzcTNidDRi"
 
+	// Self-resolve PartitionID if zero
+	if cmd.PartitionID == 0 {
+		tenant, err := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
+		if err == nil && tenant.DefaultPartition != nil {
+			cmd.PartitionID = *tenant.DefaultPartition
+		}
+	}
+
+	// Self-resolve ProviderID if empty
+	if cmd.ProviderID == uuid.Nil {
+		providers, err := s.storage.GetEnabledIdentityProviders(ctx, cmd.TenantID)
+		if err == nil {
+			for _, p := range providers {
+				if p.IDPType == model.UsernamePasswordIDPType && p.PartitionID == cmd.PartitionID {
+					cmd.ProviderID = p.ID
+					break
+				}
+			}
+		}
+	}
+
 	// 1. Locate the specific target identity record for this authentication attempt
 	identity, err := s.storage.GetUserIdentityByIdentifier(ctx, cmd.TenantID, cmd.PartitionID, cmd.ProviderID, cmd.Identifier)
 	if err != nil {
