@@ -192,8 +192,18 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 		return fmt.Errorf("bootstrap admin group: unable to resolve default identity provider context: %w", err)
 	}
 
-	// Extract the real uuid primary key from your local provider instead of utilizing strings
-	localProviderUUID := providers[0].ID
+	// Correctly resolve the local username-password provider instead of assuming index 0
+	var localProviderUUID uuid.UUID
+	for _, p := range providers {
+		if p.IDPType == model.UsernamePasswordIDPType {
+			localProviderUUID = p.ID
+			break
+		}
+	}
+
+	if localProviderUUID == uuid.Nil {
+		return fmt.Errorf("bootstrap admin group: local username-password identity provider not found")
+	}
 
 	scheme := model.SchemeHttps
 	if s.appEnv == "local" {

@@ -184,6 +184,7 @@ func (s *LocalAuthService) GetLoginContext(ctx context.Context, cmd port.GetLogi
 	var allowedIDPs []string
 	var partitionID int64
 	var isDirectAccess = true
+	var group *model.ApplicationGroup
 
 	if tenant != nil {
 		if tenant.DefaultPartition != nil && *tenant.DefaultPartition != 0 {
@@ -204,8 +205,21 @@ func (s *LocalAuthService) GetLoginContext(ctx context.Context, cmd port.GetLogi
 				interactionSession = session
 				isDirectAccess = false
 				partitionID = session.PartitionID
+
+				_, _, grp, _ := s.storage.GetApplicationByClientID(ctx, cmd.TenantID, session.ClientID)
+				group = grp
+
 				if session.IDPHint != "" {
 					allowedIDPs = []string{session.IDPHint}
+				} else if group != nil && len(group.AllowedIDPIDs) > 0 {
+					permittedIDPs, err := s.storage.GetIdentityProvidersByUUIDs(ctx, cmd.TenantID, group.AllowedIDPIDs)
+					if err == nil {
+						for _, p := range permittedIDPs {
+							if p.Enabled {
+								allowedIDPs = append(allowedIDPs, p.Alias)
+							}
+						}
+					}
 				}
 			}
 		}
@@ -231,12 +245,6 @@ func (s *LocalAuthService) GetLoginContext(ctx context.Context, cmd port.GetLogi
 	}
 
 	// 5. Resolve default client/group default provider and idp hint redirects
-	var group *model.ApplicationGroup
-	if interactionSession != nil {
-		_, _, grp, _ := s.storage.GetApplicationByClientID(ctx, cmd.TenantID, interactionSession.ClientID)
-		group = grp
-	}
-
 	hint := cmd.IDPHintQuery
 	if hint == "" && interactionSession != nil {
 		hint = interactionSession.IDPHint

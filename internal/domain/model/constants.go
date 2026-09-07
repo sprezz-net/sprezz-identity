@@ -17,6 +17,7 @@ const (
 const (
 	AdminUIProfileName        = "sprezz_admin_ui_profile"
 	AdminUIGroupName          = "sprezz_admin_ui_group"
+	AdminPartitionAliasName   = "sprezz_admin"
 	ContentTypeFormUrlEncoded = "application/x-www-form-urlencoded"
 	ContentTypeJSON           = "application/json; charset=utf-8"
 	ContentTypeHTML           = "text/html; charset=utf-8"

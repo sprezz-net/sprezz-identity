@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -25,11 +26,13 @@ func TestHttpAdapter_HandleFederationCallback_Success(t *testing.T) {
 		return tenant, nil
 	})
 
+	userProfileUUID := uuid.New()
 	fuc.ExecuteFederatedCallbackMock.Set(func(ctx context.Context, cmd port.FederatedCallbackCommand) (*port.FederatedCallbackResponse, error) {
 		if cmd.IncomingState != "mock-state" || cmd.IncomingCode != "mock-code" {
 			t.Errorf("unexpected command parameters")
 		}
 		return &port.FederatedCallbackResponse{
+			UserProfileID:       userProfileUUID,
 			PartitionID:         123,
 			UpstreamAccessToken: "access-123",
 			TargetLandingURI:    "https://test.com/dashboard",
@@ -37,6 +40,10 @@ func TestHttpAdapter_HandleFederationCallback_Success(t *testing.T) {
 	})
 
 	suc.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
+		expectedPayload := fmt.Sprintf("%s:123", userProfileUUID.String())
+		if cmd.PayloadValue != expectedPayload {
+			t.Errorf("expected session cookie payload '%s', got '%s'", expectedPayload, cmd.PayloadValue)
+		}
 		return &port.CookieIntentResponse{
 			CookieName:  "spz_session",
 			CookieValue: "cookie-val-123",

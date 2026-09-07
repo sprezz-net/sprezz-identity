@@ -153,14 +153,12 @@ func (s *UserRegistrationService) GetSignupContext(ctx context.Context, cmd port
 	// Fetch partition-confined username-password providers
 	providers, err := s.storage.GetIdentityProvidersByTypeAndPartition(ctx, cmd.TenantID, resolvedPartitionID, model.UsernamePasswordIDPType)
 	if err != nil || len(providers) == 0 {
-		if isDirectAccess {
-			allProviders, fallbackErr := s.storage.GetEnabledIdentityProviders(ctx, cmd.TenantID)
-			if fallbackErr == nil {
-				for _, p := range allProviders {
-					if p.IDPType == model.UsernamePasswordIDPType {
-						providers = append(providers, p)
-						break
-					}
+		allProviders, fallbackErr := s.storage.GetEnabledIdentityProviders(ctx, cmd.TenantID)
+		if fallbackErr == nil {
+			for _, p := range allProviders {
+				if p.IDPType == model.UsernamePasswordIDPType {
+					providers = append(providers, p)
+					break
 				}
 			}
 		}

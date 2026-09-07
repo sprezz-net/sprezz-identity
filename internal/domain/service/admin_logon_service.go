@@ -201,7 +201,7 @@ func (s *AdminLogonService) provisionViaSoftwareStatement(ctx context.Context, l
 
 	payload := model.DynamicRegistrationPayload{
 		ApplicationName:         fmt.Sprintf("Administrative UI Client for Tenant Partition: %s", localTenantID.String()),
-		TokenEndpointAuthMethod: model.AuthMethodClientSecretPost,
+		TokenEndpointAuthMethod: model.AuthMethodNone,
 		GrantTypes:              []model.GrantType{model.GrantTypeAuthorizationCode, model.GrantTypeRefreshToken},
 		ResponseTypes:           []model.ResponseType{model.ResponseTypeCode},
 		AllowedScopes:           "openid profile email",

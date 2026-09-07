@@ -203,3 +203,75 @@ func TestTenantBootstrapService_BootstrapAdminTenant_OidcProviderPreExists(t *te
 		t.Errorf("expected CreateIdentityProvider to be called exactly 1 time for username-password IDP, called %d times", createIDPCallCount)
 	}
 }
+
+func TestTenantBootstrapService_BootstrapAdminTenant_GroupMatchesLocalIDP(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
+	tenantUseCase := portmock.NewTenantUseCaseMock(ctrl)
+	clock := portmock.NewMockClock(time.Now())
+
+	service := NewTenantBootstrapService(storage, adminStorage, tenantUseCase, clock, "unittest")
+
+	domain := "admin.example.com"
+	tenantID := uuid.New()
+
+	storage.ResolveTenantByDomainMock.Expect(minimock.AnyContext, domain).Return(nil, port.ErrTenantNotFound)
+
+	defaultPart := int64(1)
+	createdTenant := &model.Tenant{
+		ID:               tenantID,
+		Name:             "Administrative Tenant",
+		Domain:           domain,
+		IsActive:         true,
+		DefaultPartition: &defaultPart,
+	}
+	tenantUseCase.CreateTenantMock.Set(func(ctx context.Context, cmd port.CreateTenantCommand) (*model.Tenant, error) {
+		return createdTenant, nil
+	})
+
+	adminStorage.CreateTenantMock.Set(func(ctx context.Context, tenant model.Tenant) error {
+		return nil
+	})
+
+	oidcProviderID := uuid.New()
+	localProviderID := uuid.New()
+
+	// Mock GetEnabledIdentityProviders to return the OIDC provider FIRST (index 0) and the local provider SECOND
+	storage.GetEnabledIdentityProvidersMock.Set(func(ctx context.Context, tID uuid.UUID) ([]model.IdentityProvider, error) {
+		return []model.IdentityProvider{
+			{ID: oidcProviderID, IDPType: model.OpenIDConnectIDPType, Enabled: true},
+			{ID: localProviderID, IDPType: model.UsernamePasswordIDPType, Enabled: true},
+		}, nil
+	})
+
+	storage.ResolveTenantByUUIDMock.Set(func(ctx context.Context, tID uuid.UUID) (*model.Tenant, error) {
+		return createdTenant, nil
+	})
+
+	storage.GetApplicationByClientIDMock.Expect(minimock.AnyContext, tenantID, "admin_ui").Return(nil, nil, nil, port.ErrApplicationNotFound)
+
+	adminStorage.CreateApplicationProfileMock.Set(func(ctx context.Context, tID uuid.UUID, profile model.ApplicationProfile) error {
+		return nil
+	})
+
+	// EXPECT: the admin group MUST map allowed IDPs to localProviderID, NOT oidcProviderID!
+	adminStorage.CreateApplicationGroupMock.Set(func(ctx context.Context, tID uuid.UUID, group model.ApplicationGroup) error {
+		if group.DefaultIDPID == nil || *group.DefaultIDPID != localProviderID {
+			t.Errorf("expected admin group DefaultIDPID to be local provider %s, got %v", localProviderID, group.DefaultIDPID)
+		}
+		if len(group.AllowedIDPIDs) != 1 || group.AllowedIDPIDs[0] != localProviderID {
+			t.Errorf("expected admin group AllowedIDPIDs to contain only local provider %s, got %v", localProviderID, group.AllowedIDPIDs)
+		}
+		return nil
+	})
+
+	adminStorage.CreateApplicationMock.Set(func(ctx context.Context, tID uuid.UUID, app model.Application) error {
+		return nil
+	})
+
+	_, err := service.BootstrapAdminTenant(context.Background(), domain)
+	if err != nil {
+		t.Fatalf("unexpected error during bootstrap: %v", err)
+	}
+}

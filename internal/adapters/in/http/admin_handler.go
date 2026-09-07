@@ -12,6 +12,7 @@ import (
 	"sprezz-identity/internal/views/admin"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 const (
@@ -62,8 +63,20 @@ func (h *AdminHandler) adminDashboardView(w http.ResponseWriter, r *http.Request
 	}
 
 	// 1. Resolve the expected namespaced session cookie dynamically from the SSO use case
+	var adminPartitionID int64
+	partitions, err := h.storagePort.GetPartitions(r.Context(), tenant.ID)
+	if err == nil {
+		for _, p := range partitions {
+			if p.AliasName == model.AdminPartitionAliasName {
+				adminPartitionID = p.ID
+				break
+			}
+		}
+	}
+
 	cookieSpec, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
 		TenantID:       tenant.ID,
+		PartitionID:    adminPartitionID,
 		LifecycleStage: "clear", // Resolves bearer cookie name
 		RequestHost:    r.Host,
 	})
@@ -84,11 +97,23 @@ func (h *AdminHandler) adminDashboardView(w http.ResponseWriter, r *http.Request
 		h.initiateAdminOIDC(w, r)
 		return
 	}
-	accessToken := parts[1]
+	userUUIDStr := parts[1]
 
-	// 3. Verify the access token extracted out of the unified tracking session slot
-	_, err = h.cryptoPort.VerifyToken(accessToken)
+	userUUID, err := uuid.Parse(userUUIDStr)
 	if err != nil {
+		h.initiateAdminOIDC(w, r)
+		return
+	}
+
+	// 3. Verify that the user profile exists and is active inside the administrative partition
+	userProfile, err := h.storagePort.GetUserProfileByID(r.Context(), tenant.ID, adminPartitionID, userUUID)
+	if err != nil {
+		h.clearCookieAndRedirect(w, r, cookieSpec.CookieName, port.RouteAdmin)
+		return
+	}
+
+	allowed, err := userProfile.IsLoginAllowed()
+	if !allowed || err != nil {
 		h.clearCookieAndRedirect(w, r, cookieSpec.CookieName, port.RouteAdmin)
 		return
 	}

@@ -2,8 +2,10 @@ package http
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"sprezz-identity/internal/domain/model"
@@ -42,12 +44,21 @@ func TestHttpAdapter_AdminOIDC_Initiation_Success(t *testing.T) {
 		return tenant, nil
 	})
 
+	storage.GetPartitionsMock.Expect(minimock.AnyContext, tenantID).Return([]model.Partition{
+		{
+			ID:        1,
+			TenantID:  tenantID,
+			Name:      "Sprezz Admin",
+			AliasName: model.AdminPartitionAliasName,
+		},
+	}, nil)
+
 	suc.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
 		if cmd.LifecycleStage == "clear" {
-			return &port.CookieIntentResponse{CookieName: "spz_session_sprezz_admin"}, nil
+			return &port.CookieIntentResponse{CookieName: "spz_session_" + model.AdminPartitionAliasName}, nil
 		}
 		if cmd.LifecycleStage == "handshake" {
-			return &port.CookieIntentResponse{CookieName: "spz_session_sprezz_admin", CookieValue: "handshake:test-state-token"}, nil
+			return &port.CookieIntentResponse{CookieName: "spz_session_" + model.AdminPartitionAliasName, CookieValue: "handshake:test-state-token"}, nil
 		}
 		return nil, nil
 	})
@@ -86,5 +97,67 @@ func TestHttpAdapter_AdminOIDC_Initiation_Success(t *testing.T) {
 	cookie := rec.Header().Get("Set-Cookie")
 	if cookie == "" {
 		t.Error("expected session tracking state cookie to be set")
+	}
+}
+
+func TestHttpAdapter_AdminDashboard_AuthorizedSession_Success(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	adapter, _, tuc, storage, ssoMock := buildLocalAdminTestAdapter(ctrl)
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "admin-domain.com", Name: "Administrative Tenant", Scheme: "http"}
+	userUUID := uuid.New()
+	adminPartitionID := int64(12)
+
+	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
+		return tenant, nil
+	})
+
+	storage.GetPartitionsMock.Expect(minimock.AnyContext, tenantID).Return([]model.Partition{
+		{
+			ID:        adminPartitionID,
+			TenantID:  tenantID,
+			Name:      "Sprezz Admin",
+			AliasName: model.AdminPartitionAliasName,
+		},
+	}, nil)
+
+	ssoMock.BuildSessionCookieMock.Expect(minimock.AnyContext, port.CookieIntentCommand{
+		TenantID:       tenantID,
+		PartitionID:    adminPartitionID,
+		LifecycleStage: "clear",
+		RequestHost:    "admin-domain.com",
+	}).Return(&port.CookieIntentResponse{
+		CookieName: "spz_session_" + model.AdminPartitionAliasName,
+	}, nil)
+
+	storage.GetUserProfileByIDMock.Expect(minimock.AnyContext, tenantID, adminPartitionID, userUUID).Return(&model.UserProfile{
+		ID:                userUUID,
+		TenantID:          tenantID,
+		PartitionID:       adminPartitionID,
+		Email:             "admin@sprezz.com",
+		PreferredUsername: "admin@sprezz.com",
+		Name:              "Main Admin",
+		LifecycleState:    model.LifecycleActivated,
+		Blocked:           false,
+	}, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	req.Host = "admin-domain.com"
+	req.AddCookie(&http.Cookie{
+		Name:  "spz_session_" + model.AdminPartitionAliasName,
+		Value: fmt.Sprintf("bearer:%s:%d", userUUID.String(), adminPartitionID),
+	})
+	rec := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 OK, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "Administrative Tenant") {
+		t.Errorf("expected rendered dashboard to contain tenant name 'Administrative Tenant'")
 	}
 }

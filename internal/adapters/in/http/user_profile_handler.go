@@ -157,7 +157,7 @@ func (h *ProfileHandler) HandleChangeEmailSubmit(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// 🌟 FIXED: Map elements straight into a type-safe Command struct
+	// Map elements straight into a type-safe Command struct
 	cmd := port.ChangeEmailCommand{
 		TenantID:        tenantUUID,
 		PartitionID:     partitionID,

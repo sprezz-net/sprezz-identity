@@ -549,13 +549,21 @@ func (s *PostgresStorage) GetAndConsumeAuthSession(ctx context.Context, tenantID
 	}
 
 	var localIDPUUID uuid.UUID
+	var partitionID int64
 	if row.IdentityProviderID.Valid {
 		localIDPUUID, _ = pgUUIDToUUID(row.IdentityProviderID)
+		if idp, err := s.queries.GetIdentityProviderByUUID(ctx, sqlcdb.GetIdentityProviderByUUIDParams{
+			TenantUuid: toPGUUID(tenantID),
+			IdpUuid:    row.IdentityProviderID,
+		}); err == nil {
+			partitionID = idp.PartitionID
+		}
 	}
 
 	return &model.AuthorizationCodeSession{
 		Code:                  row.Code,
 		TenantID:              tenantID,
+		PartitionID:           partitionID,
 		ClientID:              row.ClientID,
 		Subject:               row.Subject,
 		CodeChallenge:         row.CodeChallenge,
@@ -1033,10 +1041,7 @@ func (s *PostgresStorage) GetDynamicApplicationsSummary(ctx context.Context, ten
 		if err != nil {
 			return nil, fmt.Errorf("storage: convert dynamic updated_at: %w", err)
 		}
-		lastUsedAt, err := pgTimestamptzToTime(row.LastUsedAt)
-		if err != nil {
-			return nil, fmt.Errorf("storage: convert dynamic last_used_at: %w", err)
-		}
+		lastUsedAt := pgTimestamptzToTimeOrZero(row.LastUsedAt)
 
 		summaries = append(summaries, model.ApplicationSummary{
 			ID:              appID,
@@ -1088,10 +1093,7 @@ func (s *PostgresStorage) GetStaticApplicationsSummary(ctx context.Context, tena
 		if err != nil {
 			return nil, fmt.Errorf("storage: convert static updated_at: %w", err)
 		}
-		lastUsedAt, err := pgTimestamptzToTime(row.LastUsedAt)
-		if err != nil {
-			return nil, fmt.Errorf("storage: convert static last_used_at: %w", err)
-		}
+		lastUsedAt := pgTimestamptzToTimeOrZero(row.LastUsedAt)
 
 		summaries = append(summaries, model.ApplicationSummary{
 			ID:              appID,
@@ -1362,21 +1364,21 @@ func (s *PostgresStorage) GetApplicationProfiles(ctx context.Context, tenantUUID
 		var pgID pgtype.UUID
 		var authMethod string
 		var grantTypes, responseTypes []string
-		var accessSec, refreshSec, idSec int32
+		var accessInterval, refreshInterval, idInterval pgtype.Interval
 		var signingAlg string
 		var updatedAt pgtype.Timestamptz
 
 		if err := rows.Scan(&pgID, &p.ProfileName, &p.IsEnabled, &authMethod, &grantTypes, &responseTypes,
-			&accessSec, &refreshSec, &idSec, &p.EnforceRTR, &signingAlg, &updatedAt); err != nil {
+			&accessInterval, &refreshInterval, &idInterval, &p.EnforceRTR, &signingAlg, &updatedAt); err != nil {
 			return nil, fmt.Errorf("storage: scan profile row: %w", err)
 		}
 
 		p.ID, _ = pgUUIDToUUID(pgID)
 		p.TenantID = tenantUUID
 		p.TokenEndpointAuthMethod = model.TokenEndpointAuthMethod(authMethod)
-		p.AccessTokenLifetime = time.Duration(accessSec) * time.Second
-		p.RefreshTokenLifetime = time.Duration(refreshSec) * time.Second
-		p.IDTokenLifetime = time.Duration(idSec) * time.Second
+		p.AccessTokenLifetime, _ = pgIntervalToDuration(accessInterval)
+		p.RefreshTokenLifetime, _ = pgIntervalToDuration(refreshInterval)
+		p.IDTokenLifetime, _ = pgIntervalToDuration(idInterval)
 		p.SigningAlgorithm = model.SignatureAlgorithm(signingAlg)
 		p.UpdatedAt = pgTimestamptzToTimeOrZero(updatedAt)
 
@@ -1455,7 +1457,7 @@ func (s *PostgresStorage) GetApplicationProfileByID(ctx context.Context, tenantU
 	var pgID pgtype.UUID
 	var authMethod string
 	var grantTypes, responseTypes []string
-	var accessSec, refreshSec, idSec int32
+	var accessInterval, refreshInterval, idInterval pgtype.Interval
 	var signingAlg string
 	var updatedAt pgtype.Timestamptz
 
@@ -1465,7 +1467,7 @@ func (s *PostgresStorage) GetApplicationProfileByID(ctx context.Context, tenantU
 		FROM application_profiles
 		WHERE id = $1 AND tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $2 LIMIT 1)
 	`, toPGUUID(id), toPGUUID(tenantUUID)).Scan(&pgID, &p.ProfileName, &p.IsEnabled, &authMethod, &grantTypes, &responseTypes,
-		&accessSec, &refreshSec, &idSec, &p.EnforceRTR, &signingAlg, &updatedAt)
+		&accessInterval, &refreshInterval, &idInterval, &p.EnforceRTR, &signingAlg, &updatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("profile not found")
@@ -1476,9 +1478,9 @@ func (s *PostgresStorage) GetApplicationProfileByID(ctx context.Context, tenantU
 	p.ID = id
 	p.TenantID = tenantUUID
 	p.TokenEndpointAuthMethod = model.TokenEndpointAuthMethod(authMethod)
-	p.AccessTokenLifetime = time.Duration(accessSec) * time.Second
-	p.RefreshTokenLifetime = time.Duration(refreshSec) * time.Second
-	p.IDTokenLifetime = time.Duration(idSec) * time.Second
+	p.AccessTokenLifetime, _ = pgIntervalToDuration(accessInterval)
+	p.RefreshTokenLifetime, _ = pgIntervalToDuration(refreshInterval)
+	p.IDTokenLifetime, _ = pgIntervalToDuration(idInterval)
 	p.SigningAlgorithm = model.SignatureAlgorithm(signingAlg)
 	p.UpdatedAt = pgTimestamptzToTimeOrZero(updatedAt)
 

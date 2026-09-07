@@ -61,7 +61,7 @@ func (h *CallbackHandler) HandleFederationCallback(w http.ResponseWriter, r *htt
 	intent, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
 		TenantID:       tenantUUID,
 		PartitionID:    response.PartitionID,
-		PayloadValue:   fmt.Sprintf("%s:%d", response.UpstreamAccessToken, response.PartitionID),
+		PayloadValue:   fmt.Sprintf("%s:%d", response.UserProfileID.String(), response.PartitionID),
 		LifecycleStage: "bearer",
 		RequestHost:    r.Host,
 	})
