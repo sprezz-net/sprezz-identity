@@ -64,13 +64,16 @@ func TestHttpAdapter_Authorize_PreservesParams(t *testing.T) {
 		if cmd.State != "state-1234567890-abcdef" {
 			t.Errorf("expected State 'state-1234567890-abcdef', got %s", cmd.State)
 		}
+		if len(cmd.Scopes) != 3 || cmd.Scopes[0] != "openid" || cmd.Scopes[1] != "profile" || cmd.Scopes[2] != "email" {
+			t.Errorf("expected Scopes '[openid profile email]', got %v", cmd.Scopes)
+		}
 		return &port.AuthorizeExecutionResult{
 			Action:      port.ActionRedirectToLoginUI,
 			RedirectURL: "https://test.com/login",
 		}, nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?client_id=test-client&redirect_uri=https://test.com/callback&state=state-1234567890-abcdef&nonce=nonce-456&acr_values=acr-silver", nil)
+	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?client_id=test-client&redirect_uri=https://test.com/callback&state=state-1234567890-abcdef&nonce=nonce-456&acr_values=acr-silver&scope=openid+profile+email", nil)
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
 

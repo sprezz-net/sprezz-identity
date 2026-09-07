@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -52,6 +53,11 @@ func (h *AuthorizeHandler) HandleAuthorize(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	var scopes []string
+	if scopeFormVal := r.FormValue("scope"); scopeFormVal != "" {
+		scopes = strings.Fields(scopeFormVal)
+	}
+
 	// 2. Map transport layer parameters into the pure driving port command object
 	cmd := port.AuthorizeRequestCommand{
 		TenantID:        tenantUUID,
@@ -65,6 +71,7 @@ func (h *AuthorizeHandler) HandleAuthorize(w http.ResponseWriter, r *http.Reques
 		ACRValues:       r.FormValue("acr_values"),
 		ClaimsJSON:      r.FormValue("claims"),
 		RequestURI:      r.FormValue("request_uri"), // When PAR is used
+		Scopes:          scopes,
 		ActiveSessionID: activeSessionPayload,
 		RequestHost:     r.Host,
 	}
