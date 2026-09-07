@@ -82,7 +82,7 @@ func (s *TenantService) CreateTenant(ctx context.Context, cmd port.CreateTenantC
 	}
 
 	// 2. Provision the administrative partition
-	p2, err := s.adminStorage.CreatePartition(ctx, newTenant.ID, "Sprezz Admin", "sprezz_admin")
+	p2, err := s.adminStorage.CreatePartition(ctx, newTenant.ID, "Sprezz Admin", model.AdminPartitionAliasName)
 	if err != nil {
 		return nil, fmt.Errorf("create sprezz admin partition: %w", err)
 	}
@@ -98,6 +98,8 @@ func (s *TenantService) CreateTenant(ctx context.Context, cmd port.CreateTenantC
 		JwksURI:               adminIssuerURL + port.RouteWellKnownKeys,
 		DCRMode:               model.DCRModeSoftwareStatement,
 		Scopes:                []string{"openid", "profile", "email"},
+		AutoProvisionUser:     true,
+		AutoVerifyEmail:       true,
 	}
 
 	idp := model.IdentityProvider{

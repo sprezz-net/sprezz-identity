@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -666,6 +667,7 @@ func (h *AdminApplicationHandler) adminSaveGroup(w http.ResponseWriter, r *http.
 }
 
 func (h *HttpAdapter) renderError(w http.ResponseWriter, r *http.Request, status int, errorMessage string) {
+	slog.Error("Rendering admin visual error page", "status", status, "error", errorMessage, "path", r.URL.Path)
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	w.WriteHeader(status)
 	component := public.Error(errorMessage)

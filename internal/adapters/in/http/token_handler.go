@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -196,6 +197,7 @@ func (h *TokenHandler) handleServiceError(w http.ResponseWriter, err error) {
 		h.writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
 	default:
 		// Shield backend system faults gracefully from exposure logs
+		slog.Error("Token handler execution failed with unexpected error", "error", err)
 		h.writeError(w, http.StatusInternalServerError, "server_error", "an internal execution worker faulted")
 	}
 }

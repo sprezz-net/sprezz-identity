@@ -60,7 +60,7 @@ func TestHttpAdapter_LoginRoot_Success(t *testing.T) {
 		}, nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
 
@@ -161,6 +161,9 @@ func TestHttpAdapter_LoginSubmit_Success(t *testing.T) {
 		if cmd.ActiveSessionID != userUUID.String()+":1" {
 			t.Errorf("expected ActiveSessionID containing user UUID, got '%s'", cmd.ActiveSessionID)
 		}
+		if cmd.RequestURI != "" {
+			t.Errorf("expected RequestURI to be empty on login complete, got '%s'", cmd.RequestURI)
+		}
 		return &port.AuthorizeExecutionResult{
 			Action:      port.ActionEmitAuthorizationCode,
 			RedirectURL: "https://callback?code=abc",
@@ -182,5 +185,101 @@ func TestHttpAdapter_LoginSubmit_Success(t *testing.T) {
 	hxRedirect := rec.Header().Get(model.HeaderHXRedirect)
 	if hxRedirect != "https://callback?code=abc" {
 		t.Errorf("expected HX-Redirect 'https://callback?code=abc', got '%s'", hxRedirect)
+	}
+}
+
+func TestHttpAdapter_LoginWithInteractionID_QueryAndForm(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	adapter, lauc, suc, tuc, auth := buildLocalLoginTestAdapter(ctrl)
+
+	tenantID := uuid.New()
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Config: model.TenantConfig{AllowSignup: true}}
+	provider := model.IdentityProvider{
+		ID:       uuid.New(),
+		TenantID: tenantID,
+		IDPType:  model.UsernamePasswordIDPType,
+		Enabled:  true,
+	}
+
+	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
+		return tenant, nil
+	})
+
+	suc.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
+		return &port.CookieIntentResponse{CookieName: "spz_session_default", CookieValue: "bearer:session123"}, nil
+	})
+
+	// 1. Verify HandleLoginRoot correctly reads tx from URL query parameter
+	lauc.GetLoginContextMock.Set(func(ctx context.Context, cmd port.GetLoginContextCommand) (*port.LoginContextResponse, error) {
+		if cmd.InteractionID != "url_interaction_123" {
+			t.Errorf("expected InteractionID 'url_interaction_123', got '%s'", cmd.InteractionID)
+		}
+		return &port.LoginContextResponse{
+			AllowSignup:              true,
+			Providers:                []model.IdentityProvider{provider},
+			ShowUsernamePasswordForm: true,
+			PartitionID:              0,
+		}, nil
+	})
+
+	reqRoot := httptest.NewRequest(http.MethodGet, "/login?tx=url_interaction_123", nil)
+	reqRoot.Host = "test.com"
+	recRoot := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(recRoot, reqRoot)
+
+	if recRoot.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", recRoot.Code)
+	}
+
+	// 1.1 Verify HandleLoginRootRedirect redirects from "/" to "/login" keeping parameters
+	reqRedirect := httptest.NewRequest(http.MethodGet, "/?tx=url_interaction_123", nil)
+	reqRedirect.Host = "test.com"
+	recRedirect := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(recRedirect, reqRedirect)
+
+	if recRedirect.Code != http.StatusFound {
+		t.Fatalf("expected status 302 Found, got %d", recRedirect.Code)
+	}
+	if loc := recRedirect.Header().Get("Location"); loc != "/login?tx=url_interaction_123" {
+		t.Errorf("expected redirect location '/login?tx=url_interaction_123', got '%s'", loc)
+	}
+
+	// 2. Verify HandleLoginSubmit correctly reads tx from form payload
+	lauc.GetInteractionSessionMock.Expect(minimock.AnyContext, tenantID, "form_interaction_456").Return(&model.InteractionSession{
+		ID:                 uuid.New(),
+		TenantID:           tenantID,
+		PartitionID:        1,
+		ClientID:           "client-abc",
+		RedirectURI:        "https://callback",
+		IdentityProviderID: provider.ID,
+	}, nil)
+
+	lauc.AuthenticateLocalCredentialsMock.Set(func(ctx context.Context, cmd port.LocalLoginCommand) (*port.LocalLoginResponse, error) {
+		return &port.LocalLoginResponse{
+			UserProfileID: uuid.New(),
+			PartitionID:   1,
+			SessionID:     "sso-session-id",
+			Subject:       "user-123",
+		}, nil
+	})
+
+	auth.ProcessAuthorizeRequestMock.Set(func(ctx context.Context, cmd port.AuthorizeRequestCommand) (*port.AuthorizeExecutionResult, error) {
+		return &port.AuthorizeExecutionResult{
+			Action:      port.ActionEmitAuthorizationCode,
+			RedirectURL: "https://callback?code=abc",
+		}, nil
+	})
+
+	reqSubmit := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("username=testuser&password=password123&tx=form_interaction_456"))
+	reqSubmit.Header.Set(model.HeaderContentType, model.ContentTypeFormUrlEncoded)
+	reqSubmit.Host = "test.com"
+	recSubmit := httptest.NewRecorder()
+
+	adapter.Router().ServeHTTP(recSubmit, reqSubmit)
+
+	if recSubmit.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", recSubmit.Code)
 	}
 }

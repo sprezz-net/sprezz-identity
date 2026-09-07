@@ -237,6 +237,24 @@ func (s *OAuthService) ProcessAuthorizeRequest(ctx context.Context, cmd port.Aut
 		return nil, fmt.Errorf("%w: structural routing calculation failed: %w", port.ErrInvalidRequest, err)
 	}
 
+	// Strict Multi-Partition Cookie isolation guard:
+	// If the active session is associated with a different partition than the
+	// client's target partition, treat the user as unauthenticated for this request.
+	if cmd.ActiveSessionID != "" {
+		parts := strings.Split(cmd.ActiveSessionID, ":")
+		if len(parts) >= 2 {
+			if parsedPartitionID, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+				if parsedPartitionID != truePartitionID {
+					cmd.ActiveSessionID = "" // Invalidate session context for this cross-partition request
+				}
+			} else {
+				cmd.ActiveSessionID = "" // Malformed session ID, clear it
+			}
+		} else {
+			cmd.ActiveSessionID = "" // Missing partition namespace, clear it
+		}
+	}
+
 	now := s.clock.Now()
 	// ------------------------------------------------------------------------
 	// BRANCH A: User is unauthenticated -> Stage Interaction Session & Handshake
@@ -282,7 +300,7 @@ func (s *OAuthService) ProcessAuthorizeRequest(ctx context.Context, cmd port.Aut
 
 		return &port.AuthorizeExecutionResult{
 			Action:          port.ActionRedirectToLoginUI,
-			RedirectURL:     "/",
+			RedirectURL:     port.RouteWebLogin + "?tx=" + interaction.ID.String(),
 			HasCookieIntent: true,
 			CookieName:      cookieIntent.CookieName,
 			CookieValue:     cookieIntent.CookieValue,
@@ -306,6 +324,17 @@ func (s *OAuthService) ProcessAuthorizeRequest(ctx context.Context, cmd port.Aut
 		subjectID = parts[0]
 	}
 
+	if len(cmd.Scopes) > 0 {
+		if err := s.validator.ValidateScopes(ctx, tenant, group, cmd.Scopes); err != nil {
+			return nil, fmt.Errorf("%w: requested scopes deviate from whitelists: %w", port.ErrInvalidRequest, err)
+		}
+	}
+
+	grantedScopes := cmd.Scopes
+	if len(grantedScopes) == 0 {
+		grantedScopes = group.DefaultScopes
+	}
+
 	authSession := model.AuthorizationCodeSession{
 		Code:                  code,
 		TenantID:              cmd.TenantID,
@@ -315,7 +344,7 @@ func (s *OAuthService) ProcessAuthorizeRequest(ctx context.Context, cmd port.Aut
 		CodeChallenge:         cmd.CodeChallenge,
 		ChallengeMethod:       cmd.ChallengeMethod,
 		RedirectURI:           redirectURI,
-		Scopes:                group.DefaultScopes,
+		Scopes:                grantedScopes,
 		ExpiresAt:             now.Add(5 * time.Minute),
 		SessionID:             cmd.ActiveSessionID,
 		State:                 cmd.State,
@@ -387,13 +416,13 @@ func (s *OAuthService) mintTokensFromSession(ctx context.Context, tenant *model.
 
 	// Ironclad Safety Gate: Deny token rotation if any single entity node is administratively suspended [5.7]
 	if app == nil || !app.IsEnabled {
-		return nil, fmt.Errorf("%s: target application is disabled", port.ErrInvalidGrant)
+		return nil, fmt.Errorf("%w: target application is disabled", port.ErrInvalidGrant)
 	}
 	if group == nil || !group.IsEnabled {
-		return nil, fmt.Errorf("%s: target application group is disabled", port.ErrInvalidGrant)
+		return nil, fmt.Errorf("%w: target application group is disabled", port.ErrInvalidGrant)
 	}
 	if profile == nil || !profile.IsEnabled {
-		return nil, fmt.Errorf("%s: target application profile is disabled", port.ErrInvalidGrant)
+		return nil, fmt.Errorf("%w: target application profile is disabled", port.ErrInvalidGrant)
 	}
 
 	now := s.clock.Now()
@@ -561,23 +590,23 @@ func (s *OAuthService) ExchangeCodeForTokens(
 	// 1. Destructive Read: Atomically fetch and consume the authorization session to prevent replay vectors
 	authSession, err := s.storage.GetAndConsumeAuthSession(ctx, cmd.TenantID, cmd.Code)
 	if err != nil {
-		return nil, fmt.Errorf("%s: code is invalid, used, or mismatched: %w", port.ErrInvalidGrant, err)
+		return nil, fmt.Errorf("%w: code is invalid, used, or mismatched: %w", port.ErrInvalidGrant, err)
 	}
 
 	// 2. Temporal Guardrail: Assert code validity window (standard maximum 5-minute ceiling)
 	if now.After(authSession.ExpiresAt) {
-		return nil, fmt.Errorf("%s: authorization code has expired", port.ErrInvalidGrant)
+		return nil, fmt.Errorf("%w: authorization code has expired", port.ErrInvalidGrant)
 	}
 
 	// 3. Structural Boundary Verification: Validate client matching context rules
 	if authSession.ClientID != cmd.ClientID {
-		return nil, fmt.Errorf("%s: client identity context mismatch", port.ErrInvalidGrant)
+		return nil, fmt.Errorf("%w: client identity context mismatch", port.ErrInvalidGrant)
 	}
 
 	// 4. Cryptographic Validation Layer: Enforce High-Entropy PKCE S256 Verifier verification
 	if authSession.CodeChallenge != "" {
 		if cmd.CodeVerifier == "" {
-			return nil, fmt.Errorf("%s: missing mandatory code_verifier parameter", port.ErrInvalidGrant)
+			return nil, fmt.Errorf("%w: missing mandatory code_verifier parameter", port.ErrInvalidGrant)
 		}
 
 		// Compute the S256 digest transformation loop over the incoming verifier string
@@ -585,7 +614,7 @@ func (s *OAuthService) ExchangeCodeForTokens(
 		computedChallenge := base64.RawURLEncoding.EncodeToString(hashDigest[:])
 
 		if authSession.CodeChallenge != computedChallenge {
-			return nil, fmt.Errorf("%s: pkce code verification challenge mismatch", port.ErrInvalidGrant)
+			return nil, fmt.Errorf("%w: pkce code verification challenge mismatch", port.ErrInvalidGrant)
 		}
 	}
 
@@ -1414,6 +1443,30 @@ func (s *OAuthService) findUserProfile(ctx context.Context, tenantID uuid.UUID, 
 	if email != "" {
 		// Query the clean, single-index partitioned profile tracker
 		profile, err := s.storage.FindProfileByEmail(ctx, provider.PartitionID, email)
+		if err != nil && provider.Config.AutoProvisionUser {
+			now := s.clock.Now()
+			isEmailVerified := provider.Config.AutoVerifyEmail && emailVerified
+
+			// Create a generic JIT user profile
+			profile = &model.UserProfile{
+				ID:                uuid.New(),
+				TenantID:          tenantID,
+				PartitionID:       provider.PartitionID,
+				Email:             email,
+				EmailVerified:     isEmailVerified,
+				PreferredUsername: email,
+				Name:              email,
+				LifecycleState:    model.LifecycleActivated,
+				CreatedAt:         now,
+				UpdatedAt:         now,
+			}
+
+			if errSave := s.storage.SaveUserProfile(ctx, tenantID, provider.PartitionID, *profile); errSave != nil {
+				return nil, fmt.Errorf("failed to JIT provision user profile in oauth_service: %w", errSave)
+			}
+			err = nil
+		}
+
 		if err == nil && profile != nil {
 			// Multi-Tenant Guard: Confirm data containment properties hold true
 			if profile.TenantID != tenantID {

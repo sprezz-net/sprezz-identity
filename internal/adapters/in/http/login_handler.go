@@ -30,13 +30,25 @@ func NewLoginHandler(auc port.AuthUseCase, fuc port.FederatedLoginUseCase, suc p
 }
 
 func (h *LoginHandler) Routes(r chi.Router) {
-	r.Get("/", h.HandleLoginRoot)
+	r.Get("/", h.HandleLoginRootRedirect)
+	r.Get(port.RouteWebLogin, h.HandleLoginRoot)
 	r.Post(port.RouteWebLogin, h.HandleLoginSubmit)
+}
+
+func (h *LoginHandler) HandleLoginRootRedirect(w http.ResponseWriter, r *http.Request) {
+	target := port.RouteWebLogin
+	if q := r.URL.Query().Encode(); q != "" {
+		target += "?" + q
+	}
+	http.Redirect(w, r, target, http.StatusFound)
 }
 
 func (h *LoginHandler) HandleLoginRoot(w http.ResponseWriter, r *http.Request) {
 	tenantUUID := h.mustResolveTenant(r.Context())
-	interactionID := h.parseInteractionCookie(r, tenantUUID)
+	interactionID := r.URL.Query().Get("tx")
+	if interactionID == "" {
+		interactionID = h.parseInteractionCookie(r, tenantUUID)
+	}
 
 	if interactionID == "" {
 		if h.hasActiveBearerSession(r, tenantUUID) {
@@ -71,6 +83,7 @@ func (h *LoginHandler) HandleLoginRoot(w http.ResponseWriter, r *http.Request) {
 		Providers:                ctxResp.Providers,
 		ShowUsernamePasswordForm: ctxResp.ShowUsernamePasswordForm,
 		PartitionID:              ctxResp.PartitionID,
+		InteractionID:            interactionID,
 	})
 	_ = component.Render(r.Context(), w)
 }
@@ -90,7 +103,10 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	interactionID := h.parseInteractionCookie(r, tenantUUID)
+	interactionID := r.FormValue("tx")
+	if interactionID == "" {
+		interactionID = h.parseInteractionCookie(r, tenantUUID)
+	}
 	interactionSession, _ := h.localAuthUseCase.GetInteractionSession(r.Context(), tenantUUID, interactionID)
 
 	var partitionID int64
@@ -155,7 +171,7 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 			Nonce:           interactionSession.Nonce,
 			ACRValues:       interactionSession.ACRValues,
 			RequestHost:     r.Host,
-			RequestURI:      model.URIPrefixPAR + interactionSession.ID.String(),
+			RequestURI:      "",
 			ActiveSessionID: fmt.Sprintf("%s:%d", loginResp.Subject, partitionID),
 		})
 		if err != nil {

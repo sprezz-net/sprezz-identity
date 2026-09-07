@@ -337,7 +337,39 @@ func (s *FederationService) ExecuteFederatedCallback(
 		// Look up account matching the verified email explicitly locked inside the handshake's target Partition [3.1]
 		targetUser, err = s.storage.FindProfileByEmail(ctx, idp.PartitionID, email)
 		if err != nil {
-			return nil, fmt.Errorf("federation_service: no matching system profile found to stitch account link against: %w", port.ErrUserProfileNotFound)
+			if idp.Config.AutoProvisionUser {
+				// JIT Provision User Profile
+				username := email
+				displayName := ""
+				if nameVal, ok := externalClaims["name"].(string); ok {
+					displayName = nameVal
+				} else if preferredVal, ok := externalClaims["preferred_username"].(string); ok {
+					displayName = preferredVal
+				} else {
+					displayName = email
+				}
+
+				isEmailVerified := idp.Config.AutoVerifyEmail && emailVerified
+
+				targetUser = &model.UserProfile{
+					ID:                uuid.New(),
+					TenantID:          cmd.TenantID,
+					PartitionID:       idp.PartitionID,
+					Email:             email,
+					EmailVerified:     isEmailVerified,
+					PreferredUsername: username,
+					Name:              displayName,
+					LifecycleState:    model.LifecycleActivated,
+					CreatedAt:         now,
+					UpdatedAt:         now,
+				}
+
+				if errSave := s.storage.SaveUserProfile(ctx, cmd.TenantID, idp.PartitionID, *targetUser); errSave != nil {
+					return nil, fmt.Errorf("federation_service: failed to JIT provision user profile: %w", errSave)
+				}
+			} else {
+				return nil, fmt.Errorf("federation_service: no matching system profile found to stitch account link against: %w", port.ErrUserProfileNotFound)
+			}
 		}
 
 		// Strategy C: Structural Account stitching registration
@@ -389,6 +421,7 @@ func (s *FederationService) ExecuteFederatedCallback(
 
 	// 7. STAGE 6: Pack and return clean data boundaries back up to the caller ring [3.1, 5.7]
 	return &port.FederatedCallbackResponse{
+		UserProfileID:        targetUser.ID,
 		UpstreamAccessToken:  providerTokenSet.AccessToken,  // Maps operational session parameters
 		UpstreamIDToken:      providerTokenSet.IDToken,      // Preserved for the SLO id_token_hint parameter
 		UpstreamRefreshToken: providerTokenSet.RefreshToken, // Preserved for background refresh access if needed

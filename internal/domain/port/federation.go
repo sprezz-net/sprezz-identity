@@ -38,13 +38,14 @@ type FederatedCallbackCommand struct {
 }
 
 type FederatedCallbackResponse struct {
-	UpstreamAccessToken  string // The active authentication token/session key
-	UpstreamIDToken      string // Retained for the id_token_hint parameter during full SLO loops
-	UpstreamRefreshToken string // Retained if offline background API proxy renewals are required
-	PartitionID          int64  // Internal database primary key preserved for tracking [3.1]
-	TargetLandingURI     string // Resolved target landing zone (e.g., /admin/dashboard) [5.7]
-	ReachedAAL           int    // Trust metric passed cleanly up to the delivery shell
-	ReachedIAL           int    // Trust metric passed cleanly up to the delivery shell
+	UserProfileID        uuid.UUID // Local user profile ID context
+	UpstreamAccessToken  string    // The active authentication token/session key
+	UpstreamIDToken      string    // Retained for the id_token_hint parameter during full SLO loops
+	UpstreamRefreshToken string    // Retained if offline background API proxy renewals are required
+	PartitionID          int64     // Internal database primary key preserved for tracking [3.1]
+	TargetLandingURI     string    // Resolved target landing zone (e.g., /admin/dashboard) [5.7]
+	ReachedAAL           int       // Trust metric passed cleanly up to the delivery shell
+	ReachedIAL           int       // Trust metric passed cleanly up to the delivery shell
 }
 
 // FederatedCallbackUseCase handles the entire inbound external provider callback journey

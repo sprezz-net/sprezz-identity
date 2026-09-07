@@ -5,7 +5,7 @@ import (
 	"sprezz-identity/internal/domain/port"
 )
 
-templ SignUp(errorMessage string, provider *model.IdentityProvider, email string, username string, name string) {
+templ SignUp(errorMessage string, provider *model.IdentityProvider, email string, username string, name string, interactionID string) {
 	<!doctype html>
 	<html lang="en" class="h-full bg-slate-50">
 	<head>
@@ -34,6 +34,7 @@ templ SignUp(errorMessage string, provider *model.IdentityProvider, email string
 				</div>
 
 				<form hx-post={ port.RouteWebSignUp } hx-target="#signup-result" hx-swap="none" class="space-y-4">
+					<input type="hidden" name="tx" value={ interactionID } />
 					<div>
 						<label class="block text-sm font-medium text-slate-700 mb-1">Display Name</label>
 						<input

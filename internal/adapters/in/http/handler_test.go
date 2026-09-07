@@ -110,7 +110,7 @@ func TestHttpAdapter_CSPNonce(t *testing.T) {
 	adapter := NewHttpAdapter(tuc, auth, fuc, nil, suc, upuc, uruc, lauc, nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
 
 	// Request 1
-	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/login", nil)
 	rec1 := httptest.NewRecorder()
 	adapter.Router().ServeHTTP(rec1, req1)
 

@@ -403,13 +403,15 @@ Sprezz Identity implements OAuth 2.0 Token Exchange (RFC 8693) via the custom gr
 - **Client Authentication**: Confidential clients are authenticated via standard HTTP Basic Authentication or form parameter checks. Public clients are checked for validity by resolving their registrations.
 - **Token Validation**: The service decodes and extracts claims (e.g., `iss`, `sub`, `email`, `name`, `preferred_username`, `email_verified`) from incoming OIDC JWT tokens or custom legacy string formats.
 - **Federated Identity Mapping**: The server matches the token's `iss` issuer exactly on `p.Issuer == iss` to an enabled, configured `IdentityProvider` in the tenant context. If direct issuer matching fails, the engine falls back to matching the email's domain alias against the configured provider's `DomainAliases`.
-- **Prioritized Profile Matching & Verification Safety Gating**:
-  - **Stage 1 (Identity External ID Match)**: If the provider is configured with a `UserIdentifierClaim` (e.g., `"sub"`), the engine extracts it from the payload as `externalSub` and queries the `identities` table using `GetIdentityByProviderAndExternalID`. If a matching coupled identity exists, the linked `UserProfile` is resolved and returned immediately.
+- **Prioritized Profile Matching, JIT Auto-Provisioning & Verification Safety Gating**:
+  - **Stage 1 (Identity External ID Match)**: If the provider is configured with a `UserIdentifierClaim` (e.g., `"sub"`), the engine extracts it from the payload as `externalSub` and queries the `identities` table using `GetUserIdentityByProviderAndExternalID` matching the partition. If a matching coupled identity exists, the linked `UserProfile` is resolved and returned immediately.
   - **Stage 2 (Email Verification Gate)**: If no identity match is found, the engine evaluates the `email_verified` claim of the incoming token. If `email_verified` is false or missing, the exchange is immediately denied with an `invalid_grant` error (`ErrExternalEmailNotVerified`) to prevent account takeover via spoofed external identities.
-  - **Stage 3 (Verified Email Match & Auto-Link)**: If email verification passes, the engine queries the `user_profiles` table using `FindProfileByEmail` matching the partition. If a verified matching profile is found, the engine automatically persists a new link in the `identities` table using `UpsertIdentity` so subsequent logins resolve instantly via Stage 1, then returns the profile.
-  - **Stage 4 (Deny Token Exchange)**: If no profile matches any of these stages, or if safety gates fail, the token exchange is strictly denied.
+  - **Stage 3 (Verified Email Match, Auto-Link & JIT Fallback)**: If email verification passes, the engine queries the `user_profiles` table using `FindProfileByEmail` matching the partition.
+    - **Existing Match**: If a verified matching profile is found, the engine automatically persists a new link in the `identities` table using `UpsertUserIdentity` so subsequent logins resolve instantly via Stage 1, then returns the profile.
+    - **JIT User Provisioning**: If no profile exists, but the identity provider configuration has `AutoProvisionUser` set to `true`, the engine automatically provisions a new, clean JIT `UserProfile`. The new profile's `EmailVerified` is populated based on whether `AutoVerifyEmail` is enabled and the external assertion's `email_verified` is true. The profile is committed via `SaveUserProfile` and linked instantly via `UpsertUserIdentity` to secure the external identity.
+  - **Stage 4 (Deny Token Exchange)**: If no user profile matches any of these stages and JIT provisioning is not configured, the token exchange is strictly denied.
 - **Token Issuance**: The server mints a secure, native Access Token (and ID/Refresh Token as per client capabilities and configuration) bound to the newly resolved native subject.
-- **Interactive Federation Client Session Registration**: When processing a token exchange that facilitates an interactive browser-facing user transition, the service registers the newly joined client application under the active session identifier inside the client sessions store. This binds the application to the single-sign-on logout boundary. Headless server-to-server or machine-to-machine token exchanges bypass this registration entirely.
+- **Interactive Federation Client Session Registration**: When processing a token exchange that facilitates an interactive browser-facing user transition, the service registers the newly joined client application under the active session identifier inside the client sessions store using `RecordClientSessionLink`. This binds the application to the single-sign-on logout boundary. Headless server-to-server or machine-to-machine token exchanges bypass this registration entirely.
 
 ## 6. Token Lifecycle, Governance & Asymmetric Cryptography
 
@@ -567,16 +569,15 @@ Modifying the `allow_signup` flag to `false` prevents future rogue registration 
 
 ### 8.3 Watertight Cookie Session Defenses
 
-To prevent Session Hijacking, Cross-Site Scripting (XSS) extraction, and Cross-Site Request Forgery (CSRF) token subversions, the session cookie handler must explicitly enforce strict cryptographic and transport storage parameters on the unified, single first-party cookie (`spz_session`) established in Section 9.7:
+To prevent Session Hijacking, Cross-Site Scripting (XSS) extraction, and Cross-Site Request Forgery (CSRF) token subversions, the session cookie handler must explicitly enforce strict cryptographic and transport storage parameters on the unified, single first-party cookie (`spz_session`):
 
 - **`HttpOnly = true`**: Restricts access to the cookie parameter block strictly to the network layer, preventing execution readouts by client-side JavaScript fragments (essential defense-in-depth against malicious XSS vectors).
 - **`Secure = true`**: Forces transmission of the authentication session context strictly over TLS-encrypted HTTPS transport layers.
 - **`SameSite = SameSiteLaxMode`**: Mitigates malicious cross-origin parameter forging attempts while maintaining fast, smooth OIDC cross-app hypermedia navigation loops.
-- **Prefix Enforcement**: In all non-development environments, the partition based cookie identifier must be explicitly declared with the `__Host-` structural prefix (i.e., `__Host-spz_session_default`). This guarantees the token pool is bound exclusively to the exact hostname domain grid, prevents cross-contamination across broader organizational sub-domains, and mandates a strict root path definition.
-- **Local Development Exception Loop**: To support local unencrypted debugging workflows on `http://localhost` (as detailed in Section 5.C), the cookie generation factory incorporates a dual-gated environmental and network runtime validation fence:
-  1. **The Global Flag Gate**: The engine asserts that the centralized operational configuration parameter `APP_ENV` is explicitly set to `"local"`.
-  2. **The Request Network Gate**: The inbound HTTP handler verifies that the inbound `r.Host` parameter targets `localhost` or `127.0.0.1`.
-  3. **The Execution Rule**: If and only if *both* criteria are simultaneously satisfied, the engine is permitted to dynamically strip the `__Host-` prefix wrapper (falling back to plain `spz_session`) and flip `Secure = false` to enable cookie persistence over unencrypted channels. If `APP_ENV` is set to anything else (e.g., `staging`, `production`), any request hitting the engine with a local host header is treated with zero-trust defaults, strictly enforcing prefix wrappers and encryption.
+- **Prefix Enforcement**: In all non-development environments, the partition-based cookie identifier must be explicitly declared with the `__Host-` structural prefix (i.e., `__Host-spz_session_default`). This guarantees the token pool is bound exclusively to the exact hostname domain grid, prevents cross-contamination across broader organizational sub-domains, and mandates a strict root path definition.
+- **Local Development Exception Loop**: To support local unencrypted debugging workflows on `http://localhost`, the cookie generation factory incorporates a clean environmental runtime validation check:
+  - **The Environmental Gate**: The engine asserts that the centralized operational configuration parameter `APP_ENV` is explicitly set to `"local"`.
+  - **The Execution Rule**: If and only if this environmental criterion is satisfied, the engine is permitted to dynamically strip the `__Host-` prefix wrapper (falling back to plain `spz_session`) and flip `Secure = false` to enable cookie persistence over unencrypted local channels. If `APP_ENV` is set to anything else (e.g., `staging`, `production`), the engine applies zero-trust defaults, strictly prepending `__Host-` prefix wrappers and requiring HTTPS transport.
 
 ### 8.3.1 Dynamic Partition Namespacing Strategy
 
@@ -590,8 +591,9 @@ This configuration forces the browser to sandbox storage contexts natively (e.g.
 
 Within the isolated partition cookie, states are evaluated and migrated using strict protocol value prefixes:
 
-- **Outbound Handshake Lifecycle:** The cookie value stores a high-entropy state tracking UUID prefixed with the handshake protocol identifier (`handshake:[state_uuid]`). This acts as an anti-XSRF fence during the redirection loop to the central identity provider.
-- **Authenticated Bearer Lifecycle:** Upon completing back-channel validation, the HTTP adapter overwrites the transient token with the finalized, signed access token string using the bearer namespace prefix (`bearer:[jwt_access_token]`).
+- **Outbound Handshake Lifecycle:** The cookie value stores a high-entropy state tracking UUID prefixed with the handshake protocol identifier (`handshake:[state_uuid]`). This acts as an anti-XSRF fence during the redirection loop, restricted strictly to a short-lived, 5-minute (300 seconds) expiration boundary.
+- **Authenticated Bearer Lifecycle:** Upon completing back-channel validation, the HTTP adapter overwrites the transient token with the finalized, signed access token string using the bearer namespace prefix (`bearer:[jwt_access_token]`), defaulting to a standard 24-hour expiration threshold.
+- **Clear/Evict Lifecycle:** When terminating or revoking a session, the adapter forcefully expires and clears the browser's partition-scoped first-party cookie by returning a standard `Set-Cookie` header with a negative `Max-Age` attribute (`Max-Age = -1`) and an empty value.
 
 ### 8.4 Hypermedia Semantic Error Status Compliance
 

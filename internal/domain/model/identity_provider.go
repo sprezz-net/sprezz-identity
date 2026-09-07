@@ -70,6 +70,8 @@ type IdentityProviderConfig struct {
 	DiscoveryResult             string              `json:"discovery_result,omitempty"`
 	AcrToTuple                  map[string]AcrTuple `json:"acr_to_tuple,omitempty"`
 	AmrToAAL                    map[string]int      `json:"amr_to_aal,omitempty"`
+	AutoProvisionUser           bool                `json:"auto_provision_user,omitempty"`
+	AutoVerifyEmail             bool                `json:"auto_verify_email,omitempty"`
 }
 
 type UserIdentity struct {

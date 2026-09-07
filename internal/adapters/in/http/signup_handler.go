@@ -40,7 +40,10 @@ func (h *SignupHandler) HandleSignUpForm(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	interactionID := h.parseInteractionCookie(r, tenant.ID)
+	interactionID := r.URL.Query().Get("tx")
+	if interactionID == "" {
+		interactionID = h.parseInteractionCookie(r, tenant.ID)
+	}
 
 	ctxResp, err := h.registrationUseCase.GetSignupContext(r.Context(), port.GetSignupContextCommand{
 		TenantID:       tenant.ID,
@@ -55,7 +58,7 @@ func (h *SignupHandler) HandleSignUpForm(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	component := public.SignUp("", ctxResp.Provider, "", "", "")
+	component := public.SignUp("", ctxResp.Provider, "", "", "", interactionID)
 	_ = component.Render(r.Context(), w)
 }
 
@@ -67,7 +70,10 @@ func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	interactionID := h.parseInteractionCookie(r, tenant.ID)
+	interactionID := r.FormValue("tx")
+	if interactionID == "" {
+		interactionID = h.parseInteractionCookie(r, tenant.ID)
+	}
 
 	ctxResp, err := h.registrationUseCase.GetSignupContext(r.Context(), port.GetSignupContextCommand{
 		TenantID:       tenant.ID,
@@ -83,7 +89,7 @@ func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Reques
 	provider := ctxResp.Provider
 
 	if err := r.ParseForm(); err != nil {
-		h.renderInlineFormError(w, r, provider, "Malformed sign-up payload parameters submitted")
+		h.renderInlineFormError(w, r, provider, interactionID, "Malformed sign-up payload parameters submitted")
 		return
 	}
 
@@ -94,7 +100,7 @@ func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Reques
 	confirmPassword := r.FormValue("confirm_password")
 
 	if password != confirmPassword {
-		h.renderInlineFormError(w, r, provider, "Passwords provided do not match")
+		h.renderInlineFormError(w, r, provider, interactionID, "Passwords provided do not match")
 		return
 	}
 
@@ -121,7 +127,7 @@ func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Reques
 
 	if err != nil {
 		slog.Error("Self-service registration submission failed", "error", err, "tenant_id", tenant.ID, "username", username)
-		h.renderInlineFormError(w, r, provider, err.Error())
+		h.renderInlineFormError(w, r, provider, interactionID, err.Error())
 		return
 	}
 
@@ -149,10 +155,10 @@ func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *SignupHandler) renderInlineFormError(w http.ResponseWriter, r *http.Request, provider *model.IdentityProvider, message string) {
+func (h *SignupHandler) renderInlineFormError(w http.ResponseWriter, r *http.Request, provider *model.IdentityProvider, interactionID string, message string) {
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	w.WriteHeader(http.StatusOK)
-	component := public.SignUp(message, provider, r.FormValue("email"), r.FormValue("username"), r.FormValue("name"))
+	component := public.SignUp(message, provider, r.FormValue("email"), r.FormValue("username"), r.FormValue("name"), interactionID)
 	_ = component.Render(r.Context(), w)
 }
 
