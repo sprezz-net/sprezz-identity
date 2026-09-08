@@ -1,5 +1,6 @@
 app_env: "local"
 port: "8100"
+log_level: "debug"
 
 database:
   host: "localhost"

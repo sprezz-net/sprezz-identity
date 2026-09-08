@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	httpadapter "sprezz-identity/internal/adapters/in/http"
@@ -87,10 +88,15 @@ func initDependencies(ctx context.Context) *dependencies {
 		log.Fatalf("Configuration bootstrap error: %v", err)
 	}
 
-	// 2. Configure structured system logging parameters
+	// 2. Configure structured system logging parameters dynamically from configuration
 	logLevel := slog.LevelInfo
-	if cfg.AppEnv == "local" {
+	switch strings.ToLower(cfg.LogLevel) {
+	case "debug":
 		logLevel = slog.LevelDebug
+	case "warn":
+		logLevel = slog.LevelWarn
+	case "error":
+		logLevel = slog.LevelError
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: logLevel,

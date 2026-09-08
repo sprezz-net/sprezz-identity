@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"regexp"
 	"sort"
@@ -746,9 +747,11 @@ func (s *OAuthService) ExchangeExternalToken(
 	subjectToken string,
 	subjectTokenType model.TokenType,
 ) (*model.TokenSetResponse, error) {
+	slog.Debug("ExchangeExternalToken: starting token exchange", "tenant_id", tenantID, "client_id", clientID, "subject_token_type", subjectTokenType)
 
 	// 1. Enforce strict RFC 8693 standard incoming subject token profile constraints [5.7]
 	if subjectTokenType != model.TokenTypeIDToken {
+		slog.Error("ExchangeExternalToken: unsupported subject token type profile", "type", subjectTokenType)
 		return nil, fmt.Errorf("%s: unsupported subject token type profile", port.ErrInvalidGrant)
 	}
 
@@ -756,56 +759,70 @@ func (s *OAuthService) ExchangeExternalToken(
 	parser := jwt.NewParser()
 	unverifiedToken, _, err := parser.ParseUnverified(subjectToken, jwt.MapClaims{})
 	if err != nil {
+		slog.Error("ExchangeExternalToken: structural token decoding failed", "err", err)
 		return nil, fmt.Errorf("%s: structural token decoding failed: %w", port.ErrInvalidGrant, err)
 	}
 
 	unverifiedClaims, ok := unverifiedToken.Claims.(jwt.MapClaims)
 	if !ok {
+		slog.Error("ExchangeExternalToken: corrupt token claims container layout")
 		return nil, fmt.Errorf("%s: corrupt token claims container layout", port.ErrInvalidGrant)
 	}
 
 	rawIssuer, _ := unverifiedClaims["iss"].(string)
 	rawEmail, _ := unverifiedClaims["email"].(string)
+	slog.Debug("ExchangeExternalToken: unverified token claims extracted", "iss", rawIssuer, "email", rawEmail)
 	if rawIssuer == "" {
+		slog.Error("ExchangeExternalToken: token is missing mandatory issuer identity assertions")
 		return nil, fmt.Errorf("%s: token is missing mandatory issuer identity assertions", port.ErrInvalidGrant)
 	}
 
 	// 3. Resolve and verify the specific Identity Provider by its explicit issuer string [5.7]
 	activeProvider, err := s.matchIdentityProvider(ctx, tenantID, rawIssuer, rawEmail)
 	if err != nil {
+		slog.Error("ExchangeExternalToken: external token issuer unrecognized or unmapped", "iss", rawIssuer, "err", err)
 		return nil, fmt.Errorf("%s: external token issuer is unrecognized or unmapped for this tenant: %w", port.ErrInvalidGrant, err)
 	}
 
+	slog.Debug("ExchangeExternalToken: matched identity provider", "id", activeProvider.ID, "alias", activeProvider.Alias, "partition_id", activeProvider.PartitionID)
+
 	if !activeProvider.Enabled {
+		slog.Error("ExchangeExternalToken: resolved federated identity provider is administratively deactivated", "id", activeProvider.ID)
 		return nil, fmt.Errorf("%s: resolved federated identity provider is administratively deactivated", port.ErrInvalidGrant)
 	}
 
 	// 4. Cryptographic Validation: Verify asymmetric signatures against the securely resolved provider parameters [5.7]
 	externalClaims, err := s.crypto.VerifyExternalTokenWithProvider(ctx, subjectToken, activeProvider.Config.JwksURI, activeProvider.Issuer)
 	if err != nil {
+		slog.Error("ExchangeExternalToken: cryptographic token signature verification failed", "jwks", activeProvider.Config.JwksURI, "issuer", activeProvider.Issuer, "err", err)
 		return nil, fmt.Errorf("%s: cryptographic token signature verification failed: %w", port.ErrInvalidGrant, err)
 	}
 
 	subject, _ := externalClaims["sub"].(string)
 	email, _ := externalClaims["email"].(string)
 	emailVerified, _ := externalClaims["email_verified"].(bool)
+	slog.Debug("ExchangeExternalToken: cryptographic signature verified successfully", "sub", subject, "email", email, "email_verified", emailVerified)
 
 	if subject == "" || email == "" {
+		slog.Error("ExchangeExternalToken: external identity assertions missing mandatory subject or email mapping credentials")
 		return nil, fmt.Errorf("%s: external identity assertions missing mandatory subject mapping credentials", port.ErrInvalidGrant)
 	}
 
 	// 5. Fetch client metadata profiles to enforce lifecycle security gates and gather whitelists [5.7]
 	app, profile, group, err := s.storage.GetApplicationByClientID(ctx, tenantID, clientID)
 	if err != nil {
+		slog.Error("ExchangeExternalToken: target client application unresolvable", "client_id", clientID, "err", err)
 		return nil, fmt.Errorf("oauth_service: target client application unresolvable: %w", err)
 	}
 
 	if app == nil || !app.IsEnabled || group == nil || !group.IsEnabled || profile == nil || !profile.IsEnabled {
+		slog.Error("ExchangeExternalToken: target application architecture context is deactivated", "client_id", clientID)
 		return nil, fmt.Errorf("%s: target application architecture context is deactivated", port.ErrInvalidGrant)
 	}
 
 	// Enforce that the application group is strictly bound to this Identity Provider [5.7]
 	idpPermitted := false
+	slog.Debug("ExchangeExternalToken: verifying group allowed IDPs", "group_id", group.ID, "group_name", group.GroupName, "allowed_ids", group.AllowedIDPIDs, "provider_id", activeProvider.ID)
 	for _, allowedIDP := range group.AllowedIDPIDs {
 		if allowedIDP == activeProvider.ID {
 			idpPermitted = true
@@ -813,12 +830,14 @@ func (s *OAuthService) ExchangeExternalToken(
 		}
 	}
 	if !idpPermitted {
+		slog.Error("ExchangeExternalToken: identity provider is not authorized for use with this application client group", "group_allowed", group.AllowedIDPIDs, "provider_id", activeProvider.ID)
 		return nil, fmt.Errorf("%w: identity provider is not authorized for use with this application client group", port.ErrInvalidGrant)
 	}
 
 	// 6. Namespace Translation: Resolve partition tracking models to pass string aliases forward to tokens [5.7]
 	partition, err := s.storage.GetPartitionByID(ctx, tenantID, activeProvider.PartitionID)
 	if err != nil {
+		slog.Error("ExchangeExternalToken: failed to resolve partition tracking metadata", "partition_id", activeProvider.PartitionID, "err", err)
 		return nil, fmt.Errorf("oauth_service: failed to resolve partition tracking metadata: %w", err)
 	}
 
@@ -1425,51 +1444,68 @@ func fallbackNonPasswordProvider(providers []model.IdentityProvider) *model.Iden
 }
 
 func (s *OAuthService) findUserProfile(ctx context.Context, tenantID uuid.UUID, provider *model.IdentityProvider, externalSub, email string, emailVerified bool) (*model.UserProfile, error) {
+	slog.Debug("findUserProfile: starting profile search", "tenant_id", tenantID, "provider_partition_id", provider.PartitionID, "provider_id", provider.ID, "external_sub", externalSub, "email", email, "email_verified", emailVerified)
+
 	// 1. DIRECT ONE-TRIP IDENTITY LOOKUP: Query row matching provider ID and foreign subject index
 	identity, err := s.storage.GetUserIdentityByProviderAndExternalID(ctx, tenantID, provider.PartitionID, provider.ID, externalSub)
 	if err == nil && identity != nil {
+		slog.Debug("findUserProfile: coupled identity found, resolving user profile", "user_profile_id", identity.UserProfileID)
 		// Load the global parent profile using the verified identity context mapping pointer
 		profile, err := s.storage.GetUserProfileByID(ctx, tenantID, provider.PartitionID, identity.UserProfileID)
 		if err == nil && profile != nil {
+			slog.Debug("findUserProfile: user profile resolved successfully via direct coupling", "user_id", profile.ID)
 			return profile, nil
 		}
+		slog.Warn("findUserProfile: coupled identity exists but failed loading user profile", "err", err)
+	} else {
+		slog.Debug("findUserProfile: direct identity coupling not found, falling back to email", "err", err)
 	}
 
 	// 2. VERIFIED EMAIL AUTOLINK FALLBACK
 	if !emailVerified {
+		slog.Warn("findUserProfile: email is unverified, blocking autolink and JIT provisioning")
 		return nil, port.ErrExternalEmailNotVerified
 	}
 
 	if email != "" {
 		// Query the clean, single-index partitioned profile tracker
+		slog.Debug("findUserProfile: looking up profile by email", "partition_id", provider.PartitionID, "email", email)
 		profile, err := s.storage.FindProfileByEmail(ctx, provider.PartitionID, email)
-		if err != nil && provider.Config.AutoProvisionUser {
-			now := s.clock.Now()
-			isEmailVerified := provider.Config.AutoVerifyEmail && emailVerified
+		if err != nil {
+			slog.Debug("findUserProfile: profile not found by email", "partition_id", provider.PartitionID, "email", email, "err", err)
+			if provider.Config.AutoProvisionUser {
+				now := s.clock.Now()
+				isEmailVerified := provider.Config.AutoVerifyEmail && emailVerified
 
-			// Create a generic JIT user profile
-			profile = &model.UserProfile{
-				ID:                uuid.New(),
-				TenantID:          tenantID,
-				PartitionID:       provider.PartitionID,
-				Email:             email,
-				EmailVerified:     isEmailVerified,
-				PreferredUsername: email,
-				Name:              email,
-				LifecycleState:    model.LifecycleActivated,
-				CreatedAt:         now,
-				UpdatedAt:         now,
-			}
+				// Create a generic JIT user profile
+				profile = &model.UserProfile{
+					ID:                uuid.New(),
+					TenantID:          tenantID,
+					PartitionID:       provider.PartitionID,
+					Email:             email,
+					EmailVerified:     isEmailVerified,
+					PreferredUsername: email,
+					Name:              email,
+					LifecycleState:    model.LifecycleActivated,
+					CreatedAt:         now,
+					UpdatedAt:         now,
+				}
 
-			if errSave := s.storage.SaveUserProfile(ctx, tenantID, provider.PartitionID, *profile); errSave != nil {
-				return nil, fmt.Errorf("failed to JIT provision user profile in oauth_service: %w", errSave)
+				slog.Debug("findUserProfile: JIT provisioning user profile", "user_id", profile.ID, "partition_id", provider.PartitionID, "email", email)
+				if errSave := s.storage.SaveUserProfile(ctx, tenantID, provider.PartitionID, *profile); errSave != nil {
+					slog.Error("findUserProfile: failed to JIT provision user profile", "err", errSave)
+					return nil, fmt.Errorf("failed to JIT provision user profile in oauth_service: %w", errSave)
+				}
+				err = nil
+			} else {
+				slog.Warn("findUserProfile: JIT auto-provisioning is disabled for this provider")
 			}
-			err = nil
 		}
 
 		if err == nil && profile != nil {
 			// Multi-Tenant Guard: Confirm data containment properties hold true
 			if profile.TenantID != tenantID {
+				slog.Error("findUserProfile: multi-tenant guard breach detected", "profile_tenant_id", profile.TenantID, "request_tenant_id", tenantID)
 				return nil, errors.New("federation error: target user identity belongs to an isolated external tenant boundary")
 			}
 
@@ -1482,14 +1518,17 @@ func (s *OAuthService) findUserProfile(ctx context.Context, tenantID uuid.UUID, 
 				CoupledAt:          s.clock.Now(),
 			}
 
+			slog.Debug("findUserProfile: auto-linking external sub to user profile", "user_id", profile.ID, "external_sub", externalSub)
 			// Commit link safely into database indexes
 			if err := s.storage.UpsertUserIdentity(ctx, tenantID, provider.PartitionID, newIdentity); err != nil {
+				slog.Error("findUserProfile: failed auto-linking identity record", "err", err)
 				return nil, fmt.Errorf("failed auto-linking identity record: %w", err)
 			}
 			return profile, nil
 		}
 	}
 
+	slog.Warn("findUserProfile: user profile resolution failed entirely")
 	return nil, errors.New("user profile not found")
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"sprezz-identity/internal/domain/model"
@@ -160,9 +161,12 @@ func (s *LocalAuthService) handleFailedPasswordAttempt(
 }
 
 func (s *LocalAuthService) GetLoginContext(ctx context.Context, cmd port.GetLoginContextCommand) (*port.LoginContextResponse, error) {
+	slog.Debug("GetLoginContext: starting context resolution", "tenant_id", cmd.TenantID, "interaction_id", cmd.InteractionID, "idp_hint_query", cmd.IDPHintQuery)
+
 	// 1. Fetch Tenant configuration permissions
 	tenant, err := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
 	if err != nil {
+		slog.Error("GetLoginContext: failed resolving tenant context", "tenant_id", cmd.TenantID, "err", err)
 		return nil, fmt.Errorf("local_auth_service: failed resolving tenant context: %w", err)
 	}
 
@@ -176,8 +180,11 @@ func (s *LocalAuthService) GetLoginContext(ctx context.Context, cmd port.GetLogi
 	// 2. Fetch enabled providers for the tenant
 	allProviders, err := s.storage.GetEnabledIdentityProviders(ctx, cmd.TenantID)
 	if err != nil {
+		slog.Error("GetLoginContext: failed gathering enabled providers", "tenant_id", cmd.TenantID, "err", err)
 		return nil, fmt.Errorf("local_auth_service: failed gathering enabled providers: %w", err)
 	}
+
+	slog.Debug("GetLoginContext: retrieved active providers count", "count", len(allProviders))
 
 	// 3. Fetch interaction session if interaction ID is provided
 	var interactionSession *model.InteractionSession
@@ -204,9 +211,16 @@ func (s *LocalAuthService) GetLoginContext(ctx context.Context, cmd port.GetLogi
 			if err == nil && session != nil {
 				interactionSession = session
 				isDirectAccess = false
-				partitionID = session.PartitionID
+				if session.PartitionID != 0 {
+					partitionID = session.PartitionID
+				}
 
-				_, _, grp, _ := s.storage.GetApplicationByClientID(ctx, cmd.TenantID, session.ClientID)
+				slog.Debug("GetLoginContext: interaction session found", "client_id", session.ClientID, "idp_hint", session.IDPHint, "expires_at", session.ExpiresAt)
+
+				_, _, grp, grpErr := s.storage.GetApplicationByClientID(ctx, cmd.TenantID, session.ClientID)
+				if grpErr != nil {
+					slog.Warn("GetLoginContext: GetApplicationByClientID failed to resolve group", "client_id", session.ClientID, "err", grpErr)
+				}
 				group = grp
 
 				if session.IDPHint != "" {
@@ -219,11 +233,17 @@ func (s *LocalAuthService) GetLoginContext(ctx context.Context, cmd port.GetLogi
 								allowedIDPs = append(allowedIDPs, p.Alias)
 							}
 						}
+					} else {
+						slog.Error("GetLoginContext: GetIdentityProvidersByUUIDs failed", "allowed_ids", group.AllowedIDPIDs, "err", err)
 					}
 				}
+			} else {
+				slog.Warn("GetLoginContext: interaction ID passed but session not found or error loading", "err", err)
 			}
 		}
 	}
+
+	slog.Debug("GetLoginContext: evaluated routing context", "isDirectAccess", isDirectAccess, "partition_id", partitionID, "allowedIDPs", allowedIDPs)
 
 	// 4. Apply provider filtering matching lineage logic
 	var finalProviders []model.IdentityProvider
@@ -256,12 +276,15 @@ func (s *LocalAuthService) GetLoginContext(ctx context.Context, cmd port.GetLogi
 		}
 	}
 
+	slog.Debug("GetLoginContext: finalized hint", "resolved_hint", hint)
+
 	var triggerAutoFederatedIDP *model.IdentityProvider
 	if hint != "" {
 		for _, p := range finalProviders {
 			if p.Alias == hint && p.IDPType != model.UsernamePasswordIDPType {
 				pCopy := p
 				triggerAutoFederatedIDP = &pCopy
+				slog.Debug("GetLoginContext: matched auto-redirection hint provider", "alias", p.Alias, "id", p.ID)
 				break
 			}
 		}
@@ -276,6 +299,8 @@ func (s *LocalAuthService) GetLoginContext(ctx context.Context, cmd port.GetLogi
 			break
 		}
 	}
+
+	slog.Debug("GetLoginContext: output options", "show_password_form", showPasswordForm, "matched_partition", matchedPartition, "triggerAutoFederatedIDP_nil", triggerAutoFederatedIDP == nil)
 
 	return &port.LoginContextResponse{
 		AllowSignup:              allowSignup,

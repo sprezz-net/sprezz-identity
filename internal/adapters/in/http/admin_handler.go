@@ -2,6 +2,7 @@ package http
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -81,19 +82,24 @@ func (h *AdminHandler) adminDashboardView(w http.ResponseWriter, r *http.Request
 		RequestHost:    r.Host,
 	})
 	if err != nil {
+		slog.Error("HandleAdmin: BuildSessionCookie failed", "err", err)
 		h.initiateAdminOIDC(w, r)
 		return
 	}
 
 	cookie, err := r.Cookie(cookieSpec.CookieName)
 	if err != nil || cookie.Value == "" {
+		slog.Debug("HandleAdmin: session cookie is missing or empty, initiating OIDC", "cookie_name", cookieSpec.CookieName)
 		h.initiateAdminOIDC(w, r)
 		return
 	}
 
+	slog.Debug("HandleAdmin: session cookie found", "cookie_name", cookieSpec.CookieName, "value", cookie.Value)
+
 	// 2. Parse colon string format to extract the local user token asset safely
 	parts := strings.Split(cookie.Value, ":")
 	if len(parts) != 3 || parts[0] != "bearer" || parts[1] == "" {
+		slog.Warn("HandleAdmin: session cookie format invalid, initiating OIDC", "value", cookie.Value)
 		h.initiateAdminOIDC(w, r)
 		return
 	}
@@ -101,6 +107,7 @@ func (h *AdminHandler) adminDashboardView(w http.ResponseWriter, r *http.Request
 
 	userUUID, err := uuid.Parse(userUUIDStr)
 	if err != nil {
+		slog.Warn("HandleAdmin: failed to parse user UUID from session cookie, initiating OIDC", "userUUIDStr", userUUIDStr, "err", err)
 		h.initiateAdminOIDC(w, r)
 		return
 	}
@@ -108,15 +115,19 @@ func (h *AdminHandler) adminDashboardView(w http.ResponseWriter, r *http.Request
 	// 3. Verify that the user profile exists and is active inside the administrative partition
 	userProfile, err := h.storagePort.GetUserProfileByID(r.Context(), tenant.ID, adminPartitionID, userUUID)
 	if err != nil {
+		slog.Warn("HandleAdmin: user profile not found in partition, clearing cookie", "user_id", userUUID, "partition_id", adminPartitionID, "err", err)
 		h.clearCookieAndRedirect(w, r, cookieSpec.CookieName, port.RouteAdmin)
 		return
 	}
 
 	allowed, err := userProfile.IsLoginAllowed()
 	if !allowed || err != nil {
+		slog.Warn("HandleAdmin: user profile login disallowed, clearing cookie", "user_id", userUUID, "err", err)
 		h.clearCookieAndRedirect(w, r, cookieSpec.CookieName, port.RouteAdmin)
 		return
 	}
+
+	slog.Info("HandleAdmin: dashboard session verified successfully", "user_id", userUUID, "partition_id", adminPartitionID)
 
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	msg := r.URL.Query().Get("msg")

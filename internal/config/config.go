@@ -29,6 +29,7 @@ type IdentityServerConfig struct {
 type Config struct {
 	AppEnv         string               `yaml:"app_env" env:"APP_ENV" env-default:"local"`
 	Port           string               `yaml:"port" env:"PORT" env-default:"8080"`
+	LogLevel       string               `yaml:"log_level" env:"LOG_LEVEL" env-default:"info"`
 	Database       DatabaseConfig       `yaml:"database"`
 	IdentityServer IdentityServerConfig `yaml:"identity_server"`
 	DatabaseURL    string               `env:"DATABASE_URL"`

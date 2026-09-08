@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"sprezz-identity/internal/domain/model"
@@ -38,7 +39,10 @@ func (h *CallbackHandler) HandleFederationCallback(w http.ResponseWriter, r *htt
 	code := r.URL.Query().Get("code")
 	tenantUUID := h.mustResolveTenant(r.Context())
 
+	slog.Debug("HandleFederationCallback: federation callback triggered", "tenant_id", tenantUUID, "state", state, "code_len", len(code))
+
 	if state == "" || code == "" {
+		slog.Error("HandleFederationCallback: mandatory state or code query variables missing")
 		h.writeWebError(w, http.StatusBadRequest, "invalid_request", "mandatory federation transaction query variables missing")
 		return
 	}
@@ -54,9 +58,12 @@ func (h *CallbackHandler) HandleFederationCallback(w http.ResponseWriter, r *htt
 
 	response, err := h.federatedUseCase.ExecuteFederatedCallback(r.Context(), cmd)
 	if err != nil {
+		slog.Error("HandleFederationCallback: ExecuteFederatedCallback failed", "err", err)
 		h.writeWebError(w, http.StatusForbidden, "access_denied", err.Error())
 		return
 	}
+
+	slog.Debug("HandleFederationCallback: callback executed successfully, building session cookie", "user_id", response.UserProfileID, "partition_id", response.PartitionID)
 
 	intent, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
 		TenantID:       tenantUUID,
@@ -66,10 +73,12 @@ func (h *CallbackHandler) HandleFederationCallback(w http.ResponseWriter, r *htt
 		RequestHost:    r.Host,
 	})
 	if err != nil {
+		slog.Error("HandleFederationCallback: BuildSessionCookie failed", "err", err)
 		h.writeWebError(w, http.StatusInternalServerError, "server_error", "failed to structure authorization session cookie")
 		return
 	}
 
+	slog.Debug("HandleFederationCallback: applying cookie intent", "cookie_name", intent.CookieName, "cookie_val_len", len(intent.CookieValue))
 	h.applyCookieIntent(w, intent)
 	h.clearTransientHandshakeCookie(w)
 
@@ -77,6 +86,8 @@ func (h *CallbackHandler) HandleFederationCallback(w http.ResponseWriter, r *htt
 	if redirectTarget == "" {
 		redirectTarget = "/"
 	}
+
+	slog.Debug("HandleFederationCallback: redirecting user to final target dashboard", "redirectTarget", redirectTarget)
 
 	if r.Header.Get("HX-Request") != "" {
 		w.Header().Set("HX-Redirect", redirectTarget)
