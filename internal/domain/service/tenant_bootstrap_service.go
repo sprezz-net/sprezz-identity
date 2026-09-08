@@ -112,7 +112,7 @@ func (s *TenantBootstrapService) bootstrapNewTenant(ctx context.Context, domain 
 		createdTenant.GetBaseURI() + port.RouteFederationCallback,
 	}
 	createdTenant.Config.DCRMode = model.DCRModeSoftwareStatement
-	createdTenant.Config.PublicSoftwareStatement = model.AdminUIProfileName + ";" + model.AdminUIGroupName
+	createdTenant.Config.PublicSoftwareStatement = model.AdminUIProfileName + ";" + model.LocalAdminUIGroupName
 
 	// Save the administrative parameter adjustments back to storage
 	if err := s.adminStorage.CreateTenant(ctx, *createdTenant); err != nil {
@@ -192,17 +192,24 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 		return fmt.Errorf("bootstrap admin group: unable to resolve default identity provider context: %w", err)
 	}
 
-	// Correctly resolve the local username-password provider instead of assuming index 0
+	// Correctly resolve the local username-password provider and any admin-sso federated provider
 	var localProviderUUID uuid.UUID
+	var adminSsoProviderUUID uuid.UUID
 	for _, p := range providers {
 		if p.IDPType == model.UsernamePasswordIDPType {
 			localProviderUUID = p.ID
-			break
+		} else if p.Alias == "admin-sso" && p.IDPType == model.OpenIDConnectIDPType {
+			adminSsoProviderUUID = p.ID
 		}
 	}
 
 	if localProviderUUID == uuid.Nil {
 		return fmt.Errorf("bootstrap admin group: local username-password identity provider not found")
+	}
+
+	allowedIDPs := []uuid.UUID{localProviderUUID}
+	if adminSsoProviderUUID != uuid.Nil {
+		allowedIDPs = append(allowedIDPs, adminSsoProviderUUID)
 	}
 
 	scheme := model.SchemeHttps
@@ -211,7 +218,8 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 	}
 
 	profileID := uuid.New()
-	groupID := uuid.New()
+	adminGroupID := uuid.New()
+	localGroupID := uuid.New()
 
 	// 3. Build the Global Platform Application Profile for the Admin Hub
 	adminProfile := model.ApplicationProfile{
@@ -229,11 +237,30 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 		SigningAlgorithm:        model.AlgRS256,
 	}
 
-	// 4. Build the Global Platform Application Authorization Group for the Admin Hub
+	// 4. Build the Federated OIDC Application Authorization Group for Dynamic Registrations
+	var allowedAdminIDPs []uuid.UUID
+	if adminSsoProviderUUID != uuid.Nil {
+		allowedAdminIDPs = []uuid.UUID{adminSsoProviderUUID}
+	}
 	adminGroup := model.ApplicationGroup{
-		ID:                     groupID,
+		ID:                     adminGroupID,
 		TenantID:               tenantID,
 		GroupName:              model.AdminUIGroupName,
+		IsEnabled:              true,
+		AllowedScopes:          []string{"openid", "profile", "email", "offline_access"},
+		DefaultScopes:          []string{"openid", "profile", "email"},
+		AllowedAudiences:       []string{},
+		AllowedIDPIDs:          allowedAdminIDPs,
+		DefaultIDPID:           &adminSsoProviderUUID,
+		RedirectURIs:           []string{scheme + "://" + domain + port.RouteFederationCallback},
+		PostLogoutRedirectURIs: []string{scheme + "://" + domain + port.RouteAdmin},
+	}
+
+	// 4.5. Build the Local Application Authorization Group for direct Admin Portal login
+	localGroup := model.ApplicationGroup{
+		ID:                     localGroupID,
+		TenantID:               tenantID,
+		GroupName:              model.LocalAdminUIGroupName,
 		IsEnabled:              true,
 		AllowedScopes:          []string{"openid", "profile", "email", "offline_access"},
 		DefaultScopes:          []string{"openid", "profile", "email"},
@@ -244,12 +271,12 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 		PostLogoutRedirectURIs: []string{scheme + "://" + domain + port.RouteAdmin},
 	}
 
-	// 5. Build the core Application Instance referencing the decoupled entity nodes
+	// 5. Build the core Application Instance referencing the federated OIDC group
 	adminApp := model.Application{
 		ID:               uuid.New(),
 		TenantID:         tenantID,
 		ProfileID:        profileID,
-		GroupID:          groupID,
+		GroupID:          adminGroupID, // Bound to the federated OIDC group (admin-sso)
 		ClientID:         "admin_ui",
 		ClientSecretHash: nil, // Public client mapping
 		ApplicationName:  "Admin Interface",
@@ -263,6 +290,10 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 
 	if err := s.adminStorage.CreateApplicationGroup(ctx, tenantID, adminGroup); err != nil {
 		return fmt.Errorf("bootstrap admin group: %w", err)
+	}
+
+	if err := s.adminStorage.CreateApplicationGroup(ctx, tenantID, localGroup); err != nil {
+		return fmt.Errorf("bootstrap local admin group: %w", err)
 	}
 
 	if err := s.adminStorage.CreateApplication(ctx, tenantID, adminApp); err != nil {

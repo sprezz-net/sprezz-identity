@@ -139,12 +139,115 @@ When designing nested forms or complex multi-component configuration pages, the 
 
 To maintain full compliance, prevent parser deadlocks, and eliminate redundant window event overhead:
 
-1. **Scope Inheritance**: Since nested sub-components (such as `ClientIdentitySection` and `ClientGrantTypesSection`) reside directly inside the parent `<form>` layout tag, they inherit the `clientFormManager` parent scope natively.
-2. **Flat Callback Redirection**: Instead of using semicolon statement chaining, multi-expression assignments, or inline `$dispatch` magic tokens inside HTML attributes (which the CSP parser blocks), child nodes directly invoke the inherited flat methods:
-   - Client Type: `@change="handleClientType($el.value)"`
-   - Authorization Code checkbox: `@change="handleAuthCodeChange($el.checked)"`
-   - Client Credentials checkbox: `@change="handleClientCredentialsChange($el.checked)"`
-3. **Internal Event Dispatching**: Any necessary cross-component notifications are dispatched from within the compiled JavaScript context of the manager method itself using `this.$dispatch` securely (e.g., `this.$dispatch('grant-type-change', { authCode: checked });`). This keeps our HTML markup perfectly flat, simple, and 100% compliant under strict Content Security Policies.
+1. **Scope Inheritance**: Since nested sub-components reside directly inside the parent `<form>` layout tag, they inherit the parent manager (e.g., `applicationFormManager` or `oidcFormManager`) scope natively.
+2. **Internal Event Dispatching**: Any necessary cross-component notifications are dispatched from within the compiled JavaScript context of the manager method itself using `this.$dispatch` securely (e.g., `this.$dispatch('grant-type-change', { authCode: checked });`). This keeps our HTML markup perfectly flat, simple, and 100% compliant under strict Content Security Policies.
+
+### 5.2.2 Declarative Dataset Initialization Pattern
+
+Under strict `@alpinejs/csp`, initializing Alpine data components with parameterized constructors containing Go interpolated dynamic variables (such as `x-data={ fmt.Sprintf("applicationFormManager('%s')", value) }`) will trigger dynamic code execution and be blocked by the browser.
+
+To eliminate these critical CSP violations, the system enforces the **Declarative Dataset Initialization Pattern**:
+
+1. **Zero-Argument Constructor**: Declare all Alpine data component factories with empty argument lists, registering them inside nonced script tags (e.g., `Alpine.data('applicationFormManager', () => ({ ... }))`).
+2. **Data-Attributes Hydration**: Pass Go server-side configurations down to elements statelessly using native standard `data-*` fields on the parent container element.
+3. **Dataset Evaluation on Initialization**: Inside the Alpine component's `init()` hook, access the configuration using `this.$el.dataset` keys directly to hydrate the local state variables.
+
+```html
+<form
+    x-data="applicationFormManager"
+    data-initial-auth-method={ string(props.Profile.TokenEndpointAuthMethod) }
+    data-enforce-rtr={ fmt.Sprintf("%t", props.Profile.EnforceRTR) }
+>
+```
+
+```javascript
+Alpine.data('applicationFormManager', () => ({
+    authMethod: 'client_secret_post',
+    enforceRtr: false,
+    init() {
+        this.authMethod = this.$el.dataset.initialAuthMethod || 'client_secret_post';
+        this.enforceRtr = this.$el.dataset.enforceRtr === 'true';
+        this.$watch('authMethod', (val) => {
+            if (val === 'none') {
+                this.enforceRtr = true;
+            }
+        });
+    }
+}));
+```
+
+#### 5.2.3 Sub-Component CSP Hardening Examples
+
+This dataset initialization constraint applies equally to all nested sub-components inside our views, ensuring **no parameterized constructor strings** are injected into HTML attributes.
+
+##### A. Lifetime Calculator Sub-Component
+
+To handle duration conversions for Access, ID, and Refresh Token configurations without raw inline string evaluations:
+
+- **View Layer (`applications.templ`)**:
+
+    ```html
+    <div x-data="lifetimeCalculator" data-initial-seconds={ fmt.Sprintf("%d", int(props.Profile.AccessTokenLifetime/time.Second)) }>
+        <input type="hidden" name="access_token_lifetime" :value="seconds"/>
+        <!-- nested form inputs read/write this.value and this.unit -->
+    </div>
+    ```
+
+- **Script Layer (`layout.templ`)**:
+
+    ```javascript
+    Alpine.data('lifetimeCalculator', () => ({
+        seconds: 3600,
+        value: 1,
+        unit: 'hours',
+        init() {
+            this.seconds = parseInt(this.$el.dataset.initialSeconds) || 3600;
+            const totalSec = parseInt(this.seconds) || 0;
+            if (totalSec % 86400 === 0 && totalSec > 0) {
+                this.value = totalSec / 86400;
+                this.unit = 'days';
+            } else if (totalSec % 3600 === 0 && totalSec > 0) {
+                this.value = totalSec / 3600;
+                this.unit = 'hours';
+            } else if (totalSec % 60 === 0 && totalSec > 0) {
+                this.value = totalSec / 60;
+                this.unit = 'minutes';
+            } else {
+                this.value = totalSec;
+                this.unit = 'seconds';
+            }
+        }
+    }));
+    ```
+
+##### B. Client ID & Secret Generator
+
+To generate safe randomized entity identifiers asynchronously:
+
+- **View Layer (`applications.templ`)**:
+
+    ```html
+    <div x-data="idSecretGenerator" data-initial-value="">
+        <input type="text" name="client_id" x-model="value" required />
+    </div>
+    ```
+
+- **Script Layer (`layout.templ`)**:
+
+    ```javascript
+    Alpine.data('idSecretGenerator', () => ({
+        value: '',
+        showSecret: false,
+        init() {
+            this.value = this.$el.dataset.initialValue || '';
+        },
+        generate() {
+            window.fetch('/admin/clients/generate-secret')
+                .then(response => response.text())
+                .then(text => { this.value = text; });
+        }
+    }));
+    ```
 
 ## 5.1 HTMX Partial Render Loop & SPA Architecture
 
@@ -153,14 +256,14 @@ To minimize network payload sizes and prevent high-friction layout repaints on d
 1. **Stateful Navigation**: Sidebar navigation links utilize `hx-get` targeting the main `<main>` container, coupled with `hx-swap="innerHTML"` and `hx-push-url="true"` to dynamically alter browser history cleanly.
 2. **Tab Highlighting**: Selected tab states are tracked entirely on the client side via Alpine's CSP-friendly `currentTab` reactive string parameter, updating visually in real-time.
 3. **Hypermedia Detection**: Route handlers check for the presence of the `HX-Request == "true"` request header:
-   - If present, the handler bypasses `@AdminLayout` wrapping and returns only the core page fragment component (`TenantsContent`, `ClientsContent`, `IDPsContent`, or `UsersContent`).
+   - If present, the handler bypasses `@AdminLayout` wrapping and returns only the core page fragment component (`TenantsContent`, `ApplicationsContent`, `IDPsContent`, or `UsersContent`).
    - If absent (direct hit / browser refresh), the handler wraps the fragment inside the full layout block to ensure independent addressability.
 
 ## 6. Terminology Layer Adjustments (Clients to Applications)
 
 To simplify the interface for end administrators while preserving strict conformance with the OpenID Connect (OIDC) specification, a clean mapping is applied between the domain models and the visual HTML/UI layer:
 
-1. **Sidebar Navigation**: The sidebar navigation item is displayed as **"Applications"** (referencing the standard URL path `/admin/clients`).
+1. **Sidebar Navigation**: The sidebar navigation item is displayed as **"Applications"** (referencing the standard URL path `/admin/applications`).
 2. **Page & Card Headers**: Headings are represented as **"OIDC Applications"** and the primary creation button is mapped to **"+ New Application"**.
 3. **Core OIDC Fields**: The underlying technical standard terms, specifically **"Client ID"** and **"Client Secret"**, are strictly preserved as-is to remain clear and specification-compliant for developers.
 
@@ -176,8 +279,8 @@ Sprezz Identity Admin UI provides interactive management toggles to control the 
 
 ### 8.1 Interactive RTR Configuration Toggle
 
-- **The `clientFormManager` State**: The Alpine form manager (`layout.templ`) tracks the client-side `enforceRtr` state natively and updates computed states in real-time.
-- **Category Mandate Locking**: If the user selects the **Public** application category, the `enforceRtr` state is automatically set to `true` and locked (the checkbox input is disabled), strictly mandating RTR for native/SPA apps.
+- **The `applicationFormManager` State**: The Alpine form manager (`layout.templ`) tracks the client-side `enforceRtr` state natively and updates computed states in real-time.
+- **Category Mandate Locking**: If the user selects the **Public** application category (determined by a `TokenEndpointAuthMethod` of `none`), the `enforceRtr` state is automatically set to `true` and locked (the checkbox input is disabled), strictly mandating RTR for native/SPA apps.
 - **Conditional Configuration**: For **Confidential** applications, the input checkbox remains unlocked, allowing administrators to optionally enable or disable Refresh Token Rotation as required.
 - **Form Preservation**: When saving or validation errors occur, the backend parses `enforce_rtr` from the form payload and correctly repopulates the UI toggle state on subsequent renders.
 
@@ -215,3 +318,37 @@ Sprezz Identity supports dividing a single Tenant's space into multiple logical 
 - **Admin Dropdown Filters**: Both the **Identity Providers** and **User Profiles** list pages in the Admin UI feature a select dropdown component matching the selected partition. Selecting a partition triggers an HTMX `GET` request reloading the content with the selected `partition_id` query parameter, filtering the data view.
 - **Partition Assignment**: When creating or editing an Identity Provider or a User Profile, administrators choose which Partition the resource belongs to.
 - **Validation Constraints**: Username-password IDP configurations are restricted to at most **1** per Partition.
+
+## 11. Decoupled Three-Tier Administrative Architecture
+
+To maximize structural flexibility and enforce strict security boundaries, the monolithic "Client Application" entity has been decomposed into a decoupled, standalone Three-Tier CRUD architecture.
+
+### 11.1 Architectural Tier Decomposition
+
+The system segregates application logic across three distinct, independent domain models:
+
+1. **`Application` (Core Instance)**: Represents the high-level application registration, holding core metadata, identifier tokens (`ClientID`), status toggles, and UUID relational pointers to its current `Profile` and `Group`.
+2. **`ApplicationProfile` (Security Lifetimes Policy)**: Encapsulates all transport-layer and credential validation rules, including token expiration durations (`AccessTokenLifetime`, `IDTokenLifetime`, `RefreshTokenLifetime`), signature algorithms, and authentication schemes (`TokenEndpointAuthMethod`).
+3. **`ApplicationGroup` (Access Bounds Whitelisting)**: Manages routing and security constraints, including allowed OIDC scopes, upstream identity provider routings, front/back-channel single-sign-out targets, and client redirection whitelists (`RedirectURIs`).
+
+### 11.2 Atomic Consolidated Commands (Transactional Safety)
+
+To prevent database corruption and half-saved states across disjointed tables:
+
+- Multi-tier mutations are executed atomically. The inbound adapters compile parameters into unified command envelopes: `CreateApplicationStructureCommand` and `UpdateApplicationStructureCommand`.
+- The domain use-case layer maps these commands into single, isolated database transactions. If any check or sub-insert (such as updating redirect uri arrays) fails mid-flight, the entire database transaction is rolled back cleanly.
+
+### 11.3 Defensive Struct Hydration (Preventing Nil-Pointer Panics)
+
+When returning partial form views or error validation fragments, the Go driving adapters must defensively prepare view properties to satisfy type-safe `templ` parameters:
+
+- **The Invariant**: All empty or unitialized collections inside models (e.g., PostgreSQL arrays or list properties) must never be sent as `nil`.
+- **The Guard**: Form controllers must explicitly instantiate slices as empty arrays (`RedirectURIs: []string{}`, `AllowedScopes: []string{}`) and assign default durations to prevent the templates from triggering immediate nil-pointer dereference panics when accessing or looping through properties.
+
+### 11.4 Strict Nomenclature Segregation (Metadata vs Credentials)
+
+To prevent lexical confusion and ensure semantic clarity, a strict separation is enforced between high-level administrative descriptors and lower-level dynamic OIDC credential values:
+
+1. **Application-Level Descriptors (`application_*`)**: Any inputs, fields, or validation handles managing the administrative identity, name, or metadata of the registered entity MUST strictly use the phrase **`application_name`** (mapped directly onto `ApplicationName`). The word *Client* is prohibited for descriptions to ensure end-administrators are not confused by technical developer values.
+2. **Credential-Level Identifiers (`client_*`)**: Dynamic tokens, keys, secrets, and protocol identifiers MUST preserve the OIDC vocabulary standard using **`client`** prefixes (e.g. `client_id`, `client_secret`, and structural mappings to `ClientID` and `ClientSecretHash`).
+3. **Form-to-Handler Validation Parity**: Every administrative flow must audit form parameter namespaces for perfect symmetry. The HTML input tag's `name` attribute, the Go handler's `r.FormValue(...)` parsing key, and the targeted component `Errors[...]` key must match this nomenclature flawlessly (e.g., changing legacy `client_name` lookups and errors to `application_name` on form invalidations).

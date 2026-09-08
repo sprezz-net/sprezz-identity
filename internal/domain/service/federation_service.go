@@ -315,10 +315,10 @@ func (s *FederationService) ExecuteFederatedCallback(
 	if !ok || subject == "" {
 		return nil, errors.New("federation_service: assertion token validation failed - missing or invalid 'sub' claim")
 	}
-	identity, err := s.storage.GetUserIdentityByProviderAndExternalID(ctx, cmd.TenantID, idp.PartitionID, idp.ID, subject)
+	identity, err := s.storage.GetUserIdentityByProviderAndExternalID(ctx, cmd.TenantID, handshake.PartitionID, idp.ID, subject)
 	if err == nil {
 		// Existing linkage established, query corresponding core profile
-		targetUser, err = s.storage.GetUserProfileByID(ctx, cmd.TenantID, idp.PartitionID, identity.UserProfileID)
+		targetUser, err = s.storage.GetUserProfileByID(ctx, cmd.TenantID, handshake.PartitionID, identity.UserProfileID)
 		if err != nil {
 			return nil, fmt.Errorf("federation_service: linked user profile missing from record: %w", port.ErrUserProfileNotFound)
 		}
@@ -335,7 +335,7 @@ func (s *FederationService) ExecuteFederatedCallback(
 		}
 
 		// Look up account matching the verified email explicitly locked inside the handshake's target Partition [3.1]
-		targetUser, err = s.storage.FindProfileByEmail(ctx, idp.PartitionID, email)
+		targetUser, err = s.storage.FindProfileByEmail(ctx, handshake.PartitionID, email)
 		if err != nil {
 			if idp.Config.AutoProvisionUser {
 				// JIT Provision User Profile
@@ -354,7 +354,7 @@ func (s *FederationService) ExecuteFederatedCallback(
 				targetUser = &model.UserProfile{
 					ID:                uuid.New(),
 					TenantID:          cmd.TenantID,
-					PartitionID:       idp.PartitionID,
+					PartitionID:       handshake.PartitionID,
 					Email:             email,
 					EmailVerified:     isEmailVerified,
 					PreferredUsername: username,
@@ -364,7 +364,7 @@ func (s *FederationService) ExecuteFederatedCallback(
 					UpdatedAt:         now,
 				}
 
-				if errSave := s.storage.SaveUserProfile(ctx, cmd.TenantID, idp.PartitionID, *targetUser); errSave != nil {
+				if errSave := s.storage.SaveUserProfile(ctx, cmd.TenantID, handshake.PartitionID, *targetUser); errSave != nil {
 					return nil, fmt.Errorf("federation_service: failed to JIT provision user profile: %w", errSave)
 				}
 			} else {
@@ -381,7 +381,7 @@ func (s *FederationService) ExecuteFederatedCallback(
 			CoupledAt:          now,
 		}
 
-		if err := s.storage.UpsertUserIdentity(ctx, cmd.TenantID, idp.PartitionID, newLink); err != nil {
+		if err := s.storage.UpsertUserIdentity(ctx, cmd.TenantID, handshake.PartitionID, newLink); err != nil {
 			return nil, fmt.Errorf("federation_service: failed to commit structural profile identity link context: %w", err)
 		}
 	}

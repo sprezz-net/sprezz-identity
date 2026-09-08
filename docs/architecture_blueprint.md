@@ -154,42 +154,106 @@ To support granular security policies, Client Applications govern IdP execution:
 ```mermaid
 sequenceDiagram
     autonumber
+    actor User as User (Browser)
+    participant Client as Client Application (Relying Party)
+    participant IDP as Sprezz Identity Server (OP)
+
+    User->>Client: Click "Log In"
+    Client->>User: 302 Redirect to /oauth/authorize (with PKCE, state, client_id)
+    User->>IDP: GET /oauth/authorize
+    IDP-->>User: Render Login Interface (Partition default)
+    User->>IDP: POST /login (Submit Credentials)
+    IDP->>User: 302 Redirect to Client redirect_uri with Auth Code
+    User->>Client: GET /callback?code=CODE&state=STATE
+    Client->>IDP: Back-channel POST /oauth/token (Exchange Code + PKCE Verifier)
+    IDP-->>Client: Return Token Set (ID, Access, Refresh Tokens)
+    Client->>User: 302 Redirect to Application Dashboard (Access Granted)
+```
+
+### 3.1.3 Single-Hop Administrative OIDC Federation & JIT Provisioning Loop
+
+Sprezz Identity features a specialized administrative OIDC federation pathway for logging administrators into the sandboxed `sprezz_admin` partition. This flow is highly optimized to bypass several browser-facing redirection hops that occur in standard OIDC implementations, achieving extreme performance and heightened security.
+
+#### 1. Single-Hop DCR On-Demand Initialization
+
+In textbook OIDC flows, an unprovisioned client would redirect the user's browser back and forth to perform client registration. In Sprezz Identity, when an administrator accesses `/admin` on a newly booted tenant, the backend intercepts this call and dynamically performs Dynamic Client Registration (DCR) **in-process/back-channel** against the Central IDP. The server directly returns the final, dynamic Central IDP authorize URL (`dyn_...`) in a single roundtrip, saving a redundant browser redirect.
+
+#### 2. Single-Hop Callback Optimization
+
+Standard federated flows require two separate callback browser-redirects (one for the IDP to the Client Server, and another for the Client Server to the Client App UI). Since the Sprezz Identity Admin UI is built-in (self-contained in the same process binary), the callback handler `/oauth/federation/callback` handles the central OIDC response, executes back-channel token exchange, JIT-provisions the user's profile inside the `sprezz_admin` sandbox partition, and sets the secure session cookie `spz_session_sprezz_admin`—all within a single callback request, redirecting the browser directly to `/admin` to load the dashboard.
+
+#### 3. Administrative Federation Sequence Flow
+
+Suppose user `admin@sprezz.net` wants to login to the admin dashboard of tenant B which resides in the `sprezz_admin` partition `18`. The local credentials are in the administrative tenant A in the `default` partition `17`.
+
+```mermaid
+sequenceDiagram
+    autonumber
     actor Admin as Platform Admin (Browser)
-    participant LocalHTTP as Local Tenant HTTP Adapter
-    participant LocalCore as Local Admin Domain Service
-    participant CentralIDP as Central Admin Tenant (Default Partition)
+    participant LocalHTTP as Tenant B HTTP Adapter (Client)
+    participant LocalCore as Tenant B Domain Service (Sprezz-IDP)
+    participant CentralIDP as Tenant A Central IDP (Auth Server)
+    participant CentralCore as Tenant A Domain Service (Admin Tenant)
 
-    Admin->>LocalHTTP: Access /admin/dashboard
+    Note over Admin,LocalHTTP: [1. Access Attempt]
+    Admin->>LocalHTTP: GET /admin
     Note over LocalHTTP: Evaluate Cookie: spz_session_sprezz_admin
-    LocalHTTP-->>Admin: Missing 'bearer:' validation prefix -> Trigger OIDC Loop
+    LocalHTTP-->>Admin: Missing 'bearer:[user_uuid]:18' -> Trigger OIDC Loop
 
-    LocalHTTP->>LocalCore: Initiate Admin Login Intent
-    Note over LocalCore: Check if ClientID is cached in local metadata store
+    Note over LocalHTTP,LocalCore: [2. On-Demand DCR Registration]
+    LocalHTTP->>LocalCore: Initiate Admin Logon Intent
+    Note over LocalCore: Check if ClientID for admin-sso is cached
 
-    critical When ClientID is unprovisioned (On-Demand DCR Setup)
-        LocalCore->>LocalCore: Mint Software Statement JWT (aud = Central Admin URL)
-        LocalCore->>LocalCore: Cryptographically sign with Platform Master Private Key
-        LocalCore->>CentralIDP: POST /oauth/register (Payload + Software Statement JWT)
+    critical When ClientID is unprovisioned
+        LocalCore->>LocalCore: Mint Software Statement JWT (aud = Tenant A Central URL)
+        Note over LocalCore: SoftwareID = sprezz_admin_ui_profile | sprezz_local_admin_group
+        LocalCore->>LocalCore: Sign JWT with Platform Master Private Key
+        LocalCore->>CentralIDP: POST /oauth/register (Dynamic Payload + Software Statement)
         Note over CentralIDP: Validates cryptographic signature & audience
-        CentralIDP-->>LocalCore: Return unique ClientID & ClientSecret credentials
-        LocalCore->>LocalCore: Persist client metadata to local relational tables
+        Note over CentralIDP: Maps client to 'sprezz_local_admin_group' (allows username-password)
+        CentralIDP-->>LocalCore: Return unique ClientID (dyn_...) & ClientSecret
+        LocalCore->>LocalCore: Persist client metadata to local identity_provider configs
     end
 
+    Note over LocalCore,LocalHTTP: [3. Federated Redirection]
     LocalCore-->>LocalHTTP: Return OIDC Authorization Intent URL & State
-    LocalHTTP->>Admin: Issue Cookie 'spz_session_sprezz_admin' (Value = 'handshake:STATE')
-    LocalHTTP->>Admin: 302 Redirect to Central Admin Tenant
+    LocalHTTP->>Admin: Issue Handshake Cookie spz_session_sprezz_admin (Value = handshake:STATE)
+    LocalHTTP->>Admin: 302 Redirect to Central Admin Tenant (Tenant A)
+    Admin->>CentralIDP: GET /oauth/authorize?client_id=dyn_...&state=STATE&...
 
-    Admin->>CentralIDP: Complete local Username / Password authentication
-    CentralIDP->>Admin: 302 Redirect to /oauth/federation/callback?code=CODE&state=STATE
-
+    Note over CentralIDP,CentralCore: [4. Central Authentication on Tenant A]
+    CentralIDP->>CentralIDP: Resolve Client (dyn_...) group -> sprezz_local_admin_group
+    Note over CentralIDP: Group whitelists strictly 'username-password' (no OIDC buttons -> no loops!)
+    CentralIDP->>Admin: 302 Redirect to /login?tx=INTERACTION_ID
+    Admin->>CentralIDP: GET /login?tx=INTERACTION_ID
+    CentralIDP-->>Admin: Render local username-password form (strictly Central Tenant default partition 17)
+    Admin->>CentralIDP: POST /login (Enter credentials)
+    CentralIDP->>CentralCore: Verify local credentials (partition 17)
+    CentralCore-->>CentralIDP: Valid user profile (admin@sprezz.net, email_verified = true)
+    CentralIDP->>Admin: 302 Redirect to Tenant B Callback URI with auth code
     Admin->>LocalHTTP: GET /oauth/federation/callback?code=CODE&state=STATE
-    Note over LocalHTTP: Assert that incoming 'state' == cookie 'handshake:STATE'
 
+    Note over LocalHTTP,LocalCore: [5. Callback & Local Token Exchange]
+    LocalHTTP->>LocalHTTP: Assert incoming 'state' == cookie 'handshake:STATE'
     LocalHTTP->>CentralIDP: Back-channel POST /oauth/token (Exchange CODE + PKCE verifier)
-    CentralIDP-->>LocalHTTP: Return token bundle response
+    CentralIDP-->>LocalHTTP: Return upstream Token Set (ID Token with email_verified=true)
+    LocalHTTP->>LocalCore: ExchangeExternalToken(Tenant B, "admin_ui", ID Token)
+    Note over LocalCore: Verify ID Token signature against Tenant A JWKS
+    Note over LocalCore: Assert local client "admin_ui" group (sprezz_admin_ui_group) whitelists "admin-sso"
 
-    LocalHTTP->>Admin: Overwrite Cookie 'spz_session_sprezz_admin' to 'bearer:JWT'
-    LocalHTTP->>Admin: 302 Redirect to /admin/dashboard (Access Granted)
+    Note over LocalCore: [6. JIT Provisioning strictly inside sandbox partition 18]
+    LocalCore->>LocalCore: FindProfileByEmail(partition 18, "admin@sprezz.net")
+    alt Profile not found
+        LocalCore->>LocalCore: JIT-provision UserProfile in partition 18 (SaveUserProfile)
+        LocalCore->>LocalCore: UpsertUserIdentity to link external 'sub' to new partition 18 profile
+    else Profile exists
+        LocalCore->>LocalCore: Resolve existing partition 18 profile
+    end
+    LocalCore-->>LocalHTTP: Return native local Token Set
+
+    Note over LocalHTTP,Admin: [7. Access Granted]
+    LocalHTTP->>Admin: Overwrite Cookie spz_session_sprezz_admin to 'bearer:[user_uuid]:18'
+    LocalHTTP->>Admin: 302 Redirect to /admin (Dashboard Access Granted!)
 ```
 
 ### 3.2 Cryptographic Argon2id Storage

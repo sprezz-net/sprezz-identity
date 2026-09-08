@@ -24,6 +24,13 @@ func checkOtherProviders(providers []model.IdentityProvider) bool {
 	return false
 }
 
+func getFederatedLoginURL(alias, tx string) string {
+	if tx != "" {
+		return fmt.Sprintf("%s?idp_hint=%s&tx=%s", port.RouteWebLogin, alias, tx)
+	}
+	return fmt.Sprintf("%s?idp_hint=%s", port.RouteWebLogin, alias)
+}
+
 templ Login(props LoginProps) {
 	<!doctype html>
 	<html lang="en" class="h-full bg-slate-50">
@@ -118,7 +125,7 @@ templ Login(props LoginProps) {
 							for _, p := range props.Providers {
 								if p.IDPType != model.UsernamePasswordIDPType {
 									<a
-										href={ templ.SafeURL(fmt.Sprintf("%s?idp_hint=%s", port.RouteAuthorize, p.Alias)) }
+										href={ templ.SafeURL(getFederatedLoginURL(p.Alias, props.InteractionID)) }
 										class="w-full flex items-center justify-center px-4 py-2 border border-slate-300 rounded-lg shadow-sm text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 transition"
 									>
 										if p.Name != "" {

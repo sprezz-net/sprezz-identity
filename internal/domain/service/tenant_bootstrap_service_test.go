@@ -240,7 +240,7 @@ func TestTenantBootstrapService_BootstrapAdminTenant_GroupMatchesLocalIDP(t *tes
 	// Mock GetEnabledIdentityProviders to return the OIDC provider FIRST (index 0) and the local provider SECOND
 	storage.GetEnabledIdentityProvidersMock.Set(func(ctx context.Context, tID uuid.UUID) ([]model.IdentityProvider, error) {
 		return []model.IdentityProvider{
-			{ID: oidcProviderID, IDPType: model.OpenIDConnectIDPType, Enabled: true},
+			{ID: oidcProviderID, IDPType: model.OpenIDConnectIDPType, Alias: "admin-sso", Enabled: true},
 			{ID: localProviderID, IDPType: model.UsernamePasswordIDPType, Enabled: true},
 		}, nil
 	})
@@ -255,13 +255,24 @@ func TestTenantBootstrapService_BootstrapAdminTenant_GroupMatchesLocalIDP(t *tes
 		return nil
 	})
 
-	// EXPECT: the admin group MUST map allowed IDPs to localProviderID, NOT oidcProviderID!
+	// EXPECT: the admin group MUST map allowed IDPs based on group name
 	adminStorage.CreateApplicationGroupMock.Set(func(ctx context.Context, tID uuid.UUID, group model.ApplicationGroup) error {
-		if group.DefaultIDPID == nil || *group.DefaultIDPID != localProviderID {
-			t.Errorf("expected admin group DefaultIDPID to be local provider %s, got %v", localProviderID, group.DefaultIDPID)
-		}
-		if len(group.AllowedIDPIDs) != 1 || group.AllowedIDPIDs[0] != localProviderID {
-			t.Errorf("expected admin group AllowedIDPIDs to contain only local provider %s, got %v", localProviderID, group.AllowedIDPIDs)
+		if group.GroupName == model.LocalAdminUIGroupName {
+			if group.DefaultIDPID == nil || *group.DefaultIDPID != localProviderID {
+				t.Errorf("expected local admin group DefaultIDPID to be local provider %s, got %v", localProviderID, group.DefaultIDPID)
+			}
+			if len(group.AllowedIDPIDs) != 1 || group.AllowedIDPIDs[0] != localProviderID {
+				t.Errorf("expected local admin group AllowedIDPIDs to contain only local provider %s, got %v", localProviderID, group.AllowedIDPIDs)
+			}
+		} else if group.GroupName == model.AdminUIGroupName {
+			if group.DefaultIDPID == nil || *group.DefaultIDPID != oidcProviderID {
+				t.Errorf("expected federated admin group DefaultIDPID to be oidc provider %s, got %v", oidcProviderID, group.DefaultIDPID)
+			}
+			if len(group.AllowedIDPIDs) != 1 || group.AllowedIDPIDs[0] != oidcProviderID {
+				t.Errorf("expected federated admin group AllowedIDPIDs to contain only oidc provider %s, got %v", oidcProviderID, group.AllowedIDPIDs)
+			}
+		} else {
+			t.Errorf("unexpected application group created: %s", group.GroupName)
 		}
 		return nil
 	})
