@@ -263,4 +263,3 @@ func TestFederationService_ExecuteFederatedCallback_FailsIfEmailUnverified(t *te
 		t.Errorf("expected error '%s', got '%s'", expectedErrorStr, err.Error())
 	}
 }
-

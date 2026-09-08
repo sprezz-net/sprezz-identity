@@ -188,7 +188,6 @@ func TestLocalAuthService_AuthenticateLocalCredentials_SelfResolve_Success(t *te
 	}
 }
 
-
 func TestLocalAuthService_GetLoginContext_InteractionSessionZeroPartition_Fallback(t *testing.T) {
 	ctrl := minimock.NewController(t)
 

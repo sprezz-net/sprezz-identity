@@ -30,35 +30,33 @@ The project topology forces strict perimeter isolation. Core business logic cann
 
 ```text
 sprezz-identity/
-├── cmd/sprezz-identity/
-│   └── main.go                         # Infrastructure entrypoint & dependency wire-up
-├── docs/
-│   ├── admin_blueprint.md              # Administrator control panel specifications
-│   └── architecture_blueprint.md       # Functional and technical specs of the IdP engine
-├── internal/
-│   ├── config/                         # Configuration loaders & environment mappings
-│   ├── domain/                         # CORE BUSINESS LOGIC (Pure Go, 0 external imports)
-│   │   ├── model/                      # Pure Domain Entities (Tenant, UserProfile, UserIdentity)
-│   │   ├── port/                       # Driving and Driven Structural Interfaces & Mocks
-│   │   └── service/                    # Business Engines (OAuth, IdentityProvider, ClientApp)
-│   ├── views/                          # UI View Layers (Server-Rendered Templ components)
-│   │   ├── admin/                      # Admin administration forms and dashboard layout
-│   │   └── public/                     # Public login, signup, and profile templates
-│   ├── pkg/                            # Shared package components
-│   │   └── httpclient/                 # Secure, SSRF-protected HTTP request worker
-│   └── adapters/                       # INFRASTRUCTURE WIRE-UP (Ports fulfillment)
-│       ├── in/
-│       │   └── http/                   # HTTP endpoints, session cookies, route handlers
-│       └── out/                        # Outbound persistence and clock dependencies
-│           ├── clock/                  # Deterministic chronological time adapter
-│           ├── crypto/                 # RS256 & EdDSA dynamic token signature engines
-│           ├── logout/                 # Out-of-band asynchronous logout propagations
-│           ├── memory/                 # Transient in-memory repository mock persistence
-│           ├── state/                  # Context and local lifecycle structures
-│           └── postgres/               # Relational persistence layer via sqlc & pgx
-│               ├── db/                 # Auto-generated relational model structures
-│               ├── migrations/         # Goose transactional DDL migration scripts (.sql)
-│               └── query/              # Raw database queries and lookup statements (.sql)
+├── cmd/
+│   └── sprezz-identity/                # Infrastructure Entrypoint & Dependency Injection Wire-Up
+├── docs/                               # System Documentation, API Blueprints, & Architecture Specifications
+├── internal/                           # Private Code Perimeter (Enforced by Go Compiler)
+│   ├── config/                         # Configuration Ingestion, YAML Parsers, & Environment Variable Mappings
+│   ├── domain/                         # CORE BUSINESS LOGIC (Pure Go Boundary - Zero External Imports)
+│   │   ├── model/                      # Pure Domain Entities & Invariants (Tenants, Profiles, Applications)
+│   │   ├── port/                       # Driving (Inbound) & Driven (Outbound) Structural Abstract Interfaces
+│   │   └── service/                    # Business Engines & Core Orchestration Use-Cases (OAuth/OIDC Workers)
+│   ├── views/                          # Hypermedia Component Layer (Server-Rendered type-safe UI views)
+│   │   ├── admin/                      # Central Administrator Forms, Component Grids, & Dashboard Layouts
+│   │   └── public/                     # Public Redirection Interfaces, Sign-Up Pages, & Profile Portals
+│   ├── pkg/                            # Shared Cross-Cutting Utility Packages
+│   │   └── httpclient/                 # Secure Network Transport Pool (SSRF & DNS-Rebinding Mitigations)
+│   └── adapters/                       # INFRASTRUCTURE CORE (Fulfillment of Port Interfaces)
+│       ├── in/                         # Inbound Infrastructure Resource Drivers
+│       │   └── http/                   # HTTP Perimeter Handlers, Cookie Factories, & Request/Form Unpackers
+│       └── out/                        # Outbound Infrastructure Resource Drivers
+│           ├── clock/                  # Deterministic Whole-Second Truncated System Clock Provider
+│           ├── crypto/                 # Multi-Algorithm JWT Signers (RS256/EdDSA) & Argon2id Hashing Engines
+│           ├── logout/                 # Asynchronous Out-of-Band Single Logout HTTP Notification Dispatches
+│           ├── memory/                 # Transient Hot-Memory State Stores & Mock Repositories
+│           ├── state/                  # Shared Context Management & Internal Lifecycle Storage Structures
+│           └── postgres/               # Relational Database Persistence Frameworks
+│               ├── db/                 # Auto-Compiled SQLC Strongly Typed Database Structures
+│               ├── migrations/         # Transactional SQL Schema Evolution Control Scripts
+│               └── query/              # Performance-Optimized Indexed Database Statements & Access Paths
 ├── Dockerfile                          # Multi-stage scratch minimal container workspace
 ├── go.mod                              # Go module specifications
 ├── Makefile                            # Multi-target build and test orchestrations
@@ -71,7 +69,10 @@ All domain entities use native Go primitives. They remain entirely un-annotated 
 
 - **`tenant` Component**: Holds internal high-entropy tracking keys, human-readable organization identifiers, and structural canonical tracking domains.
 - **`crypto_types` Component**: Maintains definitions for asymmetric algorithms (`RS256` / `EdDSA`) and structure maps for signing key registries.
-- **`client_application` Component**: Governs client applications, registration secrets, white-listed redirect URIs, permitted grant/response arrays, and targeted encryption bindings.
+- **`application` Component Space**: Split into three decoupled architectural entities to isolate security policies from network routing parameters:
+  - **`application`**: Represents the unique identity instance, housing immutable Client IDs, cryptographic client secret hashes, and ownership links to its parent Tenant. It remains completely agnostic of internal data partitions.
+  - **`application_profile`**: Enforces strict security policy parameters, governing token endpoint authentication methods, allowed grant/response types, and explicit token lifespan matrices (TTL).
+  - **`application_group`**: Dictates authorization scopes and network boundaries, managing white-listed redirect URIs, permitted OIDC scope arrays, resource audiences, and authorized Identity Provider mappings (`AllowedIDPIDs`).
 - **`auth_session` Component**: Manages temporal storage variables during active validation lifecycles, locking active PKCE challenge state matrices down to explicit users.
 - **`oidc_claims` Component**: Handles structural schemas tracking access token lifespans, standard dynamic payload values, and core user-profile field vectors.
 
@@ -123,17 +124,42 @@ To safeguard critical security audit trails and history files against accidental
 
 ## 3. Identity Providers, User Profiles & Authentication
 
-### 3.1 Multi-Tenant Identity Providers, Partitions & Identity Coupling
+### 3.1 Tenant-Wide Application Topology & Partition Routing Principles
 
-Sprezz Identity natively supports multiple, decoupled identity providers per tenant. This model cleanly separates user authentication mechanisms from the core user identity boundary.
+The system isolates partition-agnostic client application spaces from user access silos using a decoupled three-tier boundary layout. Applications remain completely independent of internal database partitions, while user profiles and authentication directories are strictly locked within them.
 
-A Tenant space can be further divided into one or more logical **Partitions**:
+```text
+Tenant Boundary (Root Scope)
+├── Applications (Tenant-Global, Partition-Agnostic)
+│    └── Application Group (The Gateway Bridge)
+│         └── Implicitly authorizes partition routing via AllowedIDPIDs
+└── Partitions (Isolated Compliance Shards)
+      └── Identity Providers (Partition-Confined Anchor)
+          └── User Profiles (Data Shard Sandbox)
+```
 
-- Each user profile belongs to exactly one partition.
-- Each partition can have multiple identity providers configured to handle user authentication.
-- For each tenant, a "default" partition and an admin-specific "Sprezz Admin" partition are automatically created during bootstrapping or tenant setup.
+#### 3.1.1 Tenant Scope (Root Perimeter)
 
-### 3.1.1 Architectural Domain Model
+- Holds global whitelists, allowed token signature definitions, cryptographic master keys, and platform ceiling settings.
+- Acts as the ultimate multi-tenant data isolation anchor via the `TenantID` primary index.
+
+#### 3.1.2 Applications (Tenant-Global, Partition-Agnostic)
+
+- Applications are registered at the root Tenant level and remain entirely independent of internal user partitions.
+- This design allows any application (e.g., an internal corporate service portal or public Single Page Application) to request an authentication handshake regardless of where the target user's physical profile resides.
+
+#### 3.1.3 Partitions (Isolated Physical Data Shards)
+
+- Explicit storage boundaries created dynamically to enforce strict compliance and regulatory perimeters (e.g., localized regional hosting profiles like `sprezz_admin` or `eu-west`).
+- **`UserProfiles`** and **`IdentityProviders`** are strictly bound to a static, immutable `PartitionID`. Data from one partition cannot be accidently accessed, compared, or leaked with another during standard hot login paths, completely neutralizing cross-partition timing and index-scanning attack loops.
+
+#### 3.1.4 Application Groups (The Topology Gatekeeper)
+
+- The explicit relational bridge that safely links partition-agnostic client application entrance requests to partition-confined user profile directories.
+- Each `ApplicationGroup` contains a dedicated slice of `AllowedIDPIDs`.
+- **The Routing Loop:** When an authorization request hits the perimeter, the engine inspects the application's bound group. By tracing the selected or hinted identity provider from `AllowedIDPIDs` straight to its static database partition, the core engine determines exactly which localized directory shard to query for password validation and profile ingestion.
+
+### 3.2.1 Architectural Domain Model
 
 - **User Profile**: A singular representation of the human identity within a tenant, identified by a UUIDv4. It holds standard claim values (display name, email address, verification status) and belongs to a specific Partition.
 - **Identity Provider (IdP)**: A configured mechanism of authentication for a tenant (e.g., `"username-password"`, and future OIDC/SAML configurations).
@@ -143,7 +169,7 @@ A Tenant space can be further divided into one or more logical **Partitions**:
   - `login_count` (Logins tally)
   - `external_identity_id` (Unique subject ID from the provider; for `"username-password"` it maps to the User Profile UUID; for future federated IdPs, it maps to their external `sub` claim).
 
-### 3.1.2 Client-Level IdP Access Controls
+### 3.2.2 Client-Level IdP Access Controls
 
 To support granular security policies, Client Applications govern IdP execution:
 
@@ -170,7 +196,7 @@ sequenceDiagram
     Client->>User: 302 Redirect to Application Dashboard (Access Granted)
 ```
 
-### 3.1.3 Single-Hop Administrative OIDC Federation & JIT Provisioning Loop
+### 3.2.3 Single-Hop Administrative OIDC Federation & JIT Provisioning Loop
 
 Sprezz Identity features a specialized administrative OIDC federation pathway for logging administrators into the sandboxed `sprezz_admin` partition. This flow is highly optimized to bypass several browser-facing redirection hops that occur in standard OIDC implementations, achieving extreme performance and heightened security.
 
@@ -256,13 +282,13 @@ sequenceDiagram
     LocalHTTP->>Admin: 302 Redirect to /admin (Dashboard Access Granted!)
 ```
 
-### 3.2 Cryptographic Argon2id Storage
+### 3.3 Cryptographic Argon2id Storage
 
 The `"username-password"` provider stores credentials utilizing Argon2id in a standard PHC-formatted string:
 `$argon2id$v=19$m=65536,t=3,p=2$salt$hash`
 This format inherently prefixes the signature algorithm identifier, ensuring smooth algorithm migration support in the future.
 
-### 3.3 Password Blocking and Lockout Safeguards
+### 3.4 Password Blocking and Lockout Safeguards
 
 Sprezz Identity implements standard password blocking and lockout controls to safeguard user credentials against brute-force attacks.
 
@@ -438,6 +464,13 @@ During a Dynamic Client Registration execution flow, the engine uses these bound
 - Standard tenant developer requests are mapped to default business profiles and restricted tenant-scoped groups.
 - Platform administrative loops automatically map the dynamically generated Application into the highly privileged 'Platform Admin UI' Profile and Group, locking down token lifespans and scoping audiences strictly to the root control directory.
 
+#### 5.5.2 Inbound UI & Admin Form Alignment Constraints
+
+To support this tenant-wide global application topology cleanly without introducing configuration sprawl, both administrative adapters and view templates must observe the following constraints:
+
+- **The Administrative Selection Exclusion:** Because applications exist globally within the tenant, the application creation and modification forms must *not* capture a partition selection drop-down. Partition assignment is strictly isolated to **Identity Provider Setup** and **User Profile Modification Views**.
+- **The Group-to-IdP Authorization Toggle:** When configuring an `ApplicationGroup`, the user interface must render the permitted Identity Providers organized clearly by their parent Partitions. This makes the cross-boundary data lineage immediately visible to administrators, showing exactly which user shards will be allowed to log into that application group footprint.
+
 ### 5.6 Protocol Compliance Interface Map
 
 To maintain complete compatibility with off-the-shelf native app clients, the HTTP Inbound Adapter layer translates protocol transport wire conventions down to domain primitives.
@@ -558,6 +591,7 @@ Sprezz Identity implements concurrent asymmetric dual-signing. It uses an intern
   - **Multi-Key Ring Mapping**: For each tenant, the engine maintains a keyring tracking the current `ActiveKid`, a registry of private keys (`Keys map[string]*rsa.PrivateKey`), and a pre-computed array of public JWKs (`JWKS []map[string]any`).
   - **No-Downtime Token Verification**: Incoming tokens are verified dynamically by extracting the `kid` from their header and querying the tenant's registry of active and retired keys. This ensures tokens minted prior to rotation remain perfectly valid until they naturally expire.
   - **Automated Background Worker**: A background key rotation worker running on a customizable schedule (e.g. `24h` ticks) automatically generates fresh key pairs for bootstrapped tenants and publishes them in the public JWKS.
+- **Zero-Lookup Partition Propagation in Tokens:** When the Token Endpoint trades a single-use authorization code for token sets, the engine resolves the user's explicit partition internal key down to its stateless wire-level `PartitionAlias` (e.g., `pid="eu-west"`). This partition name is baked directly into the access and ID tokens under the `"pid"` claim, allowing downstream resource servers to isolate data queries instantly without hitting the main database cluster for lookup validations.
 
 ### 6.6 Demonstrating Proof-of-Possession at the Application Layer (DPoP - RFC 9449)
 
