@@ -32,6 +32,7 @@ type OutboundHandshakeSession struct {
 // OIDCDiscoveryMetadata mirrors the structural parameters fetched back-channel
 // during standard OpenID Metadata Discovery sweeps.
 type OIDCDiscoveryMetadata struct {
+	Issuer                             string   `json:"issuer"`
 	AuthorizationEndpoint              string   `json:"authorization_endpoint"`
 	TokenEndpoint                      string   `json:"token_endpoint"`
 	JwksURI                            string   `json:"jwks_uri"`

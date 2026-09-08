@@ -136,8 +136,8 @@ func (h *HttpAdapter) registerRoutes() {
 func (h *HttpAdapter) tenantMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		// /.well-known endpoints and userinfo must bypass the tenant initialization gate if they resolve URLs dynamically
-		if path == "/.well-known/jwks.json" || path == "/oauth/userinfo" {
+		// userinfo must bypass the tenant initialization gate if they resolve URLs dynamically
+		if path == "/oauth/userinfo" {
 			next.ServeHTTP(w, r)
 			return
 		}

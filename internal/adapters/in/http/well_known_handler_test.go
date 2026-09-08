@@ -107,7 +107,21 @@ func TestHttpAdapter_JWKS_CacheControl(t *testing.T) {
 	upuc := portmock.NewUserProfileUseCaseMock(ctrl)
 	uruc := portmock.NewUserRegistrationUseCaseMock(ctrl)
 
-	auth.ProcessJWKSetRetrievalMock.Set(func(ctx context.Context, tenantID uuid.UUID, host string, scheme string) (map[string]any, error) {
+	tenantID := uuid.New()
+	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
+		return &model.Tenant{
+			ID:       tenantID,
+			Name:     "test-tenant",
+			Domain:   "test.com",
+			Scheme:   "https",
+			IsActive: true,
+		}, nil
+	})
+
+	auth.ProcessJWKSetRetrievalMock.Set(func(ctx context.Context, tID uuid.UUID, host string, scheme string) (map[string]any, error) {
+		if tID != tenantID {
+			t.Errorf("expected tenant ID %s, got %s", tenantID, tID)
+		}
 		return map[string]any{
 			"keys": []any{},
 		}, nil

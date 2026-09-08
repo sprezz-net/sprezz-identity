@@ -80,7 +80,7 @@ func (s *AdminLogonService) InitiateAdminLogon(ctx context.Context, localTenantI
 	}
 
 	// 2. Metadata Discovery Hook: Hydrate execution targets dynamically via the network port if blank
-	if adminOidcProvider.Config.AuthorizationEndpoint == "" || adminOidcProvider.Config.TokenEndpoint == "" {
+	if adminOidcProvider.Config.AuthorizationEndpoint == "" || adminOidcProvider.Config.TokenEndpoint == "" || adminOidcProvider.Issuer == "" {
 		metadata, err := s.federationClient.FetchOIDCDiscoveryMetadata(ctx, adminOidcProvider.Config.DiscoveryEndpoint)
 		if err != nil {
 			return nil, fmt.Errorf("admin_logon: upstream meta-discovery handshake failed: %w", err)
@@ -89,6 +89,7 @@ func (s *AdminLogonService) InitiateAdminLogon(ctx context.Context, localTenantI
 		adminOidcProvider.Config.AuthorizationEndpoint = metadata.AuthorizationEndpoint
 		adminOidcProvider.Config.TokenEndpoint = metadata.TokenEndpoint
 		adminOidcProvider.Config.JwksURI = metadata.JwksURI
+		adminOidcProvider.Issuer = metadata.Issuer
 
 		// Persist the discovered metadata permanently to the database so callbacks can load them
 		err = s.adminStorage.CreateIdentityProvider(ctx, localTenantID, *adminOidcProvider)

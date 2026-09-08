@@ -146,3 +146,39 @@ FROM identity_providers
 WHERE tenant_id = (SELECT id FROM tenant)
   AND enabled = TRUE
 ORDER BY alias_name ASC;
+
+-- name: CreateIdentityProvider :exec
+-- CreateIdentityProvider inserts a new identity provider or updates an existing one on conflict.
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = @tenant_uuid::uuid
+    LIMIT 1
+)
+INSERT INTO identity_providers (
+    id,
+    tenant_id,
+    idp_type,
+    enabled,
+    alias_name,
+    config,
+    name,
+    partition_id,
+    issuer
+)
+SELECT
+    @id::uuid,
+    t.id,
+    @idp_type,
+    @enabled::boolean,
+    @alias_name,
+    @config::jsonb,
+    @name,
+    @partition_id::bigint,
+    NULLIF(@issuer::varchar, '')
+FROM tenant t
+ON CONFLICT (tenant_id, partition_id, idp_type, alias_name) DO UPDATE SET
+    enabled = EXCLUDED.enabled,
+    config = EXCLUDED.config,
+    name = EXCLUDED.name,
+    issuer = EXCLUDED.issuer;

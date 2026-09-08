@@ -187,3 +187,87 @@ func TestLocalAuthService_AuthenticateLocalCredentials_SelfResolve_Success(t *te
 		t.Errorf("expected user profile ID %s, got %s", userID, resp.UserProfileID)
 	}
 }
+
+
+func TestLocalAuthService_GetLoginContext_InteractionSessionZeroPartition_Fallback(t *testing.T) {
+	ctrl := minimock.NewController(t)
+
+	storage := portmock.NewStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+	now := time.Now()
+	clock := portmock.NewMockClock(now)
+
+	svc := NewLocalAuthService(storage, crypto, clock)
+
+	tenantUUID := uuid.New()
+	defaultPartitionID := int64(42)
+	interactionID := uuid.New()
+	clientUUID := uuid.New()
+	groupUUID := uuid.New()
+
+	// 1. Resolve Tenant Context
+	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantUUID).Return(&model.Tenant{
+		ID:               tenantUUID,
+		DefaultPartition: &defaultPartitionID,
+		Config: model.TenantConfig{
+			AllowSignup: false,
+		},
+	}, nil)
+
+	// 2. Fetch enabled providers
+	storage.GetEnabledIdentityProvidersMock.Expect(minimock.AnyContext, tenantUUID).Return([]model.IdentityProvider{
+		{
+			ID:          uuid.New(),
+			TenantID:    tenantUUID,
+			IDPType:     model.UsernamePasswordIDPType,
+			PartitionID: defaultPartitionID,
+			Enabled:     true,
+			Alias:       "username-password",
+		},
+	}, nil)
+
+	// 3. Resolve Interaction Session (with PartitionID = 0)
+	storage.GetInteractionSessionMock.Expect(minimock.AnyContext, tenantUUID, interactionID).Return(&model.InteractionSession{
+		ID:          interactionID,
+		TenantID:    tenantUUID,
+		ClientID:    "test_client",
+		PartitionID: 0, // This is 0, mimicking our database condition!
+	}, nil)
+
+	// 4. Resolve application and group
+	storage.GetApplicationByClientIDMock.Expect(minimock.AnyContext, tenantUUID, "test_client").Return(&model.Application{
+		ID: clientUUID,
+	}, &model.ApplicationProfile{}, &model.ApplicationGroup{
+		ID:            groupUUID,
+		AllowedIDPIDs: []uuid.UUID{uuid.New()},
+	}, nil)
+
+	// 5. Get identity providers by UUIDs for the group
+	storage.GetIdentityProvidersByUUIDsMock.Set(func(ctx context.Context, tenantID uuid.UUID, uuids []uuid.UUID) ([]model.IdentityProvider, error) {
+		return []model.IdentityProvider{
+			{
+				ID:          uuids[0],
+				TenantID:    tenantID,
+				IDPType:     model.UsernamePasswordIDPType,
+				PartitionID: defaultPartitionID,
+				Enabled:     true,
+				Alias:       "username-password",
+			},
+		}, nil
+	})
+
+	cmd := port.GetLoginContextCommand{
+		TenantID:      tenantUUID,
+		InteractionID: interactionID.String(),
+	}
+
+	resp, err := svc.GetLoginContext(context.Background(), cmd)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// ASSERTION: The partition ID must fallback to the tenant default partition ID (42) and NOT be overwritten by the session's 0!
+	if resp.PartitionID != defaultPartitionID {
+		t.Errorf("expected partition ID %d, got %d", defaultPartitionID, resp.PartitionID)
+	}
+}

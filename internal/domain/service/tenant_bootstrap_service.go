@@ -207,11 +207,6 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 		return fmt.Errorf("bootstrap admin group: local username-password identity provider not found")
 	}
 
-	allowedIDPs := []uuid.UUID{localProviderUUID}
-	if adminSsoProviderUUID != uuid.Nil {
-		allowedIDPs = append(allowedIDPs, adminSsoProviderUUID)
-	}
-
 	scheme := model.SchemeHttps
 	if s.appEnv == "local" {
 		scheme = model.SchemeHttp

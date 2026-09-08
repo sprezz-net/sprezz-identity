@@ -32,6 +32,7 @@ func TestAdminLogonService_InitiateAdminLogon_Success(t *testing.T) {
 			IDPType: model.OpenIDConnectIDPType,
 			Alias:   "admin-sso",
 			Enabled: true,
+			Issuer:  "https://admin.com",
 			Config: model.IdentityProviderConfig{
 				ClientID:              "admin_ui",
 				AuthorizationEndpoint: "https://auth",
@@ -123,6 +124,7 @@ func TestAdminLogonService_InitiateAdminLogon_OnDemandDCR_Success(t *testing.T) 
 	})
 
 	fedClient.FetchOIDCDiscoveryMetadataMock.Expect(minimock.AnyContext, "https://admin.com/.well-known/openid-configuration").Return(&model.OIDCDiscoveryMetadata{
+		Issuer:                "https://admin.com",
 		AuthorizationEndpoint: "https://admin.com/oauth/authorize",
 		TokenEndpoint:         "https://admin.com/oauth/token",
 		JwksURI:               "https://admin.com/.well-known/jwks.json",
@@ -182,6 +184,7 @@ func TestAdminLogonService_InitiateAdminLogon_DiscoveryPersist_Success(t *testin
 	}, nil)
 
 	fedClient.FetchOIDCDiscoveryMetadataMock.Expect(minimock.AnyContext, "https://admin.com/.well-known/openid-configuration").Return(&model.OIDCDiscoveryMetadata{
+		Issuer:                "https://admin.com",
 		AuthorizationEndpoint: "https://admin.com/oauth/authorize",
 		TokenEndpoint:         "https://admin.com/oauth/token",
 		JwksURI:               "https://admin.com/.well-known/jwks.json",

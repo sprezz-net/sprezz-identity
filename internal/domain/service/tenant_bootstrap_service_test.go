@@ -257,21 +257,22 @@ func TestTenantBootstrapService_BootstrapAdminTenant_GroupMatchesLocalIDP(t *tes
 
 	// EXPECT: the admin group MUST map allowed IDPs based on group name
 	adminStorage.CreateApplicationGroupMock.Set(func(ctx context.Context, tID uuid.UUID, group model.ApplicationGroup) error {
-		if group.GroupName == model.LocalAdminUIGroupName {
+		switch group.GroupName {
+		case model.LocalAdminUIGroupName:
 			if group.DefaultIDPID == nil || *group.DefaultIDPID != localProviderID {
 				t.Errorf("expected local admin group DefaultIDPID to be local provider %s, got %v", localProviderID, group.DefaultIDPID)
 			}
 			if len(group.AllowedIDPIDs) != 1 || group.AllowedIDPIDs[0] != localProviderID {
 				t.Errorf("expected local admin group AllowedIDPIDs to contain only local provider %s, got %v", localProviderID, group.AllowedIDPIDs)
 			}
-		} else if group.GroupName == model.AdminUIGroupName {
+		case model.AdminUIGroupName:
 			if group.DefaultIDPID == nil || *group.DefaultIDPID != oidcProviderID {
 				t.Errorf("expected federated admin group DefaultIDPID to be oidc provider %s, got %v", oidcProviderID, group.DefaultIDPID)
 			}
 			if len(group.AllowedIDPIDs) != 1 || group.AllowedIDPIDs[0] != oidcProviderID {
 				t.Errorf("expected federated admin group AllowedIDPIDs to contain only oidc provider %s, got %v", oidcProviderID, group.AllowedIDPIDs)
 			}
-		} else {
+		default:
 			t.Errorf("unexpected application group created: %s", group.GroupName)
 		}
 		return nil

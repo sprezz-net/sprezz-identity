@@ -1735,16 +1735,17 @@ func (s *PostgresStorage) CreateIdentityProvider(ctx context.Context, tenantID u
 		return fmt.Errorf("marshal provider config: %w", err)
 	}
 
-	_, err = s.pool.Exec(ctx, `
-		INSERT INTO identity_providers (id, tenant_id, idp_type, enabled, alias_name, config, name, partition_id)
-		SELECT $1::uuid, t.id, $2, $3, $4, $5::jsonb, $7, $8
-		FROM tenants t
-		WHERE t.tenant_uuid = $6::uuid
-		ON CONFLICT (tenant_id, partition_id, idp_type, alias_name) DO UPDATE SET
-			enabled = EXCLUDED.enabled,
-			config = EXCLUDED.config,
-			name = EXCLUDED.name
-	`, toPGUUID(provider.ID), provider.IDPType, provider.Enabled, provider.Alias, string(configJSON), toPGUUID(tenantID), provider.Name, provider.PartitionID)
+	err = s.queries.CreateIdentityProvider(ctx, sqlcdb.CreateIdentityProviderParams{
+		ID:          toPGUUID(provider.ID),
+		IdpType:     provider.IDPType,
+		Enabled:     provider.Enabled,
+		AliasName:   provider.Alias,
+		Config:      configJSON,
+		Name:        provider.Name,
+		PartitionID: provider.PartitionID,
+		Issuer:      provider.Issuer,
+		TenantUuid:  toPGUUID(tenantID),
+	})
 	if err != nil {
 		return fmt.Errorf("create identity provider: %w", err)
 	}

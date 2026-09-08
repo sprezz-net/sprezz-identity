@@ -114,7 +114,14 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 	var redirectURL string
 
 	if interactionSession != nil {
-		partitionID = interactionSession.PartitionID
+		if interactionSession.PartitionID != 0 {
+			partitionID = interactionSession.PartitionID
+		} else {
+			tenant, ok := TenantFromContext(r.Context())
+			if ok && tenant.DefaultPartition != nil {
+				partitionID = *tenant.DefaultPartition
+			}
+		}
 		providerID = interactionSession.IdentityProviderID
 	} else {
 		tenant, ok := TenantFromContext(r.Context())

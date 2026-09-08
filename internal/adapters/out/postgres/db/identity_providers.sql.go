@@ -11,6 +11,70 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createIdentityProvider = `-- name: CreateIdentityProvider :exec
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $9::uuid
+    LIMIT 1
+)
+INSERT INTO identity_providers (
+    id,
+    tenant_id,
+    idp_type,
+    enabled,
+    alias_name,
+    config,
+    name,
+    partition_id,
+    issuer
+)
+SELECT
+    $1::uuid,
+    t.id,
+    $2,
+    $3::boolean,
+    $4,
+    $5::jsonb,
+    $6,
+    $7::bigint,
+    NULLIF($8::varchar, '')
+FROM tenant t
+ON CONFLICT (tenant_id, partition_id, idp_type, alias_name) DO UPDATE SET
+    enabled = EXCLUDED.enabled,
+    config = EXCLUDED.config,
+    name = EXCLUDED.name,
+    issuer = EXCLUDED.issuer
+`
+
+type CreateIdentityProviderParams struct {
+	ID          pgtype.UUID `json:"id"`
+	IdpType     string      `json:"idp_type"`
+	Enabled     bool        `json:"enabled"`
+	AliasName   string      `json:"alias_name"`
+	Config      []byte      `json:"config"`
+	Name        string      `json:"name"`
+	PartitionID int64       `json:"partition_id"`
+	Issuer      string      `json:"issuer"`
+	TenantUuid  pgtype.UUID `json:"tenant_uuid"`
+}
+
+// CreateIdentityProvider inserts a new identity provider or updates an existing one on conflict.
+func (q *Queries) CreateIdentityProvider(ctx context.Context, arg CreateIdentityProviderParams) error {
+	_, err := q.db.Exec(ctx, createIdentityProvider,
+		arg.ID,
+		arg.IdpType,
+		arg.Enabled,
+		arg.AliasName,
+		arg.Config,
+		arg.Name,
+		arg.PartitionID,
+		arg.Issuer,
+		arg.TenantUuid,
+	)
+	return err
+}
+
 const getEnabledIdentityProviders = `-- name: GetEnabledIdentityProviders :many
 WITH tenant AS (
     SELECT id
