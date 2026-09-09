@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,7 +9,6 @@ import (
 	"sprezz-identity/internal/domain/port"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 type UserInfoHandler struct {
@@ -24,12 +22,12 @@ func NewUserInfoHandler(auc port.AuthUseCase) *UserInfoHandler {
 }
 
 func (h *UserInfoHandler) Routes(r chi.Router) {
-	r.Get("/oauth/userinfo", h.HandleUserInfoRequest)
-	r.Post("/oauth/userinfo", h.HandleUserInfoRequest)
+	r.Get(port.RouteUserInfo, h.HandleUserInfoRequest)
+	r.Post(port.RouteUserInfo, h.HandleUserInfoRequest)
 }
 
 func (h *UserInfoHandler) HandleUserInfoRequest(w http.ResponseWriter, r *http.Request) {
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 
 	// 1. Map HTTP Transport parameter blocks directly into the Port Command envelope
 	cmd := port.UserInfoRequestCommand{
@@ -52,15 +50,6 @@ func (h *UserInfoHandler) HandleUserInfoRequest(w http.ResponseWriter, r *http.R
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(claims)
-}
-
-func (h *UserInfoHandler) mustResolveTenant(ctx context.Context) uuid.UUID {
-	if val := ctx.Value(tenantIDCtxKey); val != nil {
-		if uid, ok := val.(uuid.UUID); ok {
-			return uid
-		}
-	}
-	return uuid.Nil
 }
 
 // writeSpecCompliantOIDCError maps domain failures into RFC 6750 WWW-Authenticate header tokens automatically

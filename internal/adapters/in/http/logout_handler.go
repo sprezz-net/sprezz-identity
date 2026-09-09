@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"net/http"
 
 	"sprezz-identity/internal/domain/model"
@@ -9,7 +8,6 @@ import (
 	"sprezz-identity/internal/views/public"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 type LogoutHandler struct {
@@ -30,7 +28,7 @@ func (h *LogoutHandler) Routes(r chi.Router) {
 }
 
 func (h *LogoutHandler) HandleLogoutRequest(w http.ResponseWriter, r *http.Request) {
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 
 	// 1. Harvest active bearer session contexts from namespaced cookies via port contracts
 	var activeSessionPayload string
@@ -93,13 +91,4 @@ func (h *LogoutHandler) HandleLogoutRequest(w http.ResponseWriter, r *http.Reque
 
 	// Default fallback to direct redirection if zero front-channel apps are listening
 	http.Redirect(w, r, result.PostLogoutRedirectURI, http.StatusFound)
-}
-
-func (h *LogoutHandler) mustResolveTenant(ctx context.Context) uuid.UUID {
-	if val := ctx.Value(tenantIDCtxKey); val != nil {
-		if uid, ok := val.(uuid.UUID); ok {
-			return uid
-		}
-	}
-	return uuid.Nil
 }

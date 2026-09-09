@@ -14,15 +14,11 @@ import (
 
 type PARHandler struct {
 	authUseCase port.AuthUseCase
-	crypto      port.Crypto
-	storage     port.Storage
 }
 
-func NewPARHandler(auc port.AuthUseCase, c port.Crypto, s port.Storage) *PARHandler {
+func NewPARHandler(auc port.AuthUseCase) *PARHandler {
 	return &PARHandler{
 		authUseCase: auc,
-		crypto:      c,
-		storage:     s,
 	}
 }
 
@@ -45,7 +41,7 @@ func (h *PARHandler) HandlePARRequest(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Recover pre-validated parameters straight from the ClientAuthMiddleware context thread pool
 	ctx := r.Context()
-	tenantUUID := ctx.Value(tenantIDCtxKey).(uuid.UUID)
+	tenantUUID := ctx.Value(TenantIDContextKey).(uuid.UUID)
 	clientID := ctx.Value(ClientIDContextKey).(string)
 	isClientAuthenticated := ctx.Value(ClientAuthFlagKey).(bool)
 

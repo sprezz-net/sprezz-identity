@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"net/http"
 	"strings"
 
@@ -9,7 +8,6 @@ import (
 	"sprezz-identity/internal/domain/port"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 type AuthorizeHandler struct {
@@ -25,8 +23,8 @@ func NewAuthorizeHandler(auc port.AuthUseCase, suc port.SSOSessionUseCase) *Auth
 }
 
 func (h *AuthorizeHandler) Routes(r chi.Router) {
-	r.Get("/oauth/authorize", h.HandleAuthorize)
-	r.Post("/oauth/authorize", h.HandleAuthorize)
+	r.Get(port.RouteAuthorize, h.HandleAuthorize)
+	r.Post(port.RouteAuthorize, h.HandleAuthorize)
 }
 
 func (h *AuthorizeHandler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +33,7 @@ func (h *AuthorizeHandler) HandleAuthorize(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 
 	// 1. Scan for an active namespaced session cookie using pure port orchestration
 	var activeSessionPayload string
@@ -97,15 +95,6 @@ func (h *AuthorizeHandler) HandleAuthorize(w http.ResponseWriter, r *http.Reques
 	}
 
 	http.Redirect(w, r, result.RedirectURL, http.StatusFound)
-}
-
-func (h *AuthorizeHandler) mustResolveTenant(ctx context.Context) uuid.UUID {
-	if val := ctx.Value(tenantIDCtxKey); val != nil {
-		if uid, ok := val.(uuid.UUID); ok {
-			return uid
-		}
-	}
-	return uuid.Nil
 }
 
 func (h *AuthorizeHandler) writeWebPlainError(w http.ResponseWriter, status int, code, desc string) {

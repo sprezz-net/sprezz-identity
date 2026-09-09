@@ -14,6 +14,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 const (
@@ -43,8 +44,8 @@ type HttpAdapter struct {
 type contextKey string
 
 const (
-	tenantCtxKey       contextKey = "tenant"
-	tenantIDCtxKey     contextKey = "tenant_id"
+	TenantContextKey   contextKey = "spz_tenant_context"
+	TenantIDContextKey contextKey = "spz_tenant_id_context"
 	AppContextKey      contextKey = "spz_app_context"
 	ProfileContextKey  contextKey = "spz_profile_context"
 	GroupContextKey    contextKey = "spz_group_context"
@@ -53,8 +54,17 @@ const (
 )
 
 // Helper functions to pull compiled layers out of the request context down-funnel
+// TenantIDFromContext extracts the pre-validated Tenant UUID from the request context thread.
+// It panics if the boundary is missing, as the perimeter middleware guarantees its presence.
+func TenantIDFromContext(ctx context.Context) uuid.UUID {
+	if val, ok := ctx.Value(TenantIDContextKey).(uuid.UUID); ok {
+		return val
+	}
+	return uuid.Nil
+}
+
 func TenantFromContext(ctx context.Context) (*model.Tenant, bool) {
-	tenant, ok := ctx.Value(tenantCtxKey).(*model.Tenant)
+	tenant, ok := ctx.Value(TenantContextKey).(*model.Tenant)
 	return tenant, ok
 }
 
@@ -138,9 +148,9 @@ func (h *HttpAdapter) registerRoutes() {
 
 	// Handlers that will be wired directly inside our protected client sub-router
 	tokenHandler := NewTokenHandler(h.authUseCase, h.cryptoPort, h.storagePort)
-	introspectionHandler := NewIntrospectionHandler(h.authUseCase, h.cryptoPort, h.storagePort)
-	revocationHandler := NewRevocationHandler(h.authUseCase, h.cryptoPort, h.storagePort)
-	parHandler := NewPARHandler(h.authUseCase, h.cryptoPort, h.storagePort)
+	introspectionHandler := NewIntrospectionHandler(h.authUseCase)
+	revocationHandler := NewRevocationHandler(h.authUseCase)
+	parHandler := NewPARHandler(h.authUseCase)
 
 	// 3. Mount standard public browser-facing routes and discovery endpoints
 	wellKnownHandler.Routes(h.router)
@@ -180,8 +190,8 @@ func (h *HttpAdapter) tenantMiddleware(next http.Handler) http.Handler {
 			h.respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
-		ctx := context.WithValue(r.Context(), tenantCtxKey, tenant)
-		ctx = context.WithValue(ctx, tenantIDCtxKey, tenant.ID)
+		ctx := context.WithValue(r.Context(), TenantContextKey, tenant)
+		ctx = context.WithValue(ctx, TenantIDContextKey, tenant.ID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

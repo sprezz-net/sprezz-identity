@@ -48,7 +48,7 @@ func (h *TokenHandler) HandleTokenRequest(w http.ResponseWriter, r *http.Request
 
 	// 2. Recover pre-validated parameters out of context with zero database query lookups
 	ctx := r.Context()
-	tenantUUID := ctx.Value(tenantIDCtxKey).(uuid.UUID)
+	tenantUUID := ctx.Value(TenantIDContextKey).(uuid.UUID)
 	clientID := ctx.Value(ClientIDContextKey).(string)
 	isClientAuthenticated := ctx.Value(ClientAuthFlagKey).(bool)
 

@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -10,7 +9,6 @@ import (
 	"sprezz-identity/internal/domain/port"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 type RegistrationHandler struct {
@@ -24,7 +22,7 @@ func NewRegistrationHandler(auc port.AuthUseCase) *RegistrationHandler {
 }
 
 func (h *RegistrationHandler) Routes(r chi.Router) {
-	r.Post("/oauth/register", h.HandleRegistrationRequest)
+	r.Post(port.RouteRegister, h.HandleRegistrationRequest)
 }
 
 func (h *RegistrationHandler) HandleRegistrationRequest(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +39,7 @@ func (h *RegistrationHandler) HandleRegistrationRequest(w http.ResponseWriter, r
 		return
 	}
 
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 
 	// 2. Pure Delegation: Pass execution directly across the use-case boundary
 	result, err := h.authUseCase.ProcessDynamicRegistration(r.Context(), tenantUUID, payload)
@@ -70,15 +68,6 @@ func (h *RegistrationHandler) HandleRegistrationRequest(w http.ResponseWriter, r
 	w.Header().Set("Pragma", "no-cache")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(responseFields)
-}
-
-func (h *RegistrationHandler) mustResolveTenant(ctx context.Context) uuid.UUID {
-	if val := ctx.Value(tenantIDCtxKey); val != nil {
-		if uid, ok := val.(uuid.UUID); ok {
-			return uid
-		}
-	}
-	return uuid.Nil
 }
 
 func (h *RegistrationHandler) writeJSONError(w http.ResponseWriter, statusCode int, errCode, description string) {

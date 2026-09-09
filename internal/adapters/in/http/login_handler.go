@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
@@ -44,7 +43,7 @@ func (h *LoginHandler) HandleLoginRootRedirect(w http.ResponseWriter, r *http.Re
 }
 
 func (h *LoginHandler) HandleLoginRoot(w http.ResponseWriter, r *http.Request) {
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 	interactionID := r.URL.Query().Get("tx")
 	if interactionID == "" {
 		interactionID = h.parseInteractionCookie(r, tenantUUID)
@@ -94,7 +93,7 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
@@ -278,13 +277,4 @@ func (h *LoginHandler) triggerExternalFederationRedirection(w http.ResponseWrite
 	}
 
 	http.Redirect(w, r, response.TargetRedirectURL, http.StatusFound)
-}
-
-func (h *LoginHandler) mustResolveTenant(ctx context.Context) uuid.UUID {
-	if val := ctx.Value(tenantIDCtxKey); val != nil {
-		if uid, ok := val.(uuid.UUID); ok {
-			return uid
-		}
-	}
-	return uuid.Nil
 }

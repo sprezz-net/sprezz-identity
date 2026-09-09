@@ -41,7 +41,7 @@ func (h *ProfileHandler) Routes(r chi.Router) {
 }
 
 func (h *ProfileHandler) HandleViewDashboard(w http.ResponseWriter, r *http.Request) {
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 	subjectID, partitionID, err := h.authenticateSessionUser(r, tenantUUID)
 	if err != nil {
 		http.Redirect(w, r, port.RouteRoot, http.StatusSeeOther)
@@ -72,7 +72,7 @@ func (h *ProfileHandler) HandleViewDashboard(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *ProfileHandler) HandleChangePasswordForm(w http.ResponseWriter, r *http.Request) {
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 	userProfile, _, err := h.resolveAuthenticatedUser(r, tenantUUID)
 	if err != nil {
 		http.Redirect(w, r, port.RouteRoot, http.StatusSeeOther)
@@ -84,7 +84,7 @@ func (h *ProfileHandler) HandleChangePasswordForm(w http.ResponseWriter, r *http
 }
 
 func (h *ProfileHandler) HandleChangePasswordSubmit(w http.ResponseWriter, r *http.Request) {
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 	userProfile, partitionID, err := h.resolveAuthenticatedUser(r, tenantUUID)
 	if err != nil {
 		http.Redirect(w, r, port.RouteRoot, http.StatusSeeOther)
@@ -124,7 +124,7 @@ func (h *ProfileHandler) HandleChangePasswordSubmit(w http.ResponseWriter, r *ht
 }
 
 func (h *ProfileHandler) HandleChangeEmailForm(w http.ResponseWriter, r *http.Request) {
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 	userProfile, _, err := h.resolveAuthenticatedUser(r, tenantUUID)
 	if err != nil {
 		http.Redirect(w, r, port.RouteRoot, http.StatusSeeOther)
@@ -136,7 +136,7 @@ func (h *ProfileHandler) HandleChangeEmailForm(w http.ResponseWriter, r *http.Re
 }
 
 func (h *ProfileHandler) HandleChangeEmailSubmit(w http.ResponseWriter, r *http.Request) {
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 	userProfile, partitionID, err := h.resolveAuthenticatedUser(r, tenantUUID)
 	if err != nil {
 		http.Redirect(w, r, port.RouteRoot, http.StatusSeeOther)
@@ -177,7 +177,7 @@ func (h *ProfileHandler) HandleChangeEmailSubmit(w http.ResponseWriter, r *http.
 }
 
 func (h *ProfileHandler) HandleChangeNameForm(w http.ResponseWriter, r *http.Request) {
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 	userProfile, _, err := h.resolveAuthenticatedUser(r, tenantUUID)
 	if err != nil {
 		http.Redirect(w, r, port.RouteRoot, http.StatusSeeOther)
@@ -189,7 +189,7 @@ func (h *ProfileHandler) HandleChangeNameForm(w http.ResponseWriter, r *http.Req
 }
 
 func (h *ProfileHandler) HandleChangeNameSubmit(w http.ResponseWriter, r *http.Request) {
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 	userProfile, partitionID, err := h.resolveAuthenticatedUser(r, tenantUUID)
 	if err != nil {
 		http.Redirect(w, r, port.RouteRoot, http.StatusSeeOther)
@@ -221,7 +221,7 @@ func (h *ProfileHandler) HandleChangeNameSubmit(w http.ResponseWriter, r *http.R
 }
 
 func (h *ProfileHandler) HandleDecoupleIdentitySubmit(w http.ResponseWriter, r *http.Request) {
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 	userProfile, partitionID, err := h.resolveAuthenticatedUser(r, tenantUUID)
 	if err != nil {
 		w.Header().Set("HX-Redirect", port.RouteRoot)
@@ -329,15 +329,6 @@ func (h *ProfileHandler) renderNamePageStatus(w http.ResponseWriter, r *http.Req
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	w.WriteHeader(http.StatusOK)
 	_ = public.ChangeNamePage(user, err, success).Render(r.Context(), w)
-}
-
-func (h *ProfileHandler) mustResolveTenant(ctx context.Context) uuid.UUID {
-	if val := ctx.Value(tenantIDCtxKey); val != nil {
-		if uid, ok := val.(uuid.UUID); ok {
-			return uid
-		}
-	}
-	return uuid.Nil
 }
 
 func (h *ProfileHandler) writeWebHTMLError(w http.ResponseWriter, status int, desc string) {

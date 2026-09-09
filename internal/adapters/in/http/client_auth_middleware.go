@@ -24,7 +24,7 @@ func NewMiddlewareProvider(s port.Storage, c port.Crypto) *MiddlewareProvider {
 func (m *MiddlewareProvider) ClientAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// 1. Resolve Multi-Tenant Perimeter via pre-assigned context
-		tenantIDVal := r.Context().Value(tenantIDCtxKey) // Uses your existing tenant key anchor
+		tenantIDVal := r.Context().Value(TenantIDContextKey) // Uses your existing tenant key anchor
 		tenantUUID, ok := tenantIDVal.(uuid.UUID)
 		if !ok || tenantUUID == uuid.Nil {
 			w.Header().Set(model.HeaderContentType, model.ContentTypeJSON)

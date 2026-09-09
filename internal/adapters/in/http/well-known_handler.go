@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 
@@ -9,7 +8,6 @@ import (
 	"sprezz-identity/internal/domain/port"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 type WellKnownHandler struct {
@@ -31,7 +29,7 @@ func (h *WellKnownHandler) Routes(r chi.Router) {
 }
 
 func (h *WellKnownHandler) HandleOIDCDiscovery(w http.ResponseWriter, r *http.Request) {
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 
 	metadata, err := h.authUseCase.ProcessDiscoveryMetadata(r.Context(), tenantUUID, true)
 	if err != nil {
@@ -43,7 +41,7 @@ func (h *WellKnownHandler) HandleOIDCDiscovery(w http.ResponseWriter, r *http.Re
 }
 
 func (h *WellKnownHandler) HandleOAuthMetadata(w http.ResponseWriter, r *http.Request) {
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 
 	metadata, err := h.authUseCase.ProcessDiscoveryMetadata(r.Context(), tenantUUID, false)
 	if err != nil {
@@ -55,7 +53,7 @@ func (h *WellKnownHandler) HandleOAuthMetadata(w http.ResponseWriter, r *http.Re
 }
 
 func (h *WellKnownHandler) HandleJWKS(w http.ResponseWriter, r *http.Request) {
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 
 	scheme := model.SchemeHttps
 	if h.appEnv == "local" {
@@ -69,15 +67,6 @@ func (h *WellKnownHandler) HandleJWKS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.writeJSONResponse(w, http.StatusOK, "public, max-age=600, stale-while-revalidate=86400", jwks)
-}
-
-func (h *WellKnownHandler) mustResolveTenant(ctx context.Context) uuid.UUID {
-	if val := ctx.Value(tenantIDCtxKey); val != nil {
-		if uid, ok := val.(uuid.UUID); ok {
-			return uid
-		}
-	}
-	return uuid.Nil
 }
 
 func (h *WellKnownHandler) writeJSONResponse(w http.ResponseWriter, status int, cacheControl string, data any) {

@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -37,7 +36,8 @@ func (h *CallbackHandler) Routes(r chi.Router) {
 func (h *CallbackHandler) HandleFederationCallback(w http.ResponseWriter, r *http.Request) {
 	state := r.URL.Query().Get("state")
 	code := r.URL.Query().Get("code")
-	tenantUUID := h.mustResolveTenant(r.Context())
+
+	tenantUUID := TenantIDFromContext(r.Context())
 
 	slog.Debug("HandleFederationCallback: federation callback triggered", "tenant_id", tenantUUID, "state", state, "code_len", len(code))
 
@@ -100,7 +100,7 @@ func (h *CallbackHandler) HandleFederationCallback(w http.ResponseWriter, r *htt
 
 // HandleOAuthCallbackRequest processes the internal redirection loop for local web portal applications (ingress loop).
 func (h *CallbackHandler) HandleOAuthCallbackRequest(w http.ResponseWriter, r *http.Request) {
-	tenantUUID := h.mustResolveTenant(r.Context())
+	tenantUUID := TenantIDFromContext(r.Context())
 
 	cookie, err := r.Cookie("spz_auth_session_id")
 	if err != nil || cookie.Value == "" {
@@ -161,15 +161,6 @@ func (h *CallbackHandler) HandleOAuthCallbackRequest(w http.ResponseWriter, r *h
 	}
 
 	http.Redirect(w, r, result.RedirectURL, http.StatusFound)
-}
-
-func (h *CallbackHandler) mustResolveTenant(ctx context.Context) uuid.UUID {
-	if val := ctx.Value(tenantIDCtxKey); val != nil {
-		if uid, ok := val.(uuid.UUID); ok {
-			return uid
-		}
-	}
-	return uuid.Nil
 }
 
 func (h *CallbackHandler) applyCookieIntent(w http.ResponseWriter, intent *port.CookieIntentResponse) {

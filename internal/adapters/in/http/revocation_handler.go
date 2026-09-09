@@ -14,15 +14,11 @@ import (
 
 type RevocationHandler struct {
 	authUseCase port.AuthUseCase
-	crypto      port.Crypto
-	storage     port.Storage
 }
 
-func NewRevocationHandler(auc port.AuthUseCase, c port.Crypto, s port.Storage) *RevocationHandler {
+func NewRevocationHandler(auc port.AuthUseCase) *RevocationHandler {
 	return &RevocationHandler{
 		authUseCase: auc,
-		crypto:      c,
-		storage:     s,
 	}
 }
 
@@ -45,7 +41,7 @@ func (h *RevocationHandler) HandleRevocationRequest(w http.ResponseWriter, r *ht
 
 	// 2. Recover pre-validated parameters straight from the ClientAuthMiddleware context thread pool
 	ctx := r.Context()
-	tenantUUID := ctx.Value(tenantIDCtxKey).(uuid.UUID)
+	tenantUUID := ctx.Value(TenantIDContextKey).(uuid.UUID)
 	clientID := ctx.Value(ClientIDContextKey).(string)
 	isClientAuthenticated := ctx.Value(ClientAuthFlagKey).(bool)
 

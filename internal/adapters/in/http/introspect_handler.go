@@ -14,20 +14,16 @@ import (
 
 type IntrospectionHandler struct {
 	authUseCase port.AuthUseCase
-	crypto      port.Crypto
-	storage     port.Storage
 }
 
-func NewIntrospectionHandler(auc port.AuthUseCase, c port.Crypto, s port.Storage) *IntrospectionHandler {
+func NewIntrospectionHandler(auc port.AuthUseCase) *IntrospectionHandler {
 	return &IntrospectionHandler{
 		authUseCase: auc,
-		crypto:      c,
-		storage:     s,
 	}
 }
 
 func (h *IntrospectionHandler) Routes(r chi.Router) {
-	r.Post("/oauth/introspect", h.HandleIntrospectionRequest)
+	r.Post(port.RouteIntrospect, h.HandleIntrospectionRequest)
 }
 
 func (h *IntrospectionHandler) HandleIntrospectionRequest(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +41,7 @@ func (h *IntrospectionHandler) HandleIntrospectionRequest(w http.ResponseWriter,
 
 	// 2. Recover pre-validated perimeter parameters from ClientAuthMiddleware context
 	ctx := r.Context()
-	tenantUUID := ctx.Value(tenantIDCtxKey).(uuid.UUID)
+	tenantUUID := ctx.Value(TenantIDContextKey).(uuid.UUID)
 	clientID := ctx.Value(ClientIDContextKey).(string)
 	isClientAuthenticated := ctx.Value(ClientAuthFlagKey).(bool)
 
