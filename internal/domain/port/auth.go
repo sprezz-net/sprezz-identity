@@ -167,7 +167,6 @@ type RotateRefreshTokenCommand struct {
 	TenantID           uuid.UUID
 	ClientID           string
 	RefreshToken       string
-	CurrentClaims      model.TokenClaims
 	Tenant             *model.Tenant
 	Application        *model.Application
 	ApplicationProfile *model.ApplicationProfile

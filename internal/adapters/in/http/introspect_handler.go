@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -32,6 +31,7 @@ func (h *IntrospectionHandler) Routes(r chi.Router) {
 }
 
 func (h *IntrospectionHandler) HandleIntrospectionRequest(w http.ResponseWriter, r *http.Request) {
+	// 1. Enforce strict Content-Type compliance per RFC 7662 Section 2.1
 	contentType := r.Header.Get(model.HeaderContentType)
 	if !strings.HasPrefix(contentType, model.ContentTypeFormUrlEncoded) {
 		h.writeJSONError(w, http.StatusBadRequest, "invalid_request", "content-type must be application/x-www-form-urlencoded")
@@ -43,16 +43,13 @@ func (h *IntrospectionHandler) HandleIntrospectionRequest(w http.ResponseWriter,
 		return
 	}
 
-	tenantUUID := h.mustResolveTenant(r.Context())
+	// 2. Recover pre-validated perimeter parameters from ClientAuthMiddleware context
+	ctx := r.Context()
+	tenantUUID := ctx.Value(tenantIDCtxKey).(uuid.UUID)
+	clientID := ctx.Value(ClientIDContextKey).(string)
+	isClientAuthenticated := ctx.Value(ClientAuthFlagKey).(bool)
 
-	// 1. Authenticate client context on the transport perimeter using the shared helper function
-	clientID, _, isClientAuthenticated, _, _, _, err := authenticateClientContext(r, tenantUUID, h.storage, h.crypto)
-	if err != nil {
-		h.writeJSONError(w, http.StatusUnauthorized, "invalid_client", "client authentication failed")
-		return
-	}
-
-	// 2. Map pure primitive fields directly into the Port Command envelope object
+	// 3. Map pure primitive fields directly into the Port Command envelope object
 	cmd := port.IntrospectTokenCommand{
 		TenantID:              tenantUUID,
 		ClientID:              clientID,
@@ -60,30 +57,22 @@ func (h *IntrospectionHandler) HandleIntrospectionRequest(w http.ResponseWriter,
 		TargetTokenString:     r.Form.Get("token"),
 	}
 
-	// 3. Pure Delegation: Fire use case execution across the driving perimeter
+	// 4. Pure Delegation: Fire use case execution across the driving perimeter
 	response, err := h.authUseCase.ProcessTokenIntrospection(r.Context(), cmd)
 	if err != nil {
+		// RFC 7662: If the token is invalid, expired, or revoked, return active: false with a 200 OK
 		w.Header().Set(model.HeaderContentType, model.ContentTypeJSON)
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(model.IntrospectionResponse{Active: false})
 		return
 	}
 
-	// 4. Success Output Generation
+	// 5. Success Output Generation
 	w.Header().Set(model.HeaderContentType, model.ContentTypeJSON)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(response)
-}
-
-func (h *IntrospectionHandler) mustResolveTenant(ctx context.Context) uuid.UUID {
-	if val := ctx.Value(tenantIDCtxKey); val != nil {
-		if uid, ok := val.(uuid.UUID); ok {
-			return uid
-		}
-	}
-	return uuid.Nil
 }
 
 func (h *IntrospectionHandler) writeJSONError(w http.ResponseWriter, statusCode int, errCode, description string) {

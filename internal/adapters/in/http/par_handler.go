@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -28,10 +27,11 @@ func NewPARHandler(auc port.AuthUseCase, c port.Crypto, s port.Storage) *PARHand
 }
 
 func (h *PARHandler) Routes(r chi.Router) {
-	r.Post("/oauth/par", h.HandlePARRequest)
+	r.Post(port.RoutePAR, h.HandlePARRequest)
 }
 
 func (h *PARHandler) HandlePARRequest(w http.ResponseWriter, r *http.Request) {
+	// 1. Enforce strict Content-Type compliance per RFC 9126 Section 2
 	contentType := r.Header.Get(model.HeaderContentType)
 	if !strings.HasPrefix(contentType, model.ContentTypeFormUrlEncoded) {
 		h.writeJSONError(w, http.StatusBadRequest, "invalid_request", "content-type must be application/x-www-form-urlencoded")
@@ -43,15 +43,11 @@ func (h *PARHandler) HandlePARRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantUUID := h.mustResolveTenant(r.Context())
-
-	// Authenticate Client Credentials (Dual-Track: HTTP Basic vs Form POST)
-	// Invokes the shared, spec-compliant extraction helper safely
-	clientID, _, isClientAuthenticated, _, _, _, err := authenticateClientContext(r, tenantUUID, h.storage, h.crypto)
-	if err != nil {
-		h.writeJSONError(w, http.StatusUnauthorized, "invalid_client", "client authentication failed")
-		return
-	}
+	// 2. Recover pre-validated parameters straight from the ClientAuthMiddleware context thread pool
+	ctx := r.Context()
+	tenantUUID := ctx.Value(tenantIDCtxKey).(uuid.UUID)
+	clientID := ctx.Value(ClientIDContextKey).(string)
+	isClientAuthenticated := ctx.Value(ClientAuthFlagKey).(bool)
 
 	var requestedScopes []string
 	if scopeParam := r.Form.Get("scope"); scopeParam != "" {
@@ -88,15 +84,6 @@ func (h *PARHandler) HandlePARRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Pragma", "no-cache")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(response)
-}
-
-func (h *PARHandler) mustResolveTenant(ctx context.Context) uuid.UUID {
-	if val := ctx.Value(tenantIDCtxKey); val != nil {
-		if uid, ok := val.(uuid.UUID); ok {
-			return uid
-		}
-	}
-	return uuid.Nil
 }
 
 func (h *PARHandler) writeJSONError(w http.ResponseWriter, statusCode int, errCode, description string) {

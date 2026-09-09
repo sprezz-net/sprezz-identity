@@ -668,24 +668,40 @@ func (s *OAuthService) RotateRefreshToken(
 	ctx context.Context,
 	cmd port.RotateRefreshTokenCommand,
 ) (*model.TokenSetResponse, error) {
+	// 1. Verify and unpack the raw token string using the injected Crypto adapter port
+	claimsMap, err := s.crypto.VerifyToken(cmd.RefreshToken)
+	if err != nil {
+		return nil, port.ErrInvalidGrant // Invalid signature or expired token lifetime window
+	}
 
-	// 1. Fetch the lean reference tracking row from the database registry [7.3]
+	// 2. Map the raw dictionary into standard type-safe domain structures via your helper
+	tokenClaims := s.mapMapClaimsToTokenClaims(cmd.TenantID, claimsMap)
+
+	// 3. Map raw claims map fields type-safely into internal primitives
+	jti, _ := claimsMap["jti"].(string)
+	familyID, _ := claimsMap["fid"].(string) // Assumes 'fid' maps the immutable TokenFamilyID
+
+	if jti == "" || familyID == "" {
+		return nil, port.ErrInvalidGrant
+	}
+
+	// 4. Fetch the lean reference tracking row from the database registry [7.3]
 	tokenRecord, err := s.storage.GetRefreshToken(ctx, cmd.RefreshToken)
 	if err != nil {
 		return nil, fmt.Errorf("%s: refresh token is unrecognized or invalid: %w", port.ErrInvalidGrant, err)
 	}
 
-	// 2. Strict Boundary Verification: Validate multi-tenant and client mapping contexts
+	// 5. Strict Boundary Verification: Validate multi-tenant and client mapping contexts
 	if tokenRecord.TenantID != cmd.TenantID || tokenRecord.ClientID != cmd.ClientID {
 		return nil, fmt.Errorf("%s: access token context boundary violation", port.ErrInvalidGrant)
 	}
 
-	// 3. Structural Replay Verification: Confirm the incoming Refresh Token is bound to this specific Access Token session
-	if tokenRecord.SessionID != cmd.CurrentClaims.SessionID {
+	// 7. Structural Replay Verification: Confirm the incoming Refresh Token is bound to this specific Access Token session
+	if tokenRecord.SessionID != tokenClaims.SessionID {
 		return nil, fmt.Errorf("%s: session tracking token mismatch", port.ErrInvalidGrant)
 	}
 
-	// 4. Temporal Guardrail: Assert token validity window has not expired
+	// 8. Temporal Guardrail: Assert token validity window has not expired
 	if s.clock.Now().After(tokenRecord.ExpiresAt) {
 		return nil, fmt.Errorf("%s: refresh token has expired", port.ErrInvalidGrant)
 	}
@@ -703,12 +719,12 @@ func (s *OAuthService) RotateRefreshToken(
 		return nil, fmt.Errorf("%s: structural compromise detected - token family revoked", port.ErrInvalidGrant)
 	}
 
-	// 5. Mark the incoming leaf node as used immediately before minting new children (Destructive Update)
+	// 9. Mark the incoming leaf node as used immediately before minting new children (Destructive Update)
 	if err := s.storage.MarkRefreshTokenUsed(ctx, cmd.RefreshToken); err != nil {
 		return nil, fmt.Errorf("oauth_service: token status invalidation pass failed: %w", err)
 	}
 
-	// 6. Gather multi-tenant metadata to resolve stateless wire properties
+	// 10. Gather multi-tenant metadata to resolve stateless wire properties
 	tenant := cmd.Tenant
 	if tenant == nil {
 		tn, err := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
@@ -718,24 +734,57 @@ func (s *OAuthService) RotateRefreshToken(
 		tenant = tn
 	}
 
-	// 7. Mint rotated sliding child tokens while preserving historical lineage anchors [1.14]
+	// 11. Mint rotated sliding child tokens while preserving historical lineage anchors [1.14]
 	return s.mintTokensFromSession(ctx, tenant, mintTokensCommand{
-		PartitionAlias:        cmd.CurrentClaims.PartitionAlias, // Inherited zero-lookup partition propagation [5.7]
+		PartitionAlias:        tokenClaims.PartitionAlias, // Inherited zero-lookup partition propagation [5.7]
 		ClientID:              cmd.ClientID,
 		Subject:               tokenRecord.Subject,
 		SessionID:             tokenRecord.SessionID,
 		Scopes:                tokenRecord.Scopes,
 		IdentityProviderID:    tokenRecord.IdentityProviderID,
 		IdentityProviderAlias: tokenRecord.IdentityProviderAlias,
-		ACR:                   cmd.CurrentClaims.ACR,          // Inherited zero-lookup trust carryover [5.7]
-		AMR:                   cmd.CurrentClaims.AMR,          // Inherited zero-lookup trust carryover [5.7]
-		Confirmation:          cmd.CurrentClaims.Confirmation, // Pass forward proof-of-possession parameters if active
-		ExistingTokenFamilyID: tokenRecord.TokenFamilyID,      // Retain historical lineage family anchor
-		OverrideAudiences:     cmd.CurrentClaims.Audiences,    // Inherited zero-lookup audience footprint arrays [5.7]
+		ACR:                   tokenClaims.ACR,           // Inherited zero-lookup trust carryover [5.7]
+		AMR:                   tokenClaims.AMR,           // Inherited zero-lookup trust carryover [5.7]
+		Confirmation:          tokenClaims.Confirmation,  // Pass forward proof-of-possession parameters if active
+		ExistingTokenFamilyID: tokenRecord.TokenFamilyID, // Retain historical lineage family anchor
+		OverrideAudiences:     tokenClaims.Audiences,     // Inherited zero-lookup audience footprint arrays [5.7]
 		Application:           cmd.Application,
 		ApplicationProfile:    cmd.ApplicationProfile,
 		ApplicationGroup:      cmd.ApplicationGroup,
 	})
+}
+
+func (s *OAuthService) mapMapClaimsToTokenClaims(tenantID uuid.UUID, claims map[string]any) model.TokenClaims {
+	sub, _ := claims["sub"].(string)
+	sid, _ := claims["sid"].(string)
+	pid, _ := claims["pid"].(string)
+	azp, _ := claims["azp"].(string)
+	acr, _ := claims["acr"].(string)
+
+	var auds []string
+	if rawAud, exists := claims["aud"]; exists {
+		if single, ok := rawAud.(string); ok {
+			auds = []string{single}
+		} else if slice, ok := rawAud.([]any); ok {
+			for _, a := range slice {
+				if str, ok := a.(string); ok {
+					auds = append(auds, str)
+				}
+			}
+		}
+	}
+
+	return model.TokenClaims{
+		BaseTokenClaims: model.BaseTokenClaims{
+			Subject:   sub,
+			SessionID: sid,
+			TenantID:  tenantID,
+			ClientID:  azp,
+			ACR:       acr,
+		},
+		Audiences:      auds,
+		PartitionAlias: pid,
+	}
 }
 
 // ExchangeExternalToken executes an RFC 8693 compliant Token Exchange workflow,
