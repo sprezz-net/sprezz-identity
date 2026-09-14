@@ -9,7 +9,6 @@ import (
 	"sprezz-identity/internal/domain/port"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 type PARHandler struct {
@@ -41,9 +40,9 @@ func (h *PARHandler) HandlePARRequest(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Recover pre-validated parameters straight from the ClientAuthMiddleware context thread pool
 	ctx := r.Context()
-	tenantUUID := ctx.Value(TenantIDContextKey).(uuid.UUID)
-	clientID := ctx.Value(ClientIDContextKey).(string)
-	isClientAuthenticated := ctx.Value(ClientAuthFlagKey).(bool)
+	tenantUUID := TenantIDFromContext(ctx)
+	clientID, _ := ClientIDFromContext(ctx)
+	isClientAuthenticated := IsClientAuthenticatedFromContext(ctx)
 
 	var requestedScopes []string
 	if scopeParam := r.Form.Get("scope"); scopeParam != "" {

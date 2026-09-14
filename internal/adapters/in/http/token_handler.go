@@ -11,7 +11,6 @@ import (
 	"sprezz-identity/internal/domain/port"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 type TokenHandler struct {
@@ -48,10 +47,9 @@ func (h *TokenHandler) HandleTokenRequest(w http.ResponseWriter, r *http.Request
 
 	// 2. Recover pre-validated parameters out of context with zero database query lookups
 	ctx := r.Context()
-	tenantUUID := ctx.Value(TenantIDContextKey).(uuid.UUID)
-	clientID := ctx.Value(ClientIDContextKey).(string)
-	isClientAuthenticated := ctx.Value(ClientAuthFlagKey).(bool)
-
+	tenantUUID := TenantIDFromContext(ctx)
+	clientID, _ := ClientIDFromContext(ctx)
+	isClientAuthenticated := IsClientAuthenticatedFromContext(ctx)
 	app, _ := AppFromContext(ctx)
 	profile, _ := ProfileFromContext(ctx)
 	group, _ := GroupFromContext(ctx)

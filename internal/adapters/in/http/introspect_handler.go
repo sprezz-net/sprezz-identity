@@ -9,7 +9,6 @@ import (
 	"sprezz-identity/internal/domain/port"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 type IntrospectionHandler struct {
@@ -30,7 +29,7 @@ func (h *IntrospectionHandler) HandleIntrospectionRequest(w http.ResponseWriter,
 	// 1. Enforce strict Content-Type compliance per RFC 7662 Section 2.1
 	contentType := r.Header.Get(model.HeaderContentType)
 	if !strings.HasPrefix(contentType, model.ContentTypeFormUrlEncoded) {
-		h.writeJSONError(w, http.StatusBadRequest, "invalid_request", "content-type must be application/x-www-form-urlencoded")
+		h.writeJSONError(w, http.StatusBadRequest, "invalid_request", "content-type must be "+model.ContentTypeFormUrlEncoded)
 		return
 	}
 
@@ -41,9 +40,9 @@ func (h *IntrospectionHandler) HandleIntrospectionRequest(w http.ResponseWriter,
 
 	// 2. Recover pre-validated perimeter parameters from ClientAuthMiddleware context
 	ctx := r.Context()
-	tenantUUID := ctx.Value(TenantIDContextKey).(uuid.UUID)
-	clientID := ctx.Value(ClientIDContextKey).(string)
-	isClientAuthenticated := ctx.Value(ClientAuthFlagKey).(bool)
+	tenantUUID := TenantIDFromContext(ctx)
+	clientID, _ := ClientIDFromContext(ctx)
+	isClientAuthenticated := IsClientAuthenticatedFromContext(ctx)
 
 	// 3. Map pure primitive fields directly into the Port Command envelope object
 	cmd := port.IntrospectTokenCommand{

@@ -9,7 +9,6 @@ import (
 	"sprezz-identity/internal/domain/port"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 type RevocationHandler struct {
@@ -41,9 +40,9 @@ func (h *RevocationHandler) HandleRevocationRequest(w http.ResponseWriter, r *ht
 
 	// 2. Recover pre-validated parameters straight from the ClientAuthMiddleware context thread pool
 	ctx := r.Context()
-	tenantUUID := ctx.Value(TenantIDContextKey).(uuid.UUID)
-	clientID := ctx.Value(ClientIDContextKey).(string)
-	isClientAuthenticated := ctx.Value(ClientAuthFlagKey).(bool)
+	tenantUUID := TenantIDFromContext(ctx)
+	clientID, _ := ClientIDFromContext(ctx)
+	isClientAuthenticated := IsClientAuthenticatedFromContext(ctx)
 
 	// 3. Map parameters cleanly to the Port Command envelope object
 	cmd := port.RevokeTokenCommand{

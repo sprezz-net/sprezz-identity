@@ -41,16 +41,16 @@ type HttpAdapter struct {
 	adminDomain             string
 }
 
-type contextKey string
+type ContextKey string
 
 const (
-	TenantContextKey   contextKey = "spz_tenant_context"
-	TenantIDContextKey contextKey = "spz_tenant_id_context"
-	AppContextKey      contextKey = "spz_app_context"
-	ProfileContextKey  contextKey = "spz_profile_context"
-	GroupContextKey    contextKey = "spz_group_context"
-	ClientAuthFlagKey  contextKey = "spz_client_authenticated"
-	ClientIDContextKey contextKey = "spz_client_id"
+	TenantContextKey   ContextKey = "spz_tenant_context"
+	TenantIDContextKey ContextKey = "spz_tenant_id_context"
+	AppContextKey      ContextKey = "spz_app_context"
+	ProfileContextKey  ContextKey = "spz_profile_context"
+	GroupContextKey    ContextKey = "spz_group_context"
+	ClientAuthFlagKey  ContextKey = "spz_client_authenticated"
+	ClientIDContextKey ContextKey = "spz_client_id"
 )
 
 // Helper functions to pull compiled layers out of the request context down-funnel
@@ -66,6 +66,20 @@ func TenantIDFromContext(ctx context.Context) uuid.UUID {
 func TenantFromContext(ctx context.Context) (*model.Tenant, bool) {
 	tenant, ok := ctx.Value(TenantContextKey).(*model.Tenant)
 	return tenant, ok
+}
+
+// ClientIDFromContext recovers the authenticated Client ID string from the request context.
+func ClientIDFromContext(ctx context.Context) (string, bool) {
+	val, ok := ctx.Value(ClientIDContextKey).(string)
+	return val, ok
+}
+
+// IsClientAuthenticatedFromContext extracts the boolean credential verification status.
+func IsClientAuthenticatedFromContext(ctx context.Context) bool {
+	if val, ok := ctx.Value(ClientAuthFlagKey).(bool); ok {
+		return val
+	}
+	return false
 }
 
 func AppFromContext(ctx context.Context) (*model.Application, bool) {
