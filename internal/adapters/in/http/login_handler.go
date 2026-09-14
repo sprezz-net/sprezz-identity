@@ -2,6 +2,7 @@ package http
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 
 	"sprezz-identity/internal/domain/model"
@@ -210,7 +211,8 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 func (h *LoginHandler) renderInlineFormError(w http.ResponseWriter, r *http.Request, message string) {
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	w.WriteHeader(http.StatusOK)
-	_, _ = fmt.Fprintf(w, `<div class="p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg text-sm font-medium">%s</div>`, message)
+	escapedMessage := html.EscapeString(message)
+	_, _ = fmt.Fprintf(w, `<div class="p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg text-sm font-medium">%s</div>`, escapedMessage)
 }
 
 func (h *LoginHandler) parseInteractionCookie(r *http.Request, tenantID uuid.UUID) string {
