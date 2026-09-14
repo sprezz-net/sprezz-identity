@@ -203,7 +203,7 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 		redirectURL = "/"
 	}
 
-	w.Header().Set(model.HeaderHXRedirect, redirectURL)
+	w.Header().Set(model.HeaderHxRedirect, redirectURL)
 	w.WriteHeader(http.StatusOK)
 }
 

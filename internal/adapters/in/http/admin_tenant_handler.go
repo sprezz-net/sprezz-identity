@@ -34,7 +34,7 @@ func (h *AdminTenantHandler) Routes(r chi.Router) {
 func (h *AdminTenantHandler) adminNewTenantForm(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	if r.URL.Query().Get("modal") == "true" {
-		component := admin.Modal("Create Tenant", "/admin/tenants/new")
+		component := admin.Modal("Create Tenant", port.RouteAdmin+port.RouteAdminTenants+"/new")
 		_ = component.Render(r.Context(), w)
 		return
 	}
@@ -103,7 +103,7 @@ func (h *AdminTenantHandler) adminCreateTenant(w http.ResponseWriter, r *http.Re
 	}
 	_ = h.adminStorage.CreateIdentityProvider(r.Context(), newTenant.ID, defaultProvider)
 
-	w.Header().Set(model.HeaderHXRedirect, port.RouteAdmin+"?msg=Tenant+created+successfully")
+	w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+"?msg=Tenant+created+successfully")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -111,21 +111,21 @@ func (h *AdminTenantHandler) adminToggleSignup(w http.ResponseWriter, r *http.Re
 	tenantIDStr := chi.URLParam(r, "id")
 	tenantID, err := uuid.Parse(tenantIDStr)
 	if err != nil {
-		http.Error(w, "invalid tenant id", http.StatusBadRequest)
+		h.renderError(w, r, http.StatusBadRequest, ErrInvalidTenantUUID)
 		return
 	}
 
 	// Fetch the tenant first to determine the toggled signup state
 	t, err := h.storagePort.ResolveTenantByUUID(r.Context(), tenantID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		h.renderError(w, r, http.StatusNotFound, err.Error())
 		return
 	}
 
 	// Delegate orchestration completely to the domain service
 	tenant, err := h.tenantUseCase.ToggleSignup(r.Context(), tenantID, !t.Config.AllowSignup)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.renderError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -140,12 +140,12 @@ func (h *AdminTenantHandler) adminToggleSignup(w http.ResponseWriter, r *http.Re
 	_ = component.Render(r.Context(), w)
 
 	// We use HX-Redirect to natively trigger a full page refresh with the success message
-	w.Header().Set(model.HeaderHXRedirect, port.RouteAdmin+"?msg=Registration+status+updated+successfully")
+	w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+"?msg=Registration+status+updated+successfully")
 }
 
 func (h *AdminTenantHandler) adminTenantsPage(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
-	isAdminTenant := tenant.Name == adminTenantName
+	isAdminTenant := tenant.Name == AdminTenantName
 
 	allTenants := []model.Tenant{}
 	if isAdminTenant {
@@ -166,7 +166,7 @@ func (h *AdminTenantHandler) adminTenantsPage(w http.ResponseWriter, r *http.Req
 		Msg:           msg,
 		Errors:        make(map[string]string),
 	}
-	if r.Header.Get(model.HeaderHXRequest) == "true" {
+	if r.Header.Get(model.HeaderHxRequest) == "true" {
 		_ = admin.TenantsContent(props).Render(r.Context(), w)
 	} else {
 		_ = admin.TenantsPage(props).Render(r.Context(), w)
@@ -188,7 +188,7 @@ func validateDefaultRedirectURI(uri string, whitelist []string) string {
 	}
 	u, err := url.Parse(uri)
 	if err != nil || u.Scheme == "" || u.Host == "" {
-		return errInvalidURLFormat
+		return ErrInvalidURLFormat
 	}
 	if !isPresentInWhitelist(uri, whitelist) {
 		return "Default Redirect URI must be present in the Redirect Whitelist"
@@ -243,7 +243,7 @@ func (h *AdminTenantHandler) adminSaveTenantSettings(w http.ResponseWriter, r *h
 	if len(errs) > 0 {
 		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 		w.WriteHeader(http.StatusUnprocessableEntity)
-		isAdminTenant := tenant.Name == adminTenantName
+		isAdminTenant := tenant.Name == AdminTenantName
 		allTenants := []model.Tenant{}
 		if isAdminTenant {
 			allTenants, _ = h.adminStorage.GetAllTenants(r.Context())
@@ -264,5 +264,6 @@ func (h *AdminTenantHandler) adminSaveTenantSettings(w http.ResponseWriter, r *h
 		return
 	}
 
-	http.Redirect(w, r, "/admin/tenants?msg=Settings+saved+successfully", http.StatusFound)
+	w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+port.RouteAdminTenants+"?msg=Settings+saved+successfully")
+	w.WriteHeader(http.StatusOK)
 }

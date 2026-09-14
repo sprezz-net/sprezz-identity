@@ -182,7 +182,7 @@ func TestHttpAdapter_LoginSubmit_Success(t *testing.T) {
 		t.Fatalf("expected status 200, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 
-	hxRedirect := rec.Header().Get(model.HeaderHXRedirect)
+	hxRedirect := rec.Header().Get(model.HeaderHxRedirect)
 	if hxRedirect != "https://callback?code=abc" {
 		t.Errorf("expected HX-Redirect 'https://callback?code=abc', got '%s'", hxRedirect)
 	}

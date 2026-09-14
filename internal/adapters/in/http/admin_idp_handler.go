@@ -70,7 +70,7 @@ func (h *AdminIDPHandler) adminIDPsPage(w http.ResponseWriter, r *http.Request) 
 		FilterPartitionID: filterPartitionID,
 		Msg:               msg,
 	}
-	if r.Header.Get(model.HeaderHXRequest) == "true" {
+	if r.Header.Get(model.HeaderHxRequest) == "true" {
 		_ = admin.IDPsContent(props).Render(r.Context(), w)
 	} else {
 		_ = admin.IDPsPage(props).Render(r.Context(), w)
@@ -81,7 +81,7 @@ func (h *AdminIDPHandler) adminNewIDPForm(w http.ResponseWriter, r *http.Request
 	tenant, _ := TenantFromContext(r.Context())
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	if r.URL.Query().Get("modal") == "true" {
-		component := admin.Modal("Add Identity Provider", "/admin/idps/new")
+		component := admin.Modal("Add Identity Provider", port.RouteAdmin+port.RouteAdminIdentityProviders+"/new")
 		_ = component.Render(r.Context(), w)
 		return
 	}
@@ -102,7 +102,7 @@ func (h *AdminIDPHandler) adminEditIDPForm(w http.ResponseWriter, r *http.Reques
 	idpIDStr := r.URL.Query().Get("id")
 	idpUUID, err := uuid.Parse(idpIDStr)
 	if err != nil {
-		h.renderError(w, r, http.StatusBadRequest, errInvalidIDPUUID)
+		h.renderError(w, r, http.StatusBadRequest, ErrInvalidIDPUUID)
 		return
 	}
 
@@ -120,7 +120,7 @@ func (h *AdminIDPHandler) adminEditIDPForm(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	if r.URL.Query().Get("modal") == "true" {
-		component := admin.Modal("Edit Identity Provider", fmt.Sprintf("/admin/idps/edit?id=%s", idpIDStr))
+		component := admin.Modal("Edit Identity Provider", fmt.Sprintf(port.RouteAdmin+port.RouteAdminIdentityProviders+"/edit?id=%s", idpIDStr))
 		_ = component.Render(r.Context(), w)
 		return
 	}
@@ -135,13 +135,13 @@ func (h *AdminIDPHandler) adminEditIDPForm(w http.ResponseWriter, r *http.Reques
 func (h *AdminIDPHandler) adminDiscoverIDP(w http.ResponseWriter, r *http.Request) {
 	urlStr := r.URL.Query().Get("url")
 	if urlStr == "" {
-		http.Error(w, "OIDC discovery URL is required", http.StatusBadRequest)
+		h.renderError(w, r, http.StatusBadRequest, ErrOIDCDiscoveryURL)
 		return
 	}
 
 	meta, err := h.idpService.DiscoverOIDC(r.Context(), urlStr)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.renderError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -250,7 +250,7 @@ func (h *AdminIDPHandler) adminSaveIDP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set(hxRedirectHeader, "/admin/idps?msg=Identity+provider+saved+successfully")
+	w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+port.RouteAdminIdentityProviders+"?msg=Identity+provider+saved+successfully")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -259,15 +259,15 @@ func (h *AdminIDPHandler) adminDeleteIDP(w http.ResponseWriter, r *http.Request)
 	idpIDStr := chi.URLParam(r, "id")
 	idpUUID, err := uuid.Parse(idpIDStr)
 	if err != nil {
-		http.Error(w, errInvalidIDPUUID, http.StatusBadRequest)
+		h.renderError(w, r, http.StatusBadRequest, ErrInvalidIDPUUID)
 		return
 	}
 
 	if err := h.idpService.DeleteIdentityProvider(r.Context(), tenant.ID, idpUUID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.renderError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	w.Header().Set(hxRedirectHeader, "/admin/idps?msg=Identity+provider+deleted+successfully")
+	w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+port.RouteAdminIdentityProviders+"?msg=Identity+provider+deleted+successfully")
 	w.WriteHeader(http.StatusOK)
 }

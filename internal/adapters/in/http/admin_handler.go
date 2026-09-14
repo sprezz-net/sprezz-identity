@@ -1,30 +1,37 @@
 package http
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
 	"sprezz-identity/internal/views/admin"
+	"sprezz-identity/internal/views/public"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
 const (
-	adminTenantName     = "Administrative Tenant"
-	hxTriggerHeader     = "HX-Trigger"
-	hxRedirectHeader    = "HX-Redirect"
-	hxRequestHeader     = "HX-Request"
-	errInvalidIDPUUID   = "invalid IDP UUID"
-	errInvalidUserUUID  = "invalid User UUID"
-	errInvalidURLFormat = "Invalid URL format (must include protocol like http:// or https://)"
+	AdminTenantName      = "Administrative Tenant"
+	ErrInvalidIDPUUID    = "invalid IDP UUID"
+	ErrInvalidTenantUUID = "invalid Tenant UUID"
+	ErrInvalidUserUUID   = "invalid User UUID"
+	ErrInvalidURLFormat  = "Invalid URL format (must include protocol like http:// or https://)"
+	ErrMalformedPayload  = "malformed payload parameters submitted"
+	ErrOIDCDiscoveryURL  = "OIDC discovery URL is required"
 )
+
+func parseFormStringSlice(form url.Values, key string) []string {
+	vals := form[key]
+	if vals == nil {
+		return []string{}
+	}
+	return vals
+}
 
 type AdminHandler struct {
 	*HttpAdapter
@@ -133,7 +140,7 @@ func (h *AdminHandler) adminDashboardView(w http.ResponseWriter, r *http.Request
 	msg := r.URL.Query().Get("msg")
 	component := admin.AdminDashboard(admin.AdminDashboardProps{
 		ActiveTenant:  *tenant,
-		IsAdminTenant: tenant.Name == adminTenantName,
+		IsAdminTenant: tenant.Name == AdminTenantName,
 		Msg:           msg,
 	})
 	_ = component.Render(r.Context(), w)
@@ -217,21 +224,10 @@ func (h *HttpAdapter) clearCookieAndRedirect(w http.ResponseWriter, r *http.Requ
 	http.Redirect(w, r, redirectPath, http.StatusFound)
 }
 
-func parseFormStringSlice(form url.Values, key string) []string {
-	vals := form[key]
-	if vals == nil {
-		return []string{}
-	}
-	return vals
-}
-
-func parseClientLifetimes(r *http.Request) (time.Duration, time.Duration, time.Duration) {
-	var accessSec, idSec, refreshSec int64
-	_, _ = fmt.Sscanf(r.FormValue("access_token_lifetime"), "%d", &accessSec)
-	_, _ = fmt.Sscanf(r.FormValue("id_token_lifetime"), "%d", &idSec)
-	_, _ = fmt.Sscanf(r.FormValue("refresh_token_lifetime"), "%d", &refreshSec)
-
-	return time.Duration(accessSec) * time.Second,
-		time.Duration(idSec) * time.Second,
-		time.Duration(refreshSec) * time.Second
+func (h *HttpAdapter) renderError(w http.ResponseWriter, r *http.Request, status int, errorMessage string) {
+	slog.Error("Rendering admin visual error page", "status", status, "error", errorMessage, "path", r.URL.Path)
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
+	w.WriteHeader(status)
+	component := public.Error(errorMessage)
+	_ = component.Render(r.Context(), w)
 }

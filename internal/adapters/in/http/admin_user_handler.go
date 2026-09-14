@@ -73,7 +73,7 @@ func (h *AdminUserHandler) adminUsersPage(w http.ResponseWriter, r *http.Request
 		FilterPartitionID: filterPartitionID,
 		Msg:               msg,
 	}
-	if r.Header.Get(model.HeaderHXRequest) == "true" {
+	if r.Header.Get(model.HeaderHxRequest) == "true" {
 		_ = admin.UsersContent(props).Render(r.Context(), w)
 	} else {
 		_ = admin.UsersPage(props).Render(r.Context(), w)
@@ -85,7 +85,7 @@ func (h *AdminUserHandler) adminViewUser(w http.ResponseWriter, r *http.Request)
 	userIDStr := r.URL.Query().Get("id")
 	userUUID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		h.renderError(w, r, http.StatusBadRequest, errInvalidUserUUID)
+		h.renderError(w, r, http.StatusBadRequest, ErrInvalidUserUUID)
 		return
 	}
 
@@ -112,7 +112,7 @@ func (h *AdminUserHandler) adminViewUser(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	if r.URL.Query().Get("modal") == "true" {
-		component := admin.Modal(user.Name, fmt.Sprintf("/admin/users/view?id=%s&partition_id=%d", userIDStr, partitionID))
+		component := admin.Modal(user.Name, fmt.Sprintf(port.RouteAdmin+port.RouteAdminUsers+"/view?id=%s&partition_id=%d", userIDStr, partitionID))
 		_ = component.Render(r.Context(), w)
 		return
 	}
@@ -129,7 +129,7 @@ func (h *AdminUserHandler) adminEditUserForm(w http.ResponseWriter, r *http.Requ
 	userIDStr := r.URL.Query().Get("id")
 	userUUID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		h.renderError(w, r, http.StatusBadRequest, errInvalidUserUUID)
+		h.renderError(w, r, http.StatusBadRequest, ErrInvalidUserUUID)
 		return
 	}
 
@@ -150,7 +150,7 @@ func (h *AdminUserHandler) adminEditUserForm(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	if r.URL.Query().Get("modal") == "true" {
-		component := admin.Modal("Edit User", fmt.Sprintf("/admin/users/edit?id=%s&partition_id=%d", userIDStr, partitionID))
+		component := admin.Modal("Edit User", fmt.Sprintf(port.RouteAdmin+port.RouteAdminUsers+"/edit?id=%s&partition_id=%d", userIDStr, partitionID))
 		_ = component.Render(r.Context(), w)
 		return
 	}
@@ -167,7 +167,7 @@ func (h *AdminUserHandler) adminSaveUser(w http.ResponseWriter, r *http.Request)
 	id := r.FormValue("id")
 	userUUID, err := uuid.Parse(id)
 	if err != nil {
-		h.renderError(w, r, http.StatusBadRequest, errInvalidUserUUID)
+		h.renderError(w, r, http.StatusBadRequest, ErrInvalidUserUUID)
 		return
 	}
 
@@ -248,7 +248,7 @@ func (h *AdminUserHandler) adminSaveUser(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.Header().Set(model.HeaderHXRedirect, fmt.Sprintf("/admin/users?msg=User+%s+updated+successfully", url.QueryEscape(user.Name)))
+	w.Header().Set(model.HeaderHxRedirect, fmt.Sprintf(port.RouteAdmin+port.RouteAdminUsers+"?msg=User+%s+updated+successfully", url.QueryEscape(user.Name)))
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -257,7 +257,7 @@ func (h *AdminUserHandler) adminDeleteUser(w http.ResponseWriter, r *http.Reques
 	userIDStr := chi.URLParam(r, "id")
 	userUUID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		http.Error(w, errInvalidUserUUID, http.StatusBadRequest)
+		h.renderError(w, r, http.StatusBadRequest, ErrInvalidUserUUID)
 		return
 	}
 
@@ -269,7 +269,7 @@ func (h *AdminUserHandler) adminDeleteUser(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	w.Header().Set(hxRedirectHeader, "/admin/users?msg=User+deleted+successfully")
+	w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+port.RouteAdminUsers+"?msg=User+deleted+successfully")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -278,14 +278,14 @@ func (h *AdminUserHandler) adminDecoupleIdentity(w http.ResponseWriter, r *http.
 	userIDStr := chi.URLParam(r, "id")
 	userUUID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		http.Error(w, errInvalidUserUUID, http.StatusBadRequest)
+		h.renderError(w, r, http.StatusBadRequest, ErrInvalidUserUUID)
 		return
 	}
 
 	idpIDStr := chi.URLParam(r, "idp")
 	idpUUID, err := uuid.Parse(idpIDStr)
 	if err != nil {
-		http.Error(w, errInvalidIDPUUID, http.StatusBadRequest)
+		h.renderError(w, r, http.StatusBadRequest, ErrInvalidIDPUUID)
 		return
 	}
 
