@@ -22,7 +22,8 @@ type FederationService struct {
 	federationClient port.FederationClient // Driven Port: Outbound HTTP network client [1.3]
 	crypto           port.Crypto           // Driven Port: JWT verify and token signature checks
 	clock            port.Clock            // Driven Port: Deterministic System Clock
-	validator        OAuthValidatorService
+	idpService       *IdentityProviderService
+	validator        *OAuthValidatorService
 }
 
 // NewFederationService instantiates a fully isolated federation engine domain loop
@@ -31,12 +32,16 @@ func NewFederationService(
 	fc port.FederationClient,
 	c port.Crypto,
 	cl port.Clock,
+	idpService *IdentityProviderService,
+	validator *OAuthValidatorService,
 ) *FederationService {
 	return &FederationService{
 		storage:          s,
 		federationClient: fc,
 		crypto:           c,
 		clock:            cl,
+		idpService:       idpService,
+		validator:        validator,
 	}
 }
 
@@ -296,7 +301,7 @@ func (s *FederationService) ExecuteFederatedCallback(
 	}
 
 	// Calculate internal assurance levels via the centralized validator service.
-	assurance := s.validator.TranslateIDPReachedLevels(idp, upstreamACR, upstreamAMR)
+	assurance := s.idpService.ResolveFederatedLevels(idp.Config, upstreamACR, upstreamAMR)
 
 	// Generate downstream space-delimited ACR string configurations.
 	tenant, err := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)

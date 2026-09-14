@@ -314,7 +314,7 @@ func (s *IdentityProviderService) DiscoverOIDC(ctx context.Context, endpoint str
 	return string(body), nil
 }
 
-func (s *IdentityProviderService) ResolveFederatedLevels(config model.IdentityProviderConfig, externalAcr string, externalAmrs []string) (int, int) {
+func (s *IdentityProviderService) ResolveFederatedLevels(config model.IdentityProviderConfig, externalAcr string, externalAmrs []string) model.ResolvedAssurance {
 	// 1. Establish initial system baselines from Identity Provider Defaults
 	resolvedAAL := config.AAL
 	if resolvedAAL < 1 {
@@ -357,7 +357,10 @@ func (s *IdentityProviderService) ResolveFederatedLevels(config model.IdentityPr
 		}
 	}
 
-	return resolvedAAL, resolvedIAL
+	return model.ResolvedAssurance{
+		AAL: resolvedAAL,
+		IAL: resolvedIAL,
+	}
 }
 
 func (s *IdentityProviderService) NormalizeFederatedAmr(reachedAAL int) string {

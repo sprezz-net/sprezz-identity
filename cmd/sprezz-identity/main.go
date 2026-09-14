@@ -170,7 +170,7 @@ func initDependencies(ctx context.Context) *dependencies {
 	startKeyRotationWorker(ctx, signer, cfg.IdentityServer.AdminTenantDomain, cfg.IdentityServer.KeyRotationInterval)
 
 	notifier := logout.NewLogoutHttpClient(cfg.AppEnv)
-	validator := service.NewOAuthValidatorService()
+	validator := service.NewOAuthValidatorService(idpService)
 
 	// 8. Instantiate core domain use cases
 	userProfileUseCase := service.NewUserProfileService(storage, signer, sysClock)
@@ -184,6 +184,8 @@ func initDependencies(ctx context.Context) *dependencies {
 		fedClient,
 		signer,
 		sysClock,
+		idpService,
+		validator,
 	)
 
 	oauthService := service.NewOAuthService(

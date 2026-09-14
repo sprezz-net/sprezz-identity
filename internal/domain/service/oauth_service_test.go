@@ -80,7 +80,8 @@ func TestOAuthService_ProcessAuthorizeRequest_StrictPartitionIsolation(t *testin
 	ssoUseCase := portmock.NewSSOSessionUseCaseMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	validator := NewOAuthValidatorService()
+	idpService := NewIdentityProviderService(storage, nil, clock)
+	validator := NewOAuthValidatorService(idpService)
 
 	svc := NewOAuthService(storage, nil, nil, nil, clock, ssoUseCase, validator)
 
@@ -165,7 +166,8 @@ func TestOAuthService_ProcessAuthorizeRequest_MatchingPartitionAllowed(t *testin
 	ssoUseCase := portmock.NewSSOSessionUseCaseMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	validator := NewOAuthValidatorService()
+	idpService := NewIdentityProviderService(storage, nil, clock)
+	validator := NewOAuthValidatorService(idpService)
 
 	svc := NewOAuthService(storage, nil, nil, nil, clock, ssoUseCase, validator)
 
@@ -241,7 +243,8 @@ func TestOAuthService_ProcessAuthorizeRequest_PersistsRequestedScopes(t *testing
 	ssoUseCase := portmock.NewSSOSessionUseCaseMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	validator := NewOAuthValidatorService()
+	idpService := NewIdentityProviderService(storage, nil, clock)
+	validator := NewOAuthValidatorService(idpService)
 
 	svc := NewOAuthService(storage, nil, nil, nil, clock, ssoUseCase, validator)
 

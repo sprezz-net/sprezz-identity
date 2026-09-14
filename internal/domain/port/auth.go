@@ -199,9 +199,9 @@ type AuthUseCase interface {
 
 	// Token Server Token Issuance Core (POST /oauth/token Channels)
 	ExchangeCodeForTokens(ctx context.Context, cmd ExchangeCodeForTokensCommand) (*model.TokenSetResponse, error)
-	RotateRefreshToken(ctx context.Context, cmd RotateRefreshTokenCommand) (*model.TokenSetResponse, error)
 	ExchangeClientCredentials(ctx context.Context, cmd ExchangeClientCredentialsCommand) (*model.TokenSetResponse, error)
 	ExchangeExternalToken(ctx context.Context, tenantID uuid.UUID, clientID, subjectToken string, subjectTokenType model.TokenType) (*model.TokenSetResponse, error)
+	RotateRefreshToken(ctx context.Context, cmd RotateRefreshTokenCommand) (*model.TokenSetResponse, error)
 
 	// Handles back-channel authorization caching
 	ProcessPushedAuthorization(ctx context.Context, cmd PushedAuthCommand) (*PushedAuthResponse, error)

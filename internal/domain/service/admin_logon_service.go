@@ -154,7 +154,7 @@ func (s *AdminLogonService) CompleteAdminLogon(ctx context.Context, localTenantI
 		localTenantID,
 		handshake.ClientID,
 		upstreamTokens.IDToken,
-		"urn:ietf:params:oauth:token-type:id_token",
+		model.TokenTypeIDToken,
 	)
 	if err != nil {
 		return nil, "", fmt.Errorf("admin_logon: profile mapping and federation link denied: %w", err)

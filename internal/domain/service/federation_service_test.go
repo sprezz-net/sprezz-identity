@@ -21,8 +21,10 @@ func TestFederationService_InitiateFederatedLogin_Success(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
+	idp := NewIdentityProviderService(storage, nil, clock)
+	validator := NewOAuthValidatorService(idp)
 
-	svc := NewFederationService(storage, fedClient, crypto, clock)
+	svc := NewFederationService(storage, fedClient, crypto, clock, idp, validator)
 
 	tenantUUID := uuid.New()
 	providerUUID := uuid.New()
@@ -75,8 +77,10 @@ func TestFederationService_ExecuteFederatedCallback_JITProvisioning(t *testing.T
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
+	idp := NewIdentityProviderService(storage, nil, clock)
+	validator := NewOAuthValidatorService(idp)
 
-	svc := NewFederationService(storage, fedClient, crypto, clock)
+	svc := NewFederationService(storage, fedClient, crypto, clock, idp, validator)
 
 	tenantUUID := uuid.New()
 	providerUUID := uuid.New()
@@ -188,8 +192,10 @@ func TestFederationService_ExecuteFederatedCallback_FailsIfEmailUnverified(t *te
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
+	idp := NewIdentityProviderService(storage, nil, clock)
+	validator := NewOAuthValidatorService(idp)
 
-	svc := NewFederationService(storage, fedClient, crypto, clock)
+	svc := NewFederationService(storage, fedClient, crypto, clock, idp, validator)
 
 	tenantUUID := uuid.New()
 	providerUUID := uuid.New()

@@ -21,10 +21,14 @@ var (
 	ErrClientAudiencesNotAllowed = errors.New("requested audiences are not allowed for this client")
 )
 
-type OAuthValidatorService struct{}
+type OAuthValidatorService struct {
+	idpService *IdentityProviderService
+}
 
-func NewOAuthValidatorService() *OAuthValidatorService {
-	return &OAuthValidatorService{}
+func NewOAuthValidatorService(idpService *IdentityProviderService) *OAuthValidatorService {
+	return &OAuthValidatorService{
+		idpService: idpService,
+	}
 }
 
 // ValidateRedirect checks if the redirectURL is allowed under the client and matches the tenant's redirect whitelist.
@@ -216,7 +220,7 @@ func (s *OAuthValidatorService) ParseClientACRClaims(claimsJSON string) (*model.
 
 // CompileSessionAssuranceToClientACR gathers all predefined tenant-ACR profiles satisfied by the current IdP
 func (s *OAuthValidatorService) CompileSessionAssuranceToClientACR(tenant *model.Tenant, provider *model.IdentityProvider, externalACR string, externalAMRs []string) string {
-	assurance := s.TranslateIDPReachedLevels(provider, externalACR, externalAMRs)
+	assurance := s.idpService.ResolveFederatedLevels(provider.Config, externalACR, externalAMRs)
 
 	var satisfied []string
 	for acr, req := range tenant.Config.ACRToLevels {
@@ -273,7 +277,7 @@ func (s *OAuthValidatorService) ValidateClientACR(ctx context.Context, tenant *m
 }
 
 func (s *OAuthValidatorService) CheckSessionAssuranceSatisfiesClientConstraints(tenant *model.Tenant, provider *model.IdentityProvider, condition string, externalACR string, externalAMRs []string) bool {
-	assurance := s.TranslateIDPReachedLevels(provider, externalACR, externalAMRs)
+	assurance := s.idpService.ResolveFederatedLevels(provider.Config, externalACR, externalAMRs)
 
 	parts := strings.Split(condition, "-")
 	for _, acr := range parts {
@@ -333,63 +337,4 @@ func (s *OAuthValidatorService) isSubset(subset, set []string) bool {
 		}
 	}
 	return true
-}
-
-// TranslateReachedLevels evaluates raw external ACR/AMR claims against an IdP's configuration maps.
-func (s *OAuthValidatorService) TranslateIDPReachedLevels(
-	provider *model.IdentityProvider,
-	externalACR string,
-	externalAMRs []string,
-) model.ResolvedAssurance {
-
-	// 1. Establish the baseline default assurance scores from the core provider record.
-	// If a baseline is less than 1, clamp it to 1 as the minimum default secure floor.
-	resolvedAAL := provider.Config.AAL
-	if resolvedAAL < 1 {
-		resolvedAAL = 1
-	}
-
-	resolvedIAL := provider.Config.IAL
-	if resolvedIAL < 1 {
-		resolvedIAL = 1
-	}
-
-	// 2. STAGE 1: Evaluate multi-dimensional ACR tuple mappings
-	// Level 0 means "Unmapped", so we ONLY overwrite if the mapping is an explicit level (1, 2, or 3).
-	if externalACR != "" && provider.Config.AcrToTuple != nil {
-		if tuple, exists := provider.Config.AcrToTuple[externalACR]; exists {
-			if tuple.AAL >= 1 && tuple.AAL <= 3 {
-				resolvedAAL = tuple.AAL
-			}
-			if tuple.IAL >= 1 && tuple.IAL <= 3 {
-				resolvedIAL = tuple.IAL
-			}
-		}
-	}
-
-	// 3. STAGE 2: Evaluate dynamic AMR authenticators array scaling checks
-	// Level 0 means "Unmapped", so we filter those out. We find the HIGHEST valid level (1-3)
-	// reported among all active factors to scale the final AAL score.
-	if len(externalAMRs) > 0 && provider.Config.AmrToAAL != nil {
-		highestAMRMappedAAL := 0
-
-		for _, amr := range externalAMRs {
-			cleanAMR := strings.ToLower(strings.TrimSpace(amr))
-			if mappedLevel, exists := provider.Config.AmrToAAL[cleanAMR]; exists {
-				if mappedLevel > highestAMRMappedAAL {
-					highestAMRMappedAAL = mappedLevel
-				}
-			}
-		}
-
-		// Elevate the active AAL context ONLY if a verified factor score (1-3) outranks the baseline tier
-		if highestAMRMappedAAL >= 1 && highestAMRMappedAAL <= 3 && highestAMRMappedAAL > resolvedAAL {
-			resolvedAAL = highestAMRMappedAAL
-		}
-	}
-
-	return model.ResolvedAssurance{
-		AAL: resolvedAAL,
-		IAL: resolvedIAL,
-	}
 }
