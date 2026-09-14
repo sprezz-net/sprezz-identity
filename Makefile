@@ -127,7 +127,7 @@ run: build
 ## clean: Evict transient profiling outputs and temporary compiled targets
 clean:
 	@echo "=> Evicting build targets and coverage profiles..."
-	go clean -testcache
+	go clean -cache
 	rm -f $(BINARY_NAME)
 	rm -f $(SQLC_TIMESTAMP) $(TEMPL_TIMESTAMP) $(MOCK_TIMESTAMP)
 	rm -f $(COVERAGE_FILE)
