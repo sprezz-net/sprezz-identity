@@ -79,6 +79,148 @@ var _ port.AdminStorage = (*Storage)(nil)
 // PORT.STORAGE INTERFACE IMPLEMENTATION (RUNTIME HOT-PATHS)
 // =========================================================================
 
+// InTransaction simulates transactional boundary safety isolation states for the mock memory ecosystem.
+func (s *Storage) InTransaction(ctx context.Context, fn func(txRepo port.Storage) error) error {
+	// 1. Thread Concurrency Guard: Enforce a master mutual exclusion lock over the base data store maps
+	s.mu.Lock()
+
+	// Create an isolated transaction workspace clone by copy-mapping active state pointer references
+	txStorage := &Storage{
+		appEnv:              s.appEnv,
+		tenants:             make(map[string]*model.Tenant, len(s.tenants)),
+		applications:        make(map[uuid.UUID]*model.Application, len(s.applications)),
+		profiles:            make(map[uuid.UUID]*model.ApplicationProfile, len(s.profiles)),
+		groups:              make(map[uuid.UUID]*model.ApplicationGroup, len(s.groups)),
+		profileNames:        make(map[string]uuid.UUID, len(s.profileNames)),
+		groupNames:          make(map[string]uuid.UUID, len(s.groupNames)),
+		sessions:            make(map[string]model.AuthorizationCodeSession, len(s.sessions)),
+		providers:           make(map[string]map[uuid.UUID]model.IdentityProvider, len(s.providers)),
+		userProfiles:        make(map[string]*model.UserProfile, len(s.userProfiles)),
+		passwordCredentials: make(map[string]*model.PasswordCredential, len(s.passwordCredentials)),
+		identities:          make(map[string]*model.UserIdentity, len(s.identities)),
+		interactionSessions: make(map[uuid.UUID]model.InteractionSession, len(s.interactionSessions)),
+		revokedTokens:       make(map[string]time.Time, len(s.revokedTokens)),
+		parSessions:         make(map[string]model.PushedAuthorizationRequest, len(s.parSessions)),
+		dpopProofs:          make(map[string]time.Time, len(s.dpopProofs)),
+		refreshTokens:       make(map[string]model.RefreshToken, len(s.refreshTokens)),
+		partitions:          make(map[string]map[int64]model.Partition, len(s.partitions)),
+		deks:                make(map[uuid.UUID][]byte, len(s.deks)),
+		nonces:              make(map[uuid.UUID][]byte, len(s.nonces)),
+		signingKeys:         make(map[uuid.UUID][]model.SigningKey, len(s.signingKeys)),
+		outboundHandshakes:  make(map[string]model.OutboundHandshakeSession, len(s.outboundHandshakes)),
+	}
+
+	// 2. Clone active data states to establish an isolated volatile staging sandbox
+	for k, v := range s.tenants {
+		txStorage.tenants[k] = v
+	}
+	for k, v := range s.applications {
+		txStorage.applications[k] = v
+	}
+	for k, v := range s.profiles {
+		txStorage.profiles[k] = v
+	}
+	for k, v := range s.groups {
+		txStorage.groups[k] = v
+	}
+	for k, v := range s.profileNames {
+		txStorage.profileNames[k] = v
+	}
+	for k, v := range s.groupNames {
+		txStorage.groupNames[k] = v
+	}
+	for k, v := range s.sessions {
+		txStorage.sessions[k] = v
+	}
+	for k, v := range s.userProfiles {
+		txStorage.userProfiles[k] = v
+	}
+	for k, v := range s.passwordCredentials {
+		txStorage.passwordCredentials[k] = v
+	}
+	for k, v := range s.identities {
+		txStorage.identities[k] = v
+	}
+	for k, v := range s.interactionSessions {
+		txStorage.interactionSessions[k] = v
+	}
+	for k, v := range s.revokedTokens {
+		txStorage.revokedTokens[k] = v
+	}
+	for k, v := range s.parSessions {
+		txStorage.parSessions[k] = v
+	}
+	for k, v := range s.dpopProofs {
+		txStorage.dpopProofs[k] = v
+	}
+	for k, v := range s.refreshTokens {
+		txStorage.refreshTokens[k] = v
+	}
+	for k, v := range s.deks {
+		txStorage.deks[k] = v
+	}
+	for k, v := range s.nonces {
+		txStorage.nonces[k] = v
+	}
+	for k, v := range s.signingKeys {
+		txStorage.signingKeys[k] = v
+	}
+	for k, v := range s.outboundHandshakes {
+		txStorage.outboundHandshakes[k] = v
+	}
+	for k, v := range s.providers {
+		txStorage.providers[k] = make(map[uuid.UUID]model.IdentityProvider, len(v))
+		for subK, subV := range v {
+			txStorage.providers[k][subK] = subV
+		}
+	}
+	for k, v := range s.partitions {
+		txStorage.partitions[k] = make(map[int64]model.Partition, len(v))
+		for subK, subV := range v {
+			txStorage.partitions[k][subK] = subV
+		}
+	}
+
+	// Release the parent structure lock temporarily to enable concurrent execution loops inside the function closure
+	s.mu.Unlock()
+
+	// 3. Fire the execution callback pass containing your token delivery handshake channel
+	err := fn(txStorage)
+	if err != nil {
+		// ROLLBACK EFFECT: An error is thrown back up the stack.
+		// We instantly discard the isolated txStorage workspace maps with zero parent mutations.
+		return fmt.Errorf("memory_transaction_rollback_enforced: %w", err)
+	}
+
+	// 4. COMMIT PHASE: Delivery pipeline confirmed success. Re-acquire the master structure lock to persist staged changes
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.tenants = txStorage.tenants
+	s.applications = txStorage.applications
+	s.profiles = txStorage.profiles
+	s.groups = txStorage.groups
+	s.profileNames = txStorage.profileNames
+	s.groupNames = txStorage.groupNames
+	s.sessions = txStorage.sessions
+	s.providers = txStorage.providers
+	s.userProfiles = txStorage.userProfiles
+	s.passwordCredentials = txStorage.passwordCredentials
+	s.identities = txStorage.identities
+	s.interactionSessions = txStorage.interactionSessions
+	s.revokedTokens = txStorage.revokedTokens
+	s.parSessions = txStorage.parSessions
+	s.dpopProofs = txStorage.dpopProofs
+	s.refreshTokens = txStorage.refreshTokens
+	s.partitions = txStorage.partitions
+	s.deks = txStorage.deks
+	s.nonces = txStorage.nonces
+	s.signingKeys = txStorage.signingKeys
+	s.outboundHandshakes = txStorage.outboundHandshakes
+
+	return nil
+}
+
 func (s *Storage) ResolveTenantByDomain(ctx context.Context, domain string) (*model.Tenant, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

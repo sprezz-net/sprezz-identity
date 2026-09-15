@@ -7,6 +7,7 @@ package portmock
 import (
 	"context"
 	"sprezz-identity/internal/domain/model"
+	mm_port "sprezz-identity/internal/domain/port"
 	"sync"
 	mm_atomic "sync/atomic"
 	"time"
@@ -244,6 +245,13 @@ type StorageMock struct {
 	afterGetUserProfileByIdentifierCounter  uint64
 	beforeGetUserProfileByIdentifierCounter uint64
 	GetUserProfileByIdentifierMock          mStorageMockGetUserProfileByIdentifier
+
+	funcInTransaction          func(ctx context.Context, fn func(txRepo mm_port.Storage) error) (err error)
+	funcInTransactionOrigin    string
+	inspectFuncInTransaction   func(ctx context.Context, fn func(txRepo mm_port.Storage) error)
+	afterInTransactionCounter  uint64
+	beforeInTransactionCounter uint64
+	InTransactionMock          mStorageMockInTransaction
 
 	funcIncrementUserIdentityLoginTracker          func(ctx context.Context, tenantID uuid.UUID, partitionID int64, identityID uuid.UUID, loginTime time.Time) (err error)
 	funcIncrementUserIdentityLoginTrackerOrigin    string
@@ -531,6 +539,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 
 	m.GetUserProfileByIdentifierMock = mStorageMockGetUserProfileByIdentifier{mock: m}
 	m.GetUserProfileByIdentifierMock.callArgs = []*StorageMockGetUserProfileByIdentifierParams{}
+
+	m.InTransactionMock = mStorageMockInTransaction{mock: m}
+	m.InTransactionMock.callArgs = []*StorageMockInTransactionParams{}
 
 	m.IncrementUserIdentityLoginTrackerMock = mStorageMockIncrementUserIdentityLoginTracker{mock: m}
 	m.IncrementUserIdentityLoginTrackerMock.callArgs = []*StorageMockIncrementUserIdentityLoginTrackerParams{}
@@ -12925,6 +12936,348 @@ func (m *StorageMock) MinimockGetUserProfileByIdentifierInspect() {
 	}
 }
 
+type mStorageMockInTransaction struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockInTransactionExpectation
+	expectations       []*StorageMockInTransactionExpectation
+
+	callArgs []*StorageMockInTransactionParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockInTransactionExpectation specifies expectation struct of the Storage.InTransaction
+type StorageMockInTransactionExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockInTransactionParams
+	paramPtrs          *StorageMockInTransactionParamPtrs
+	expectationOrigins StorageMockInTransactionExpectationOrigins
+	results            *StorageMockInTransactionResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockInTransactionParams contains parameters of the Storage.InTransaction
+type StorageMockInTransactionParams struct {
+	ctx context.Context
+	fn  func(txRepo mm_port.Storage) error
+}
+
+// StorageMockInTransactionParamPtrs contains pointers to parameters of the Storage.InTransaction
+type StorageMockInTransactionParamPtrs struct {
+	ctx *context.Context
+	fn  *func(txRepo mm_port.Storage) error
+}
+
+// StorageMockInTransactionResults contains results of the Storage.InTransaction
+type StorageMockInTransactionResults struct {
+	err error
+}
+
+// StorageMockInTransactionOrigins contains origins of expectations of the Storage.InTransaction
+type StorageMockInTransactionExpectationOrigins struct {
+	origin    string
+	originCtx string
+	originFn  string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmInTransaction *mStorageMockInTransaction) Optional() *mStorageMockInTransaction {
+	mmInTransaction.optional = true
+	return mmInTransaction
+}
+
+// Expect sets up expected params for Storage.InTransaction
+func (mmInTransaction *mStorageMockInTransaction) Expect(ctx context.Context, fn func(txRepo mm_port.Storage) error) *mStorageMockInTransaction {
+	if mmInTransaction.mock.funcInTransaction != nil {
+		mmInTransaction.mock.t.Fatalf("StorageMock.InTransaction mock is already set by Set")
+	}
+
+	if mmInTransaction.defaultExpectation == nil {
+		mmInTransaction.defaultExpectation = &StorageMockInTransactionExpectation{}
+	}
+
+	if mmInTransaction.defaultExpectation.paramPtrs != nil {
+		mmInTransaction.mock.t.Fatalf("StorageMock.InTransaction mock is already set by ExpectParams functions")
+	}
+
+	mmInTransaction.defaultExpectation.params = &StorageMockInTransactionParams{ctx, fn}
+	mmInTransaction.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmInTransaction.expectations {
+		if minimock.Equal(e.params, mmInTransaction.defaultExpectation.params) {
+			mmInTransaction.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmInTransaction.defaultExpectation.params)
+		}
+	}
+
+	return mmInTransaction
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.InTransaction
+func (mmInTransaction *mStorageMockInTransaction) ExpectCtxParam1(ctx context.Context) *mStorageMockInTransaction {
+	if mmInTransaction.mock.funcInTransaction != nil {
+		mmInTransaction.mock.t.Fatalf("StorageMock.InTransaction mock is already set by Set")
+	}
+
+	if mmInTransaction.defaultExpectation == nil {
+		mmInTransaction.defaultExpectation = &StorageMockInTransactionExpectation{}
+	}
+
+	if mmInTransaction.defaultExpectation.params != nil {
+		mmInTransaction.mock.t.Fatalf("StorageMock.InTransaction mock is already set by Expect")
+	}
+
+	if mmInTransaction.defaultExpectation.paramPtrs == nil {
+		mmInTransaction.defaultExpectation.paramPtrs = &StorageMockInTransactionParamPtrs{}
+	}
+	mmInTransaction.defaultExpectation.paramPtrs.ctx = &ctx
+	mmInTransaction.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmInTransaction
+}
+
+// ExpectFnParam2 sets up expected param fn for Storage.InTransaction
+func (mmInTransaction *mStorageMockInTransaction) ExpectFnParam2(fn func(txRepo mm_port.Storage) error) *mStorageMockInTransaction {
+	if mmInTransaction.mock.funcInTransaction != nil {
+		mmInTransaction.mock.t.Fatalf("StorageMock.InTransaction mock is already set by Set")
+	}
+
+	if mmInTransaction.defaultExpectation == nil {
+		mmInTransaction.defaultExpectation = &StorageMockInTransactionExpectation{}
+	}
+
+	if mmInTransaction.defaultExpectation.params != nil {
+		mmInTransaction.mock.t.Fatalf("StorageMock.InTransaction mock is already set by Expect")
+	}
+
+	if mmInTransaction.defaultExpectation.paramPtrs == nil {
+		mmInTransaction.defaultExpectation.paramPtrs = &StorageMockInTransactionParamPtrs{}
+	}
+	mmInTransaction.defaultExpectation.paramPtrs.fn = &fn
+	mmInTransaction.defaultExpectation.expectationOrigins.originFn = minimock.CallerInfo(1)
+
+	return mmInTransaction
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.InTransaction
+func (mmInTransaction *mStorageMockInTransaction) Inspect(f func(ctx context.Context, fn func(txRepo mm_port.Storage) error)) *mStorageMockInTransaction {
+	if mmInTransaction.mock.inspectFuncInTransaction != nil {
+		mmInTransaction.mock.t.Fatalf("Inspect function is already set for StorageMock.InTransaction")
+	}
+
+	mmInTransaction.mock.inspectFuncInTransaction = f
+
+	return mmInTransaction
+}
+
+// Return sets up results that will be returned by Storage.InTransaction
+func (mmInTransaction *mStorageMockInTransaction) Return(err error) *StorageMock {
+	if mmInTransaction.mock.funcInTransaction != nil {
+		mmInTransaction.mock.t.Fatalf("StorageMock.InTransaction mock is already set by Set")
+	}
+
+	if mmInTransaction.defaultExpectation == nil {
+		mmInTransaction.defaultExpectation = &StorageMockInTransactionExpectation{mock: mmInTransaction.mock}
+	}
+	mmInTransaction.defaultExpectation.results = &StorageMockInTransactionResults{err}
+	mmInTransaction.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmInTransaction.mock
+}
+
+// Set uses given function f to mock the Storage.InTransaction method
+func (mmInTransaction *mStorageMockInTransaction) Set(f func(ctx context.Context, fn func(txRepo mm_port.Storage) error) (err error)) *StorageMock {
+	if mmInTransaction.defaultExpectation != nil {
+		mmInTransaction.mock.t.Fatalf("Default expectation is already set for the Storage.InTransaction method")
+	}
+
+	if len(mmInTransaction.expectations) > 0 {
+		mmInTransaction.mock.t.Fatalf("Some expectations are already set for the Storage.InTransaction method")
+	}
+
+	mmInTransaction.mock.funcInTransaction = f
+	mmInTransaction.mock.funcInTransactionOrigin = minimock.CallerInfo(1)
+	return mmInTransaction.mock
+}
+
+// When sets expectation for the Storage.InTransaction which will trigger the result defined by the following
+// Then helper
+func (mmInTransaction *mStorageMockInTransaction) When(ctx context.Context, fn func(txRepo mm_port.Storage) error) *StorageMockInTransactionExpectation {
+	if mmInTransaction.mock.funcInTransaction != nil {
+		mmInTransaction.mock.t.Fatalf("StorageMock.InTransaction mock is already set by Set")
+	}
+
+	expectation := &StorageMockInTransactionExpectation{
+		mock:               mmInTransaction.mock,
+		params:             &StorageMockInTransactionParams{ctx, fn},
+		expectationOrigins: StorageMockInTransactionExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmInTransaction.expectations = append(mmInTransaction.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.InTransaction return parameters for the expectation previously defined by the When method
+func (e *StorageMockInTransactionExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockInTransactionResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.InTransaction should be invoked
+func (mmInTransaction *mStorageMockInTransaction) Times(n uint64) *mStorageMockInTransaction {
+	if n == 0 {
+		mmInTransaction.mock.t.Fatalf("Times of StorageMock.InTransaction mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmInTransaction.expectedInvocations, n)
+	mmInTransaction.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmInTransaction
+}
+
+func (mmInTransaction *mStorageMockInTransaction) invocationsDone() bool {
+	if len(mmInTransaction.expectations) == 0 && mmInTransaction.defaultExpectation == nil && mmInTransaction.mock.funcInTransaction == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmInTransaction.mock.afterInTransactionCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmInTransaction.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// InTransaction implements mm_port.Storage
+func (mmInTransaction *StorageMock) InTransaction(ctx context.Context, fn func(txRepo mm_port.Storage) error) (err error) {
+	mm_atomic.AddUint64(&mmInTransaction.beforeInTransactionCounter, 1)
+	defer mm_atomic.AddUint64(&mmInTransaction.afterInTransactionCounter, 1)
+
+	mmInTransaction.t.Helper()
+
+	if mmInTransaction.inspectFuncInTransaction != nil {
+		mmInTransaction.inspectFuncInTransaction(ctx, fn)
+	}
+
+	mm_params := StorageMockInTransactionParams{ctx, fn}
+
+	// Record call args
+	mmInTransaction.InTransactionMock.mutex.Lock()
+	mmInTransaction.InTransactionMock.callArgs = append(mmInTransaction.InTransactionMock.callArgs, &mm_params)
+	mmInTransaction.InTransactionMock.mutex.Unlock()
+
+	for _, e := range mmInTransaction.InTransactionMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmInTransaction.InTransactionMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmInTransaction.InTransactionMock.defaultExpectation.Counter, 1)
+		mm_want := mmInTransaction.InTransactionMock.defaultExpectation.params
+		mm_want_ptrs := mmInTransaction.InTransactionMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockInTransactionParams{ctx, fn}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmInTransaction.t.Errorf("StorageMock.InTransaction got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmInTransaction.InTransactionMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.fn != nil && !minimock.Equal(*mm_want_ptrs.fn, mm_got.fn) {
+				mmInTransaction.t.Errorf("StorageMock.InTransaction got unexpected parameter fn, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmInTransaction.InTransactionMock.defaultExpectation.expectationOrigins.originFn, *mm_want_ptrs.fn, mm_got.fn, minimock.Diff(*mm_want_ptrs.fn, mm_got.fn))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmInTransaction.t.Errorf("StorageMock.InTransaction got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmInTransaction.InTransactionMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmInTransaction.InTransactionMock.defaultExpectation.results
+		if mm_results == nil {
+			mmInTransaction.t.Fatal("No results are set for the StorageMock.InTransaction")
+		}
+		return (*mm_results).err
+	}
+	if mmInTransaction.funcInTransaction != nil {
+		return mmInTransaction.funcInTransaction(ctx, fn)
+	}
+	mmInTransaction.t.Fatalf("Unexpected call to StorageMock.InTransaction. %v %v", ctx, fn)
+	return
+}
+
+// InTransactionAfterCounter returns a count of finished StorageMock.InTransaction invocations
+func (mmInTransaction *StorageMock) InTransactionAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmInTransaction.afterInTransactionCounter)
+}
+
+// InTransactionBeforeCounter returns a count of StorageMock.InTransaction invocations
+func (mmInTransaction *StorageMock) InTransactionBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmInTransaction.beforeInTransactionCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.InTransaction.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmInTransaction *mStorageMockInTransaction) Calls() []*StorageMockInTransactionParams {
+	mmInTransaction.mutex.RLock()
+
+	argCopy := make([]*StorageMockInTransactionParams, len(mmInTransaction.callArgs))
+	copy(argCopy, mmInTransaction.callArgs)
+
+	mmInTransaction.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockInTransactionDone returns true if the count of the InTransaction invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockInTransactionDone() bool {
+	if m.InTransactionMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.InTransactionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.InTransactionMock.invocationsDone()
+}
+
+// MinimockInTransactionInspect logs each unmet expectation
+func (m *StorageMock) MinimockInTransactionInspect() {
+	for _, e := range m.InTransactionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.InTransaction at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterInTransactionCounter := mm_atomic.LoadUint64(&m.afterInTransactionCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.InTransactionMock.defaultExpectation != nil && afterInTransactionCounter < 1 {
+		if m.InTransactionMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.InTransaction at\n%s", m.InTransactionMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.InTransaction at\n%s with params: %#v", m.InTransactionMock.defaultExpectation.expectationOrigins.origin, *m.InTransactionMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcInTransaction != nil && afterInTransactionCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.InTransaction at\n%s", m.funcInTransactionOrigin)
+	}
+
+	if !m.InTransactionMock.invocationsDone() && afterInTransactionCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.InTransaction at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.InTransactionMock.expectedInvocations), m.InTransactionMock.expectedInvocationsOrigin, afterInTransactionCounter)
+	}
+}
+
 type mStorageMockIncrementUserIdentityLoginTracker struct {
 	optional           bool
 	mock               *StorageMock
@@ -22572,6 +22925,8 @@ func (m *StorageMock) MinimockFinish() {
 
 			m.MinimockGetUserProfileByIdentifierInspect()
 
+			m.MinimockInTransactionInspect()
+
 			m.MinimockIncrementUserIdentityLoginTrackerInspect()
 
 			m.MinimockIsDPoPProofUsedInspect()
@@ -22678,6 +23033,7 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockGetUserProfileByIDDone() &&
 		m.MinimockGetUserProfileByIDAndPartitionAliasDone() &&
 		m.MinimockGetUserProfileByIdentifierDone() &&
+		m.MinimockInTransactionDone() &&
 		m.MinimockIncrementUserIdentityLoginTrackerDone() &&
 		m.MinimockIsDPoPProofUsedDone() &&
 		m.MinimockIsTokenRevokedDone() &&

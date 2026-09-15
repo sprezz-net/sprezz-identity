@@ -12,6 +12,9 @@ import (
 // Storage handles high-frequency, low-latency hot-paths for core OAuth/OIDC transactions.
 // This interface is optimized for targeted lookups and is heavily cached at runtime.
 type Storage interface {
+	// Centralized atomic transaction port contract signature
+	InTransaction(ctx context.Context, fn func(txRepo Storage) error) error
+
 	GetApplicationByClientID(ctx context.Context, tenantUUID uuid.UUID, clientID string) (*model.Application, *model.ApplicationProfile, *model.ApplicationGroup, error)
 	RegisterApplication(ctx context.Context, app model.Application) error
 	GetProfileByName(ctx context.Context, tenantUUID uuid.UUID, name string) (*model.ApplicationProfile, error)

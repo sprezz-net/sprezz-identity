@@ -3,6 +3,7 @@ package http
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -117,26 +118,32 @@ func (h *AdminApplicationHandler) adminSaveApplication(w http.ResponseWriter, r 
 		ApplicationName: payload.ApplicationName,
 		ProfileID:       profileID,
 		GroupID:         groupID,
+		OnDelivery: func(plaintextSecret string) error {
+			profile, _ := h.adminApplicationUseCase.GetProfile(r.Context(), tenant.ID, profileID)
+			w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
+
+			// Track A: Public Client application requires zero back-channel secret generation
+			if profile.TokenEndpointAuthMethod == model.AuthMethodNone {
+				w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+port.RouteAdminApplications+"?msg=Application+created+successfully")
+				w.WriteHeader(http.StatusOK)
+				return nil
+			}
+
+			// Track B: Confidential Client application profile. Stream plaintext secret directly into network socket
+			w.WriteHeader(http.StatusOK)
+			component := admin.ApplicationCredentialsResetPanel(payload.ClientID, plaintextSecret)
+
+			// Critical Invariant: If network stream socket breaks mid-write, Render returns an error, forcing a hard DB ROLLBACK
+			return component.Render(r.Context(), w)
+		},
 	}
-	app, secret, err := h.adminApplicationUseCase.CreateApplication(r.Context(), cmd)
+	// Dispatch across the use-case boundary ports layer
+	_, _, err := h.adminApplicationUseCase.CreateApplication(r.Context(), cmd)
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		slog.Error("Transactional application provisioning failed", "err", err)
+		h.renderError(w, r, http.StatusInternalServerError, "Storage transaction rolled back: client delivery channel interrupted.")
 		return
 	}
-
-	profile, _ := h.adminApplicationUseCase.GetProfile(r.Context(), tenant.ID, profileID)
-	if profile.TokenEndpointAuthMethod != model.AuthMethodNone {
-		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-		w.WriteHeader(http.StatusOK)
-
-		// Secure CSP-Nonce stamped OOB component delivery prevents inline injection traps
-		component := admin.ApplicationCredentialsResetPanel(app.ClientID, secret)
-		_ = component.Render(r.Context(), w)
-		return
-	}
-
-	w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+port.RouteAdminApplications+"?msg=Application+created+successfully")
-	w.WriteHeader(http.StatusOK)
 }
 
 // =========================================================================
@@ -609,15 +616,30 @@ func (h *AdminApplicationHandler) adminResetApplicationSecret(w http.ResponseWri
 	tenant, _ := TenantFromContext(r.Context())
 	clientID := chi.URLParam(r, "id")
 
-	plainSecret, err := h.adminApplicationUseCase.ResetApplicationSecret(r.Context(), tenant.ID, clientID)
+	// 1. Package variables into the transaction-locked command contract wrapper
+	cmd := port.ResetApplicationSecretCommand{
+		TenantID: tenant.ID,
+		ClientID: clientID,
+		OnDelivery: func(plaintextSecret string) error {
+			// Set response headers and status inside the transaction boundary
+			w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
+			w.WriteHeader(http.StatusOK)
+
+			// Stream the out-of-band component panel directly into the live socket buffer
+			component := admin.ApplicationCredentialsResetPanel(clientID, plaintextSecret)
+			return component.Render(r.Context(), w)
+		},
+	}
+
+	// 2. Dispatch the command across the driving use-case boundary
+	_, err := h.adminApplicationUseCase.ResetApplicationSecret(r.Context(), cmd)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		slog.Error("Transactional secret rotation failed", "err", err)
+		h.renderError(w, r, http.StatusInternalServerError, "Storage transaction rolled back: client delivery channel interrupted.")
 		return
 	}
 
-	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	component := admin.ApplicationCredentialsResetPanel(clientID, plainSecret)
-	_ = component.Render(r.Context(), w)
+	// 3. Exit cleanly. The OnDelivery callback has already successfully finalized the network stream states.
 }
 
 func (h *AdminApplicationHandler) adminDeleteApplication(w http.ResponseWriter, r *http.Request) {

@@ -22,6 +22,7 @@ type PostgresStorage struct {
 	pool    *pgxpool.Pool
 	queries *sqlcdb.Queries
 	appEnv  string
+	tx      pgx.Tx // Optional: active transaction context for atomic operations
 }
 
 // Compile-time type assertions to guarantee strict structural compliance.
@@ -111,6 +112,38 @@ func valueOrEmpty(value *string) string {
 // =========================================================================
 // PORT.STORAGE INTERFACE IMPLEMENTATION (RUNTIME HOT-PATHS)
 // =========================================================================
+
+func (s *PostgresStorage) InTransaction(ctx context.Context, fn func(txRepo port.Storage) error) error {
+	// 1. Check if this repository instance is already operating inside an active parent transaction
+	if s.tx != nil {
+		return fn(s) // Re-use the existing transaction context cleanly to prevent deadlocks
+	}
+
+	// 2. Open a fresh top-level transaction boundary over the high-performance pool
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: failed to begin transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx) // Safe fallback: triggers an automatic rollback on failures or panics
+	}()
+
+	// 3. Build a dedicated repository copy, wrapping the live pgx.Tx handle cleanly
+	txStorage := &PostgresStorage{
+		pool:    s.pool,
+		queries: s.queries.WithTx(tx), // Dynamic sqlc interceptor re-routing injection wrapper
+		appEnv:  s.appEnv,
+		tx:      tx, // Safely locks down the active pipeline handle
+	}
+
+	// 4. Fire the callback containing the business use case and live network sockets
+	if err := fn(txStorage); err != nil {
+		return err // Errors caught here force an automatic transaction rollback across the defer hook
+	}
+
+	// 5. Handshake confirmed by the HTTP delivery layer: commit modifications down to disk atomically
+	return tx.Commit(ctx)
+}
 
 func (s *PostgresStorage) ResolveTenantByDomain(ctx context.Context, domain string) (*model.Tenant, error) {
 	row, err := s.queries.ResolveTenantByDomain(ctx, domain)

@@ -9,6 +9,10 @@ import (
 	"github.com/google/uuid"
 )
 
+// CommitCallback is executed by the HTTP transport adapter.
+// Returning an error forces the domain service layer to trigger a ROLLBACK.
+type CommitCallback func(plaintextSecret string) error
+
 // CreateApplicationCommand defines parameter inputs for creating an application standalone entity.
 type CreateApplicationCommand struct {
 	TenantID        uuid.UUID
@@ -16,6 +20,7 @@ type CreateApplicationCommand struct {
 	ApplicationName string
 	ProfileID       uuid.UUID
 	GroupID         uuid.UUID
+	OnDelivery      CommitCallback // Handshake callback: runs AFTER write but BEFORE commit
 }
 
 // UpdateApplicationCommand defines parameter inputs for updating an application standalone entity.
@@ -26,6 +31,13 @@ type UpdateApplicationCommand struct {
 	ProfileID       uuid.UUID
 	GroupID         uuid.UUID
 	IsEnabled       bool
+}
+
+// ResetApplicationSecretCommand encapsulates parameters for transaction-locked credential rotation.
+type ResetApplicationSecretCommand struct {
+	TenantID   uuid.UUID
+	ClientID   string
+	OnDelivery CommitCallback // Callback channel: holds DB lock open until HTTP write acknowledges success
 }
 
 // CreateProfileCommand defines parameter inputs for creating a security policy profile standalone.
@@ -98,7 +110,7 @@ type AdminApplicationUseCase interface {
 	UpdateApplication(ctx context.Context, cmd UpdateApplicationCommand) error
 	DeleteApplication(ctx context.Context, tenantID uuid.UUID, clientID string) error
 	ToggleApplicationStatus(ctx context.Context, tenantID uuid.UUID, clientID string) (*model.Application, error)
-	ResetApplicationSecret(ctx context.Context, tenantID uuid.UUID, clientID string) (string, error)
+	ResetApplicationSecret(ctx context.Context, cmd ResetApplicationSecretCommand) (string, error)
 
 	// Standalone Profile CRUD
 	GetProfiles(ctx context.Context, tenantID uuid.UUID) ([]model.ApplicationProfile, error)

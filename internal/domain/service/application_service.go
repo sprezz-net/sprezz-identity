@@ -115,8 +115,29 @@ func (s *ApplicationService) CreateApplication(ctx context.Context, cmd port.Cre
 		UpdatedAt:        s.clock.Now(),
 	}
 
-	if err := s.adminStorage.CreateApplication(ctx, cmd.TenantID, app); err != nil {
-		return nil, "", fmt.Errorf("failed persisting application metadata: %w", err)
+	// Execute within a strict outbound database transaction closure boundary pattern
+	txErr := s.storage.InTransaction(ctx, func(txRepo port.Storage) error {
+		// Use the transaction-scoped repository to stage records securely before committing
+		txAdminStorage, ok := txRepo.(port.AdminStorage)
+		if !ok {
+			return fmt.Errorf("application_service: storage repository context type assertion failure")
+		}
+
+		if errSave := txAdminStorage.CreateApplication(ctx, cmd.TenantID, app); errSave != nil {
+			return fmt.Errorf("failed persisting application metadata: %w", errSave)
+		}
+
+		// Transfer control temporarily over to the inbound transport boundary.
+		// If socket stream delivery fails here, it returns an error and forces a hard DB ROLLBACK.
+		if errDelivery := cmd.OnDelivery(plaintextSecret); errDelivery != nil {
+			return fmt.Errorf("transport_layer_delivery_interrupted_enforcing_rollback: %w", errDelivery)
+		}
+
+		return nil // Staging success: transaction is finalized cleanly
+	})
+
+	if txErr != nil {
+		return nil, "", txErr
 	}
 
 	return &app, plaintextSecret, nil
@@ -174,14 +195,15 @@ func (s *ApplicationService) ToggleApplicationStatus(ctx context.Context, tenant
 	return app, nil
 }
 
-// ResetApplicationSecret rotates credentials for confidential applications.
-func (s *ApplicationService) ResetApplicationSecret(ctx context.Context, tenantID uuid.UUID, clientID string) (string, error) {
-	app, profile, _, err := s.storage.GetApplicationByClientID(ctx, tenantID, clientID)
+// ResetApplicationSecret rotates credentials for confidential applications inside an open transaction loop.
+func (s *ApplicationService) ResetApplicationSecret(ctx context.Context, cmd port.ResetApplicationSecretCommand) (string, error) {
+	// 1. Interrogate core state records via the pre-compiled command properties
+	app, profile, _, err := s.storage.GetApplicationByClientID(ctx, cmd.TenantID, cmd.ClientID)
 	if err != nil {
 		return "", fmt.Errorf("failed retrieving target application: %w", err)
 	}
 
-	// Public clients (TokenEndpointAuthMethod == none) cannot have secrets
+	// 2. Protocol Validation Gate: Public clients (TokenEndpointAuthMethod == none) cannot possess secrets
 	if profile.TokenEndpointAuthMethod == model.AuthMethodNone {
 		return "", fmt.Errorf("cannot reset secret of a public native application")
 	}
@@ -200,8 +222,27 @@ func (s *ApplicationService) ResetApplicationSecret(ctx context.Context, tenantI
 	app.ClientSecretHash = &hash
 	app.UpdatedAt = s.clock.Now()
 
-	if err := s.adminStorage.UpdateApplication(ctx, tenantID, clientID, *app); err != nil {
-		return "", fmt.Errorf("failed to persist updated application secret: %w", err)
+	// 3. Transaction Boundary: Staging state records securely before committing
+	txErr := s.storage.InTransaction(ctx, func(txRepo port.Storage) error {
+		txAdminStorage, ok := txRepo.(port.AdminStorage)
+		if !ok {
+			return fmt.Errorf("application_service: storage repository context type assertion failure")
+		}
+
+		if errUpdate := txAdminStorage.UpdateApplication(ctx, cmd.TenantID, cmd.ClientID, *app); errUpdate != nil {
+			return fmt.Errorf("failed to persist updated application secret: %w", errUpdate)
+		}
+
+		// 4. THE HANDSHAKE HOOK: Transfer execution flow temporarily over to the HTTP writer pipe
+		if errDelivery := cmd.OnDelivery(plaintextSecret); errDelivery != nil {
+			return fmt.Errorf("transport_layer_delivery_interrupted_enforcing_rollback: %w", errDelivery)
+		}
+
+		return nil // Staging success: transaction finalized safely on disk now
+	})
+
+	if txErr != nil {
+		return "", txErr
 	}
 
 	return plaintextSecret, nil

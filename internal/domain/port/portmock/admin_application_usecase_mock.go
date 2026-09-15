@@ -91,9 +91,9 @@ type AdminApplicationUseCaseMock struct {
 	beforeGetProfilesCounter uint64
 	GetProfilesMock          mAdminApplicationUseCaseMockGetProfiles
 
-	funcResetApplicationSecret          func(ctx context.Context, tenantID uuid.UUID, clientID string) (s1 string, err error)
+	funcResetApplicationSecret          func(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand) (s1 string, err error)
 	funcResetApplicationSecretOrigin    string
-	inspectFuncResetApplicationSecret   func(ctx context.Context, tenantID uuid.UUID, clientID string)
+	inspectFuncResetApplicationSecret   func(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand)
 	afterResetApplicationSecretCounter  uint64
 	beforeResetApplicationSecretCounter uint64
 	ResetApplicationSecretMock          mAdminApplicationUseCaseMockResetApplicationSecret
@@ -3765,16 +3765,14 @@ type AdminApplicationUseCaseMockResetApplicationSecretExpectation struct {
 
 // AdminApplicationUseCaseMockResetApplicationSecretParams contains parameters of the AdminApplicationUseCase.ResetApplicationSecret
 type AdminApplicationUseCaseMockResetApplicationSecretParams struct {
-	ctx      context.Context
-	tenantID uuid.UUID
-	clientID string
+	ctx context.Context
+	cmd mm_port.ResetApplicationSecretCommand
 }
 
 // AdminApplicationUseCaseMockResetApplicationSecretParamPtrs contains pointers to parameters of the AdminApplicationUseCase.ResetApplicationSecret
 type AdminApplicationUseCaseMockResetApplicationSecretParamPtrs struct {
-	ctx      *context.Context
-	tenantID *uuid.UUID
-	clientID *string
+	ctx *context.Context
+	cmd *mm_port.ResetApplicationSecretCommand
 }
 
 // AdminApplicationUseCaseMockResetApplicationSecretResults contains results of the AdminApplicationUseCase.ResetApplicationSecret
@@ -3785,10 +3783,9 @@ type AdminApplicationUseCaseMockResetApplicationSecretResults struct {
 
 // AdminApplicationUseCaseMockResetApplicationSecretOrigins contains origins of expectations of the AdminApplicationUseCase.ResetApplicationSecret
 type AdminApplicationUseCaseMockResetApplicationSecretExpectationOrigins struct {
-	origin         string
-	originCtx      string
-	originTenantID string
-	originClientID string
+	origin    string
+	originCtx string
+	originCmd string
 }
 
 // Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
@@ -3802,7 +3799,7 @@ func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecr
 }
 
 // Expect sets up expected params for AdminApplicationUseCase.ResetApplicationSecret
-func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecret) Expect(ctx context.Context, tenantID uuid.UUID, clientID string) *mAdminApplicationUseCaseMockResetApplicationSecret {
+func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecret) Expect(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand) *mAdminApplicationUseCaseMockResetApplicationSecret {
 	if mmResetApplicationSecret.mock.funcResetApplicationSecret != nil {
 		mmResetApplicationSecret.mock.t.Fatalf("AdminApplicationUseCaseMock.ResetApplicationSecret mock is already set by Set")
 	}
@@ -3815,7 +3812,7 @@ func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecr
 		mmResetApplicationSecret.mock.t.Fatalf("AdminApplicationUseCaseMock.ResetApplicationSecret mock is already set by ExpectParams functions")
 	}
 
-	mmResetApplicationSecret.defaultExpectation.params = &AdminApplicationUseCaseMockResetApplicationSecretParams{ctx, tenantID, clientID}
+	mmResetApplicationSecret.defaultExpectation.params = &AdminApplicationUseCaseMockResetApplicationSecretParams{ctx, cmd}
 	mmResetApplicationSecret.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmResetApplicationSecret.expectations {
 		if minimock.Equal(e.params, mmResetApplicationSecret.defaultExpectation.params) {
@@ -3849,8 +3846,8 @@ func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecr
 	return mmResetApplicationSecret
 }
 
-// ExpectTenantIDParam2 sets up expected param tenantID for AdminApplicationUseCase.ResetApplicationSecret
-func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecret) ExpectTenantIDParam2(tenantID uuid.UUID) *mAdminApplicationUseCaseMockResetApplicationSecret {
+// ExpectCmdParam2 sets up expected param cmd for AdminApplicationUseCase.ResetApplicationSecret
+func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecret) ExpectCmdParam2(cmd mm_port.ResetApplicationSecretCommand) *mAdminApplicationUseCaseMockResetApplicationSecret {
 	if mmResetApplicationSecret.mock.funcResetApplicationSecret != nil {
 		mmResetApplicationSecret.mock.t.Fatalf("AdminApplicationUseCaseMock.ResetApplicationSecret mock is already set by Set")
 	}
@@ -3866,37 +3863,14 @@ func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecr
 	if mmResetApplicationSecret.defaultExpectation.paramPtrs == nil {
 		mmResetApplicationSecret.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockResetApplicationSecretParamPtrs{}
 	}
-	mmResetApplicationSecret.defaultExpectation.paramPtrs.tenantID = &tenantID
-	mmResetApplicationSecret.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
-
-	return mmResetApplicationSecret
-}
-
-// ExpectClientIDParam3 sets up expected param clientID for AdminApplicationUseCase.ResetApplicationSecret
-func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecret) ExpectClientIDParam3(clientID string) *mAdminApplicationUseCaseMockResetApplicationSecret {
-	if mmResetApplicationSecret.mock.funcResetApplicationSecret != nil {
-		mmResetApplicationSecret.mock.t.Fatalf("AdminApplicationUseCaseMock.ResetApplicationSecret mock is already set by Set")
-	}
-
-	if mmResetApplicationSecret.defaultExpectation == nil {
-		mmResetApplicationSecret.defaultExpectation = &AdminApplicationUseCaseMockResetApplicationSecretExpectation{}
-	}
-
-	if mmResetApplicationSecret.defaultExpectation.params != nil {
-		mmResetApplicationSecret.mock.t.Fatalf("AdminApplicationUseCaseMock.ResetApplicationSecret mock is already set by Expect")
-	}
-
-	if mmResetApplicationSecret.defaultExpectation.paramPtrs == nil {
-		mmResetApplicationSecret.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockResetApplicationSecretParamPtrs{}
-	}
-	mmResetApplicationSecret.defaultExpectation.paramPtrs.clientID = &clientID
-	mmResetApplicationSecret.defaultExpectation.expectationOrigins.originClientID = minimock.CallerInfo(1)
+	mmResetApplicationSecret.defaultExpectation.paramPtrs.cmd = &cmd
+	mmResetApplicationSecret.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
 
 	return mmResetApplicationSecret
 }
 
 // Inspect accepts an inspector function that has same arguments as the AdminApplicationUseCase.ResetApplicationSecret
-func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecret) Inspect(f func(ctx context.Context, tenantID uuid.UUID, clientID string)) *mAdminApplicationUseCaseMockResetApplicationSecret {
+func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecret) Inspect(f func(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand)) *mAdminApplicationUseCaseMockResetApplicationSecret {
 	if mmResetApplicationSecret.mock.inspectFuncResetApplicationSecret != nil {
 		mmResetApplicationSecret.mock.t.Fatalf("Inspect function is already set for AdminApplicationUseCaseMock.ResetApplicationSecret")
 	}
@@ -3921,7 +3895,7 @@ func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecr
 }
 
 // Set uses given function f to mock the AdminApplicationUseCase.ResetApplicationSecret method
-func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecret) Set(f func(ctx context.Context, tenantID uuid.UUID, clientID string) (s1 string, err error)) *AdminApplicationUseCaseMock {
+func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecret) Set(f func(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand) (s1 string, err error)) *AdminApplicationUseCaseMock {
 	if mmResetApplicationSecret.defaultExpectation != nil {
 		mmResetApplicationSecret.mock.t.Fatalf("Default expectation is already set for the AdminApplicationUseCase.ResetApplicationSecret method")
 	}
@@ -3937,14 +3911,14 @@ func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecr
 
 // When sets expectation for the AdminApplicationUseCase.ResetApplicationSecret which will trigger the result defined by the following
 // Then helper
-func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecret) When(ctx context.Context, tenantID uuid.UUID, clientID string) *AdminApplicationUseCaseMockResetApplicationSecretExpectation {
+func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecret) When(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand) *AdminApplicationUseCaseMockResetApplicationSecretExpectation {
 	if mmResetApplicationSecret.mock.funcResetApplicationSecret != nil {
 		mmResetApplicationSecret.mock.t.Fatalf("AdminApplicationUseCaseMock.ResetApplicationSecret mock is already set by Set")
 	}
 
 	expectation := &AdminApplicationUseCaseMockResetApplicationSecretExpectation{
 		mock:               mmResetApplicationSecret.mock,
-		params:             &AdminApplicationUseCaseMockResetApplicationSecretParams{ctx, tenantID, clientID},
+		params:             &AdminApplicationUseCaseMockResetApplicationSecretParams{ctx, cmd},
 		expectationOrigins: AdminApplicationUseCaseMockResetApplicationSecretExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmResetApplicationSecret.expectations = append(mmResetApplicationSecret.expectations, expectation)
@@ -3979,17 +3953,17 @@ func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecr
 }
 
 // ResetApplicationSecret implements mm_port.AdminApplicationUseCase
-func (mmResetApplicationSecret *AdminApplicationUseCaseMock) ResetApplicationSecret(ctx context.Context, tenantID uuid.UUID, clientID string) (s1 string, err error) {
+func (mmResetApplicationSecret *AdminApplicationUseCaseMock) ResetApplicationSecret(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand) (s1 string, err error) {
 	mm_atomic.AddUint64(&mmResetApplicationSecret.beforeResetApplicationSecretCounter, 1)
 	defer mm_atomic.AddUint64(&mmResetApplicationSecret.afterResetApplicationSecretCounter, 1)
 
 	mmResetApplicationSecret.t.Helper()
 
 	if mmResetApplicationSecret.inspectFuncResetApplicationSecret != nil {
-		mmResetApplicationSecret.inspectFuncResetApplicationSecret(ctx, tenantID, clientID)
+		mmResetApplicationSecret.inspectFuncResetApplicationSecret(ctx, cmd)
 	}
 
-	mm_params := AdminApplicationUseCaseMockResetApplicationSecretParams{ctx, tenantID, clientID}
+	mm_params := AdminApplicationUseCaseMockResetApplicationSecretParams{ctx, cmd}
 
 	// Record call args
 	mmResetApplicationSecret.ResetApplicationSecretMock.mutex.Lock()
@@ -4008,7 +3982,7 @@ func (mmResetApplicationSecret *AdminApplicationUseCaseMock) ResetApplicationSec
 		mm_want := mmResetApplicationSecret.ResetApplicationSecretMock.defaultExpectation.params
 		mm_want_ptrs := mmResetApplicationSecret.ResetApplicationSecretMock.defaultExpectation.paramPtrs
 
-		mm_got := AdminApplicationUseCaseMockResetApplicationSecretParams{ctx, tenantID, clientID}
+		mm_got := AdminApplicationUseCaseMockResetApplicationSecretParams{ctx, cmd}
 
 		if mm_want_ptrs != nil {
 
@@ -4017,14 +3991,9 @@ func (mmResetApplicationSecret *AdminApplicationUseCaseMock) ResetApplicationSec
 					mmResetApplicationSecret.ResetApplicationSecretMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
-			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
-				mmResetApplicationSecret.t.Errorf("AdminApplicationUseCaseMock.ResetApplicationSecret got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmResetApplicationSecret.ResetApplicationSecretMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
-			}
-
-			if mm_want_ptrs.clientID != nil && !minimock.Equal(*mm_want_ptrs.clientID, mm_got.clientID) {
-				mmResetApplicationSecret.t.Errorf("AdminApplicationUseCaseMock.ResetApplicationSecret got unexpected parameter clientID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmResetApplicationSecret.ResetApplicationSecretMock.defaultExpectation.expectationOrigins.originClientID, *mm_want_ptrs.clientID, mm_got.clientID, minimock.Diff(*mm_want_ptrs.clientID, mm_got.clientID))
+			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
+				mmResetApplicationSecret.t.Errorf("AdminApplicationUseCaseMock.ResetApplicationSecret got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResetApplicationSecret.ResetApplicationSecretMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
@@ -4039,9 +4008,9 @@ func (mmResetApplicationSecret *AdminApplicationUseCaseMock) ResetApplicationSec
 		return (*mm_results).s1, (*mm_results).err
 	}
 	if mmResetApplicationSecret.funcResetApplicationSecret != nil {
-		return mmResetApplicationSecret.funcResetApplicationSecret(ctx, tenantID, clientID)
+		return mmResetApplicationSecret.funcResetApplicationSecret(ctx, cmd)
 	}
-	mmResetApplicationSecret.t.Fatalf("Unexpected call to AdminApplicationUseCaseMock.ResetApplicationSecret. %v %v %v", ctx, tenantID, clientID)
+	mmResetApplicationSecret.t.Fatalf("Unexpected call to AdminApplicationUseCaseMock.ResetApplicationSecret. %v %v", ctx, cmd)
 	return
 }
 

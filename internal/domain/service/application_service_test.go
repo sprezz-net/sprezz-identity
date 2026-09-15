@@ -72,7 +72,21 @@ func TestApplicationService_CreateApplication_ConfidentialSecretGeneration(t *te
 		return "hashed-secret", nil
 	})
 
-	// 3. AdminStorage saves the new application node
+	// 3. Stub out the atomic transaction infrastructure wrapper pipeline execution loop
+	storageMock.InTransactionMock.Set(func(ctx context.Context, fn func(txRepo port.Storage) error) error {
+		// In a minimock context, we pass back our test setup references directly as the txRepo driver
+		structWrapper := struct {
+			port.Storage
+			port.AdminStorage
+		}{
+			Storage:      storageMock,
+			AdminStorage: adminStorageMock,
+		}
+
+		return fn(structWrapper)
+	})
+
+	// 4. AdminStorage saves the transaction-locked application record node entries
 	adminStorageMock.CreateApplicationMock.Set(func(ctx context.Context, tenantUUID uuid.UUID, app model.Application) error {
 		assert.Equal(t, tenantID, tenantUUID)
 		assert.Equal(t, "hashed-secret", *app.ClientSecretHash)
@@ -87,6 +101,11 @@ func TestApplicationService_CreateApplication_ConfidentialSecretGeneration(t *te
 		ApplicationName: "Confidential App",
 		ProfileID:       profileID,
 		GroupID:         groupID,
+		// Inject a standard successful delivery callback baseline tracker handle to confirm staging commits
+		OnDelivery: func(plaintextSecret string) error {
+			assert.NotEmpty(t, plaintextSecret)
+			return nil
+		},
 	}
 
 	app, secret, err := svc.CreateApplication(context.Background(), cmd)
