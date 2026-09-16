@@ -78,10 +78,10 @@ func (s *ApplicationService) GetApplicationDetails(ctx context.Context, tenantID
 }
 
 // CreateApplication creates a standalone application entity linking to standalones profiles and groups.
-func (s *ApplicationService) CreateApplication(ctx context.Context, cmd port.CreateApplicationCommand) (*model.Application, string, error) {
+func (s *ApplicationService) CreateApplication(ctx context.Context, cmd port.CreateApplicationCommand) (*model.Application, error) {
 	profile, err := s.adminStorage.GetApplicationProfileByID(ctx, cmd.TenantID, cmd.ProfileID)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed resolving application profile: %w", err)
+		return nil, fmt.Errorf("failed resolving application profile: %w", err)
 	}
 
 	var plaintextSecret string
@@ -90,13 +90,13 @@ func (s *ApplicationService) CreateApplication(ctx context.Context, cmd port.Cre
 	if profile.TokenEndpointAuthMethod != model.AuthMethodNone {
 		bytes := make([]byte, 32)
 		if _, err := rand.Read(bytes); err != nil {
-			return nil, "", fmt.Errorf("failed to generate secure random bytes: %w", err)
+			return nil, fmt.Errorf("failed to generate secure random bytes: %w", err)
 		}
 		plaintextSecret = base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(bytes)
 
 		hash, err := s.crypto.HashCredential(plaintextSecret)
 		if err != nil {
-			return nil, "", fmt.Errorf("failed to hash secure client secret: %w", err)
+			return nil, fmt.Errorf("failed to hash secure client secret: %w", err)
 		}
 		hashedSecret = &hash
 	}
@@ -137,10 +137,10 @@ func (s *ApplicationService) CreateApplication(ctx context.Context, cmd port.Cre
 	})
 
 	if txErr != nil {
-		return nil, "", txErr
+		return nil, txErr
 	}
 
-	return &app, plaintextSecret, nil
+	return &app, nil
 }
 
 // UpdateApplication modifies standalone application metadata.
@@ -196,27 +196,27 @@ func (s *ApplicationService) ToggleApplicationStatus(ctx context.Context, tenant
 }
 
 // ResetApplicationSecret rotates credentials for confidential applications inside an open transaction loop.
-func (s *ApplicationService) ResetApplicationSecret(ctx context.Context, cmd port.ResetApplicationSecretCommand) (string, error) {
+func (s *ApplicationService) ResetApplicationSecret(ctx context.Context, cmd port.ResetApplicationSecretCommand) error {
 	// 1. Interrogate core state records via the pre-compiled command properties
 	app, profile, _, err := s.storage.GetApplicationByClientID(ctx, cmd.TenantID, cmd.ClientID)
 	if err != nil {
-		return "", fmt.Errorf("failed retrieving target application: %w", err)
+		return fmt.Errorf("failed retrieving target application: %w", err)
 	}
 
 	// 2. Protocol Validation Gate: Public clients (TokenEndpointAuthMethod == none) cannot possess secrets
 	if profile.TokenEndpointAuthMethod == model.AuthMethodNone {
-		return "", fmt.Errorf("cannot reset secret of a public native application")
+		return fmt.Errorf("cannot reset secret of a public native application")
 	}
 
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("failed to generate secure random bytes: %w", err)
+		return fmt.Errorf("failed to generate secure random bytes: %w", err)
 	}
 	plaintextSecret := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(bytes)
 
 	hash, err := s.crypto.HashCredential(plaintextSecret)
 	if err != nil {
-		return "", fmt.Errorf("failed to hash generated secret: %w", err)
+		return fmt.Errorf("failed to hash generated secret: %w", err)
 	}
 
 	app.ClientSecretHash = &hash
@@ -242,10 +242,10 @@ func (s *ApplicationService) ResetApplicationSecret(ctx context.Context, cmd por
 	})
 
 	if txErr != nil {
-		return "", txErr
+		return txErr
 	}
 
-	return plaintextSecret, nil
+	return nil
 }
 
 // GetProfiles lists standalone security profiles.

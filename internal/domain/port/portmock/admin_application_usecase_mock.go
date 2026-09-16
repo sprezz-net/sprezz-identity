@@ -21,7 +21,7 @@ type AdminApplicationUseCaseMock struct {
 	t          minimock.Tester
 	finishOnce sync.Once
 
-	funcCreateApplication          func(ctx context.Context, cmd mm_port.CreateApplicationCommand) (ap1 *model.Application, s1 string, err error)
+	funcCreateApplication          func(ctx context.Context, cmd mm_port.CreateApplicationCommand) (ap1 *model.Application, err error)
 	funcCreateApplicationOrigin    string
 	inspectFuncCreateApplication   func(ctx context.Context, cmd mm_port.CreateApplicationCommand)
 	afterCreateApplicationCounter  uint64
@@ -91,7 +91,7 @@ type AdminApplicationUseCaseMock struct {
 	beforeGetProfilesCounter uint64
 	GetProfilesMock          mAdminApplicationUseCaseMockGetProfiles
 
-	funcResetApplicationSecret          func(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand) (s1 string, err error)
+	funcResetApplicationSecret          func(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand) (err error)
 	funcResetApplicationSecretOrigin    string
 	inspectFuncResetApplicationSecret   func(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand)
 	afterResetApplicationSecretCounter  uint64
@@ -224,7 +224,6 @@ type AdminApplicationUseCaseMockCreateApplicationParamPtrs struct {
 // AdminApplicationUseCaseMockCreateApplicationResults contains results of the AdminApplicationUseCase.CreateApplication
 type AdminApplicationUseCaseMockCreateApplicationResults struct {
 	ap1 *model.Application
-	s1  string
 	err error
 }
 
@@ -328,7 +327,7 @@ func (mmCreateApplication *mAdminApplicationUseCaseMockCreateApplication) Inspec
 }
 
 // Return sets up results that will be returned by AdminApplicationUseCase.CreateApplication
-func (mmCreateApplication *mAdminApplicationUseCaseMockCreateApplication) Return(ap1 *model.Application, s1 string, err error) *AdminApplicationUseCaseMock {
+func (mmCreateApplication *mAdminApplicationUseCaseMockCreateApplication) Return(ap1 *model.Application, err error) *AdminApplicationUseCaseMock {
 	if mmCreateApplication.mock.funcCreateApplication != nil {
 		mmCreateApplication.mock.t.Fatalf("AdminApplicationUseCaseMock.CreateApplication mock is already set by Set")
 	}
@@ -336,13 +335,13 @@ func (mmCreateApplication *mAdminApplicationUseCaseMockCreateApplication) Return
 	if mmCreateApplication.defaultExpectation == nil {
 		mmCreateApplication.defaultExpectation = &AdminApplicationUseCaseMockCreateApplicationExpectation{mock: mmCreateApplication.mock}
 	}
-	mmCreateApplication.defaultExpectation.results = &AdminApplicationUseCaseMockCreateApplicationResults{ap1, s1, err}
+	mmCreateApplication.defaultExpectation.results = &AdminApplicationUseCaseMockCreateApplicationResults{ap1, err}
 	mmCreateApplication.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmCreateApplication.mock
 }
 
 // Set uses given function f to mock the AdminApplicationUseCase.CreateApplication method
-func (mmCreateApplication *mAdminApplicationUseCaseMockCreateApplication) Set(f func(ctx context.Context, cmd mm_port.CreateApplicationCommand) (ap1 *model.Application, s1 string, err error)) *AdminApplicationUseCaseMock {
+func (mmCreateApplication *mAdminApplicationUseCaseMockCreateApplication) Set(f func(ctx context.Context, cmd mm_port.CreateApplicationCommand) (ap1 *model.Application, err error)) *AdminApplicationUseCaseMock {
 	if mmCreateApplication.defaultExpectation != nil {
 		mmCreateApplication.mock.t.Fatalf("Default expectation is already set for the AdminApplicationUseCase.CreateApplication method")
 	}
@@ -373,8 +372,8 @@ func (mmCreateApplication *mAdminApplicationUseCaseMockCreateApplication) When(c
 }
 
 // Then sets up AdminApplicationUseCase.CreateApplication return parameters for the expectation previously defined by the When method
-func (e *AdminApplicationUseCaseMockCreateApplicationExpectation) Then(ap1 *model.Application, s1 string, err error) *AdminApplicationUseCaseMock {
-	e.results = &AdminApplicationUseCaseMockCreateApplicationResults{ap1, s1, err}
+func (e *AdminApplicationUseCaseMockCreateApplicationExpectation) Then(ap1 *model.Application, err error) *AdminApplicationUseCaseMock {
+	e.results = &AdminApplicationUseCaseMockCreateApplicationResults{ap1, err}
 	return e.mock
 }
 
@@ -400,7 +399,7 @@ func (mmCreateApplication *mAdminApplicationUseCaseMockCreateApplication) invoca
 }
 
 // CreateApplication implements mm_port.AdminApplicationUseCase
-func (mmCreateApplication *AdminApplicationUseCaseMock) CreateApplication(ctx context.Context, cmd mm_port.CreateApplicationCommand) (ap1 *model.Application, s1 string, err error) {
+func (mmCreateApplication *AdminApplicationUseCaseMock) CreateApplication(ctx context.Context, cmd mm_port.CreateApplicationCommand) (ap1 *model.Application, err error) {
 	mm_atomic.AddUint64(&mmCreateApplication.beforeCreateApplicationCounter, 1)
 	defer mm_atomic.AddUint64(&mmCreateApplication.afterCreateApplicationCounter, 1)
 
@@ -420,7 +419,7 @@ func (mmCreateApplication *AdminApplicationUseCaseMock) CreateApplication(ctx co
 	for _, e := range mmCreateApplication.CreateApplicationMock.expectations {
 		if minimock.Equal(*e.params, mm_params) {
 			mm_atomic.AddUint64(&e.Counter, 1)
-			return e.results.ap1, e.results.s1, e.results.err
+			return e.results.ap1, e.results.err
 		}
 	}
 
@@ -452,7 +451,7 @@ func (mmCreateApplication *AdminApplicationUseCaseMock) CreateApplication(ctx co
 		if mm_results == nil {
 			mmCreateApplication.t.Fatal("No results are set for the AdminApplicationUseCaseMock.CreateApplication")
 		}
-		return (*mm_results).ap1, (*mm_results).s1, (*mm_results).err
+		return (*mm_results).ap1, (*mm_results).err
 	}
 	if mmCreateApplication.funcCreateApplication != nil {
 		return mmCreateApplication.funcCreateApplication(ctx, cmd)
@@ -3777,7 +3776,6 @@ type AdminApplicationUseCaseMockResetApplicationSecretParamPtrs struct {
 
 // AdminApplicationUseCaseMockResetApplicationSecretResults contains results of the AdminApplicationUseCase.ResetApplicationSecret
 type AdminApplicationUseCaseMockResetApplicationSecretResults struct {
-	s1  string
 	err error
 }
 
@@ -3881,7 +3879,7 @@ func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecr
 }
 
 // Return sets up results that will be returned by AdminApplicationUseCase.ResetApplicationSecret
-func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecret) Return(s1 string, err error) *AdminApplicationUseCaseMock {
+func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecret) Return(err error) *AdminApplicationUseCaseMock {
 	if mmResetApplicationSecret.mock.funcResetApplicationSecret != nil {
 		mmResetApplicationSecret.mock.t.Fatalf("AdminApplicationUseCaseMock.ResetApplicationSecret mock is already set by Set")
 	}
@@ -3889,13 +3887,13 @@ func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecr
 	if mmResetApplicationSecret.defaultExpectation == nil {
 		mmResetApplicationSecret.defaultExpectation = &AdminApplicationUseCaseMockResetApplicationSecretExpectation{mock: mmResetApplicationSecret.mock}
 	}
-	mmResetApplicationSecret.defaultExpectation.results = &AdminApplicationUseCaseMockResetApplicationSecretResults{s1, err}
+	mmResetApplicationSecret.defaultExpectation.results = &AdminApplicationUseCaseMockResetApplicationSecretResults{err}
 	mmResetApplicationSecret.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmResetApplicationSecret.mock
 }
 
 // Set uses given function f to mock the AdminApplicationUseCase.ResetApplicationSecret method
-func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecret) Set(f func(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand) (s1 string, err error)) *AdminApplicationUseCaseMock {
+func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecret) Set(f func(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand) (err error)) *AdminApplicationUseCaseMock {
 	if mmResetApplicationSecret.defaultExpectation != nil {
 		mmResetApplicationSecret.mock.t.Fatalf("Default expectation is already set for the AdminApplicationUseCase.ResetApplicationSecret method")
 	}
@@ -3926,8 +3924,8 @@ func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecr
 }
 
 // Then sets up AdminApplicationUseCase.ResetApplicationSecret return parameters for the expectation previously defined by the When method
-func (e *AdminApplicationUseCaseMockResetApplicationSecretExpectation) Then(s1 string, err error) *AdminApplicationUseCaseMock {
-	e.results = &AdminApplicationUseCaseMockResetApplicationSecretResults{s1, err}
+func (e *AdminApplicationUseCaseMockResetApplicationSecretExpectation) Then(err error) *AdminApplicationUseCaseMock {
+	e.results = &AdminApplicationUseCaseMockResetApplicationSecretResults{err}
 	return e.mock
 }
 
@@ -3953,7 +3951,7 @@ func (mmResetApplicationSecret *mAdminApplicationUseCaseMockResetApplicationSecr
 }
 
 // ResetApplicationSecret implements mm_port.AdminApplicationUseCase
-func (mmResetApplicationSecret *AdminApplicationUseCaseMock) ResetApplicationSecret(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand) (s1 string, err error) {
+func (mmResetApplicationSecret *AdminApplicationUseCaseMock) ResetApplicationSecret(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand) (err error) {
 	mm_atomic.AddUint64(&mmResetApplicationSecret.beforeResetApplicationSecretCounter, 1)
 	defer mm_atomic.AddUint64(&mmResetApplicationSecret.afterResetApplicationSecretCounter, 1)
 
@@ -3973,7 +3971,7 @@ func (mmResetApplicationSecret *AdminApplicationUseCaseMock) ResetApplicationSec
 	for _, e := range mmResetApplicationSecret.ResetApplicationSecretMock.expectations {
 		if minimock.Equal(*e.params, mm_params) {
 			mm_atomic.AddUint64(&e.Counter, 1)
-			return e.results.s1, e.results.err
+			return e.results.err
 		}
 	}
 
@@ -4005,7 +4003,7 @@ func (mmResetApplicationSecret *AdminApplicationUseCaseMock) ResetApplicationSec
 		if mm_results == nil {
 			mmResetApplicationSecret.t.Fatal("No results are set for the AdminApplicationUseCaseMock.ResetApplicationSecret")
 		}
-		return (*mm_results).s1, (*mm_results).err
+		return (*mm_results).err
 	}
 	if mmResetApplicationSecret.funcResetApplicationSecret != nil {
 		return mmResetApplicationSecret.funcResetApplicationSecret(ctx, cmd)

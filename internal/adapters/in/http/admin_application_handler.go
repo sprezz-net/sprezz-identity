@@ -138,7 +138,7 @@ func (h *AdminApplicationHandler) adminSaveApplication(w http.ResponseWriter, r 
 		},
 	}
 	// Dispatch across the use-case boundary ports layer
-	_, _, err := h.adminApplicationUseCase.CreateApplication(r.Context(), cmd)
+	_, err := h.adminApplicationUseCase.CreateApplication(r.Context(), cmd)
 	if err != nil {
 		slog.Error("Transactional application provisioning failed", "err", err)
 		h.renderError(w, r, http.StatusInternalServerError, "Storage transaction rolled back: client delivery channel interrupted.")

@@ -56,7 +56,10 @@ func TestApplicationService_CreateApplication_ConfidentialSecretGeneration(t *te
 	profileID := uuid.New()
 	groupID := uuid.New()
 
-	// 1. Storage returns a confidential profile
+	// Track whether our callback actually fired
+	deliveryFired := false
+
+	// 1. Storage returns a confidential profile policy template
 	adminStorageMock.GetApplicationProfileByIDMock.Set(func(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) (*model.ApplicationProfile, error) {
 		assert.Equal(t, tenantID, tenantUUID)
 		assert.Equal(t, profileID, id)
@@ -66,15 +69,14 @@ func TestApplicationService_CreateApplication_ConfidentialSecretGeneration(t *te
 		}, nil
 	})
 
-	// 2. Crypto hashes the generated secret
+	// 2. Crypto hashes the single-flight plaintext secret string parameter
 	cryptoMock.HashCredentialMock.Set(func(secret string) (string, error) {
 		assert.NotEmpty(t, secret)
 		return "hashed-secret", nil
 	})
 
-	// 3. Stub out the atomic transaction infrastructure wrapper pipeline execution loop
+	// 3. Stub out the atomic transaction infrastructure wrapper pipeline loop cleanly
 	storageMock.InTransactionMock.Set(func(ctx context.Context, fn func(txRepo port.Storage) error) error {
-		// In a minimock context, we pass back our test setup references directly as the txRepo driver
 		structWrapper := struct {
 			port.Storage
 			port.AdminStorage
@@ -101,15 +103,17 @@ func TestApplicationService_CreateApplication_ConfidentialSecretGeneration(t *te
 		ApplicationName: "Confidential App",
 		ProfileID:       profileID,
 		GroupID:         groupID,
-		// Inject a standard successful delivery callback baseline tracker handle to confirm staging commits
+		// Verify secret delivery securely within our single-flight delivery channel hook
 		OnDelivery: func(plaintextSecret string) error {
 			assert.NotEmpty(t, plaintextSecret)
+			deliveryFired = true
 			return nil
 		},
 	}
 
-	app, secret, err := svc.CreateApplication(context.Background(), cmd)
+	// Updated return assignment maps strictly to the 2-value return model tuple signature
+	app, err := svc.CreateApplication(context.Background(), cmd)
 	assert.NoError(t, err)
-	assert.NotEmpty(t, secret)
 	assert.NotNil(t, app)
+	assert.True(t, deliveryFired, "expected single-use token delivery handshake execution closure to fire")
 }
