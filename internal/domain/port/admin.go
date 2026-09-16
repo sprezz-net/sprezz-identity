@@ -106,11 +106,11 @@ type AdminApplicationUseCase interface {
 	GetApplicationDetails(ctx context.Context, tenantID uuid.UUID, clientID string) (*model.ApplicationDetailsProps, error)
 
 	// Standalone Application CRUD
-	CreateApplication(ctx context.Context, cmd CreateApplicationCommand) (*model.Application, string, error)
+	CreateApplication(ctx context.Context, cmd CreateApplicationCommand) (*model.Application, error)
 	UpdateApplication(ctx context.Context, cmd UpdateApplicationCommand) error
 	DeleteApplication(ctx context.Context, tenantID uuid.UUID, clientID string) error
 	ToggleApplicationStatus(ctx context.Context, tenantID uuid.UUID, clientID string) (*model.Application, error)
-	ResetApplicationSecret(ctx context.Context, cmd ResetApplicationSecretCommand) (string, error)
+	ResetApplicationSecret(ctx context.Context, cmd ResetApplicationSecretCommand) error
 
 	// Standalone Profile CRUD
 	GetProfiles(ctx context.Context, tenantID uuid.UUID) ([]model.ApplicationProfile, error)
