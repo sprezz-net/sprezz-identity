@@ -453,10 +453,10 @@ func (s *FederationService) resolveFederatedLevels(config model.IdentityProvider
 
 	if externalAcr != "" && config.AcrToTuple != nil {
 		if tuple, exists := config.AcrToTuple[externalAcr]; exists {
-			if tuple.AAL >= 1 && tuple.AAL <= 4 {
+			if tuple.AAL >= 1 && tuple.AAL <= 3 {
 				resolvedAAL = tuple.AAL
 			}
-			if tuple.IAL >= 1 && tuple.IAL <= 4 {
+			if tuple.IAL >= 1 && tuple.IAL <= 3 {
 				resolvedIAL = tuple.IAL
 			}
 		}
@@ -470,7 +470,7 @@ func (s *FederationService) resolveFederatedLevels(config model.IdentityProvider
 				highestAMRMapped = level
 			}
 		}
-		if highestAMRMapped >= 1 && highestAMRMapped <= 4 && highestAMRMapped > resolvedAAL {
+		if highestAMRMapped >= 1 && highestAMRMapped <= 3 && highestAMRMapped > resolvedAAL {
 			resolvedAAL = highestAMRMapped
 		}
 	}
