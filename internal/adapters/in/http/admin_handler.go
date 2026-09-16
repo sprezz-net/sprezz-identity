@@ -25,12 +25,35 @@ const (
 	ErrOIDCDiscoveryURL  = "OIDC discovery URL is required"
 )
 
+// parseFormStringSlice extracts a raw string array from incoming form values.
+// If the key is missing from the payload map, it returns an empty, non-nil slice block.
 func parseFormStringSlice(form url.Values, key string) []string {
 	vals := form[key]
 	if vals == nil {
 		return []string{}
 	}
 	return vals
+}
+
+// CleanBoundaryStringSlice executes a zero-allocation, in-place filtration sweep
+// that trims peripheral whitespace and completely evicts empty string fragments.
+func CleanBoundaryStringSlice(slice []string) []string {
+	if len(slice) == 0 {
+		return slice
+	}
+
+	// In-place filtration reuse loop avoids duplicating the underlying block array
+	writeIdx := 0
+	for _, val := range slice {
+		cleaned := strings.TrimSpace(val)
+		if cleaned != "" {
+			slice[writeIdx] = cleaned
+			writeIdx++
+		}
+	}
+
+	// Explicitly slice off any trailing index trash to release pointers for garbage collection
+	return slice[:writeIdx]
 }
 
 type AdminHandler struct {

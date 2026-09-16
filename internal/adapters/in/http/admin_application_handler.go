@@ -315,13 +315,13 @@ func NewSaveGroupPayload(r *http.Request) *SaveGroupPayload {
 	return &SaveGroupPayload{
 		IDStr:                 r.FormValue("id"),
 		GroupName:             strings.TrimSpace(r.FormValue("group_name")),
-		RedirectURIs:          parseFormStringSlice(r.Form, "redirect_uris"),
-		PostLogoutURIs:        parseFormStringSlice(r.Form, "post_logout_redirect_uris"),
+		RedirectURIs:          CleanBoundaryStringSlice(parseFormStringSlice(r.Form, "redirect_uris")),
+		PostLogoutURIs:        CleanBoundaryStringSlice(parseFormStringSlice(r.Form, "post_logout_redirect_uris")),
 		FrontChannelLogoutURI: strings.TrimSpace(r.FormValue("front_channel_logout_uri")),
 		BackChannelLogoutURI:  strings.TrimSpace(r.FormValue("back_channel_logout_uri")),
-		Scopes:                parseFormStringSlice(r.Form, "scopes"),
-		Audiences:             parseFormStringSlice(r.Form, "audiences"),
-		AllowedIDPsRaw:        parseFormStringSlice(r.Form, "allowed_idps"),
+		Scopes:                CleanBoundaryStringSlice(parseFormStringSlice(r.Form, "scopes")),
+		Audiences:             CleanBoundaryStringSlice(parseFormStringSlice(r.Form, "audiences")),
+		AllowedIDPsRaw:        CleanBoundaryStringSlice(parseFormStringSlice(r.Form, "allowed_idps")),
 		DefaultIDPRaw:         r.FormValue("default_idp_id"),
 	}
 }
@@ -632,7 +632,7 @@ func (h *AdminApplicationHandler) adminResetApplicationSecret(w http.ResponseWri
 	}
 
 	// 2. Dispatch the command across the driving use-case boundary
-	_, err := h.adminApplicationUseCase.ResetApplicationSecret(r.Context(), cmd)
+	err := h.adminApplicationUseCase.ResetApplicationSecret(r.Context(), cmd)
 	if err != nil {
 		slog.Error("Transactional secret rotation failed", "err", err)
 		h.renderError(w, r, http.StatusInternalServerError, "Storage transaction rolled back: client delivery channel interrupted.")

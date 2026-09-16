@@ -219,18 +219,11 @@ func (h *AdminTenantHandler) adminSaveTenantSettings(w http.ResponseWriter, r *h
 	name := r.FormValue("name")
 	domain := r.FormValue("domain")
 	defaultRedirectURI := r.FormValue("default_redirect_uri")
-	redirectWhitelist := r.Form["redirect_whitelist"]
-	if redirectWhitelist == nil {
-		redirectWhitelist = []string{}
-	}
-	predefinedScopes := r.Form["predefined_scopes"]
-	if predefinedScopes == nil {
-		predefinedScopes = []string{}
-	}
-	predefinedAudiences := r.Form["predefined_audiences"]
-	if predefinedAudiences == nil {
-		predefinedAudiences = []string{}
-	}
+
+	// Force in-place cleanup loops over multi-tenant infrastructure array configurations
+	redirectWhitelist := CleanBoundaryStringSlice(r.Form["redirect_whitelist"])
+	predefinedScopes := CleanBoundaryStringSlice(r.Form["predefined_scopes"])
+	predefinedAudiences := CleanBoundaryStringSlice(r.Form["predefined_audiences"])
 
 	errs := validateTenantSettingsInputs(name, domain, defaultRedirectURI, redirectWhitelist)
 
