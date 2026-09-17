@@ -47,19 +47,37 @@ func (s *UserRegistrationService) RegisterUser(ctx context.Context, cmd port.Reg
 	firstName := strings.TrimSpace(cmd.FirstName)
 	lastName := strings.TrimSpace(cmd.LastName)
 
-	if len(firstName) > 64 || len(lastName) > 64 {
-		return nil, port.ErrInputTooLong
-	}
-	if len(username) > 64 || len(email) > 255 {
-		return nil, port.ErrInputTooLong
+	// 3. Initialize structured field-specific validation envelope
+	valErr := port.NewValidationError()
+
+	if username == "" {
+		valErr.Add("username", "username parameter constraint is required")
+	} else if len(username) > 64 {
+		valErr.Add("username", "username identifier exceeds maximum permitted length of 64 bytes")
+	} else if !strictUsernameFilter.MatchString(username) {
+		valErr.Add("username", "username contains unauthorized character profiles")
 	}
 
-	if !strictUsernameFilter.MatchString(username) {
-		return nil, port.ErrInvalidCharacters
+	if email == "" {
+		valErr.Add("email", "email address is required")
+	} else if len(email) > 255 {
+		valErr.Add("email", "email parameter exceeds maximum permitted length of 255 bytes")
+	}
+
+	if len(firstName) > 64 {
+		valErr.Add("name", "first name exceeds maximum permitted length of 64 bytes")
+	}
+	if len(lastName) > 64 {
+		valErr.Add("name", "last name exceeds maximum permitted length of 64 bytes")
 	}
 
 	if len(cmd.Password) < 8 {
-		return nil, port.ErrPasswordTooShort
+		valErr.Add("password", "password must be at least 8 characters long")
+	}
+
+	// 4. Intercept and throw if any domain boundary validations failed
+	if valErr.HasErrors() {
+		return nil, valErr // Throws the compiled field envelope straight back to the handler ring
 	}
 
 	if provider.Config.UsernameField == "email" {

@@ -2,7 +2,44 @@ package port
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 )
+
+// ValidationError represents a collection of field-specific domain validation failures.
+// It maps the frontend input form element name directly to a human-readable constraint violation.
+type ValidationError struct {
+	Fields map[string]string
+}
+
+// Compile-time type assertion to guarantee full standard error interface compliance.
+var _ error = (*ValidationError)(nil)
+
+// NewValidationError initializes an empty field-specific error envelope.
+func NewValidationError() *ValidationError {
+	return &ValidationError{
+		Fields: make(map[string]string),
+	}
+}
+
+// Add appends a localized field validation violation to the envelope tracking pool.
+func (e *ValidationError) Add(field, message string) {
+	e.Fields[field] = message
+}
+
+// HasErrors returns true if the envelope contains one or more constraint violations.
+func (e *ValidationError) HasErrors() bool {
+	return len(e.Fields) > 0
+}
+
+// Error complies with the standard Go error contract by joining all localized faults.
+func (e *ValidationError) Error() string {
+	var errMsgs []string
+	for field, msg := range e.Fields {
+		errMsgs = append(errMsgs, fmt.Sprintf("%s: %s", field, msg))
+	}
+	return fmt.Sprintf("domain validation failed: %s", strings.Join(errMsgs, "; "))
+}
 
 var (
 	// Standard Spec-Compliant OAuth 2.0 / OIDC Core Protocol Errors (RFC 6749 Section 5.2) [5.7]

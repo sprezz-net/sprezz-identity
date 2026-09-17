@@ -223,7 +223,15 @@ func (h *HttpAdapter) cspMiddleware(next http.Handler) http.Handler {
 		}
 		nonce := base64.StdEncoding.EncodeToString(nonceBytes)
 
-		csp := fmt.Sprintf("default-src 'self'; script-src 'self' 'nonce-%s' https://unpkg.com; style-src 'self' 'unsafe-inline'; frame-src 'self' *", nonce)
+		csp := fmt.Sprintf(
+			"default-src 'self'; "+
+				"script-src 'self' 'nonce-%s' unpkg.com https://unpkg.com https://cdn.tailwindcss.com; "+
+				"style-src 'self' 'unsafe-inline' https://googleapis.com https://cdn.tailwindcss.com; "+
+				"font-src 'self' https://gstatic.com; "+
+				"base-uri 'self'; "+
+				"form-action 'self';",
+			nonce,
+		)
 		w.Header().Set("Content-Security-Policy", csp)
 
 		ctx := templ.WithNonce(r.Context(), nonce)

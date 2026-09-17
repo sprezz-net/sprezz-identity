@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -58,7 +59,7 @@ func (h *SignupHandler) HandleSignUpForm(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	component := public.SignUp("", ctxResp.Provider, "", "", "", interactionID)
+	component := public.SignUp(make(map[string]string), ctxResp.Provider, "", "", "", interactionID)
 	_ = component.Render(r.Context(), w)
 }
 
@@ -89,7 +90,8 @@ func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Reques
 	provider := ctxResp.Provider
 
 	if err := r.ParseForm(); err != nil {
-		h.renderInlineFormError(w, r, provider, interactionID, "Malformed sign-up payload parameters submitted")
+		// Wraps input error into a structured map dictionary context envelope
+		h.renderInlineFormError(w, r, provider, interactionID, map[string]string{"global": "Malformed sign-up payload parameters submitted"})
 		return
 	}
 
@@ -100,7 +102,8 @@ func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Reques
 	confirmPassword := r.FormValue("confirm_password")
 
 	if password != confirmPassword {
-		h.renderInlineFormError(w, r, provider, interactionID, "Passwords provided do not match")
+		// Maps targeted confirmation failures straight onto the appropriate element key
+		h.renderInlineFormError(w, r, provider, interactionID, map[string]string{"confirm_password": "Passwords provided do not match"})
 		return
 	}
 
@@ -113,7 +116,7 @@ func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Reques
 		lastName = strings.Join(nameParts[1:], " ")
 	}
 
-	profile, err := h.registrationUseCase.RegisterUser(r.Context(), port.RegisterUserCommand{
+	_, err = h.registrationUseCase.RegisterUser(r.Context(), port.RegisterUserCommand{
 		TenantID:   tenant.ID,
 		ProviderID: provider.ID,
 		FirstName:  firstName,
@@ -123,11 +126,16 @@ func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Reques
 		Password:   password,
 	})
 
-	_ = profile // Avoid unused variable warning if not used further
-
 	if err != nil {
+		// Dynamic type assertion intercepts our structured field validation envelope smoothly
+		var valErr *port.ValidationError
+		if errors.As(err, &valErr) {
+			h.renderInlineFormError(w, r, provider, interactionID, valErr.Fields)
+			return
+		}
 		slog.Error("Self-service registration submission failed", "error", err, "tenant_id", tenant.ID, "username", username)
-		h.renderInlineFormError(w, r, provider, interactionID, err.Error())
+		// Fallback for flat database errors or unique constraint blocks and wrap into a structured dictionary
+		h.renderInlineFormError(w, r, provider, interactionID, map[string]string{"global": err.Error()})
 		return
 	}
 
@@ -151,14 +159,18 @@ func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Reques
 	}
 
 	targetURL := h.resolveSignUpRedirectURL(r, tenant, interactionID)
-	w.Header().Set("HX-Redirect", targetURL)
+	w.Header().Set(model.HeaderHxRedirect, targetURL)
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *SignupHandler) renderInlineFormError(w http.ResponseWriter, r *http.Request, provider *model.IdentityProvider, interactionID string, message string) {
+func (h *SignupHandler) renderInlineFormError(w http.ResponseWriter, r *http.Request, provider *model.IdentityProvider, interactionID string, fieldErrors map[string]string) {
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
+
+	// Clean 200 OK means standard out-of-the-box HTMX swaps execute instantly
 	w.WriteHeader(http.StatusOK)
-	component := public.SignUp(message, provider, r.FormValue("email"), r.FormValue("username"), r.FormValue("name"), interactionID)
+
+	// Render ONLY the inner form template block to prevent duplicate nesting loops
+	component := public.SignUpForm(fieldErrors, provider, r.FormValue("email"), r.FormValue("username"), r.FormValue("name"), interactionID)
 	_ = component.Render(r.Context(), w)
 }
 
