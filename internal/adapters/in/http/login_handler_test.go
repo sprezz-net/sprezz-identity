@@ -78,13 +78,30 @@ func TestHttpAdapter_LoginRoot_Success(t *testing.T) {
 
 func TestHttpAdapter_LoginSubmit_MissingCredentials(t *testing.T) {
 	ctrl := minimock.NewController(t)
-	adapter, _, _, tuc, _ := buildLocalLoginTestAdapter(ctrl)
+	adapter, lauc, suc, tuc, _ := buildLocalLoginTestAdapter(ctrl)
+	mockSessionCookie(suc)
 
 	tenantID := uuid.New()
 	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
 
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
 		return tenant, nil
+	})
+
+	provider := model.IdentityProvider{
+		ID:       uuid.New(),
+		TenantID: tenantID,
+		IDPType:  model.UsernamePasswordIDPType,
+		Enabled:  true,
+	}
+
+	lauc.GetLoginContextMock.Set(func(ctx context.Context, cmd port.GetLoginContextCommand) (*port.LoginContextResponse, error) {
+		return &port.LoginContextResponse{
+			AllowSignup:              true,
+			Providers:                []model.IdentityProvider{provider},
+			ShowUsernamePasswordForm: true,
+			PartitionID:              0,
+		}, nil
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("username=&password="))
@@ -99,8 +116,11 @@ func TestHttpAdapter_LoginSubmit_MissingCredentials(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "Username and password fields are both required") {
-		t.Fatalf("expected error message in response body")
+	if !strings.Contains(body, "Username field identifier is required") {
+		t.Fatalf("expected username error message in response body, got: %s", body)
+	}
+	if !strings.Contains(body, "Password authorization parameter is required") {
+		t.Fatalf("expected password error message in response body, got: %s", body)
 	}
 }
 
@@ -115,6 +135,15 @@ func TestHttpAdapter_LoginSubmit_Success(t *testing.T) {
 
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
 		return tenant, nil
+	})
+
+	lauc.GetLoginContextMock.Set(func(ctx context.Context, cmd port.GetLoginContextCommand) (*port.LoginContextResponse, error) {
+		return &port.LoginContextResponse{
+			AllowSignup:              true,
+			Providers:                []model.IdentityProvider{{ID: providerID, TenantID: tenantID, IDPType: model.UsernamePasswordIDPType, Enabled: true}},
+			ShowUsernamePasswordForm: true,
+			PartitionID:              1,
+		}, nil
 	})
 
 	// Mock cookie building for both handshake parsing and bearer creation
@@ -247,6 +276,18 @@ func TestHttpAdapter_LoginWithInteractionID_QueryAndForm(t *testing.T) {
 	}
 
 	// 2. Verify HandleLoginSubmit correctly reads tx from form payload
+	lauc.GetLoginContextMock.Set(func(ctx context.Context, cmd port.GetLoginContextCommand) (*port.LoginContextResponse, error) {
+		if cmd.InteractionID != "form_interaction_456" {
+			t.Errorf("expected InteractionID 'form_interaction_456', got '%s'", cmd.InteractionID)
+		}
+		return &port.LoginContextResponse{
+			AllowSignup:              true,
+			Providers:                []model.IdentityProvider{provider},
+			ShowUsernamePasswordForm: true,
+			PartitionID:              1,
+		}, nil
+	})
+
 	lauc.GetInteractionSessionMock.Expect(minimock.AnyContext, tenantID, "form_interaction_456").Return(&model.InteractionSession{
 		ID:                 uuid.New(),
 		TenantID:           tenantID,

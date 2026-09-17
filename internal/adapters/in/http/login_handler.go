@@ -2,7 +2,7 @@ package http
 
 import (
 	"fmt"
-	"html"
+	"log/slog"
 	"net/http"
 
 	"sprezz-identity/internal/domain/model"
@@ -65,7 +65,7 @@ func (h *LoginHandler) HandleLoginRoot(w http.ResponseWriter, r *http.Request) {
 		IDPHintQuery:  r.URL.Query().Get("idp_hint"),
 	})
 	if err != nil {
-		w.Header().Set(model.HeaderContentType, "text/html; charset=utf-8")
+		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 		w.WriteHeader(http.StatusInternalServerError)
 		_ = public.Error("Internal server fault loading identity providers").Render(r.Context(), w)
 		return
@@ -78,7 +78,7 @@ func (h *LoginHandler) HandleLoginRoot(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	component := public.Login(public.LoginProps{
-		ErrorMessage:             "",
+		FieldErrors:              make(map[string]string),
 		AllowSignup:              ctxResp.AllowSignup,
 		Providers:                ctxResp.Providers,
 		ShowUsernamePasswordForm: ctxResp.ShowUsernamePasswordForm,
@@ -89,24 +89,32 @@ func (h *LoginHandler) HandleLoginRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		h.renderInlineFormError(w, r, "Malformed form payload parameters submitted")
-		return
-	}
-
 	tenantUUID := TenantIDFromContext(r.Context())
-	username := r.FormValue("username")
-	password := r.FormValue("password")
-
-	if username == "" || password == "" {
-		h.renderInlineFormError(w, r, "Username and password fields are both required")
-		return
-	}
-
 	interactionID := r.FormValue("tx")
 	if interactionID == "" {
 		interactionID = h.parseInteractionCookie(r, tenantUUID)
 	}
+
+	ctxResp, _ := h.localAuthUseCase.GetLoginContext(r.Context(), port.GetLoginContextCommand{
+		TenantID:      tenantUUID,
+		InteractionID: interactionID,
+	})
+
+	username := r.FormValue("username")
+	password := r.FormValue("password")
+
+	if username == "" || password == "" {
+		errs := make(map[string]string)
+		if username == "" {
+			errs["username"] = "Username field identifier is required"
+		}
+		if password == "" {
+			errs["password"] = "Password authorization parameter is required"
+		}
+		h.renderInlineFormError(w, r, ctxResp, interactionID, errs)
+		return
+	}
+
 	interactionSession, _ := h.localAuthUseCase.GetInteractionSession(r.Context(), tenantUUID, interactionID)
 
 	var partitionID int64
@@ -142,7 +150,22 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 		PlaintextPassword: password,
 	})
 	if err != nil {
-		h.renderInlineFormError(w, r, err.Error())
+		// Enforce a uniform, generic error string over ALL authentication errors
+		// This completely masks lockouts, administrative blocks, and non-existent users.
+		genericErrorMessage := "Invalid username or password"
+
+		errs := map[string]string{
+			"username": genericErrorMessage,
+			"password": genericErrorMessage,
+		}
+
+		// We log the forensic reason internally for audit trails but never leak it to the client viewport
+		slog.Warn("Local authentication checkpoint failed",
+			"error", err,
+			"tenant_id", tenantUUID,
+			"username", username,
+		)
+		h.renderInlineFormError(w, r, ctxResp, interactionID, errs)
 		return
 	}
 
@@ -182,7 +205,7 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 			ActiveSessionID: fmt.Sprintf("%s:%d", loginResp.Subject, partitionID),
 		})
 		if err != nil {
-			h.renderInlineFormError(w, r, err.Error())
+			h.renderInlineFormError(w, r, ctxResp, interactionID, map[string]string{"global": err.Error()})
 			return
 		}
 		redirectURL = result.RedirectURL
@@ -208,11 +231,23 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *LoginHandler) renderInlineFormError(w http.ResponseWriter, r *http.Request, message string) {
+// Returning an HTTP 200 OK alongside only the LoginForm sub-component partial
+func (h *LoginHandler) renderInlineFormError(w http.ResponseWriter, r *http.Request, ctxResp *port.LoginContextResponse, tx string, fieldErrors map[string]string) {
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	w.WriteHeader(http.StatusOK)
-	escapedMessage := html.EscapeString(message)
-	_, _ = fmt.Fprintf(w, `<div class="p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg text-sm font-medium">%s</div>`, escapedMessage)
+
+	props := public.LoginProps{
+		FieldErrors:              fieldErrors,
+		AllowSignup:              ctxResp.AllowSignup,
+		Providers:                ctxResp.Providers,
+		ShowUsernamePasswordForm: ctxResp.ShowUsernamePasswordForm,
+		PartitionID:              ctxResp.PartitionID,
+		InteractionID:            tx,
+		Username:                 r.FormValue("username"), // Retains the typed username
+	}
+
+	component := public.LoginForm(props)
+	_ = component.Render(r.Context(), w)
 }
 
 func (h *LoginHandler) parseInteractionCookie(r *http.Request, tenantID uuid.UUID) string {
