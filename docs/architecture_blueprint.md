@@ -693,20 +693,50 @@ Within the isolated partition cookie, states are evaluated and migrated using st
 - **Authenticated Bearer Lifecycle:** Upon completing back-channel validation, the HTTP adapter overwrites the transient token with the finalized, signed access token string using the bearer namespace prefix (`bearer:[jwt_access_token]`), defaulting to a standard 24-hour expiration threshold.
 - **Clear/Evict Lifecycle:** When terminating or revoking a session, the adapter forcefully expires and clears the browser's partition-scoped first-party cookie by returning a standard `Set-Cookie` header with a negative `Max-Age` attribute (`Max-Age = -1`) and an empty value.
 
-### 8.4 Hypermedia Semantic Error Status Compliance
+### 8.4 Hypermedia Functional Validation and Error Delivery Strategy
 
-When returning field-level validation errors inside components via HTMX (e.g., returning input fragments featuring red validation highlights), standard REST endpoints often issue a `200 OK` response payload simply to allow the HTMX library to execute its inner HTML swap routine. This distorts edge diagnostics and log trace analysis tools.
+This section establishes the definitive functional protocol for user input validation, field-level error routing, and network signaling responses. To balance edge observability in privileged scopes with zero-dependency structural safety on the public perimeter, the server operates a gehybridized, split error delivery model.
 
-- **Semantic Error Delivery**: Backend input verification failures processing structural mutations must return an HTTP Status Code of **`422 Unprocessable Entity`**.
-- **HTMX Error Integration**: The master global layout shell must incorporate an explicit configuration snippet handling errors gracefully:
+```mermaid
+graph TD
+    Request[Inbound Request Form Validation Failure] --> Gate{Evaluate Route Context}
+
+    Gate -->|Public Gateway: /login, /signup| Public[Public Fragment Delivery Path]
+    Gate -->|Admin Console: /admin/*| Admin[Admin Semantic Compliance Path]
+
+    Public --> PublicStatus[Issue HTTP 200 OK Response]
+    Public --> PublicSwap[Render Lean Form Component Partial Only]
+    Public --> PublicHTMX[Browser Hot-Swaps Form Instantly with Zero Custom Script]
+
+    Admin --> AdminStatus[Issue HTTP 422 Unprocessable Entity]
+    Admin --> AdminSwap[Render Complete Form with Error Dictionary]
+    Admin --> AdminHTMX[Global Layout Listener Forces Swap Processing]
+```
+
+#### 8.4.1 Public Gateway Validation Flow (Zero-Dependency Consumer Isolation)
+
+Public-facing unauthenticated endpoints—specifically the self-service user registration loop (`/signup`) and the local credential authentication gate (`/login`)—must remain completely lightweight, functional, and isolated from external front-end layout scripting dependencies, custom hooks, or event listeners.
+
+- **HTTP Status Code Functional Protocol**: When user input fails domain validation checks or credential verification gates on a public route, the inbound transport adapter must return a standard HTTP Status Code of **`200 OK`**.
+- **Hypermedia Form Component Partial Delivery**: Instead of re-rendering the full document page skeleton framework (which triggers layout duplication or nesting artifacts under immediate swaps), the backend streams back **only the isolated form sub-component partial markup** (e.g., `public.SignUpForm` or `public.LoginForm`).
+- **Browser-Native Input State Retention**: Because the server returns a successful `200 OK` network token, the browser's native HTMX processing layer evaluates the transaction as a normal execution. It fires its standard `hx-target="this"` and `hx-swap="outerHTML"` rules automatically. This ensures that the user's previously typed input strings (excluding secure password fields) are preserved in place, while targeted red input highlighting frames and text alerts render instantly without requiring global JavaScript event interceptors, custom `nonce`-stamped script tags, or extra front-end script assets.
+
+#### 8.4.2 Administrative Backend Validation Flow (Forensic Observability & Compliance)
+
+Unlike public lanes, the administrative management console (`/admin/*`) processes highly sensitive workspace mutations (dynamic client enrollment, tenant configuration adjustments, profile security policy shifts) that require strict edge monitoring and forensic trackability.
+
+* **Semantic Error Diagnostics Tracking**: Administrative input verification failures or schema constraint violations processing backend updates must issue an HTTP Status Code of **`422 Unprocessable Entity`**. This allows edge gateways, reverse proxies, and cloud firewalls to immediately flag, log, and rate-limit anomalous administrative behavior or fuzzing attempts based on automated non-200 transaction metrics.
+* **Master Admin Shell Interceptor Integration**: Because the front-end hypermedia engine naturally discards non-200 responses, the central administrative layout wrapper framework must incorporate a localized, cryptographically `nonce`-stamped listener to allow the `422` error stream to finalize:
 
   ```javascript
-  document.body.addEventListener('htmx:beforeOnLoad', function (evt) {
+  document.body.addEventListener('htmx:beforeSwap', function (evt) {
       if (evt.detail.xhr.status === 422) {
+          // Explicitly instruct the engine to process the validation update natively
           evt.detail.shouldSwap = true;
+          // Force execution over the specific target defined on the originating form element
           evt.detail.isError = false;
       }
   });
   ```
 
-  This guarantees full semantic logging compliance across cloud firewalls while preserving lightning-fast HTML element hot-swaps inside the administrative management views.
+This hybrid functional architecture keeps public endpoints fast, isolated, and safe from cross-site injection parameters, while providing the admin console with deep network logging compliance without disrupting partial layout updates.
