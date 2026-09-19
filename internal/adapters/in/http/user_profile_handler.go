@@ -332,36 +332,47 @@ func (h *ProfileHandler) HandleDecoupleIdentitySubmit(w http.ResponseWriter, r *
 }
 
 func (h *ProfileHandler) authenticateSessionUser(r *http.Request, tenantID uuid.UUID) (string, int64, error) {
-	cookieSpec, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
+	// 1. INTENTIONAL PASS 1: Calculate the exact dynamic cookie name expected for this specific request context.
+	// If the user is navigating from an administrative workspace, we fetch that specification first.
+	defaultSpec, _ := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
 		TenantID:       tenantID,
-		LifecycleStage: "clear",
+		LifecycleStage: "clear", // Resolves to spz_session_default
 		RequestHost:    r.Host,
 	})
-	if err != nil {
-		return "", 0, err
+
+	// 2. Loop over cookies but prioritize non-default partition keys first (like sprezz_admin or others)
+	for _, cookie := range r.Cookies() {
+		if !strings.HasPrefix(cookie.Name, "spz_session_") && !strings.HasPrefix(cookie.Name, "sprezz_") {
+			continue
+		}
+		// Skip the default fallback cookie on Pass 1 to allow privileged keys to claim priority
+		if cookie.Name == defaultSpec.CookieName {
+			continue
+		}
+
+		stage, payload, parseErr := h.ssoUseCase.ParseSessionCookie(r.Context(), cookie.Value)
+		if parseErr == nil && stage == "bearer" {
+			if parts := strings.Split(payload, ":"); len(parts) >= 2 {
+				if partitionID, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+					return parts[0], partitionID, nil
+				}
+			}
+		}
 	}
 
-	cookie, err := r.Cookie(cookieSpec.CookieName)
-	if err != nil {
-		return "", 0, err
+	// 3. INTENTIONAL PASS 2: Fall back to checking the default consumer session cookie
+	if defaultCookie, err := r.Cookie(defaultSpec.CookieName); err == nil && defaultCookie.Value != "" {
+		stage, payload, parseErr := h.ssoUseCase.ParseSessionCookie(r.Context(), defaultCookie.Value)
+		if parseErr == nil && stage == "bearer" {
+			if parts := strings.Split(payload, ":"); len(parts) >= 2 {
+				if partitionID, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+					return parts[0], partitionID, nil
+				}
+			}
+		}
 	}
 
-	stage, payload, err := h.ssoUseCase.ParseSessionCookie(r.Context(), cookie.Value)
-	if err != nil || stage != "bearer" {
-		return "", 0, port.ErrInvalidGrant
-	}
-
-	parts := strings.Split(payload, ":")
-	if len(parts) < 2 {
-		return "", 0, port.ErrInvalidGrant
-	}
-
-	partitionID, parseErr := strconv.ParseInt(parts[1], 10, 64)
-	if parseErr != nil {
-		return "", 0, port.ErrInvalidGrant
-	}
-
-	return parts[0], partitionID, nil
+	return "", 0, port.ErrInvalidGrant
 }
 
 func (h *ProfileHandler) resolveAuthenticatedUser(r *http.Request, tenantID uuid.UUID) (*model.UserProfile, int64, error) {
