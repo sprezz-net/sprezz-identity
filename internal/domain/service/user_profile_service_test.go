@@ -16,10 +16,11 @@ import (
 func TestUserProfileService_CreateUserProfile(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 	clock := portmock.NewMockClock(time.Now())
 
-	svc := NewUserProfileService(storage, crypto, clock)
+	svc := NewUserProfileService(storage, adminStorage, crypto, clock)
 
 	tenantID := uuid.New()
 	partitionID := int64(1)

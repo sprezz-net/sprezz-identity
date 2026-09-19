@@ -173,7 +173,7 @@ func initDependencies(ctx context.Context) *dependencies {
 	validator := service.NewOAuthValidatorService(idpService)
 
 	// 8. Instantiate core domain use cases
-	userProfileUseCase := service.NewUserProfileService(storage, signer, sysClock)
+	userProfileUseCase := service.NewUserProfileService(storage, storage, signer, sysClock)
 	userRegistrationUseCase := service.NewUserRegistrationService(storage, userProfileUseCase, sysClock)
 
 	ssoService := service.NewSSOSessionService(storage, cfg.AppEnv)

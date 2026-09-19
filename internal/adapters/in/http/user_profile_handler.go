@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -73,14 +74,14 @@ func (h *ProfileHandler) HandleViewDashboard(w http.ResponseWriter, r *http.Requ
 
 func (h *ProfileHandler) HandleChangePasswordForm(w http.ResponseWriter, r *http.Request) {
 	tenantUUID := TenantIDFromContext(r.Context())
-	userProfile, _, err := h.resolveAuthenticatedUser(r, tenantUUID)
+	_, _, err := h.resolveAuthenticatedUser(r, tenantUUID)
 	if err != nil {
 		http.Redirect(w, r, port.RouteRoot, http.StatusSeeOther)
 		return
 	}
 
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	_ = public.ChangePasswordPage(*userProfile, "", "").Render(r.Context(), w)
+	_ = public.ChangePasswordPage(make(map[string]string), "").Render(r.Context(), w)
 }
 
 func (h *ProfileHandler) HandleChangePasswordSubmit(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +93,7 @@ func (h *ProfileHandler) HandleChangePasswordSubmit(w http.ResponseWriter, r *ht
 	}
 
 	if err := r.ParseForm(); err != nil {
-		h.renderPasswordPageStatus(w, r, *userProfile, "Malformed payload parameters submitted", "")
+		h.renderPasswordPageStatus(w, map[string]string{"global": "Malformed payload parameters submitted"}, "")
 		return
 	}
 
@@ -101,11 +102,11 @@ func (h *ProfileHandler) HandleChangePasswordSubmit(w http.ResponseWriter, r *ht
 	currentPassword := r.FormValue("current_password")
 
 	if newPassword != confirmPassword {
-		h.renderPasswordPageStatus(w, r, *userProfile, "New password fields do not match", "")
+		h.renderPasswordPageStatus(w, map[string]string{"confirm_password": "New password fields do not match"}, "")
 		return
 	}
 
-	// 🌟 FIXED: Map elements straight into a type-safe Command struct
+	// Map elements straight into a type-safe Command struct
 	cmd := port.ChangePasswordCommand{
 		TenantID:        tenantUUID,
 		PartitionID:     partitionID,
@@ -116,11 +117,36 @@ func (h *ProfileHandler) HandleChangePasswordSubmit(w http.ResponseWriter, r *ht
 
 	err = h.userProfileUseCase.ChangeUserPassword(r.Context(), cmd)
 	if err != nil {
-		h.renderPasswordPageStatus(w, r, *userProfile, err.Error(), "")
+		var valErr *port.ValidationError
+		if errors.As(err, &valErr) {
+			h.renderPasswordPageStatus(w, valErr.Fields, "")
+			return
+		}
+		h.renderPasswordPageStatus(w, map[string]string{"global": err.Error()}, "")
 		return
 	}
 
-	h.renderPasswordPageStatus(w, r, *userProfile, "", "Password credentials successfully updated.")
+	// 1. Fetch updated workspace state details to populate the fresh dashboard layout view safely
+	dashboardResp, err := h.userProfileUseCase.GetUserProfileDashboard(r.Context(), port.GetUserProfileDashboardCommand{
+		TenantID:      tenantUUID,
+		PartitionID:   partitionID,
+		UserProfileID: userProfile.ID,
+	})
+	if err != nil {
+		h.writeWebHTMLError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
+
+	// 2. Instruct HTMX to push the target dashboard URL straight into browser history
+	w.Header().Set(model.HeaderHxPushUrl, port.RouteWebProfile)
+	w.WriteHeader(http.StatusOK)
+
+	// 3. Stream the full refreshed dashboard, explicitly passing the text string down down-funnel
+	successConfirmation := "Password credentials successfully updated."
+	component := public.ProfileDashboard(dashboardResp.UserProfile, dashboardResp.Identities, dashboardResp.Providers, dashboardResp.HasPasswordIDP, "", successConfirmation)
+	_ = component.Render(r.Context(), w)
 }
 
 func (h *ProfileHandler) HandleChangeEmailForm(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +158,7 @@ func (h *ProfileHandler) HandleChangeEmailForm(w http.ResponseWriter, r *http.Re
 	}
 
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	_ = public.ChangeEmailPage(*userProfile, "", "").Render(r.Context(), w)
+	_ = public.ChangeEmailPage(userProfile.Email, make(map[string]string), "").Render(r.Context(), w)
 }
 
 func (h *ProfileHandler) HandleChangeEmailSubmit(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +170,7 @@ func (h *ProfileHandler) HandleChangeEmailSubmit(w http.ResponseWriter, r *http.
 	}
 
 	if err := r.ParseForm(); err != nil {
-		h.renderEmailPageStatus(w, r, *userProfile, "Malformed payload parameters submitted", "")
+		h.renderEmailPageStatus(w, userProfile.Email, r.FormValue("new_email"), r.FormValue("confirm_email"), map[string]string{"global": "Malformed payload parameters submitted"}, "")
 		return
 	}
 
@@ -153,7 +179,7 @@ func (h *ProfileHandler) HandleChangeEmailSubmit(w http.ResponseWriter, r *http.
 	currentPassword := r.FormValue("current_password")
 
 	if newEmail != confirmEmail {
-		h.renderEmailPageStatus(w, r, *userProfile, "New email addresses do not match", "")
+		h.renderEmailPageStatus(w, userProfile.Email, newEmail, confirmEmail, map[string]string{"confirm_email": "New email addresses do not match"}, "")
 		return
 	}
 
@@ -168,12 +194,36 @@ func (h *ProfileHandler) HandleChangeEmailSubmit(w http.ResponseWriter, r *http.
 
 	err = h.userProfileUseCase.ChangeUserEmail(r.Context(), cmd)
 	if err != nil {
-		h.renderEmailPageStatus(w, r, *userProfile, err.Error(), "")
+		var valErr *port.ValidationError
+		if errors.As(err, &valErr) {
+			h.renderEmailPageStatus(w, userProfile.Email, newEmail, confirmEmail, valErr.Fields, "")
+			return
+		}
+		h.renderEmailPageStatus(w, userProfile.Email, newEmail, confirmEmail, map[string]string{"global": err.Error()}, "")
 		return
 	}
 
-	userProfile.Email = newEmail
-	h.renderEmailPageStatus(w, r, *userProfile, "", "Email address successfully updated.")
+	// 1. Fetch updated workspace state details to populate the fresh dashboard layout view safely
+	dashboardResp, err := h.userProfileUseCase.GetUserProfileDashboard(r.Context(), port.GetUserProfileDashboardCommand{
+		TenantID:      tenantUUID,
+		PartitionID:   partitionID,
+		UserProfileID: userProfile.ID,
+	})
+	if err != nil {
+		h.writeWebHTMLError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
+
+	// 2. Instruct HTMX to push the target dashboard URL straight into browser history
+	w.Header().Set(model.HeaderHxPushUrl, port.RouteWebProfile)
+	w.WriteHeader(http.StatusOK)
+
+	// 3. Stream the full refreshed dashboard, explicitly passing the text string down down-funnel
+	successConfirmation := "Email address successfully updated."
+	component := public.ProfileDashboard(dashboardResp.UserProfile, dashboardResp.Identities, dashboardResp.Providers, dashboardResp.HasPasswordIDP, "", successConfirmation)
+	_ = component.Render(r.Context(), w)
 }
 
 func (h *ProfileHandler) HandleChangeNameForm(w http.ResponseWriter, r *http.Request) {
@@ -185,7 +235,7 @@ func (h *ProfileHandler) HandleChangeNameForm(w http.ResponseWriter, r *http.Req
 	}
 
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	_ = public.ChangeNamePage(*userProfile, "", "").Render(r.Context(), w)
+	_ = public.ChangeNamePage(userProfile.Name, make(map[string]string), "").Render(r.Context(), w)
 }
 
 func (h *ProfileHandler) HandleChangeNameSubmit(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +247,7 @@ func (h *ProfileHandler) HandleChangeNameSubmit(w http.ResponseWriter, r *http.R
 	}
 
 	if err := r.ParseForm(); err != nil {
-		h.renderNamePageStatus(w, r, *userProfile, "Malformed payload parameters submitted", "")
+		h.renderNamePageStatus(w, userProfile.Name, r.FormValue("new_name"), map[string]string{"global": "Malformed payload parameters submitted"}, "")
 		return
 	}
 
@@ -212,19 +262,43 @@ func (h *ProfileHandler) HandleChangeNameSubmit(w http.ResponseWriter, r *http.R
 
 	err = h.userProfileUseCase.ChangeUserName(r.Context(), cmd)
 	if err != nil {
-		h.renderNamePageStatus(w, r, *userProfile, err.Error(), "")
+		var valErr *port.ValidationError
+		if errors.As(err, &valErr) {
+			h.renderNamePageStatus(w, userProfile.Name, newName, valErr.Fields, "")
+			return
+		}
+		h.renderNamePageStatus(w, userProfile.Name, newName, map[string]string{"global": err.Error()}, "")
 		return
 	}
 
-	userProfile.Name = newName
-	h.renderNamePageStatus(w, r, *userProfile, "", "Display name successfully updated.")
+	// 1. Fetch updated workspace state details to populate the fresh dashboard layout view safely
+	dashboardResp, err := h.userProfileUseCase.GetUserProfileDashboard(r.Context(), port.GetUserProfileDashboardCommand{
+		TenantID:      tenantUUID,
+		PartitionID:   partitionID,
+		UserProfileID: userProfile.ID,
+	})
+	if err != nil {
+		h.writeWebHTMLError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
+
+	// 2. Instruct HTMX to push the target dashboard URL straight into browser history
+	w.Header().Set(model.HeaderHxPushUrl, port.RouteWebProfile)
+	w.WriteHeader(http.StatusOK)
+
+	// 3. Stream the full refreshed dashboard, explicitly passing the text string down down-funnel
+	successConfirmation := "Display name successfully updated."
+	component := public.ProfileDashboard(dashboardResp.UserProfile, dashboardResp.Identities, dashboardResp.Providers, dashboardResp.HasPasswordIDP, "", successConfirmation)
+	_ = component.Render(r.Context(), w)
 }
 
 func (h *ProfileHandler) HandleDecoupleIdentitySubmit(w http.ResponseWriter, r *http.Request) {
 	tenantUUID := TenantIDFromContext(r.Context())
 	userProfile, partitionID, err := h.resolveAuthenticatedUser(r, tenantUUID)
 	if err != nil {
-		w.Header().Set("HX-Redirect", port.RouteRoot)
+		w.Header().Set(model.HeaderHxRedirect, port.RouteRoot)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -253,7 +327,7 @@ func (h *ProfileHandler) HandleDecoupleIdentitySubmit(w http.ResponseWriter, r *
 		return
 	}
 
-	w.Header().Set("HX-Redirect", port.RouteWebProfile)
+	w.Header().Set(model.HeaderHxRedirect, port.RouteWebProfile)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -313,22 +387,22 @@ func (h *ProfileHandler) resolveAuthenticatedUser(r *http.Request, tenantID uuid
 	return profile, partitionID, nil
 }
 
-func (h *ProfileHandler) renderPasswordPageStatus(w http.ResponseWriter, r *http.Request, user model.UserProfile, err, success string) {
+func (h *ProfileHandler) renderPasswordPageStatus(w http.ResponseWriter, fieldErrors map[string]string, success string) {
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	w.WriteHeader(http.StatusOK)
-	_ = public.ChangePasswordPage(user, err, success).Render(r.Context(), w)
+	_ = public.ChangePasswordForm(fieldErrors, success).Render(context.Background(), w)
 }
 
-func (h *ProfileHandler) renderEmailPageStatus(w http.ResponseWriter, r *http.Request, user model.UserProfile, err, success string) {
+func (h *ProfileHandler) renderEmailPageStatus(w http.ResponseWriter, currentEmail, typedNewEmail, typedConfirmEmail string, fieldErrors map[string]string, success string) {
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	w.WriteHeader(http.StatusOK)
-	_ = public.ChangeEmailPage(user, err, success).Render(r.Context(), w)
+	_ = public.ChangeEmailForm(currentEmail, typedNewEmail, typedConfirmEmail, fieldErrors, success).Render(context.Background(), w)
 }
 
-func (h *ProfileHandler) renderNamePageStatus(w http.ResponseWriter, r *http.Request, user model.UserProfile, err, success string) {
+func (h *ProfileHandler) renderNamePageStatus(w http.ResponseWriter, currentName, typedNewName string, fieldErrors map[string]string, success string) {
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	w.WriteHeader(http.StatusOK)
-	_ = public.ChangeNamePage(user, err, success).Render(r.Context(), w)
+	_ = public.ChangeNameForm(currentName, typedNewName, fieldErrors, success).Render(context.Background(), w)
 }
 
 func (h *ProfileHandler) writeWebHTMLError(w http.ResponseWriter, status int, desc string) {

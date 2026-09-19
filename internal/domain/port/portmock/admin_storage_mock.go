@@ -174,9 +174,9 @@ type AdminStorageMock struct {
 	beforeUpdateApplicationProfileCounter uint64
 	UpdateApplicationProfileMock          mAdminStorageMockUpdateApplicationProfile
 
-	funcUpdateUserProfile          func(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) (err error)
+	funcUpdateUserProfile          func(ctx context.Context, tenantID uuid.UUID, partitionID int64, profile model.UserProfile) (err error)
 	funcUpdateUserProfileOrigin    string
-	inspectFuncUpdateUserProfile   func(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile)
+	inspectFuncUpdateUserProfile   func(ctx context.Context, tenantID uuid.UUID, partitionID int64, profile model.UserProfile)
 	afterUpdateUserProfileCounter  uint64
 	beforeUpdateUserProfileCounter uint64
 	UpdateUserProfileMock          mAdminStorageMockUpdateUserProfile
@@ -8351,16 +8351,18 @@ type AdminStorageMockUpdateUserProfileExpectation struct {
 
 // AdminStorageMockUpdateUserProfileParams contains parameters of the AdminStorage.UpdateUserProfile
 type AdminStorageMockUpdateUserProfileParams struct {
-	ctx      context.Context
-	tenantID uuid.UUID
-	profile  model.UserProfile
+	ctx         context.Context
+	tenantID    uuid.UUID
+	partitionID int64
+	profile     model.UserProfile
 }
 
 // AdminStorageMockUpdateUserProfileParamPtrs contains pointers to parameters of the AdminStorage.UpdateUserProfile
 type AdminStorageMockUpdateUserProfileParamPtrs struct {
-	ctx      *context.Context
-	tenantID *uuid.UUID
-	profile  *model.UserProfile
+	ctx         *context.Context
+	tenantID    *uuid.UUID
+	partitionID *int64
+	profile     *model.UserProfile
 }
 
 // AdminStorageMockUpdateUserProfileResults contains results of the AdminStorage.UpdateUserProfile
@@ -8370,10 +8372,11 @@ type AdminStorageMockUpdateUserProfileResults struct {
 
 // AdminStorageMockUpdateUserProfileOrigins contains origins of expectations of the AdminStorage.UpdateUserProfile
 type AdminStorageMockUpdateUserProfileExpectationOrigins struct {
-	origin         string
-	originCtx      string
-	originTenantID string
-	originProfile  string
+	origin            string
+	originCtx         string
+	originTenantID    string
+	originPartitionID string
+	originProfile     string
 }
 
 // Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
@@ -8387,7 +8390,7 @@ func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) Optional() *mAdmi
 }
 
 // Expect sets up expected params for AdminStorage.UpdateUserProfile
-func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) Expect(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) *mAdminStorageMockUpdateUserProfile {
+func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) Expect(ctx context.Context, tenantID uuid.UUID, partitionID int64, profile model.UserProfile) *mAdminStorageMockUpdateUserProfile {
 	if mmUpdateUserProfile.mock.funcUpdateUserProfile != nil {
 		mmUpdateUserProfile.mock.t.Fatalf("AdminStorageMock.UpdateUserProfile mock is already set by Set")
 	}
@@ -8400,7 +8403,7 @@ func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) Expect(ctx contex
 		mmUpdateUserProfile.mock.t.Fatalf("AdminStorageMock.UpdateUserProfile mock is already set by ExpectParams functions")
 	}
 
-	mmUpdateUserProfile.defaultExpectation.params = &AdminStorageMockUpdateUserProfileParams{ctx, tenantID, profile}
+	mmUpdateUserProfile.defaultExpectation.params = &AdminStorageMockUpdateUserProfileParams{ctx, tenantID, partitionID, profile}
 	mmUpdateUserProfile.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmUpdateUserProfile.expectations {
 		if minimock.Equal(e.params, mmUpdateUserProfile.defaultExpectation.params) {
@@ -8457,8 +8460,31 @@ func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) ExpectTenantIDPar
 	return mmUpdateUserProfile
 }
 
-// ExpectProfileParam3 sets up expected param profile for AdminStorage.UpdateUserProfile
-func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) ExpectProfileParam3(profile model.UserProfile) *mAdminStorageMockUpdateUserProfile {
+// ExpectPartitionIDParam3 sets up expected param partitionID for AdminStorage.UpdateUserProfile
+func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) ExpectPartitionIDParam3(partitionID int64) *mAdminStorageMockUpdateUserProfile {
+	if mmUpdateUserProfile.mock.funcUpdateUserProfile != nil {
+		mmUpdateUserProfile.mock.t.Fatalf("AdminStorageMock.UpdateUserProfile mock is already set by Set")
+	}
+
+	if mmUpdateUserProfile.defaultExpectation == nil {
+		mmUpdateUserProfile.defaultExpectation = &AdminStorageMockUpdateUserProfileExpectation{}
+	}
+
+	if mmUpdateUserProfile.defaultExpectation.params != nil {
+		mmUpdateUserProfile.mock.t.Fatalf("AdminStorageMock.UpdateUserProfile mock is already set by Expect")
+	}
+
+	if mmUpdateUserProfile.defaultExpectation.paramPtrs == nil {
+		mmUpdateUserProfile.defaultExpectation.paramPtrs = &AdminStorageMockUpdateUserProfileParamPtrs{}
+	}
+	mmUpdateUserProfile.defaultExpectation.paramPtrs.partitionID = &partitionID
+	mmUpdateUserProfile.defaultExpectation.expectationOrigins.originPartitionID = minimock.CallerInfo(1)
+
+	return mmUpdateUserProfile
+}
+
+// ExpectProfileParam4 sets up expected param profile for AdminStorage.UpdateUserProfile
+func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) ExpectProfileParam4(profile model.UserProfile) *mAdminStorageMockUpdateUserProfile {
 	if mmUpdateUserProfile.mock.funcUpdateUserProfile != nil {
 		mmUpdateUserProfile.mock.t.Fatalf("AdminStorageMock.UpdateUserProfile mock is already set by Set")
 	}
@@ -8481,7 +8507,7 @@ func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) ExpectProfilePara
 }
 
 // Inspect accepts an inspector function that has same arguments as the AdminStorage.UpdateUserProfile
-func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) Inspect(f func(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile)) *mAdminStorageMockUpdateUserProfile {
+func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) Inspect(f func(ctx context.Context, tenantID uuid.UUID, partitionID int64, profile model.UserProfile)) *mAdminStorageMockUpdateUserProfile {
 	if mmUpdateUserProfile.mock.inspectFuncUpdateUserProfile != nil {
 		mmUpdateUserProfile.mock.t.Fatalf("Inspect function is already set for AdminStorageMock.UpdateUserProfile")
 	}
@@ -8506,7 +8532,7 @@ func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) Return(err error)
 }
 
 // Set uses given function f to mock the AdminStorage.UpdateUserProfile method
-func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) Set(f func(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) (err error)) *AdminStorageMock {
+func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) Set(f func(ctx context.Context, tenantID uuid.UUID, partitionID int64, profile model.UserProfile) (err error)) *AdminStorageMock {
 	if mmUpdateUserProfile.defaultExpectation != nil {
 		mmUpdateUserProfile.mock.t.Fatalf("Default expectation is already set for the AdminStorage.UpdateUserProfile method")
 	}
@@ -8522,14 +8548,14 @@ func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) Set(f func(ctx co
 
 // When sets expectation for the AdminStorage.UpdateUserProfile which will trigger the result defined by the following
 // Then helper
-func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) When(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) *AdminStorageMockUpdateUserProfileExpectation {
+func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) When(ctx context.Context, tenantID uuid.UUID, partitionID int64, profile model.UserProfile) *AdminStorageMockUpdateUserProfileExpectation {
 	if mmUpdateUserProfile.mock.funcUpdateUserProfile != nil {
 		mmUpdateUserProfile.mock.t.Fatalf("AdminStorageMock.UpdateUserProfile mock is already set by Set")
 	}
 
 	expectation := &AdminStorageMockUpdateUserProfileExpectation{
 		mock:               mmUpdateUserProfile.mock,
-		params:             &AdminStorageMockUpdateUserProfileParams{ctx, tenantID, profile},
+		params:             &AdminStorageMockUpdateUserProfileParams{ctx, tenantID, partitionID, profile},
 		expectationOrigins: AdminStorageMockUpdateUserProfileExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmUpdateUserProfile.expectations = append(mmUpdateUserProfile.expectations, expectation)
@@ -8564,17 +8590,17 @@ func (mmUpdateUserProfile *mAdminStorageMockUpdateUserProfile) invocationsDone()
 }
 
 // UpdateUserProfile implements mm_port.AdminStorage
-func (mmUpdateUserProfile *AdminStorageMock) UpdateUserProfile(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) (err error) {
+func (mmUpdateUserProfile *AdminStorageMock) UpdateUserProfile(ctx context.Context, tenantID uuid.UUID, partitionID int64, profile model.UserProfile) (err error) {
 	mm_atomic.AddUint64(&mmUpdateUserProfile.beforeUpdateUserProfileCounter, 1)
 	defer mm_atomic.AddUint64(&mmUpdateUserProfile.afterUpdateUserProfileCounter, 1)
 
 	mmUpdateUserProfile.t.Helper()
 
 	if mmUpdateUserProfile.inspectFuncUpdateUserProfile != nil {
-		mmUpdateUserProfile.inspectFuncUpdateUserProfile(ctx, tenantID, profile)
+		mmUpdateUserProfile.inspectFuncUpdateUserProfile(ctx, tenantID, partitionID, profile)
 	}
 
-	mm_params := AdminStorageMockUpdateUserProfileParams{ctx, tenantID, profile}
+	mm_params := AdminStorageMockUpdateUserProfileParams{ctx, tenantID, partitionID, profile}
 
 	// Record call args
 	mmUpdateUserProfile.UpdateUserProfileMock.mutex.Lock()
@@ -8593,7 +8619,7 @@ func (mmUpdateUserProfile *AdminStorageMock) UpdateUserProfile(ctx context.Conte
 		mm_want := mmUpdateUserProfile.UpdateUserProfileMock.defaultExpectation.params
 		mm_want_ptrs := mmUpdateUserProfile.UpdateUserProfileMock.defaultExpectation.paramPtrs
 
-		mm_got := AdminStorageMockUpdateUserProfileParams{ctx, tenantID, profile}
+		mm_got := AdminStorageMockUpdateUserProfileParams{ctx, tenantID, partitionID, profile}
 
 		if mm_want_ptrs != nil {
 
@@ -8605,6 +8631,11 @@ func (mmUpdateUserProfile *AdminStorageMock) UpdateUserProfile(ctx context.Conte
 			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
 				mmUpdateUserProfile.t.Errorf("AdminStorageMock.UpdateUserProfile got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmUpdateUserProfile.UpdateUserProfileMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.partitionID != nil && !minimock.Equal(*mm_want_ptrs.partitionID, mm_got.partitionID) {
+				mmUpdateUserProfile.t.Errorf("AdminStorageMock.UpdateUserProfile got unexpected parameter partitionID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmUpdateUserProfile.UpdateUserProfileMock.defaultExpectation.expectationOrigins.originPartitionID, *mm_want_ptrs.partitionID, mm_got.partitionID, minimock.Diff(*mm_want_ptrs.partitionID, mm_got.partitionID))
 			}
 
 			if mm_want_ptrs.profile != nil && !minimock.Equal(*mm_want_ptrs.profile, mm_got.profile) {
@@ -8624,9 +8655,9 @@ func (mmUpdateUserProfile *AdminStorageMock) UpdateUserProfile(ctx context.Conte
 		return (*mm_results).err
 	}
 	if mmUpdateUserProfile.funcUpdateUserProfile != nil {
-		return mmUpdateUserProfile.funcUpdateUserProfile(ctx, tenantID, profile)
+		return mmUpdateUserProfile.funcUpdateUserProfile(ctx, tenantID, partitionID, profile)
 	}
-	mmUpdateUserProfile.t.Fatalf("Unexpected call to AdminStorageMock.UpdateUserProfile. %v %v %v", ctx, tenantID, profile)
+	mmUpdateUserProfile.t.Fatalf("Unexpected call to AdminStorageMock.UpdateUserProfile. %v %v %v %v", ctx, tenantID, partitionID, profile)
 	return
 }
 

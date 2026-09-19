@@ -937,7 +937,7 @@ func (s *Storage) GetUserProfilesByTenant(ctx context.Context, tenantID uuid.UUI
 
 // UpdateUserProfile mutates an existing administrative user profile entry
 // within the context boundary of a specific tenant.
-func (s *Storage) UpdateUserProfile(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) error {
+func (s *Storage) UpdateUserProfile(ctx context.Context, tenantID uuid.UUID, partitionID int64, profile model.UserProfile) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -953,7 +953,7 @@ func (s *Storage) UpdateUserProfile(ctx context.Context, tenantID uuid.UUID, pro
 	existing.LastName = profile.LastName   // Preserves split name parameter fields
 	existing.Email = profile.Email
 	existing.EmailVerified = profile.EmailVerified
-	existing.PartitionID = profile.PartitionID
+	existing.PartitionID = partitionID
 	existing.UpdatedAt = time.Now().UTC()
 
 	return nil

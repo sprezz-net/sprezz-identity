@@ -136,7 +136,7 @@ type AdminStorage interface {
 
 	GetUserProfilesByTenant(ctx context.Context, tenantID uuid.UUID, partitionID int64) ([]model.UserProfile, error)
 	DeleteUserProfile(ctx context.Context, tenantID uuid.UUID, partitionID int64, userID uuid.UUID) error
-	UpdateUserProfile(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) error
+	UpdateUserProfile(ctx context.Context, tenantID uuid.UUID, partitionID int64, profile model.UserProfile) error
 	GetUserIdentities(ctx context.Context, userProfileID uuid.UUID) ([]model.UserIdentity, error)
 	DecoupleIdentity(ctx context.Context, userProfileID uuid.UUID, identityProviderID uuid.UUID) error
 

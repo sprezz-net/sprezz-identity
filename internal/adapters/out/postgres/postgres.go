@@ -2938,9 +2938,11 @@ func (s *PostgresStorage) DeleteUserProfile(ctx context.Context, tenantID uuid.U
 }
 
 // UpdateUserProfile writes changes matching the structural layouts back into your storage rows natively.
-func (s *PostgresStorage) UpdateUserProfile(ctx context.Context, tenantID uuid.UUID, profile model.UserProfile) error {
+func (s *PostgresStorage) UpdateUserProfile(ctx context.Context, tenantID uuid.UUID, partitionID int64, profile model.UserProfile) error {
 	err := s.queries.UpdateUserProfile(ctx, sqlcdb.UpdateUserProfileParams{
-		PartitionID:       profile.PartitionID,
+		TenantUuid:        toPGUUID(tenantID),
+		PartitionID:       partitionID,
+		ID:                toPGUUID(profile.ID),
 		PreferredUsername: profile.PreferredUsername,
 		Name:              profile.Name,
 		FirstName:         profile.FirstName,
@@ -2949,8 +2951,6 @@ func (s *PostgresStorage) UpdateUserProfile(ctx context.Context, tenantID uuid.U
 		EmailVerified:     profile.EmailVerified,
 		LifecycleState:    sqlcdb.ProfileLifecycleState(profile.LifecycleState),
 		Blocked:           profile.Blocked,
-		ID:                toPGUUID(profile.ID),
-		TenantUuid:        toPGUUID(tenantID),
 	})
 	if err != nil {
 		return fmt.Errorf("update user profile structural data layout: %w", err)

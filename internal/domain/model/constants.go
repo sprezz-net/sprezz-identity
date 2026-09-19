@@ -26,6 +26,7 @@ const (
 	CookieSessionNameProd     = "__Host-spz_session"
 	CookieSessionNameDev      = "spz_session"
 	HeaderContentType         = "Content-Type"
+	HeaderHxPushUrl           = "HX-Push-Url"
 	HeaderHxRedirect          = "HX-Redirect"
 	HeaderHxRequest           = "HX-Request"
 	HeaderHxTrigger           = "HX-Trigger"

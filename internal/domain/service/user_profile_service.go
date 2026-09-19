@@ -13,18 +13,20 @@ import (
 )
 
 type UserProfileService struct {
-	storage port.Storage
-	crypto  port.Crypto
-	clock   port.Clock
+	storage      port.Storage
+	adminStorage port.AdminStorage
+	crypto       port.Crypto
+	clock        port.Clock
 }
 
 var _ port.UserProfileUseCase = (*UserProfileService)(nil)
 
-func NewUserProfileService(s port.Storage, c port.Crypto, cl port.Clock) *UserProfileService {
+func NewUserProfileService(s port.Storage, as port.AdminStorage, c port.Crypto, cl port.Clock) *UserProfileService {
 	return &UserProfileService{
-		storage: s,
-		crypto:  c,
-		clock:   cl,
+		storage:      s,
+		adminStorage: as,
+		crypto:       c,
+		clock:        cl,
 	}
 }
 
@@ -96,35 +98,44 @@ func (s *UserProfileService) CreateUserProfile(ctx context.Context, cmd port.Cre
 // ChangeUserPassword extracts the localized credential directory inside the requested partition,
 // preventing cross-partition token or password validation leaks.
 func (s *UserProfileService) ChangeUserPassword(ctx context.Context, cmd port.ChangePasswordCommand) error {
-	if cmd.CurrentPassword == "" || cmd.NewPassword == "" {
-		return fmt.Errorf("%w: password parameters cannot be empty values", port.ErrInvalidRequest)
+	// 1. Structural Form Invariant Checks: Map directly onto form field elements
+	valErr := port.NewValidationError()
+	if strings.TrimSpace(cmd.CurrentPassword) == "" {
+		valErr.Add("current_password", "Current password cannot be empty")
+	}
+	if strings.TrimSpace(cmd.NewPassword) == "" {
+		valErr.Add("new_password", "New password cannot be empty")
+	} else if len(cmd.NewPassword) > 64 {
+		valErr := port.NewValidationError()
+		valErr.Add("new_password", "New password exceeds maximum permitted length of 64 characters")
+		return valErr
 	}
 
-	// 1. Target the exact username-password provider locked to this specific partition
+	// 2. Target the exact username-password provider locked to this specific partition
 	providers, err := s.storage.GetIdentityProvidersByTypeAndPartition(ctx, cmd.TenantID, cmd.PartitionID, model.UsernamePasswordIDPType)
 	if err != nil {
 		return fmt.Errorf("user_profile_service: username-password identity provider unresolvable for partition %d: %w", cmd.PartitionID, err)
 	}
 
-	// Structural Validation Gate: Enforce that exactly one local IDP must exist for password trades
+	// 3. Structural Validation Gate: Enforce that exactly one local IDP must exist for password trades
 	if len(providers) == 0 {
 		return fmt.Errorf("%w: no local username-password identity provider bootstrapped for this partition", port.ErrInvalidGrant)
 	}
 	idp := providers[0]
 
-	// 2. Extract existing cryptographic password parameters from the partition sandbox
+	// 4. Extract existing cryptographic password parameters from the partition sandbox
 	cred, err := s.storage.GetPasswordCredentialByProfileID(ctx, cmd.TenantID, cmd.PartitionID, cmd.UserProfileID, idp.ID)
 	if err != nil {
 		return fmt.Errorf("%w: local account record missing or unconfigured in this partition", port.ErrInvalidGrant)
 	}
 
-	// 3. Side-Channel Protection: Assert current password validity before running mutations
+	// 5. Side-Channel Protection: Assert current password validity before running mutations
 	valid, err := s.crypto.CompareCredential(cred.Argon2Hash, cmd.CurrentPassword)
 	if err != nil || !valid {
 		return fmt.Errorf("%w: invalid current password provided", port.ErrInvalidGrant)
 	}
 
-	// 4. Drive fresh Argon2id key generation over the new password string
+	// 6. Drive fresh Argon2id key generation over the new password string
 	newHash, err := s.crypto.HashCredential(cmd.NewPassword)
 	if err != nil {
 		return fmt.Errorf("user_profile_service: failed computing cryptographic hash: %w", err)
@@ -140,7 +151,7 @@ func (s *UserProfileService) ChangeUserPassword(ctx context.Context, cmd port.Ch
 	}
 
 	if err := s.storage.SavePasswordCredential(ctx, updatedCredential); err != nil {
-		return fmt.Errorf("user_profile_service: failed saving new credentials to partition ledger: %w", err)
+		return fmt.Errorf("user_profile_service: failed saving new credentials to partition: %w", err)
 	}
 
 	return nil
@@ -148,17 +159,29 @@ func (s *UserProfileService) ChangeUserPassword(ctx context.Context, cmd port.Ch
 
 // ChangeUserEmail executes partition-confined uniqueness checks to avoid cross-tenant index scans.
 func (s *UserProfileService) ChangeUserEmail(ctx context.Context, cmd port.ChangeEmailCommand) error {
-	if cmd.CurrentPassword == "" || cmd.NewEmail == "" {
-		return fmt.Errorf("%w: parameter values cannot be empty blocks", port.ErrInvalidRequest)
+	cleanedEmail := strings.TrimSpace(cmd.NewEmail)
+
+	// 1. Structural Form Invariant Checks: Map directly onto respective form field elements
+	valErr := port.NewValidationError()
+	if strings.TrimSpace(cmd.CurrentPassword) == "" {
+		valErr.Add("current_password", "Current password is required to change email")
+	}
+	if cleanedEmail == "" {
+		valErr.Add("new_email", "New email address cannot be empty")
 	}
 
-	// 1. Target provider strictly bound to the operational partition
+	// 2. Intercept and throw early if structural validations fail before invoking database checks
+	if valErr.HasErrors() {
+		return valErr
+	}
+
+	// 3. Target provider strictly bound to the operational partition
 	providers, err := s.storage.GetIdentityProvidersByTypeAndPartition(ctx, cmd.TenantID, cmd.PartitionID, model.UsernamePasswordIDPType)
 	if err != nil {
 		return fmt.Errorf("user_profile_service: username-password identity provider unresolvable for partition %d: %w", cmd.PartitionID, err)
 	}
 
-	// Structural Validation Gate: Enforce that exactly one local IDP must exist for password trades
+	// 4. Structural Validation Gate: Enforce that exactly one local IDP must exist for password trades
 	if len(providers) == 0 {
 		return fmt.Errorf("%w: no local username-password identity provider bootstrapped for this partition", port.ErrInvalidGrant)
 	}
@@ -169,15 +192,18 @@ func (s *UserProfileService) ChangeUserEmail(ctx context.Context, cmd port.Chang
 		return fmt.Errorf("%w: local account verification required to change email", port.ErrInvalidGrant)
 	}
 
+	// 5. Side-Channel Protection: Target the 'current_password' field element directly if password comparison fails
 	valid, err := s.crypto.CompareCredential(cred.Argon2Hash, cmd.CurrentPassword)
 	if err != nil || !valid {
-		return fmt.Errorf("%w: authentication failed: invalid current password", port.ErrInvalidGrant)
+		valErr.Add("current_password", "Invalid current password provided")
+		return valErr
 	}
 
-	// 2. Partition-Isolated Uniqueness Fence: Enforce email rules strictly within the partition bounds
-	existing, err := s.storage.FindProfileByEmail(ctx, cmd.PartitionID, cmd.NewEmail)
+	// 6. Partition-Isolated Uniqueness Fence: Target the 'new_email' field element directly on index collision
+	existing, err := s.storage.FindProfileByEmail(ctx, cmd.PartitionID, cleanedEmail)
 	if err == nil && existing != nil && existing.ID != cmd.UserProfileID {
-		return fmt.Errorf("%w: target email address is already bound to another profile in this partition", port.ErrInvalidRequest)
+		valErr.Add("new_email", "This email address is already bound to another profile in this partition")
+		return valErr
 	}
 
 	partition, err := s.storage.GetPartitionByID(ctx, cmd.TenantID, cmd.PartitionID)
@@ -190,11 +216,12 @@ func (s *UserProfileService) ChangeUserEmail(ctx context.Context, cmd port.Chang
 		return fmt.Errorf("user_profile_service: target user profile record missing from workspace: %w", err)
 	}
 
-	userProfile.Email = cmd.NewEmail
+	userProfile.Email = cleanedEmail
 	userProfile.EmailVerified = false
 
-	if err := s.storage.SaveUserProfile(ctx, cmd.TenantID, cmd.PartitionID, *userProfile); err != nil {
-		return fmt.Errorf("user_profile_service: failed committing email change down-funnel: %w", err)
+	// 7. Use UpdateUserProfile to persist changes over existing records safely without key-collision faults
+	if err := s.adminStorage.UpdateUserProfile(ctx, cmd.TenantID, cmd.PartitionID, *userProfile); err != nil {
+		return fmt.Errorf("user_profile_service: failed persisting email change: %w", err)
 	}
 
 	return nil
@@ -202,8 +229,20 @@ func (s *UserProfileService) ChangeUserEmail(ctx context.Context, cmd port.Chang
 
 // ChangeUserName modifies the text name using direct partition alias resolution.
 func (s *UserProfileService) ChangeUserName(ctx context.Context, cmd port.ChangeNameCommand) error {
-	if cmd.NewName == "" {
-		return fmt.Errorf("%w: new name parameter string cannot be empty", port.ErrInvalidRequest)
+	cleanedName := strings.TrimSpace(cmd.NewName)
+
+	// 1. Structural Form Invariant Checks: Map directly onto the 'new_name' field element
+	valErr := port.NewValidationError()
+	if cleanedName == "" {
+		valErr.Add("new_name", "New name parameter string cannot be empty")
+	}
+	if len(cleanedName) > 64 {
+		valErr.Add("new_name", "Display name exceeds maximum permitted length of 64 characters")
+	}
+
+	// Intercept and throw if any domain boundary validations failed
+	if valErr.HasErrors() {
+		return valErr
 	}
 
 	partition, err := s.storage.GetPartitionByID(ctx, cmd.TenantID, cmd.PartitionID)
@@ -216,9 +255,10 @@ func (s *UserProfileService) ChangeUserName(ctx context.Context, cmd port.Change
 		return fmt.Errorf("user_profile_service: target user profile record missing from workspace: %w", err)
 	}
 
-	userProfile.Name = cmd.NewName
+	userProfile.Name = cleanedName
 
-	if err := s.storage.SaveUserProfile(ctx, cmd.TenantID, cmd.PartitionID, *userProfile); err != nil {
+	// 2. Use UpdateUserProfile to persist changes over existing records safely without key-collision faults
+	if err := s.adminStorage.UpdateUserProfile(ctx, cmd.TenantID, cmd.PartitionID, *userProfile); err != nil {
 		return fmt.Errorf("user_profile_service: failed committing display name change: %w", err)
 	}
 

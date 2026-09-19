@@ -242,7 +242,7 @@ func (h *AdminUserHandler) adminSaveUser(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	err = h.adminStorage.UpdateUserProfile(r.Context(), tenant.ID, *user)
+	err = h.adminStorage.UpdateUserProfile(r.Context(), tenant.ID, user.PartitionID, *user)
 	if err != nil {
 		h.renderError(w, r, http.StatusInternalServerError, err.Error())
 		return
