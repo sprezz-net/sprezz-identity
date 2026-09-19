@@ -2,6 +2,7 @@ package http
 
 import (
 	"net/http"
+	"strings"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -30,24 +31,45 @@ func (h *LogoutHandler) Routes(r chi.Router) {
 func (h *LogoutHandler) HandleLogoutRequest(w http.ResponseWriter, r *http.Request) {
 	tenantUUID := TenantIDFromContext(r.Context())
 
-	// 1. Harvest active bearer session contexts from namespaced cookies via port contracts
-	var activeSessionPayload string
-	cookieSpec, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
+	// 1. Calculate the exact standard public consumer fallback cookie name spec
+	defaultSpec, _ := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
 		TenantID:       tenantUUID,
 		LifecycleStage: "clear",
 		RequestHost:    r.Host,
 	})
-	if err == nil {
-		if cookie, cookieErr := r.Cookie(cookieSpec.CookieName); cookieErr == nil {
-			stage, payload, parseErr := h.ssoUseCase.ParseSessionCookie(r.Context(), cookie.Value)
+
+	var activeSessionPayload string
+	var targetCookieToEvict string
+
+	// 2. PASS 1: Prioritize parsing custom partitions (e.g., sprezz_admin or other partitions) over the default fallback
+	for _, cookie := range r.Cookies() {
+		if !strings.HasPrefix(cookie.Name, "spz_session_") && !strings.HasPrefix(cookie.Name, "sprezz_") {
+			continue
+		}
+		if cookie.Name == defaultSpec.CookieName {
+			continue
+		}
+
+		stage, payload, parseErr := h.ssoUseCase.ParseSessionCookie(r.Context(), cookie.Value)
+		if parseErr == nil && stage == "bearer" {
+			activeSessionPayload = payload
+			targetCookieToEvict = cookie.Name // TARGET FOUND: Lock eviction to this specific custom partition key
+			break
+		}
+	}
+
+	// 3. PASS 2: Fall back to parsing the default partition session if no custom partitions matched
+	if activeSessionPayload == "" {
+		if defaultCookie, err := r.Cookie(defaultSpec.CookieName); err == nil && defaultCookie.Value != "" {
+			stage, payload, parseErr := h.ssoUseCase.ParseSessionCookie(r.Context(), defaultCookie.Value)
 			if parseErr == nil && stage == "bearer" {
 				activeSessionPayload = payload
+				targetCookieToEvict = defaultSpec.CookieName // TARGET FOUND: Lock eviction strictly to the default fallback key
 			}
 		}
 	}
 
-	// 2. Map transport query values straight into the pure Port Command envelope object
-	// We capture the optional id_token_hint from the query string for the OIDC spec path
+	// 4. Map transport data parameters into the Port Command envelope object
 	cmd := port.LogoutRequestCommand{
 		TenantID:              tenantUUID,
 		ActiveSessionID:       activeSessionPayload,
@@ -57,7 +79,7 @@ func (h *LogoutHandler) HandleLogoutRequest(w http.ResponseWriter, r *http.Reque
 		RequestHost:           r.Host,
 	}
 
-	// 3. Pure Corporate Delegation: Fire use case execution across the driving perimeter
+	// 5. Fire use-case execution to mark this specific discovered session tracking ID as revoked server-side
 	result, err := h.authUseCase.ProcessLogoutRequest(r.Context(), cmd)
 	if err != nil {
 		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
@@ -66,29 +88,44 @@ func (h *LogoutHandler) HandleLogoutRequest(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// 4. Enforce cookie eviction parameters explicitly dictated by domain service calculation
-	if result.HasCookieIntent {
+	// 6. SURGICAL CONTEXT-TARGETED COOKIE EVICTION
+	// We clear out the active session cookie calculated by the core domain if ProcessLogoutRequest dictates it,
+	// OR we explicitly evict the target cookie identified during our prioritized scanning passes.
+	cookieNameToKill := result.CookieName
+	if cookieNameToKill == "" {
+		cookieNameToKill = targetCookieToEvict
+	}
+
+	if cookieNameToKill != "" {
 		http.SetCookie(w, &http.Cookie{
-			Name:     result.CookieName,
-			Value:    result.CookieValue,
+			Name:     cookieNameToKill,
+			Value:    "",
 			Path:     "/",
-			MaxAge:   result.CookieMaxAge,
+			MaxAge:   -1, // Forces immediate native browser-level erasure of only this specific target cookie
 			HttpOnly: true,
-			Secure:   result.CookieSecure,
+			Secure:   true,
 			SameSite: http.SameSiteLaxMode,
 		})
 	}
 
-	// 5. Spec Compliance Section 7.1: If front-channel iframe URIs exist, render a hidden frame block page
+	// 7. Dynamic Redirect Target Calculation
+	// If the cookie we just killed belongs to the admin workspace
+	// we route back to /admin to instantly trigger a clean OIDC flow.
+	finalRedirectTarget := port.RouteWebLogin
+	if cookieNameToKill == "spz_session_sprezz_admin" {
+		finalRedirectTarget = "/admin"
+	}
+
+	// 8. Spec Compliance Section 7.1: Handle front-channel iframe web cleanups if apps are bound
 	if len(result.FrontChannelLogoutURIs) > 0 {
 		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 		w.WriteHeader(http.StatusOK)
 
-		component := public.Logout(result.FrontChannelLogoutURIs, result.PostLogoutRedirectURI)
+		component := public.Logout(result.FrontChannelLogoutURIs, port.RouteWebLogin) // Safeguard fallback routes straight back to login wall
 		_ = component.Render(r.Context(), w)
 		return
 	}
 
-	// Default fallback to direct redirection if zero front-channel apps are listening
-	http.Redirect(w, r, result.PostLogoutRedirectURI, http.StatusFound)
+	// 9. Hard immutable destination override straight back to the securely resolved endpoint
+	http.Redirect(w, r, finalRedirectTarget, http.StatusFound)
 }
