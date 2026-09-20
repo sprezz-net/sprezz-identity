@@ -38,8 +38,14 @@ type tenantKeyring struct {
 
 type Storage interface {
 	port.CryptoStorage
-	ResolveTenantByDomain(ctx context.Context, domain string) (*model.Tenant, error)
+
+	GetActiveSigningKeys(ctx context.Context, tenantUUID uuid.UUID) ([]model.SigningKey, error)
 	GetActiveVerificationKeys(ctx context.Context, tenantUUID uuid.UUID) ([]model.SigningKey, error)
+	GetTenantDEK(ctx context.Context, tenantUUID uuid.UUID) (encryptedDEK []byte, nonce []byte, err error)
+	InsertSigningKey(ctx context.Context, tenantUUID uuid.UUID, key model.SigningKey, encryptedPrivateKey []byte, nonce []byte) (string, error)
+	InsertTenantDEK(ctx context.Context, tenantUUID uuid.UUID, encryptedDEK []byte, nonce []byte) error
+	ResolveTenantByDomain(ctx context.Context, domain string) (*model.Tenant, error)
+	RotateSigningKeys(ctx context.Context, tenantUUID uuid.UUID) error
 }
 
 type JWTSigner struct {
