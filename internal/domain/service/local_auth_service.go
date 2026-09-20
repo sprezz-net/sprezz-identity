@@ -31,7 +31,7 @@ func NewLocalAuthService(s port.Storage, c port.Crypto, cl port.Clock) *LocalAut
 func (s *LocalAuthService) AuthenticateLocalCredentials(ctx context.Context, cmd port.LocalLoginCommand) (*port.LocalLoginResponse, error) {
 	// A standard high-entropy Argon2id hash used to perform a dummy comparison path
 	// This forces a consistent CPU execution time when a user profile does not exist
-	const dummyArgon2Hash = "$argon2id$v=19$m=65536,t=1,p=4$NDg4bVUzcmM2M1NxM2I0Yg$d2U4M3I2M3FzYTQ4OG11M3JjNjNzcTNidDRi"
+	const dummyArgon2Hash = "$argon2id$v=19$m=65536,t=3,p=2$NDg4bVUzcmM2M1NxM2I0Yg$d2U4M3I2M3FzYTQ4OG11M3JjNjNzcTNidDRi"
 
 	// Self-resolve PartitionID if zero
 	if cmd.PartitionID == 0 {

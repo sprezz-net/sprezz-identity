@@ -1022,9 +1022,21 @@ func mergeVerificationKeys(jwks []map[string]any, verKeys []model.SigningKey) []
 }
 
 // HashCredential wraps the secure cryptographic hashing algorithm
+// Overrode library defaults to strictly enforce §3.3 spec compliance (t=3, m=65536, p=2)
 func (s *JWTSigner) HashCredential(secret string) (string, error) {
-	// Reuses identical default Argon2id parameters (1 iteration, 64MB memory, 4 threads)
-	return argon2id.CreateHash(secret, argon2id.DefaultParams)
+	customParams := &argon2id.Params{
+		Memory:      65536, // 64MB memory profile requirement
+		Iterations:  3,     // t=3 iterations execution threshold
+		Parallelism: 2,     // p=2 concurrent execution threads
+		SaltLength:  16,    // 16-byte cryptographically secure entropy salt
+		KeyLength:   32,    // 32-byte final output hash length
+	}
+
+	hash, err := argon2id.CreateHash(secret, customParams)
+	if err != nil {
+		return "", fmt.Errorf("crypto: argon2id computation failed: %w", err)
+	}
+	return hash, nil
 }
 
 // CompareCredential validates incoming client request string metrics
