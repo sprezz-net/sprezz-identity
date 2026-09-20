@@ -1081,11 +1081,19 @@ func (s *OAuthService) ProcessLogoutRequest(ctx context.Context, cmd port.Logout
 
 	// 4. Calculate spec-compliant post-logout landing target destination URI
 	targetURL := cmd.PostLogoutRedirectURI
+
+	if targetURL != "" {
+		if err := s.validator.ValidateRedirect(ctx, tenant, nil, targetURL); err != nil {
+			slog.Warn("ProcessLogoutRequest: post_logout_redirect_uri is not white-listed", "uri", targetURL, "err", err)
+			targetURL = ""
+		}
+	}
+
 	if targetURL == "" {
 		targetURL = tenant.Config.DefaultRedirectURI
 	}
 	if targetURL == "" {
-		targetURL = "/"
+		targetURL = port.RouteWebLogin
 	}
 
 	if cmd.State != "" && targetURL != "/" {

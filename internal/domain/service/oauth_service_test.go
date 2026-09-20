@@ -308,3 +308,72 @@ func TestOAuthService_ProcessAuthorizeRequest_PersistsRequestedScopes(t *testing
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestOAuthService_ProcessLogoutRequest_UnwhitelistedRedirectFallback(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	defer ctrl.Finish()
+
+	storage := portmock.NewStorageMock(ctrl)
+	ssoUseCase := portmock.NewSSOSessionUseCaseMock(ctrl)
+	now := time.Now()
+	clock := portmock.NewMockClock(now)
+
+	// Initialize standard internal dependency validation layer
+	idpService := NewIdentityProviderService(storage, nil, clock)
+	validator := NewOAuthValidatorService(idpService)
+
+	svc := NewOAuthService(storage, nil, nil, nil, clock, ssoUseCase, validator)
+
+	tenantUUID := uuid.New()
+	tenant := &model.Tenant{
+		ID:     tenantUUID,
+		Domain: "my-tenant.com",
+		Scheme: "https",
+		Config: model.TenantConfig{
+			RedirectWhitelist:  []string{"https://my-tenant.com/admin"},
+			DefaultRedirectURI: "https://my-tenant.com/admin",
+		},
+	}
+
+	// 1. SETUP EXPLICIT MOCK EXPECTATIONS
+	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantUUID).Return(tenant, nil)
+
+	// Mock the destructive database session revocation step cleanly
+	storage.RevokeSessionMock.Expect(minimock.AnyContext, tenantUUID, "user-uuid", "user-uuid:33").Return(nil)
+
+	// Mock the front-channel application lookup loop to return zero bound clients
+	storage.GetApplicationsLogoutContextBySessionMock.Expect(minimock.AnyContext, tenantUUID, "user-uuid:33").Return([]model.Application{}, nil)
+
+	// Mock dynamic single sign-out cookie clearance parameters
+	ssoUseCase.BuildSessionCookieMock.Expect(minimock.AnyContext, port.CookieIntentCommand{
+		TenantID:       tenantUUID,
+		PartitionID:    33,
+		LifecycleStage: "clear",
+		RequestHost:    "my-tenant.com",
+	}).Return(&port.CookieIntentResponse{
+		CookieName:  "spz_session_default",
+		CookieValue: "",
+		MaxAge:      -1,
+	}, nil)
+
+	// 2. Build malicious payload parameters context
+	cmd := port.LogoutRequestCommand{
+		TenantID:              tenantUUID,
+		ActiveSessionID:       "user-uuid:33",
+		PostLogoutRedirectURI: "https://malicious-attacker-site.com", // Dangerous unwhitelisted destination!
+		RequestHost:           "my-tenant.com",
+	}
+
+	// 3. Execute execution across the driving service core
+	res, err := svc.ProcessLogoutRequest(context.Background(), cmd)
+	if err != nil {
+		t.Fatalf("unexpected error during logout processing: %v", err)
+	}
+
+	// 4. VERIFY SECURITY BOUNDARIES:
+	// The service must catch the unwhitelisted destination and fallback cleanly to the login wall path.
+	expectedFallback := tenant.Config.DefaultRedirectURI
+	if res.PostLogoutRedirectURI != expectedFallback {
+		t.Errorf("SECURITY FAULT: expected fallback redirect destination path '%s', but system leaked to: '%s'", expectedFallback, res.PostLogoutRedirectURI)
+	}
+}
