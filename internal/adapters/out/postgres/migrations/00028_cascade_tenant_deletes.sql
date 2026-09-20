@@ -22,6 +22,14 @@ ALTER TABLE outbound_handshake_sessions
     ADD CONSTRAINT fk_outbound_handshake_sessions_tenant
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE;
 
+-- 4. Re-bind federated_sessions tracking constraints to support automated ON DELETE CASCADE cascades
+ALTER TABLE federated_sessions
+    DROP CONSTRAINT IF EXISTS fk_fed_session_tenant_partition;
+
+ALTER TABLE federated_sessions
+    ADD CONSTRAINT fk_fed_session_tenant_partition
+    FOREIGN KEY (tenant_id, partition_id) REFERENCES partitions(tenant_id, id) ON DELETE CASCADE;
+
 -- +goose StatementEnd
 
 -- +goose Down
@@ -46,5 +54,13 @@ ALTER TABLE audit_event_log
 -- 3. Remove foreign key on outbound_handshake_sessions
 ALTER TABLE outbound_handshake_sessions
     DROP CONSTRAINT IF EXISTS fk_outbound_handshake_sessions_tenant;
+
+-- 4. Revert federated_sessions constraint mapping back to original RESTRICT profile safeguards
+ALTER TABLE federated_sessions
+    DROP CONSTRAINT IF EXISTS fk_fed_session_tenant_partition;
+
+ALTER TABLE federated_sessions
+    ADD CONSTRAINT fk_fed_session_tenant_partition
+    FOREIGN KEY (tenant_id, partition_id) REFERENCES partitions(tenant_id, id) ON DELETE RESTRICT;
 
 -- +goose StatementEnd
