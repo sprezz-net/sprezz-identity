@@ -18,7 +18,7 @@ import (
 func setupTestEnv(ctrl *minimock.Controller) (
 	*HttpAdapter,
 	*portmock.StorageMock,
-	*portmock.AuthMock,
+	*portmock.AuthUseCaseMock,
 	*portmock.CryptoMock,
 	*portmock.TenantUseCaseMock,
 	*portmock.FederatedLoginUseCaseMock,
@@ -27,7 +27,7 @@ func setupTestEnv(ctrl *minimock.Controller) (
 	*portmock.UserRegistrationUseCaseMock,
 ) {
 	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
+	auth := portmock.NewAuthUseCaseMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 	tuc := portmock.NewTenantUseCaseMock(ctrl)
 	fuc := portmock.NewFederatedLoginUseCaseMock(ctrl)

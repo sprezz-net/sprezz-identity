@@ -81,7 +81,7 @@ func runRegisterTestCase(t *testing.T, tt registerTestCase) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
+	auth := portmock.NewAuthUseCaseMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()

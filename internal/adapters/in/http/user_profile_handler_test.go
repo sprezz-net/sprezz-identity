@@ -17,7 +17,7 @@ import (
 
 func buildLocalProfileTestAdapter(ctrl *minimock.Controller) (*HttpAdapter, *portmock.UserProfileUseCaseMock, *portmock.SSOSessionUseCaseMock, *portmock.TenantUseCaseMock) {
 	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
+	auth := portmock.NewAuthUseCaseMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 	tuc := portmock.NewTenantUseCaseMock(ctrl)
 	fuc := portmock.NewFederatedLoginUseCaseMock(ctrl)

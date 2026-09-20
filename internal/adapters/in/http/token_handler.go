@@ -29,7 +29,7 @@ func NewTokenHandler(auc port.AuthUseCase, c port.Crypto, s port.Storage) *Token
 
 // Routes hooks the handler up to the main chi router container.
 func (h *TokenHandler) Routes(r chi.Router) {
-	r.Post("/oauth/token", h.HandleTokenRequest)
+	r.Post(port.RouteToken, h.HandleTokenRequest)
 }
 
 func (h *TokenHandler) HandleTokenRequest(w http.ResponseWriter, r *http.Request) {
@@ -117,6 +117,23 @@ func (h *TokenHandler) HandleTokenRequest(w http.ResponseWriter, r *http.Request
 			ApplicationProfile: profile,
 			ApplicationGroup:   group,
 		})
+
+	case model.GrantTypeTokenExchange:
+		// RFC 8693 Token Exchange Grant Binding
+		subjectToken := r.Form.Get("subject_token")
+		subjectTokenType := model.TokenType(r.Form.Get("subject_token_type"))
+
+		if subjectToken == "" {
+			h.writeError(w, http.StatusBadRequest, "invalid_request", "missing mandatory subject_token parameter")
+			return
+		}
+		if subjectTokenType == "" {
+			h.writeError(w, http.StatusBadRequest, "invalid_request", "missing mandatory subject_token_type parameter")
+			return
+		}
+
+		// Delegate downstream token-exchange mechanics directly to the domain layer
+		tokenResponse, err = h.authUseCase.ExchangeExternalToken(r.Context(), tenantUUID, clientID, subjectToken, subjectTokenType)
 
 	default:
 		h.writeError(w, http.StatusBadRequest, "unsupported_grant_type", "the requested grant type profile is unsupported")

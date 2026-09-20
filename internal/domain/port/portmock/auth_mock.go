@@ -2,7 +2,7 @@
 
 package portmock
 
-//go:generate minimock -i sprezz-identity/internal/domain/port.AuthUseCase -o auth_mock.go -n AuthMock -p portmock
+//go:generate minimock -i sprezz-identity/internal/domain/port.AuthUseCase -o auth_mock.go -n AuthUseCaseMock -p portmock
 
 import (
 	"context"
@@ -16,8 +16,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// AuthMock implements mm_port.AuthUseCase
-type AuthMock struct {
+// AuthUseCaseMock implements mm_port.AuthUseCase
+type AuthUseCaseMock struct {
 	t          minimock.Tester
 	finishOnce sync.Once
 
@@ -26,219 +26,219 @@ type AuthMock struct {
 	inspectFuncExchangeClientCredentials   func(ctx context.Context, cmd mm_port.ExchangeClientCredentialsCommand)
 	afterExchangeClientCredentialsCounter  uint64
 	beforeExchangeClientCredentialsCounter uint64
-	ExchangeClientCredentialsMock          mAuthMockExchangeClientCredentials
+	ExchangeClientCredentialsMock          mAuthUseCaseMockExchangeClientCredentials
 
 	funcExchangeCodeForTokens          func(ctx context.Context, cmd mm_port.ExchangeCodeForTokensCommand) (tp1 *model.TokenSetResponse, err error)
 	funcExchangeCodeForTokensOrigin    string
 	inspectFuncExchangeCodeForTokens   func(ctx context.Context, cmd mm_port.ExchangeCodeForTokensCommand)
 	afterExchangeCodeForTokensCounter  uint64
 	beforeExchangeCodeForTokensCounter uint64
-	ExchangeCodeForTokensMock          mAuthMockExchangeCodeForTokens
+	ExchangeCodeForTokensMock          mAuthUseCaseMockExchangeCodeForTokens
 
 	funcExchangeExternalToken          func(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType model.TokenType) (tp1 *model.TokenSetResponse, err error)
 	funcExchangeExternalTokenOrigin    string
 	inspectFuncExchangeExternalToken   func(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType model.TokenType)
 	afterExchangeExternalTokenCounter  uint64
 	beforeExchangeExternalTokenCounter uint64
-	ExchangeExternalTokenMock          mAuthMockExchangeExternalToken
+	ExchangeExternalTokenMock          mAuthUseCaseMockExchangeExternalToken
 
 	funcIntrospectToken          func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (ip1 *model.IntrospectionResponse, err error)
 	funcIntrospectTokenOrigin    string
 	inspectFuncIntrospectToken   func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string)
 	afterIntrospectTokenCounter  uint64
 	beforeIntrospectTokenCounter uint64
-	IntrospectTokenMock          mAuthMockIntrospectToken
+	IntrospectTokenMock          mAuthUseCaseMockIntrospectToken
 
 	funcProcessAuthorizeRequest          func(ctx context.Context, cmd mm_port.AuthorizeRequestCommand) (ap1 *mm_port.AuthorizeExecutionResult, err error)
 	funcProcessAuthorizeRequestOrigin    string
 	inspectFuncProcessAuthorizeRequest   func(ctx context.Context, cmd mm_port.AuthorizeRequestCommand)
 	afterProcessAuthorizeRequestCounter  uint64
 	beforeProcessAuthorizeRequestCounter uint64
-	ProcessAuthorizeRequestMock          mAuthMockProcessAuthorizeRequest
+	ProcessAuthorizeRequestMock          mAuthUseCaseMockProcessAuthorizeRequest
 
 	funcProcessDiscoveryMetadata          func(ctx context.Context, tenantID uuid.UUID, isOIDC bool) (dp1 *mm_port.DiscoveryResponse, err error)
 	funcProcessDiscoveryMetadataOrigin    string
 	inspectFuncProcessDiscoveryMetadata   func(ctx context.Context, tenantID uuid.UUID, isOIDC bool)
 	afterProcessDiscoveryMetadataCounter  uint64
 	beforeProcessDiscoveryMetadataCounter uint64
-	ProcessDiscoveryMetadataMock          mAuthMockProcessDiscoveryMetadata
+	ProcessDiscoveryMetadataMock          mAuthUseCaseMockProcessDiscoveryMetadata
 
 	funcProcessDynamicRegistration          func(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) (dp1 *mm_port.DynamicRegistrationResult, err error)
 	funcProcessDynamicRegistrationOrigin    string
 	inspectFuncProcessDynamicRegistration   func(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload)
 	afterProcessDynamicRegistrationCounter  uint64
 	beforeProcessDynamicRegistrationCounter uint64
-	ProcessDynamicRegistrationMock          mAuthMockProcessDynamicRegistration
+	ProcessDynamicRegistrationMock          mAuthUseCaseMockProcessDynamicRegistration
 
 	funcProcessJWKSetRetrieval          func(ctx context.Context, tenantID uuid.UUID, host string, scheme string) (m1 map[string]any, err error)
 	funcProcessJWKSetRetrievalOrigin    string
 	inspectFuncProcessJWKSetRetrieval   func(ctx context.Context, tenantID uuid.UUID, host string, scheme string)
 	afterProcessJWKSetRetrievalCounter  uint64
 	beforeProcessJWKSetRetrievalCounter uint64
-	ProcessJWKSetRetrievalMock          mAuthMockProcessJWKSetRetrieval
+	ProcessJWKSetRetrievalMock          mAuthUseCaseMockProcessJWKSetRetrieval
 
 	funcProcessLogoutRequest          func(ctx context.Context, cmd mm_port.LogoutRequestCommand) (lp1 *mm_port.LogoutExecutionResult, err error)
 	funcProcessLogoutRequestOrigin    string
 	inspectFuncProcessLogoutRequest   func(ctx context.Context, cmd mm_port.LogoutRequestCommand)
 	afterProcessLogoutRequestCounter  uint64
 	beforeProcessLogoutRequestCounter uint64
-	ProcessLogoutRequestMock          mAuthMockProcessLogoutRequest
+	ProcessLogoutRequestMock          mAuthUseCaseMockProcessLogoutRequest
 
 	funcProcessPushedAuthorization          func(ctx context.Context, cmd mm_port.PushedAuthCommand) (pp1 *mm_port.PushedAuthResponse, err error)
 	funcProcessPushedAuthorizationOrigin    string
 	inspectFuncProcessPushedAuthorization   func(ctx context.Context, cmd mm_port.PushedAuthCommand)
 	afterProcessPushedAuthorizationCounter  uint64
 	beforeProcessPushedAuthorizationCounter uint64
-	ProcessPushedAuthorizationMock          mAuthMockProcessPushedAuthorization
+	ProcessPushedAuthorizationMock          mAuthUseCaseMockProcessPushedAuthorization
 
 	funcProcessTokenIntrospection          func(ctx context.Context, cmd mm_port.IntrospectTokenCommand) (ip1 *model.IntrospectionResponse, err error)
 	funcProcessTokenIntrospectionOrigin    string
 	inspectFuncProcessTokenIntrospection   func(ctx context.Context, cmd mm_port.IntrospectTokenCommand)
 	afterProcessTokenIntrospectionCounter  uint64
 	beforeProcessTokenIntrospectionCounter uint64
-	ProcessTokenIntrospectionMock          mAuthMockProcessTokenIntrospection
+	ProcessTokenIntrospectionMock          mAuthUseCaseMockProcessTokenIntrospection
 
 	funcProcessTokenRevocation          func(ctx context.Context, cmd mm_port.RevokeTokenCommand) (err error)
 	funcProcessTokenRevocationOrigin    string
 	inspectFuncProcessTokenRevocation   func(ctx context.Context, cmd mm_port.RevokeTokenCommand)
 	afterProcessTokenRevocationCounter  uint64
 	beforeProcessTokenRevocationCounter uint64
-	ProcessTokenRevocationMock          mAuthMockProcessTokenRevocation
+	ProcessTokenRevocationMock          mAuthUseCaseMockProcessTokenRevocation
 
 	funcProcessUserInfoRequest          func(ctx context.Context, cmd mm_port.UserInfoRequestCommand) (op1 *model.OIDCTokenClaims, err error)
 	funcProcessUserInfoRequestOrigin    string
 	inspectFuncProcessUserInfoRequest   func(ctx context.Context, cmd mm_port.UserInfoRequestCommand)
 	afterProcessUserInfoRequestCounter  uint64
 	beforeProcessUserInfoRequestCounter uint64
-	ProcessUserInfoRequestMock          mAuthMockProcessUserInfoRequest
+	ProcessUserInfoRequestMock          mAuthUseCaseMockProcessUserInfoRequest
 
 	funcRegisterDynamicApplication          func(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) (ap1 *model.Application, s1 string, err error)
 	funcRegisterDynamicApplicationOrigin    string
 	inspectFuncRegisterDynamicApplication   func(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload)
 	afterRegisterDynamicApplicationCounter  uint64
 	beforeRegisterDynamicApplicationCounter uint64
-	RegisterDynamicApplicationMock          mAuthMockRegisterDynamicApplication
+	RegisterDynamicApplicationMock          mAuthUseCaseMockRegisterDynamicApplication
 
 	funcRevokeToken          func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (err error)
 	funcRevokeTokenOrigin    string
 	inspectFuncRevokeToken   func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string)
 	afterRevokeTokenCounter  uint64
 	beforeRevokeTokenCounter uint64
-	RevokeTokenMock          mAuthMockRevokeToken
+	RevokeTokenMock          mAuthUseCaseMockRevokeToken
 
 	funcRotateRefreshToken          func(ctx context.Context, cmd mm_port.RotateRefreshTokenCommand) (tp1 *model.TokenSetResponse, err error)
 	funcRotateRefreshTokenOrigin    string
 	inspectFuncRotateRefreshToken   func(ctx context.Context, cmd mm_port.RotateRefreshTokenCommand)
 	afterRotateRefreshTokenCounter  uint64
 	beforeRotateRefreshTokenCounter uint64
-	RotateRefreshTokenMock          mAuthMockRotateRefreshToken
+	RotateRefreshTokenMock          mAuthUseCaseMockRotateRefreshToken
 }
 
-// NewAuthMock returns a mock for mm_port.AuthUseCase
-func NewAuthMock(t minimock.Tester) *AuthMock {
-	m := &AuthMock{t: t}
+// NewAuthUseCaseMock returns a mock for mm_port.AuthUseCase
+func NewAuthUseCaseMock(t minimock.Tester) *AuthUseCaseMock {
+	m := &AuthUseCaseMock{t: t}
 
 	if controller, ok := t.(minimock.MockController); ok {
 		controller.RegisterMocker(m)
 	}
 
-	m.ExchangeClientCredentialsMock = mAuthMockExchangeClientCredentials{mock: m}
-	m.ExchangeClientCredentialsMock.callArgs = []*AuthMockExchangeClientCredentialsParams{}
+	m.ExchangeClientCredentialsMock = mAuthUseCaseMockExchangeClientCredentials{mock: m}
+	m.ExchangeClientCredentialsMock.callArgs = []*AuthUseCaseMockExchangeClientCredentialsParams{}
 
-	m.ExchangeCodeForTokensMock = mAuthMockExchangeCodeForTokens{mock: m}
-	m.ExchangeCodeForTokensMock.callArgs = []*AuthMockExchangeCodeForTokensParams{}
+	m.ExchangeCodeForTokensMock = mAuthUseCaseMockExchangeCodeForTokens{mock: m}
+	m.ExchangeCodeForTokensMock.callArgs = []*AuthUseCaseMockExchangeCodeForTokensParams{}
 
-	m.ExchangeExternalTokenMock = mAuthMockExchangeExternalToken{mock: m}
-	m.ExchangeExternalTokenMock.callArgs = []*AuthMockExchangeExternalTokenParams{}
+	m.ExchangeExternalTokenMock = mAuthUseCaseMockExchangeExternalToken{mock: m}
+	m.ExchangeExternalTokenMock.callArgs = []*AuthUseCaseMockExchangeExternalTokenParams{}
 
-	m.IntrospectTokenMock = mAuthMockIntrospectToken{mock: m}
-	m.IntrospectTokenMock.callArgs = []*AuthMockIntrospectTokenParams{}
+	m.IntrospectTokenMock = mAuthUseCaseMockIntrospectToken{mock: m}
+	m.IntrospectTokenMock.callArgs = []*AuthUseCaseMockIntrospectTokenParams{}
 
-	m.ProcessAuthorizeRequestMock = mAuthMockProcessAuthorizeRequest{mock: m}
-	m.ProcessAuthorizeRequestMock.callArgs = []*AuthMockProcessAuthorizeRequestParams{}
+	m.ProcessAuthorizeRequestMock = mAuthUseCaseMockProcessAuthorizeRequest{mock: m}
+	m.ProcessAuthorizeRequestMock.callArgs = []*AuthUseCaseMockProcessAuthorizeRequestParams{}
 
-	m.ProcessDiscoveryMetadataMock = mAuthMockProcessDiscoveryMetadata{mock: m}
-	m.ProcessDiscoveryMetadataMock.callArgs = []*AuthMockProcessDiscoveryMetadataParams{}
+	m.ProcessDiscoveryMetadataMock = mAuthUseCaseMockProcessDiscoveryMetadata{mock: m}
+	m.ProcessDiscoveryMetadataMock.callArgs = []*AuthUseCaseMockProcessDiscoveryMetadataParams{}
 
-	m.ProcessDynamicRegistrationMock = mAuthMockProcessDynamicRegistration{mock: m}
-	m.ProcessDynamicRegistrationMock.callArgs = []*AuthMockProcessDynamicRegistrationParams{}
+	m.ProcessDynamicRegistrationMock = mAuthUseCaseMockProcessDynamicRegistration{mock: m}
+	m.ProcessDynamicRegistrationMock.callArgs = []*AuthUseCaseMockProcessDynamicRegistrationParams{}
 
-	m.ProcessJWKSetRetrievalMock = mAuthMockProcessJWKSetRetrieval{mock: m}
-	m.ProcessJWKSetRetrievalMock.callArgs = []*AuthMockProcessJWKSetRetrievalParams{}
+	m.ProcessJWKSetRetrievalMock = mAuthUseCaseMockProcessJWKSetRetrieval{mock: m}
+	m.ProcessJWKSetRetrievalMock.callArgs = []*AuthUseCaseMockProcessJWKSetRetrievalParams{}
 
-	m.ProcessLogoutRequestMock = mAuthMockProcessLogoutRequest{mock: m}
-	m.ProcessLogoutRequestMock.callArgs = []*AuthMockProcessLogoutRequestParams{}
+	m.ProcessLogoutRequestMock = mAuthUseCaseMockProcessLogoutRequest{mock: m}
+	m.ProcessLogoutRequestMock.callArgs = []*AuthUseCaseMockProcessLogoutRequestParams{}
 
-	m.ProcessPushedAuthorizationMock = mAuthMockProcessPushedAuthorization{mock: m}
-	m.ProcessPushedAuthorizationMock.callArgs = []*AuthMockProcessPushedAuthorizationParams{}
+	m.ProcessPushedAuthorizationMock = mAuthUseCaseMockProcessPushedAuthorization{mock: m}
+	m.ProcessPushedAuthorizationMock.callArgs = []*AuthUseCaseMockProcessPushedAuthorizationParams{}
 
-	m.ProcessTokenIntrospectionMock = mAuthMockProcessTokenIntrospection{mock: m}
-	m.ProcessTokenIntrospectionMock.callArgs = []*AuthMockProcessTokenIntrospectionParams{}
+	m.ProcessTokenIntrospectionMock = mAuthUseCaseMockProcessTokenIntrospection{mock: m}
+	m.ProcessTokenIntrospectionMock.callArgs = []*AuthUseCaseMockProcessTokenIntrospectionParams{}
 
-	m.ProcessTokenRevocationMock = mAuthMockProcessTokenRevocation{mock: m}
-	m.ProcessTokenRevocationMock.callArgs = []*AuthMockProcessTokenRevocationParams{}
+	m.ProcessTokenRevocationMock = mAuthUseCaseMockProcessTokenRevocation{mock: m}
+	m.ProcessTokenRevocationMock.callArgs = []*AuthUseCaseMockProcessTokenRevocationParams{}
 
-	m.ProcessUserInfoRequestMock = mAuthMockProcessUserInfoRequest{mock: m}
-	m.ProcessUserInfoRequestMock.callArgs = []*AuthMockProcessUserInfoRequestParams{}
+	m.ProcessUserInfoRequestMock = mAuthUseCaseMockProcessUserInfoRequest{mock: m}
+	m.ProcessUserInfoRequestMock.callArgs = []*AuthUseCaseMockProcessUserInfoRequestParams{}
 
-	m.RegisterDynamicApplicationMock = mAuthMockRegisterDynamicApplication{mock: m}
-	m.RegisterDynamicApplicationMock.callArgs = []*AuthMockRegisterDynamicApplicationParams{}
+	m.RegisterDynamicApplicationMock = mAuthUseCaseMockRegisterDynamicApplication{mock: m}
+	m.RegisterDynamicApplicationMock.callArgs = []*AuthUseCaseMockRegisterDynamicApplicationParams{}
 
-	m.RevokeTokenMock = mAuthMockRevokeToken{mock: m}
-	m.RevokeTokenMock.callArgs = []*AuthMockRevokeTokenParams{}
+	m.RevokeTokenMock = mAuthUseCaseMockRevokeToken{mock: m}
+	m.RevokeTokenMock.callArgs = []*AuthUseCaseMockRevokeTokenParams{}
 
-	m.RotateRefreshTokenMock = mAuthMockRotateRefreshToken{mock: m}
-	m.RotateRefreshTokenMock.callArgs = []*AuthMockRotateRefreshTokenParams{}
+	m.RotateRefreshTokenMock = mAuthUseCaseMockRotateRefreshToken{mock: m}
+	m.RotateRefreshTokenMock.callArgs = []*AuthUseCaseMockRotateRefreshTokenParams{}
 
 	t.Cleanup(m.MinimockFinish)
 
 	return m
 }
 
-type mAuthMockExchangeClientCredentials struct {
+type mAuthUseCaseMockExchangeClientCredentials struct {
 	optional           bool
-	mock               *AuthMock
-	defaultExpectation *AuthMockExchangeClientCredentialsExpectation
-	expectations       []*AuthMockExchangeClientCredentialsExpectation
+	mock               *AuthUseCaseMock
+	defaultExpectation *AuthUseCaseMockExchangeClientCredentialsExpectation
+	expectations       []*AuthUseCaseMockExchangeClientCredentialsExpectation
 
-	callArgs []*AuthMockExchangeClientCredentialsParams
+	callArgs []*AuthUseCaseMockExchangeClientCredentialsParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// AuthMockExchangeClientCredentialsExpectation specifies expectation struct of the AuthUseCase.ExchangeClientCredentials
-type AuthMockExchangeClientCredentialsExpectation struct {
-	mock               *AuthMock
-	params             *AuthMockExchangeClientCredentialsParams
-	paramPtrs          *AuthMockExchangeClientCredentialsParamPtrs
-	expectationOrigins AuthMockExchangeClientCredentialsExpectationOrigins
-	results            *AuthMockExchangeClientCredentialsResults
+// AuthUseCaseMockExchangeClientCredentialsExpectation specifies expectation struct of the AuthUseCase.ExchangeClientCredentials
+type AuthUseCaseMockExchangeClientCredentialsExpectation struct {
+	mock               *AuthUseCaseMock
+	params             *AuthUseCaseMockExchangeClientCredentialsParams
+	paramPtrs          *AuthUseCaseMockExchangeClientCredentialsParamPtrs
+	expectationOrigins AuthUseCaseMockExchangeClientCredentialsExpectationOrigins
+	results            *AuthUseCaseMockExchangeClientCredentialsResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// AuthMockExchangeClientCredentialsParams contains parameters of the AuthUseCase.ExchangeClientCredentials
-type AuthMockExchangeClientCredentialsParams struct {
+// AuthUseCaseMockExchangeClientCredentialsParams contains parameters of the AuthUseCase.ExchangeClientCredentials
+type AuthUseCaseMockExchangeClientCredentialsParams struct {
 	ctx context.Context
 	cmd mm_port.ExchangeClientCredentialsCommand
 }
 
-// AuthMockExchangeClientCredentialsParamPtrs contains pointers to parameters of the AuthUseCase.ExchangeClientCredentials
-type AuthMockExchangeClientCredentialsParamPtrs struct {
+// AuthUseCaseMockExchangeClientCredentialsParamPtrs contains pointers to parameters of the AuthUseCase.ExchangeClientCredentials
+type AuthUseCaseMockExchangeClientCredentialsParamPtrs struct {
 	ctx *context.Context
 	cmd *mm_port.ExchangeClientCredentialsCommand
 }
 
-// AuthMockExchangeClientCredentialsResults contains results of the AuthUseCase.ExchangeClientCredentials
-type AuthMockExchangeClientCredentialsResults struct {
+// AuthUseCaseMockExchangeClientCredentialsResults contains results of the AuthUseCase.ExchangeClientCredentials
+type AuthUseCaseMockExchangeClientCredentialsResults struct {
 	tp1 *model.TokenSetResponse
 	err error
 }
 
-// AuthMockExchangeClientCredentialsOrigins contains origins of expectations of the AuthUseCase.ExchangeClientCredentials
-type AuthMockExchangeClientCredentialsExpectationOrigins struct {
+// AuthUseCaseMockExchangeClientCredentialsOrigins contains origins of expectations of the AuthUseCase.ExchangeClientCredentials
+type AuthUseCaseMockExchangeClientCredentialsExpectationOrigins struct {
 	origin    string
 	originCtx string
 	originCmd string
@@ -249,26 +249,26 @@ type AuthMockExchangeClientCredentialsExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) Optional() *mAuthMockExchangeClientCredentials {
+func (mmExchangeClientCredentials *mAuthUseCaseMockExchangeClientCredentials) Optional() *mAuthUseCaseMockExchangeClientCredentials {
 	mmExchangeClientCredentials.optional = true
 	return mmExchangeClientCredentials
 }
 
 // Expect sets up expected params for AuthUseCase.ExchangeClientCredentials
-func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) Expect(ctx context.Context, cmd mm_port.ExchangeClientCredentialsCommand) *mAuthMockExchangeClientCredentials {
+func (mmExchangeClientCredentials *mAuthUseCaseMockExchangeClientCredentials) Expect(ctx context.Context, cmd mm_port.ExchangeClientCredentialsCommand) *mAuthUseCaseMockExchangeClientCredentials {
 	if mmExchangeClientCredentials.mock.funcExchangeClientCredentials != nil {
-		mmExchangeClientCredentials.mock.t.Fatalf("AuthMock.ExchangeClientCredentials mock is already set by Set")
+		mmExchangeClientCredentials.mock.t.Fatalf("AuthUseCaseMock.ExchangeClientCredentials mock is already set by Set")
 	}
 
 	if mmExchangeClientCredentials.defaultExpectation == nil {
-		mmExchangeClientCredentials.defaultExpectation = &AuthMockExchangeClientCredentialsExpectation{}
+		mmExchangeClientCredentials.defaultExpectation = &AuthUseCaseMockExchangeClientCredentialsExpectation{}
 	}
 
 	if mmExchangeClientCredentials.defaultExpectation.paramPtrs != nil {
-		mmExchangeClientCredentials.mock.t.Fatalf("AuthMock.ExchangeClientCredentials mock is already set by ExpectParams functions")
+		mmExchangeClientCredentials.mock.t.Fatalf("AuthUseCaseMock.ExchangeClientCredentials mock is already set by ExpectParams functions")
 	}
 
-	mmExchangeClientCredentials.defaultExpectation.params = &AuthMockExchangeClientCredentialsParams{ctx, cmd}
+	mmExchangeClientCredentials.defaultExpectation.params = &AuthUseCaseMockExchangeClientCredentialsParams{ctx, cmd}
 	mmExchangeClientCredentials.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmExchangeClientCredentials.expectations {
 		if minimock.Equal(e.params, mmExchangeClientCredentials.defaultExpectation.params) {
@@ -280,21 +280,21 @@ func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) Expect(ct
 }
 
 // ExpectCtxParam1 sets up expected param ctx for AuthUseCase.ExchangeClientCredentials
-func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) ExpectCtxParam1(ctx context.Context) *mAuthMockExchangeClientCredentials {
+func (mmExchangeClientCredentials *mAuthUseCaseMockExchangeClientCredentials) ExpectCtxParam1(ctx context.Context) *mAuthUseCaseMockExchangeClientCredentials {
 	if mmExchangeClientCredentials.mock.funcExchangeClientCredentials != nil {
-		mmExchangeClientCredentials.mock.t.Fatalf("AuthMock.ExchangeClientCredentials mock is already set by Set")
+		mmExchangeClientCredentials.mock.t.Fatalf("AuthUseCaseMock.ExchangeClientCredentials mock is already set by Set")
 	}
 
 	if mmExchangeClientCredentials.defaultExpectation == nil {
-		mmExchangeClientCredentials.defaultExpectation = &AuthMockExchangeClientCredentialsExpectation{}
+		mmExchangeClientCredentials.defaultExpectation = &AuthUseCaseMockExchangeClientCredentialsExpectation{}
 	}
 
 	if mmExchangeClientCredentials.defaultExpectation.params != nil {
-		mmExchangeClientCredentials.mock.t.Fatalf("AuthMock.ExchangeClientCredentials mock is already set by Expect")
+		mmExchangeClientCredentials.mock.t.Fatalf("AuthUseCaseMock.ExchangeClientCredentials mock is already set by Expect")
 	}
 
 	if mmExchangeClientCredentials.defaultExpectation.paramPtrs == nil {
-		mmExchangeClientCredentials.defaultExpectation.paramPtrs = &AuthMockExchangeClientCredentialsParamPtrs{}
+		mmExchangeClientCredentials.defaultExpectation.paramPtrs = &AuthUseCaseMockExchangeClientCredentialsParamPtrs{}
 	}
 	mmExchangeClientCredentials.defaultExpectation.paramPtrs.ctx = &ctx
 	mmExchangeClientCredentials.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
@@ -303,21 +303,21 @@ func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) ExpectCtx
 }
 
 // ExpectCmdParam2 sets up expected param cmd for AuthUseCase.ExchangeClientCredentials
-func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) ExpectCmdParam2(cmd mm_port.ExchangeClientCredentialsCommand) *mAuthMockExchangeClientCredentials {
+func (mmExchangeClientCredentials *mAuthUseCaseMockExchangeClientCredentials) ExpectCmdParam2(cmd mm_port.ExchangeClientCredentialsCommand) *mAuthUseCaseMockExchangeClientCredentials {
 	if mmExchangeClientCredentials.mock.funcExchangeClientCredentials != nil {
-		mmExchangeClientCredentials.mock.t.Fatalf("AuthMock.ExchangeClientCredentials mock is already set by Set")
+		mmExchangeClientCredentials.mock.t.Fatalf("AuthUseCaseMock.ExchangeClientCredentials mock is already set by Set")
 	}
 
 	if mmExchangeClientCredentials.defaultExpectation == nil {
-		mmExchangeClientCredentials.defaultExpectation = &AuthMockExchangeClientCredentialsExpectation{}
+		mmExchangeClientCredentials.defaultExpectation = &AuthUseCaseMockExchangeClientCredentialsExpectation{}
 	}
 
 	if mmExchangeClientCredentials.defaultExpectation.params != nil {
-		mmExchangeClientCredentials.mock.t.Fatalf("AuthMock.ExchangeClientCredentials mock is already set by Expect")
+		mmExchangeClientCredentials.mock.t.Fatalf("AuthUseCaseMock.ExchangeClientCredentials mock is already set by Expect")
 	}
 
 	if mmExchangeClientCredentials.defaultExpectation.paramPtrs == nil {
-		mmExchangeClientCredentials.defaultExpectation.paramPtrs = &AuthMockExchangeClientCredentialsParamPtrs{}
+		mmExchangeClientCredentials.defaultExpectation.paramPtrs = &AuthUseCaseMockExchangeClientCredentialsParamPtrs{}
 	}
 	mmExchangeClientCredentials.defaultExpectation.paramPtrs.cmd = &cmd
 	mmExchangeClientCredentials.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
@@ -326,9 +326,9 @@ func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) ExpectCmd
 }
 
 // Inspect accepts an inspector function that has same arguments as the AuthUseCase.ExchangeClientCredentials
-func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) Inspect(f func(ctx context.Context, cmd mm_port.ExchangeClientCredentialsCommand)) *mAuthMockExchangeClientCredentials {
+func (mmExchangeClientCredentials *mAuthUseCaseMockExchangeClientCredentials) Inspect(f func(ctx context.Context, cmd mm_port.ExchangeClientCredentialsCommand)) *mAuthUseCaseMockExchangeClientCredentials {
 	if mmExchangeClientCredentials.mock.inspectFuncExchangeClientCredentials != nil {
-		mmExchangeClientCredentials.mock.t.Fatalf("Inspect function is already set for AuthMock.ExchangeClientCredentials")
+		mmExchangeClientCredentials.mock.t.Fatalf("Inspect function is already set for AuthUseCaseMock.ExchangeClientCredentials")
 	}
 
 	mmExchangeClientCredentials.mock.inspectFuncExchangeClientCredentials = f
@@ -337,21 +337,21 @@ func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) Inspect(f
 }
 
 // Return sets up results that will be returned by AuthUseCase.ExchangeClientCredentials
-func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) Return(tp1 *model.TokenSetResponse, err error) *AuthMock {
+func (mmExchangeClientCredentials *mAuthUseCaseMockExchangeClientCredentials) Return(tp1 *model.TokenSetResponse, err error) *AuthUseCaseMock {
 	if mmExchangeClientCredentials.mock.funcExchangeClientCredentials != nil {
-		mmExchangeClientCredentials.mock.t.Fatalf("AuthMock.ExchangeClientCredentials mock is already set by Set")
+		mmExchangeClientCredentials.mock.t.Fatalf("AuthUseCaseMock.ExchangeClientCredentials mock is already set by Set")
 	}
 
 	if mmExchangeClientCredentials.defaultExpectation == nil {
-		mmExchangeClientCredentials.defaultExpectation = &AuthMockExchangeClientCredentialsExpectation{mock: mmExchangeClientCredentials.mock}
+		mmExchangeClientCredentials.defaultExpectation = &AuthUseCaseMockExchangeClientCredentialsExpectation{mock: mmExchangeClientCredentials.mock}
 	}
-	mmExchangeClientCredentials.defaultExpectation.results = &AuthMockExchangeClientCredentialsResults{tp1, err}
+	mmExchangeClientCredentials.defaultExpectation.results = &AuthUseCaseMockExchangeClientCredentialsResults{tp1, err}
 	mmExchangeClientCredentials.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmExchangeClientCredentials.mock
 }
 
 // Set uses given function f to mock the AuthUseCase.ExchangeClientCredentials method
-func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) Set(f func(ctx context.Context, cmd mm_port.ExchangeClientCredentialsCommand) (tp1 *model.TokenSetResponse, err error)) *AuthMock {
+func (mmExchangeClientCredentials *mAuthUseCaseMockExchangeClientCredentials) Set(f func(ctx context.Context, cmd mm_port.ExchangeClientCredentialsCommand) (tp1 *model.TokenSetResponse, err error)) *AuthUseCaseMock {
 	if mmExchangeClientCredentials.defaultExpectation != nil {
 		mmExchangeClientCredentials.mock.t.Fatalf("Default expectation is already set for the AuthUseCase.ExchangeClientCredentials method")
 	}
@@ -367,37 +367,37 @@ func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) Set(f fun
 
 // When sets expectation for the AuthUseCase.ExchangeClientCredentials which will trigger the result defined by the following
 // Then helper
-func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) When(ctx context.Context, cmd mm_port.ExchangeClientCredentialsCommand) *AuthMockExchangeClientCredentialsExpectation {
+func (mmExchangeClientCredentials *mAuthUseCaseMockExchangeClientCredentials) When(ctx context.Context, cmd mm_port.ExchangeClientCredentialsCommand) *AuthUseCaseMockExchangeClientCredentialsExpectation {
 	if mmExchangeClientCredentials.mock.funcExchangeClientCredentials != nil {
-		mmExchangeClientCredentials.mock.t.Fatalf("AuthMock.ExchangeClientCredentials mock is already set by Set")
+		mmExchangeClientCredentials.mock.t.Fatalf("AuthUseCaseMock.ExchangeClientCredentials mock is already set by Set")
 	}
 
-	expectation := &AuthMockExchangeClientCredentialsExpectation{
+	expectation := &AuthUseCaseMockExchangeClientCredentialsExpectation{
 		mock:               mmExchangeClientCredentials.mock,
-		params:             &AuthMockExchangeClientCredentialsParams{ctx, cmd},
-		expectationOrigins: AuthMockExchangeClientCredentialsExpectationOrigins{origin: minimock.CallerInfo(1)},
+		params:             &AuthUseCaseMockExchangeClientCredentialsParams{ctx, cmd},
+		expectationOrigins: AuthUseCaseMockExchangeClientCredentialsExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmExchangeClientCredentials.expectations = append(mmExchangeClientCredentials.expectations, expectation)
 	return expectation
 }
 
 // Then sets up AuthUseCase.ExchangeClientCredentials return parameters for the expectation previously defined by the When method
-func (e *AuthMockExchangeClientCredentialsExpectation) Then(tp1 *model.TokenSetResponse, err error) *AuthMock {
-	e.results = &AuthMockExchangeClientCredentialsResults{tp1, err}
+func (e *AuthUseCaseMockExchangeClientCredentialsExpectation) Then(tp1 *model.TokenSetResponse, err error) *AuthUseCaseMock {
+	e.results = &AuthUseCaseMockExchangeClientCredentialsResults{tp1, err}
 	return e.mock
 }
 
 // Times sets number of times AuthUseCase.ExchangeClientCredentials should be invoked
-func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) Times(n uint64) *mAuthMockExchangeClientCredentials {
+func (mmExchangeClientCredentials *mAuthUseCaseMockExchangeClientCredentials) Times(n uint64) *mAuthUseCaseMockExchangeClientCredentials {
 	if n == 0 {
-		mmExchangeClientCredentials.mock.t.Fatalf("Times of AuthMock.ExchangeClientCredentials mock can not be zero")
+		mmExchangeClientCredentials.mock.t.Fatalf("Times of AuthUseCaseMock.ExchangeClientCredentials mock can not be zero")
 	}
 	mm_atomic.StoreUint64(&mmExchangeClientCredentials.expectedInvocations, n)
 	mmExchangeClientCredentials.expectedInvocationsOrigin = minimock.CallerInfo(1)
 	return mmExchangeClientCredentials
 }
 
-func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) invocationsDone() bool {
+func (mmExchangeClientCredentials *mAuthUseCaseMockExchangeClientCredentials) invocationsDone() bool {
 	if len(mmExchangeClientCredentials.expectations) == 0 && mmExchangeClientCredentials.defaultExpectation == nil && mmExchangeClientCredentials.mock.funcExchangeClientCredentials == nil {
 		return true
 	}
@@ -409,7 +409,7 @@ func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) invocatio
 }
 
 // ExchangeClientCredentials implements mm_port.AuthUseCase
-func (mmExchangeClientCredentials *AuthMock) ExchangeClientCredentials(ctx context.Context, cmd mm_port.ExchangeClientCredentialsCommand) (tp1 *model.TokenSetResponse, err error) {
+func (mmExchangeClientCredentials *AuthUseCaseMock) ExchangeClientCredentials(ctx context.Context, cmd mm_port.ExchangeClientCredentialsCommand) (tp1 *model.TokenSetResponse, err error) {
 	mm_atomic.AddUint64(&mmExchangeClientCredentials.beforeExchangeClientCredentialsCounter, 1)
 	defer mm_atomic.AddUint64(&mmExchangeClientCredentials.afterExchangeClientCredentialsCounter, 1)
 
@@ -419,7 +419,7 @@ func (mmExchangeClientCredentials *AuthMock) ExchangeClientCredentials(ctx conte
 		mmExchangeClientCredentials.inspectFuncExchangeClientCredentials(ctx, cmd)
 	}
 
-	mm_params := AuthMockExchangeClientCredentialsParams{ctx, cmd}
+	mm_params := AuthUseCaseMockExchangeClientCredentialsParams{ctx, cmd}
 
 	// Record call args
 	mmExchangeClientCredentials.ExchangeClientCredentialsMock.mutex.Lock()
@@ -438,54 +438,54 @@ func (mmExchangeClientCredentials *AuthMock) ExchangeClientCredentials(ctx conte
 		mm_want := mmExchangeClientCredentials.ExchangeClientCredentialsMock.defaultExpectation.params
 		mm_want_ptrs := mmExchangeClientCredentials.ExchangeClientCredentialsMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockExchangeClientCredentialsParams{ctx, cmd}
+		mm_got := AuthUseCaseMockExchangeClientCredentialsParams{ctx, cmd}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmExchangeClientCredentials.t.Errorf("AuthMock.ExchangeClientCredentials got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmExchangeClientCredentials.t.Errorf("AuthUseCaseMock.ExchangeClientCredentials got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmExchangeClientCredentials.ExchangeClientCredentialsMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
 			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
-				mmExchangeClientCredentials.t.Errorf("AuthMock.ExchangeClientCredentials got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmExchangeClientCredentials.t.Errorf("AuthUseCaseMock.ExchangeClientCredentials got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmExchangeClientCredentials.ExchangeClientCredentialsMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmExchangeClientCredentials.t.Errorf("AuthMock.ExchangeClientCredentials got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+			mmExchangeClientCredentials.t.Errorf("AuthUseCaseMock.ExchangeClientCredentials got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmExchangeClientCredentials.ExchangeClientCredentialsMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
 		mm_results := mmExchangeClientCredentials.ExchangeClientCredentialsMock.defaultExpectation.results
 		if mm_results == nil {
-			mmExchangeClientCredentials.t.Fatal("No results are set for the AuthMock.ExchangeClientCredentials")
+			mmExchangeClientCredentials.t.Fatal("No results are set for the AuthUseCaseMock.ExchangeClientCredentials")
 		}
 		return (*mm_results).tp1, (*mm_results).err
 	}
 	if mmExchangeClientCredentials.funcExchangeClientCredentials != nil {
 		return mmExchangeClientCredentials.funcExchangeClientCredentials(ctx, cmd)
 	}
-	mmExchangeClientCredentials.t.Fatalf("Unexpected call to AuthMock.ExchangeClientCredentials. %v %v", ctx, cmd)
+	mmExchangeClientCredentials.t.Fatalf("Unexpected call to AuthUseCaseMock.ExchangeClientCredentials. %v %v", ctx, cmd)
 	return
 }
 
-// ExchangeClientCredentialsAfterCounter returns a count of finished AuthMock.ExchangeClientCredentials invocations
-func (mmExchangeClientCredentials *AuthMock) ExchangeClientCredentialsAfterCounter() uint64 {
+// ExchangeClientCredentialsAfterCounter returns a count of finished AuthUseCaseMock.ExchangeClientCredentials invocations
+func (mmExchangeClientCredentials *AuthUseCaseMock) ExchangeClientCredentialsAfterCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmExchangeClientCredentials.afterExchangeClientCredentialsCounter)
 }
 
-// ExchangeClientCredentialsBeforeCounter returns a count of AuthMock.ExchangeClientCredentials invocations
-func (mmExchangeClientCredentials *AuthMock) ExchangeClientCredentialsBeforeCounter() uint64 {
+// ExchangeClientCredentialsBeforeCounter returns a count of AuthUseCaseMock.ExchangeClientCredentials invocations
+func (mmExchangeClientCredentials *AuthUseCaseMock) ExchangeClientCredentialsBeforeCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmExchangeClientCredentials.beforeExchangeClientCredentialsCounter)
 }
 
-// Calls returns a list of arguments used in each call to AuthMock.ExchangeClientCredentials.
+// Calls returns a list of arguments used in each call to AuthUseCaseMock.ExchangeClientCredentials.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) Calls() []*AuthMockExchangeClientCredentialsParams {
+func (mmExchangeClientCredentials *mAuthUseCaseMockExchangeClientCredentials) Calls() []*AuthUseCaseMockExchangeClientCredentialsParams {
 	mmExchangeClientCredentials.mutex.RLock()
 
-	argCopy := make([]*AuthMockExchangeClientCredentialsParams, len(mmExchangeClientCredentials.callArgs))
+	argCopy := make([]*AuthUseCaseMockExchangeClientCredentialsParams, len(mmExchangeClientCredentials.callArgs))
 	copy(argCopy, mmExchangeClientCredentials.callArgs)
 
 	mmExchangeClientCredentials.mutex.RUnlock()
@@ -495,7 +495,7 @@ func (mmExchangeClientCredentials *mAuthMockExchangeClientCredentials) Calls() [
 
 // MinimockExchangeClientCredentialsDone returns true if the count of the ExchangeClientCredentials invocations corresponds
 // the number of defined expectations
-func (m *AuthMock) MinimockExchangeClientCredentialsDone() bool {
+func (m *AuthUseCaseMock) MinimockExchangeClientCredentialsDone() bool {
 	if m.ExchangeClientCredentialsMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
@@ -511,10 +511,10 @@ func (m *AuthMock) MinimockExchangeClientCredentialsDone() bool {
 }
 
 // MinimockExchangeClientCredentialsInspect logs each unmet expectation
-func (m *AuthMock) MinimockExchangeClientCredentialsInspect() {
+func (m *AuthUseCaseMock) MinimockExchangeClientCredentialsInspect() {
 	for _, e := range m.ExchangeClientCredentialsMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to AuthMock.ExchangeClientCredentials at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ExchangeClientCredentials at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
@@ -522,66 +522,66 @@ func (m *AuthMock) MinimockExchangeClientCredentialsInspect() {
 	// if default expectation was set then invocations count should be greater than zero
 	if m.ExchangeClientCredentialsMock.defaultExpectation != nil && afterExchangeClientCredentialsCounter < 1 {
 		if m.ExchangeClientCredentialsMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to AuthMock.ExchangeClientCredentials at\n%s", m.ExchangeClientCredentialsMock.defaultExpectation.returnOrigin)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ExchangeClientCredentials at\n%s", m.ExchangeClientCredentialsMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to AuthMock.ExchangeClientCredentials at\n%s with params: %#v", m.ExchangeClientCredentialsMock.defaultExpectation.expectationOrigins.origin, *m.ExchangeClientCredentialsMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ExchangeClientCredentials at\n%s with params: %#v", m.ExchangeClientCredentialsMock.defaultExpectation.expectationOrigins.origin, *m.ExchangeClientCredentialsMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
 	if m.funcExchangeClientCredentials != nil && afterExchangeClientCredentialsCounter < 1 {
-		m.t.Errorf("Expected call to AuthMock.ExchangeClientCredentials at\n%s", m.funcExchangeClientCredentialsOrigin)
+		m.t.Errorf("Expected call to AuthUseCaseMock.ExchangeClientCredentials at\n%s", m.funcExchangeClientCredentialsOrigin)
 	}
 
 	if !m.ExchangeClientCredentialsMock.invocationsDone() && afterExchangeClientCredentialsCounter > 0 {
-		m.t.Errorf("Expected %d calls to AuthMock.ExchangeClientCredentials at\n%s but found %d calls",
+		m.t.Errorf("Expected %d calls to AuthUseCaseMock.ExchangeClientCredentials at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ExchangeClientCredentialsMock.expectedInvocations), m.ExchangeClientCredentialsMock.expectedInvocationsOrigin, afterExchangeClientCredentialsCounter)
 	}
 }
 
-type mAuthMockExchangeCodeForTokens struct {
+type mAuthUseCaseMockExchangeCodeForTokens struct {
 	optional           bool
-	mock               *AuthMock
-	defaultExpectation *AuthMockExchangeCodeForTokensExpectation
-	expectations       []*AuthMockExchangeCodeForTokensExpectation
+	mock               *AuthUseCaseMock
+	defaultExpectation *AuthUseCaseMockExchangeCodeForTokensExpectation
+	expectations       []*AuthUseCaseMockExchangeCodeForTokensExpectation
 
-	callArgs []*AuthMockExchangeCodeForTokensParams
+	callArgs []*AuthUseCaseMockExchangeCodeForTokensParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// AuthMockExchangeCodeForTokensExpectation specifies expectation struct of the AuthUseCase.ExchangeCodeForTokens
-type AuthMockExchangeCodeForTokensExpectation struct {
-	mock               *AuthMock
-	params             *AuthMockExchangeCodeForTokensParams
-	paramPtrs          *AuthMockExchangeCodeForTokensParamPtrs
-	expectationOrigins AuthMockExchangeCodeForTokensExpectationOrigins
-	results            *AuthMockExchangeCodeForTokensResults
+// AuthUseCaseMockExchangeCodeForTokensExpectation specifies expectation struct of the AuthUseCase.ExchangeCodeForTokens
+type AuthUseCaseMockExchangeCodeForTokensExpectation struct {
+	mock               *AuthUseCaseMock
+	params             *AuthUseCaseMockExchangeCodeForTokensParams
+	paramPtrs          *AuthUseCaseMockExchangeCodeForTokensParamPtrs
+	expectationOrigins AuthUseCaseMockExchangeCodeForTokensExpectationOrigins
+	results            *AuthUseCaseMockExchangeCodeForTokensResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// AuthMockExchangeCodeForTokensParams contains parameters of the AuthUseCase.ExchangeCodeForTokens
-type AuthMockExchangeCodeForTokensParams struct {
+// AuthUseCaseMockExchangeCodeForTokensParams contains parameters of the AuthUseCase.ExchangeCodeForTokens
+type AuthUseCaseMockExchangeCodeForTokensParams struct {
 	ctx context.Context
 	cmd mm_port.ExchangeCodeForTokensCommand
 }
 
-// AuthMockExchangeCodeForTokensParamPtrs contains pointers to parameters of the AuthUseCase.ExchangeCodeForTokens
-type AuthMockExchangeCodeForTokensParamPtrs struct {
+// AuthUseCaseMockExchangeCodeForTokensParamPtrs contains pointers to parameters of the AuthUseCase.ExchangeCodeForTokens
+type AuthUseCaseMockExchangeCodeForTokensParamPtrs struct {
 	ctx *context.Context
 	cmd *mm_port.ExchangeCodeForTokensCommand
 }
 
-// AuthMockExchangeCodeForTokensResults contains results of the AuthUseCase.ExchangeCodeForTokens
-type AuthMockExchangeCodeForTokensResults struct {
+// AuthUseCaseMockExchangeCodeForTokensResults contains results of the AuthUseCase.ExchangeCodeForTokens
+type AuthUseCaseMockExchangeCodeForTokensResults struct {
 	tp1 *model.TokenSetResponse
 	err error
 }
 
-// AuthMockExchangeCodeForTokensOrigins contains origins of expectations of the AuthUseCase.ExchangeCodeForTokens
-type AuthMockExchangeCodeForTokensExpectationOrigins struct {
+// AuthUseCaseMockExchangeCodeForTokensOrigins contains origins of expectations of the AuthUseCase.ExchangeCodeForTokens
+type AuthUseCaseMockExchangeCodeForTokensExpectationOrigins struct {
 	origin    string
 	originCtx string
 	originCmd string
@@ -592,26 +592,26 @@ type AuthMockExchangeCodeForTokensExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Optional() *mAuthMockExchangeCodeForTokens {
+func (mmExchangeCodeForTokens *mAuthUseCaseMockExchangeCodeForTokens) Optional() *mAuthUseCaseMockExchangeCodeForTokens {
 	mmExchangeCodeForTokens.optional = true
 	return mmExchangeCodeForTokens
 }
 
 // Expect sets up expected params for AuthUseCase.ExchangeCodeForTokens
-func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Expect(ctx context.Context, cmd mm_port.ExchangeCodeForTokensCommand) *mAuthMockExchangeCodeForTokens {
+func (mmExchangeCodeForTokens *mAuthUseCaseMockExchangeCodeForTokens) Expect(ctx context.Context, cmd mm_port.ExchangeCodeForTokensCommand) *mAuthUseCaseMockExchangeCodeForTokens {
 	if mmExchangeCodeForTokens.mock.funcExchangeCodeForTokens != nil {
-		mmExchangeCodeForTokens.mock.t.Fatalf("AuthMock.ExchangeCodeForTokens mock is already set by Set")
+		mmExchangeCodeForTokens.mock.t.Fatalf("AuthUseCaseMock.ExchangeCodeForTokens mock is already set by Set")
 	}
 
 	if mmExchangeCodeForTokens.defaultExpectation == nil {
-		mmExchangeCodeForTokens.defaultExpectation = &AuthMockExchangeCodeForTokensExpectation{}
+		mmExchangeCodeForTokens.defaultExpectation = &AuthUseCaseMockExchangeCodeForTokensExpectation{}
 	}
 
 	if mmExchangeCodeForTokens.defaultExpectation.paramPtrs != nil {
-		mmExchangeCodeForTokens.mock.t.Fatalf("AuthMock.ExchangeCodeForTokens mock is already set by ExpectParams functions")
+		mmExchangeCodeForTokens.mock.t.Fatalf("AuthUseCaseMock.ExchangeCodeForTokens mock is already set by ExpectParams functions")
 	}
 
-	mmExchangeCodeForTokens.defaultExpectation.params = &AuthMockExchangeCodeForTokensParams{ctx, cmd}
+	mmExchangeCodeForTokens.defaultExpectation.params = &AuthUseCaseMockExchangeCodeForTokensParams{ctx, cmd}
 	mmExchangeCodeForTokens.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmExchangeCodeForTokens.expectations {
 		if minimock.Equal(e.params, mmExchangeCodeForTokens.defaultExpectation.params) {
@@ -623,21 +623,21 @@ func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Expect(ctx contex
 }
 
 // ExpectCtxParam1 sets up expected param ctx for AuthUseCase.ExchangeCodeForTokens
-func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) ExpectCtxParam1(ctx context.Context) *mAuthMockExchangeCodeForTokens {
+func (mmExchangeCodeForTokens *mAuthUseCaseMockExchangeCodeForTokens) ExpectCtxParam1(ctx context.Context) *mAuthUseCaseMockExchangeCodeForTokens {
 	if mmExchangeCodeForTokens.mock.funcExchangeCodeForTokens != nil {
-		mmExchangeCodeForTokens.mock.t.Fatalf("AuthMock.ExchangeCodeForTokens mock is already set by Set")
+		mmExchangeCodeForTokens.mock.t.Fatalf("AuthUseCaseMock.ExchangeCodeForTokens mock is already set by Set")
 	}
 
 	if mmExchangeCodeForTokens.defaultExpectation == nil {
-		mmExchangeCodeForTokens.defaultExpectation = &AuthMockExchangeCodeForTokensExpectation{}
+		mmExchangeCodeForTokens.defaultExpectation = &AuthUseCaseMockExchangeCodeForTokensExpectation{}
 	}
 
 	if mmExchangeCodeForTokens.defaultExpectation.params != nil {
-		mmExchangeCodeForTokens.mock.t.Fatalf("AuthMock.ExchangeCodeForTokens mock is already set by Expect")
+		mmExchangeCodeForTokens.mock.t.Fatalf("AuthUseCaseMock.ExchangeCodeForTokens mock is already set by Expect")
 	}
 
 	if mmExchangeCodeForTokens.defaultExpectation.paramPtrs == nil {
-		mmExchangeCodeForTokens.defaultExpectation.paramPtrs = &AuthMockExchangeCodeForTokensParamPtrs{}
+		mmExchangeCodeForTokens.defaultExpectation.paramPtrs = &AuthUseCaseMockExchangeCodeForTokensParamPtrs{}
 	}
 	mmExchangeCodeForTokens.defaultExpectation.paramPtrs.ctx = &ctx
 	mmExchangeCodeForTokens.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
@@ -646,21 +646,21 @@ func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) ExpectCtxParam1(c
 }
 
 // ExpectCmdParam2 sets up expected param cmd for AuthUseCase.ExchangeCodeForTokens
-func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) ExpectCmdParam2(cmd mm_port.ExchangeCodeForTokensCommand) *mAuthMockExchangeCodeForTokens {
+func (mmExchangeCodeForTokens *mAuthUseCaseMockExchangeCodeForTokens) ExpectCmdParam2(cmd mm_port.ExchangeCodeForTokensCommand) *mAuthUseCaseMockExchangeCodeForTokens {
 	if mmExchangeCodeForTokens.mock.funcExchangeCodeForTokens != nil {
-		mmExchangeCodeForTokens.mock.t.Fatalf("AuthMock.ExchangeCodeForTokens mock is already set by Set")
+		mmExchangeCodeForTokens.mock.t.Fatalf("AuthUseCaseMock.ExchangeCodeForTokens mock is already set by Set")
 	}
 
 	if mmExchangeCodeForTokens.defaultExpectation == nil {
-		mmExchangeCodeForTokens.defaultExpectation = &AuthMockExchangeCodeForTokensExpectation{}
+		mmExchangeCodeForTokens.defaultExpectation = &AuthUseCaseMockExchangeCodeForTokensExpectation{}
 	}
 
 	if mmExchangeCodeForTokens.defaultExpectation.params != nil {
-		mmExchangeCodeForTokens.mock.t.Fatalf("AuthMock.ExchangeCodeForTokens mock is already set by Expect")
+		mmExchangeCodeForTokens.mock.t.Fatalf("AuthUseCaseMock.ExchangeCodeForTokens mock is already set by Expect")
 	}
 
 	if mmExchangeCodeForTokens.defaultExpectation.paramPtrs == nil {
-		mmExchangeCodeForTokens.defaultExpectation.paramPtrs = &AuthMockExchangeCodeForTokensParamPtrs{}
+		mmExchangeCodeForTokens.defaultExpectation.paramPtrs = &AuthUseCaseMockExchangeCodeForTokensParamPtrs{}
 	}
 	mmExchangeCodeForTokens.defaultExpectation.paramPtrs.cmd = &cmd
 	mmExchangeCodeForTokens.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
@@ -669,9 +669,9 @@ func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) ExpectCmdParam2(c
 }
 
 // Inspect accepts an inspector function that has same arguments as the AuthUseCase.ExchangeCodeForTokens
-func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Inspect(f func(ctx context.Context, cmd mm_port.ExchangeCodeForTokensCommand)) *mAuthMockExchangeCodeForTokens {
+func (mmExchangeCodeForTokens *mAuthUseCaseMockExchangeCodeForTokens) Inspect(f func(ctx context.Context, cmd mm_port.ExchangeCodeForTokensCommand)) *mAuthUseCaseMockExchangeCodeForTokens {
 	if mmExchangeCodeForTokens.mock.inspectFuncExchangeCodeForTokens != nil {
-		mmExchangeCodeForTokens.mock.t.Fatalf("Inspect function is already set for AuthMock.ExchangeCodeForTokens")
+		mmExchangeCodeForTokens.mock.t.Fatalf("Inspect function is already set for AuthUseCaseMock.ExchangeCodeForTokens")
 	}
 
 	mmExchangeCodeForTokens.mock.inspectFuncExchangeCodeForTokens = f
@@ -680,21 +680,21 @@ func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Inspect(f func(ct
 }
 
 // Return sets up results that will be returned by AuthUseCase.ExchangeCodeForTokens
-func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Return(tp1 *model.TokenSetResponse, err error) *AuthMock {
+func (mmExchangeCodeForTokens *mAuthUseCaseMockExchangeCodeForTokens) Return(tp1 *model.TokenSetResponse, err error) *AuthUseCaseMock {
 	if mmExchangeCodeForTokens.mock.funcExchangeCodeForTokens != nil {
-		mmExchangeCodeForTokens.mock.t.Fatalf("AuthMock.ExchangeCodeForTokens mock is already set by Set")
+		mmExchangeCodeForTokens.mock.t.Fatalf("AuthUseCaseMock.ExchangeCodeForTokens mock is already set by Set")
 	}
 
 	if mmExchangeCodeForTokens.defaultExpectation == nil {
-		mmExchangeCodeForTokens.defaultExpectation = &AuthMockExchangeCodeForTokensExpectation{mock: mmExchangeCodeForTokens.mock}
+		mmExchangeCodeForTokens.defaultExpectation = &AuthUseCaseMockExchangeCodeForTokensExpectation{mock: mmExchangeCodeForTokens.mock}
 	}
-	mmExchangeCodeForTokens.defaultExpectation.results = &AuthMockExchangeCodeForTokensResults{tp1, err}
+	mmExchangeCodeForTokens.defaultExpectation.results = &AuthUseCaseMockExchangeCodeForTokensResults{tp1, err}
 	mmExchangeCodeForTokens.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmExchangeCodeForTokens.mock
 }
 
 // Set uses given function f to mock the AuthUseCase.ExchangeCodeForTokens method
-func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Set(f func(ctx context.Context, cmd mm_port.ExchangeCodeForTokensCommand) (tp1 *model.TokenSetResponse, err error)) *AuthMock {
+func (mmExchangeCodeForTokens *mAuthUseCaseMockExchangeCodeForTokens) Set(f func(ctx context.Context, cmd mm_port.ExchangeCodeForTokensCommand) (tp1 *model.TokenSetResponse, err error)) *AuthUseCaseMock {
 	if mmExchangeCodeForTokens.defaultExpectation != nil {
 		mmExchangeCodeForTokens.mock.t.Fatalf("Default expectation is already set for the AuthUseCase.ExchangeCodeForTokens method")
 	}
@@ -710,37 +710,37 @@ func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Set(f func(ctx co
 
 // When sets expectation for the AuthUseCase.ExchangeCodeForTokens which will trigger the result defined by the following
 // Then helper
-func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) When(ctx context.Context, cmd mm_port.ExchangeCodeForTokensCommand) *AuthMockExchangeCodeForTokensExpectation {
+func (mmExchangeCodeForTokens *mAuthUseCaseMockExchangeCodeForTokens) When(ctx context.Context, cmd mm_port.ExchangeCodeForTokensCommand) *AuthUseCaseMockExchangeCodeForTokensExpectation {
 	if mmExchangeCodeForTokens.mock.funcExchangeCodeForTokens != nil {
-		mmExchangeCodeForTokens.mock.t.Fatalf("AuthMock.ExchangeCodeForTokens mock is already set by Set")
+		mmExchangeCodeForTokens.mock.t.Fatalf("AuthUseCaseMock.ExchangeCodeForTokens mock is already set by Set")
 	}
 
-	expectation := &AuthMockExchangeCodeForTokensExpectation{
+	expectation := &AuthUseCaseMockExchangeCodeForTokensExpectation{
 		mock:               mmExchangeCodeForTokens.mock,
-		params:             &AuthMockExchangeCodeForTokensParams{ctx, cmd},
-		expectationOrigins: AuthMockExchangeCodeForTokensExpectationOrigins{origin: minimock.CallerInfo(1)},
+		params:             &AuthUseCaseMockExchangeCodeForTokensParams{ctx, cmd},
+		expectationOrigins: AuthUseCaseMockExchangeCodeForTokensExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmExchangeCodeForTokens.expectations = append(mmExchangeCodeForTokens.expectations, expectation)
 	return expectation
 }
 
 // Then sets up AuthUseCase.ExchangeCodeForTokens return parameters for the expectation previously defined by the When method
-func (e *AuthMockExchangeCodeForTokensExpectation) Then(tp1 *model.TokenSetResponse, err error) *AuthMock {
-	e.results = &AuthMockExchangeCodeForTokensResults{tp1, err}
+func (e *AuthUseCaseMockExchangeCodeForTokensExpectation) Then(tp1 *model.TokenSetResponse, err error) *AuthUseCaseMock {
+	e.results = &AuthUseCaseMockExchangeCodeForTokensResults{tp1, err}
 	return e.mock
 }
 
 // Times sets number of times AuthUseCase.ExchangeCodeForTokens should be invoked
-func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Times(n uint64) *mAuthMockExchangeCodeForTokens {
+func (mmExchangeCodeForTokens *mAuthUseCaseMockExchangeCodeForTokens) Times(n uint64) *mAuthUseCaseMockExchangeCodeForTokens {
 	if n == 0 {
-		mmExchangeCodeForTokens.mock.t.Fatalf("Times of AuthMock.ExchangeCodeForTokens mock can not be zero")
+		mmExchangeCodeForTokens.mock.t.Fatalf("Times of AuthUseCaseMock.ExchangeCodeForTokens mock can not be zero")
 	}
 	mm_atomic.StoreUint64(&mmExchangeCodeForTokens.expectedInvocations, n)
 	mmExchangeCodeForTokens.expectedInvocationsOrigin = minimock.CallerInfo(1)
 	return mmExchangeCodeForTokens
 }
 
-func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) invocationsDone() bool {
+func (mmExchangeCodeForTokens *mAuthUseCaseMockExchangeCodeForTokens) invocationsDone() bool {
 	if len(mmExchangeCodeForTokens.expectations) == 0 && mmExchangeCodeForTokens.defaultExpectation == nil && mmExchangeCodeForTokens.mock.funcExchangeCodeForTokens == nil {
 		return true
 	}
@@ -752,7 +752,7 @@ func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) invocationsDone()
 }
 
 // ExchangeCodeForTokens implements mm_port.AuthUseCase
-func (mmExchangeCodeForTokens *AuthMock) ExchangeCodeForTokens(ctx context.Context, cmd mm_port.ExchangeCodeForTokensCommand) (tp1 *model.TokenSetResponse, err error) {
+func (mmExchangeCodeForTokens *AuthUseCaseMock) ExchangeCodeForTokens(ctx context.Context, cmd mm_port.ExchangeCodeForTokensCommand) (tp1 *model.TokenSetResponse, err error) {
 	mm_atomic.AddUint64(&mmExchangeCodeForTokens.beforeExchangeCodeForTokensCounter, 1)
 	defer mm_atomic.AddUint64(&mmExchangeCodeForTokens.afterExchangeCodeForTokensCounter, 1)
 
@@ -762,7 +762,7 @@ func (mmExchangeCodeForTokens *AuthMock) ExchangeCodeForTokens(ctx context.Conte
 		mmExchangeCodeForTokens.inspectFuncExchangeCodeForTokens(ctx, cmd)
 	}
 
-	mm_params := AuthMockExchangeCodeForTokensParams{ctx, cmd}
+	mm_params := AuthUseCaseMockExchangeCodeForTokensParams{ctx, cmd}
 
 	// Record call args
 	mmExchangeCodeForTokens.ExchangeCodeForTokensMock.mutex.Lock()
@@ -781,54 +781,54 @@ func (mmExchangeCodeForTokens *AuthMock) ExchangeCodeForTokens(ctx context.Conte
 		mm_want := mmExchangeCodeForTokens.ExchangeCodeForTokensMock.defaultExpectation.params
 		mm_want_ptrs := mmExchangeCodeForTokens.ExchangeCodeForTokensMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockExchangeCodeForTokensParams{ctx, cmd}
+		mm_got := AuthUseCaseMockExchangeCodeForTokensParams{ctx, cmd}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmExchangeCodeForTokens.t.Errorf("AuthMock.ExchangeCodeForTokens got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmExchangeCodeForTokens.t.Errorf("AuthUseCaseMock.ExchangeCodeForTokens got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmExchangeCodeForTokens.ExchangeCodeForTokensMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
 			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
-				mmExchangeCodeForTokens.t.Errorf("AuthMock.ExchangeCodeForTokens got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmExchangeCodeForTokens.t.Errorf("AuthUseCaseMock.ExchangeCodeForTokens got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmExchangeCodeForTokens.ExchangeCodeForTokensMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmExchangeCodeForTokens.t.Errorf("AuthMock.ExchangeCodeForTokens got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+			mmExchangeCodeForTokens.t.Errorf("AuthUseCaseMock.ExchangeCodeForTokens got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmExchangeCodeForTokens.ExchangeCodeForTokensMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
 		mm_results := mmExchangeCodeForTokens.ExchangeCodeForTokensMock.defaultExpectation.results
 		if mm_results == nil {
-			mmExchangeCodeForTokens.t.Fatal("No results are set for the AuthMock.ExchangeCodeForTokens")
+			mmExchangeCodeForTokens.t.Fatal("No results are set for the AuthUseCaseMock.ExchangeCodeForTokens")
 		}
 		return (*mm_results).tp1, (*mm_results).err
 	}
 	if mmExchangeCodeForTokens.funcExchangeCodeForTokens != nil {
 		return mmExchangeCodeForTokens.funcExchangeCodeForTokens(ctx, cmd)
 	}
-	mmExchangeCodeForTokens.t.Fatalf("Unexpected call to AuthMock.ExchangeCodeForTokens. %v %v", ctx, cmd)
+	mmExchangeCodeForTokens.t.Fatalf("Unexpected call to AuthUseCaseMock.ExchangeCodeForTokens. %v %v", ctx, cmd)
 	return
 }
 
-// ExchangeCodeForTokensAfterCounter returns a count of finished AuthMock.ExchangeCodeForTokens invocations
-func (mmExchangeCodeForTokens *AuthMock) ExchangeCodeForTokensAfterCounter() uint64 {
+// ExchangeCodeForTokensAfterCounter returns a count of finished AuthUseCaseMock.ExchangeCodeForTokens invocations
+func (mmExchangeCodeForTokens *AuthUseCaseMock) ExchangeCodeForTokensAfterCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmExchangeCodeForTokens.afterExchangeCodeForTokensCounter)
 }
 
-// ExchangeCodeForTokensBeforeCounter returns a count of AuthMock.ExchangeCodeForTokens invocations
-func (mmExchangeCodeForTokens *AuthMock) ExchangeCodeForTokensBeforeCounter() uint64 {
+// ExchangeCodeForTokensBeforeCounter returns a count of AuthUseCaseMock.ExchangeCodeForTokens invocations
+func (mmExchangeCodeForTokens *AuthUseCaseMock) ExchangeCodeForTokensBeforeCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmExchangeCodeForTokens.beforeExchangeCodeForTokensCounter)
 }
 
-// Calls returns a list of arguments used in each call to AuthMock.ExchangeCodeForTokens.
+// Calls returns a list of arguments used in each call to AuthUseCaseMock.ExchangeCodeForTokens.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Calls() []*AuthMockExchangeCodeForTokensParams {
+func (mmExchangeCodeForTokens *mAuthUseCaseMockExchangeCodeForTokens) Calls() []*AuthUseCaseMockExchangeCodeForTokensParams {
 	mmExchangeCodeForTokens.mutex.RLock()
 
-	argCopy := make([]*AuthMockExchangeCodeForTokensParams, len(mmExchangeCodeForTokens.callArgs))
+	argCopy := make([]*AuthUseCaseMockExchangeCodeForTokensParams, len(mmExchangeCodeForTokens.callArgs))
 	copy(argCopy, mmExchangeCodeForTokens.callArgs)
 
 	mmExchangeCodeForTokens.mutex.RUnlock()
@@ -838,7 +838,7 @@ func (mmExchangeCodeForTokens *mAuthMockExchangeCodeForTokens) Calls() []*AuthMo
 
 // MinimockExchangeCodeForTokensDone returns true if the count of the ExchangeCodeForTokens invocations corresponds
 // the number of defined expectations
-func (m *AuthMock) MinimockExchangeCodeForTokensDone() bool {
+func (m *AuthUseCaseMock) MinimockExchangeCodeForTokensDone() bool {
 	if m.ExchangeCodeForTokensMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
@@ -854,10 +854,10 @@ func (m *AuthMock) MinimockExchangeCodeForTokensDone() bool {
 }
 
 // MinimockExchangeCodeForTokensInspect logs each unmet expectation
-func (m *AuthMock) MinimockExchangeCodeForTokensInspect() {
+func (m *AuthUseCaseMock) MinimockExchangeCodeForTokensInspect() {
 	for _, e := range m.ExchangeCodeForTokensMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to AuthMock.ExchangeCodeForTokens at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ExchangeCodeForTokens at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
@@ -865,48 +865,48 @@ func (m *AuthMock) MinimockExchangeCodeForTokensInspect() {
 	// if default expectation was set then invocations count should be greater than zero
 	if m.ExchangeCodeForTokensMock.defaultExpectation != nil && afterExchangeCodeForTokensCounter < 1 {
 		if m.ExchangeCodeForTokensMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to AuthMock.ExchangeCodeForTokens at\n%s", m.ExchangeCodeForTokensMock.defaultExpectation.returnOrigin)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ExchangeCodeForTokens at\n%s", m.ExchangeCodeForTokensMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to AuthMock.ExchangeCodeForTokens at\n%s with params: %#v", m.ExchangeCodeForTokensMock.defaultExpectation.expectationOrigins.origin, *m.ExchangeCodeForTokensMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ExchangeCodeForTokens at\n%s with params: %#v", m.ExchangeCodeForTokensMock.defaultExpectation.expectationOrigins.origin, *m.ExchangeCodeForTokensMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
 	if m.funcExchangeCodeForTokens != nil && afterExchangeCodeForTokensCounter < 1 {
-		m.t.Errorf("Expected call to AuthMock.ExchangeCodeForTokens at\n%s", m.funcExchangeCodeForTokensOrigin)
+		m.t.Errorf("Expected call to AuthUseCaseMock.ExchangeCodeForTokens at\n%s", m.funcExchangeCodeForTokensOrigin)
 	}
 
 	if !m.ExchangeCodeForTokensMock.invocationsDone() && afterExchangeCodeForTokensCounter > 0 {
-		m.t.Errorf("Expected %d calls to AuthMock.ExchangeCodeForTokens at\n%s but found %d calls",
+		m.t.Errorf("Expected %d calls to AuthUseCaseMock.ExchangeCodeForTokens at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ExchangeCodeForTokensMock.expectedInvocations), m.ExchangeCodeForTokensMock.expectedInvocationsOrigin, afterExchangeCodeForTokensCounter)
 	}
 }
 
-type mAuthMockExchangeExternalToken struct {
+type mAuthUseCaseMockExchangeExternalToken struct {
 	optional           bool
-	mock               *AuthMock
-	defaultExpectation *AuthMockExchangeExternalTokenExpectation
-	expectations       []*AuthMockExchangeExternalTokenExpectation
+	mock               *AuthUseCaseMock
+	defaultExpectation *AuthUseCaseMockExchangeExternalTokenExpectation
+	expectations       []*AuthUseCaseMockExchangeExternalTokenExpectation
 
-	callArgs []*AuthMockExchangeExternalTokenParams
+	callArgs []*AuthUseCaseMockExchangeExternalTokenParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// AuthMockExchangeExternalTokenExpectation specifies expectation struct of the AuthUseCase.ExchangeExternalToken
-type AuthMockExchangeExternalTokenExpectation struct {
-	mock               *AuthMock
-	params             *AuthMockExchangeExternalTokenParams
-	paramPtrs          *AuthMockExchangeExternalTokenParamPtrs
-	expectationOrigins AuthMockExchangeExternalTokenExpectationOrigins
-	results            *AuthMockExchangeExternalTokenResults
+// AuthUseCaseMockExchangeExternalTokenExpectation specifies expectation struct of the AuthUseCase.ExchangeExternalToken
+type AuthUseCaseMockExchangeExternalTokenExpectation struct {
+	mock               *AuthUseCaseMock
+	params             *AuthUseCaseMockExchangeExternalTokenParams
+	paramPtrs          *AuthUseCaseMockExchangeExternalTokenParamPtrs
+	expectationOrigins AuthUseCaseMockExchangeExternalTokenExpectationOrigins
+	results            *AuthUseCaseMockExchangeExternalTokenResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// AuthMockExchangeExternalTokenParams contains parameters of the AuthUseCase.ExchangeExternalToken
-type AuthMockExchangeExternalTokenParams struct {
+// AuthUseCaseMockExchangeExternalTokenParams contains parameters of the AuthUseCase.ExchangeExternalToken
+type AuthUseCaseMockExchangeExternalTokenParams struct {
 	ctx              context.Context
 	tenantID         uuid.UUID
 	clientID         string
@@ -914,8 +914,8 @@ type AuthMockExchangeExternalTokenParams struct {
 	subjectTokenType model.TokenType
 }
 
-// AuthMockExchangeExternalTokenParamPtrs contains pointers to parameters of the AuthUseCase.ExchangeExternalToken
-type AuthMockExchangeExternalTokenParamPtrs struct {
+// AuthUseCaseMockExchangeExternalTokenParamPtrs contains pointers to parameters of the AuthUseCase.ExchangeExternalToken
+type AuthUseCaseMockExchangeExternalTokenParamPtrs struct {
 	ctx              *context.Context
 	tenantID         *uuid.UUID
 	clientID         *string
@@ -923,14 +923,14 @@ type AuthMockExchangeExternalTokenParamPtrs struct {
 	subjectTokenType *model.TokenType
 }
 
-// AuthMockExchangeExternalTokenResults contains results of the AuthUseCase.ExchangeExternalToken
-type AuthMockExchangeExternalTokenResults struct {
+// AuthUseCaseMockExchangeExternalTokenResults contains results of the AuthUseCase.ExchangeExternalToken
+type AuthUseCaseMockExchangeExternalTokenResults struct {
 	tp1 *model.TokenSetResponse
 	err error
 }
 
-// AuthMockExchangeExternalTokenOrigins contains origins of expectations of the AuthUseCase.ExchangeExternalToken
-type AuthMockExchangeExternalTokenExpectationOrigins struct {
+// AuthUseCaseMockExchangeExternalTokenOrigins contains origins of expectations of the AuthUseCase.ExchangeExternalToken
+type AuthUseCaseMockExchangeExternalTokenExpectationOrigins struct {
 	origin                 string
 	originCtx              string
 	originTenantID         string
@@ -944,26 +944,26 @@ type AuthMockExchangeExternalTokenExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Optional() *mAuthMockExchangeExternalToken {
+func (mmExchangeExternalToken *mAuthUseCaseMockExchangeExternalToken) Optional() *mAuthUseCaseMockExchangeExternalToken {
 	mmExchangeExternalToken.optional = true
 	return mmExchangeExternalToken
 }
 
 // Expect sets up expected params for AuthUseCase.ExchangeExternalToken
-func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Expect(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType model.TokenType) *mAuthMockExchangeExternalToken {
+func (mmExchangeExternalToken *mAuthUseCaseMockExchangeExternalToken) Expect(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType model.TokenType) *mAuthUseCaseMockExchangeExternalToken {
 	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
-		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+		mmExchangeExternalToken.mock.t.Fatalf("AuthUseCaseMock.ExchangeExternalToken mock is already set by Set")
 	}
 
 	if mmExchangeExternalToken.defaultExpectation == nil {
-		mmExchangeExternalToken.defaultExpectation = &AuthMockExchangeExternalTokenExpectation{}
+		mmExchangeExternalToken.defaultExpectation = &AuthUseCaseMockExchangeExternalTokenExpectation{}
 	}
 
 	if mmExchangeExternalToken.defaultExpectation.paramPtrs != nil {
-		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by ExpectParams functions")
+		mmExchangeExternalToken.mock.t.Fatalf("AuthUseCaseMock.ExchangeExternalToken mock is already set by ExpectParams functions")
 	}
 
-	mmExchangeExternalToken.defaultExpectation.params = &AuthMockExchangeExternalTokenParams{ctx, tenantID, clientID, subjectToken, subjectTokenType}
+	mmExchangeExternalToken.defaultExpectation.params = &AuthUseCaseMockExchangeExternalTokenParams{ctx, tenantID, clientID, subjectToken, subjectTokenType}
 	mmExchangeExternalToken.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmExchangeExternalToken.expectations {
 		if minimock.Equal(e.params, mmExchangeExternalToken.defaultExpectation.params) {
@@ -975,21 +975,21 @@ func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Expect(ctx contex
 }
 
 // ExpectCtxParam1 sets up expected param ctx for AuthUseCase.ExchangeExternalToken
-func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) ExpectCtxParam1(ctx context.Context) *mAuthMockExchangeExternalToken {
+func (mmExchangeExternalToken *mAuthUseCaseMockExchangeExternalToken) ExpectCtxParam1(ctx context.Context) *mAuthUseCaseMockExchangeExternalToken {
 	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
-		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+		mmExchangeExternalToken.mock.t.Fatalf("AuthUseCaseMock.ExchangeExternalToken mock is already set by Set")
 	}
 
 	if mmExchangeExternalToken.defaultExpectation == nil {
-		mmExchangeExternalToken.defaultExpectation = &AuthMockExchangeExternalTokenExpectation{}
+		mmExchangeExternalToken.defaultExpectation = &AuthUseCaseMockExchangeExternalTokenExpectation{}
 	}
 
 	if mmExchangeExternalToken.defaultExpectation.params != nil {
-		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Expect")
+		mmExchangeExternalToken.mock.t.Fatalf("AuthUseCaseMock.ExchangeExternalToken mock is already set by Expect")
 	}
 
 	if mmExchangeExternalToken.defaultExpectation.paramPtrs == nil {
-		mmExchangeExternalToken.defaultExpectation.paramPtrs = &AuthMockExchangeExternalTokenParamPtrs{}
+		mmExchangeExternalToken.defaultExpectation.paramPtrs = &AuthUseCaseMockExchangeExternalTokenParamPtrs{}
 	}
 	mmExchangeExternalToken.defaultExpectation.paramPtrs.ctx = &ctx
 	mmExchangeExternalToken.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
@@ -998,21 +998,21 @@ func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) ExpectCtxParam1(c
 }
 
 // ExpectTenantIDParam2 sets up expected param tenantID for AuthUseCase.ExchangeExternalToken
-func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthMockExchangeExternalToken {
+func (mmExchangeExternalToken *mAuthUseCaseMockExchangeExternalToken) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthUseCaseMockExchangeExternalToken {
 	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
-		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+		mmExchangeExternalToken.mock.t.Fatalf("AuthUseCaseMock.ExchangeExternalToken mock is already set by Set")
 	}
 
 	if mmExchangeExternalToken.defaultExpectation == nil {
-		mmExchangeExternalToken.defaultExpectation = &AuthMockExchangeExternalTokenExpectation{}
+		mmExchangeExternalToken.defaultExpectation = &AuthUseCaseMockExchangeExternalTokenExpectation{}
 	}
 
 	if mmExchangeExternalToken.defaultExpectation.params != nil {
-		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Expect")
+		mmExchangeExternalToken.mock.t.Fatalf("AuthUseCaseMock.ExchangeExternalToken mock is already set by Expect")
 	}
 
 	if mmExchangeExternalToken.defaultExpectation.paramPtrs == nil {
-		mmExchangeExternalToken.defaultExpectation.paramPtrs = &AuthMockExchangeExternalTokenParamPtrs{}
+		mmExchangeExternalToken.defaultExpectation.paramPtrs = &AuthUseCaseMockExchangeExternalTokenParamPtrs{}
 	}
 	mmExchangeExternalToken.defaultExpectation.paramPtrs.tenantID = &tenantID
 	mmExchangeExternalToken.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
@@ -1021,21 +1021,21 @@ func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) ExpectTenantIDPar
 }
 
 // ExpectClientIDParam3 sets up expected param clientID for AuthUseCase.ExchangeExternalToken
-func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) ExpectClientIDParam3(clientID string) *mAuthMockExchangeExternalToken {
+func (mmExchangeExternalToken *mAuthUseCaseMockExchangeExternalToken) ExpectClientIDParam3(clientID string) *mAuthUseCaseMockExchangeExternalToken {
 	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
-		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+		mmExchangeExternalToken.mock.t.Fatalf("AuthUseCaseMock.ExchangeExternalToken mock is already set by Set")
 	}
 
 	if mmExchangeExternalToken.defaultExpectation == nil {
-		mmExchangeExternalToken.defaultExpectation = &AuthMockExchangeExternalTokenExpectation{}
+		mmExchangeExternalToken.defaultExpectation = &AuthUseCaseMockExchangeExternalTokenExpectation{}
 	}
 
 	if mmExchangeExternalToken.defaultExpectation.params != nil {
-		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Expect")
+		mmExchangeExternalToken.mock.t.Fatalf("AuthUseCaseMock.ExchangeExternalToken mock is already set by Expect")
 	}
 
 	if mmExchangeExternalToken.defaultExpectation.paramPtrs == nil {
-		mmExchangeExternalToken.defaultExpectation.paramPtrs = &AuthMockExchangeExternalTokenParamPtrs{}
+		mmExchangeExternalToken.defaultExpectation.paramPtrs = &AuthUseCaseMockExchangeExternalTokenParamPtrs{}
 	}
 	mmExchangeExternalToken.defaultExpectation.paramPtrs.clientID = &clientID
 	mmExchangeExternalToken.defaultExpectation.expectationOrigins.originClientID = minimock.CallerInfo(1)
@@ -1044,21 +1044,21 @@ func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) ExpectClientIDPar
 }
 
 // ExpectSubjectTokenParam4 sets up expected param subjectToken for AuthUseCase.ExchangeExternalToken
-func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) ExpectSubjectTokenParam4(subjectToken string) *mAuthMockExchangeExternalToken {
+func (mmExchangeExternalToken *mAuthUseCaseMockExchangeExternalToken) ExpectSubjectTokenParam4(subjectToken string) *mAuthUseCaseMockExchangeExternalToken {
 	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
-		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+		mmExchangeExternalToken.mock.t.Fatalf("AuthUseCaseMock.ExchangeExternalToken mock is already set by Set")
 	}
 
 	if mmExchangeExternalToken.defaultExpectation == nil {
-		mmExchangeExternalToken.defaultExpectation = &AuthMockExchangeExternalTokenExpectation{}
+		mmExchangeExternalToken.defaultExpectation = &AuthUseCaseMockExchangeExternalTokenExpectation{}
 	}
 
 	if mmExchangeExternalToken.defaultExpectation.params != nil {
-		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Expect")
+		mmExchangeExternalToken.mock.t.Fatalf("AuthUseCaseMock.ExchangeExternalToken mock is already set by Expect")
 	}
 
 	if mmExchangeExternalToken.defaultExpectation.paramPtrs == nil {
-		mmExchangeExternalToken.defaultExpectation.paramPtrs = &AuthMockExchangeExternalTokenParamPtrs{}
+		mmExchangeExternalToken.defaultExpectation.paramPtrs = &AuthUseCaseMockExchangeExternalTokenParamPtrs{}
 	}
 	mmExchangeExternalToken.defaultExpectation.paramPtrs.subjectToken = &subjectToken
 	mmExchangeExternalToken.defaultExpectation.expectationOrigins.originSubjectToken = minimock.CallerInfo(1)
@@ -1067,21 +1067,21 @@ func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) ExpectSubjectToke
 }
 
 // ExpectSubjectTokenTypeParam5 sets up expected param subjectTokenType for AuthUseCase.ExchangeExternalToken
-func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) ExpectSubjectTokenTypeParam5(subjectTokenType model.TokenType) *mAuthMockExchangeExternalToken {
+func (mmExchangeExternalToken *mAuthUseCaseMockExchangeExternalToken) ExpectSubjectTokenTypeParam5(subjectTokenType model.TokenType) *mAuthUseCaseMockExchangeExternalToken {
 	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
-		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+		mmExchangeExternalToken.mock.t.Fatalf("AuthUseCaseMock.ExchangeExternalToken mock is already set by Set")
 	}
 
 	if mmExchangeExternalToken.defaultExpectation == nil {
-		mmExchangeExternalToken.defaultExpectation = &AuthMockExchangeExternalTokenExpectation{}
+		mmExchangeExternalToken.defaultExpectation = &AuthUseCaseMockExchangeExternalTokenExpectation{}
 	}
 
 	if mmExchangeExternalToken.defaultExpectation.params != nil {
-		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Expect")
+		mmExchangeExternalToken.mock.t.Fatalf("AuthUseCaseMock.ExchangeExternalToken mock is already set by Expect")
 	}
 
 	if mmExchangeExternalToken.defaultExpectation.paramPtrs == nil {
-		mmExchangeExternalToken.defaultExpectation.paramPtrs = &AuthMockExchangeExternalTokenParamPtrs{}
+		mmExchangeExternalToken.defaultExpectation.paramPtrs = &AuthUseCaseMockExchangeExternalTokenParamPtrs{}
 	}
 	mmExchangeExternalToken.defaultExpectation.paramPtrs.subjectTokenType = &subjectTokenType
 	mmExchangeExternalToken.defaultExpectation.expectationOrigins.originSubjectTokenType = minimock.CallerInfo(1)
@@ -1090,9 +1090,9 @@ func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) ExpectSubjectToke
 }
 
 // Inspect accepts an inspector function that has same arguments as the AuthUseCase.ExchangeExternalToken
-func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Inspect(f func(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType model.TokenType)) *mAuthMockExchangeExternalToken {
+func (mmExchangeExternalToken *mAuthUseCaseMockExchangeExternalToken) Inspect(f func(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType model.TokenType)) *mAuthUseCaseMockExchangeExternalToken {
 	if mmExchangeExternalToken.mock.inspectFuncExchangeExternalToken != nil {
-		mmExchangeExternalToken.mock.t.Fatalf("Inspect function is already set for AuthMock.ExchangeExternalToken")
+		mmExchangeExternalToken.mock.t.Fatalf("Inspect function is already set for AuthUseCaseMock.ExchangeExternalToken")
 	}
 
 	mmExchangeExternalToken.mock.inspectFuncExchangeExternalToken = f
@@ -1101,21 +1101,21 @@ func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Inspect(f func(ct
 }
 
 // Return sets up results that will be returned by AuthUseCase.ExchangeExternalToken
-func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Return(tp1 *model.TokenSetResponse, err error) *AuthMock {
+func (mmExchangeExternalToken *mAuthUseCaseMockExchangeExternalToken) Return(tp1 *model.TokenSetResponse, err error) *AuthUseCaseMock {
 	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
-		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+		mmExchangeExternalToken.mock.t.Fatalf("AuthUseCaseMock.ExchangeExternalToken mock is already set by Set")
 	}
 
 	if mmExchangeExternalToken.defaultExpectation == nil {
-		mmExchangeExternalToken.defaultExpectation = &AuthMockExchangeExternalTokenExpectation{mock: mmExchangeExternalToken.mock}
+		mmExchangeExternalToken.defaultExpectation = &AuthUseCaseMockExchangeExternalTokenExpectation{mock: mmExchangeExternalToken.mock}
 	}
-	mmExchangeExternalToken.defaultExpectation.results = &AuthMockExchangeExternalTokenResults{tp1, err}
+	mmExchangeExternalToken.defaultExpectation.results = &AuthUseCaseMockExchangeExternalTokenResults{tp1, err}
 	mmExchangeExternalToken.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmExchangeExternalToken.mock
 }
 
 // Set uses given function f to mock the AuthUseCase.ExchangeExternalToken method
-func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Set(f func(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType model.TokenType) (tp1 *model.TokenSetResponse, err error)) *AuthMock {
+func (mmExchangeExternalToken *mAuthUseCaseMockExchangeExternalToken) Set(f func(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType model.TokenType) (tp1 *model.TokenSetResponse, err error)) *AuthUseCaseMock {
 	if mmExchangeExternalToken.defaultExpectation != nil {
 		mmExchangeExternalToken.mock.t.Fatalf("Default expectation is already set for the AuthUseCase.ExchangeExternalToken method")
 	}
@@ -1131,37 +1131,37 @@ func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Set(f func(ctx co
 
 // When sets expectation for the AuthUseCase.ExchangeExternalToken which will trigger the result defined by the following
 // Then helper
-func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) When(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType model.TokenType) *AuthMockExchangeExternalTokenExpectation {
+func (mmExchangeExternalToken *mAuthUseCaseMockExchangeExternalToken) When(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType model.TokenType) *AuthUseCaseMockExchangeExternalTokenExpectation {
 	if mmExchangeExternalToken.mock.funcExchangeExternalToken != nil {
-		mmExchangeExternalToken.mock.t.Fatalf("AuthMock.ExchangeExternalToken mock is already set by Set")
+		mmExchangeExternalToken.mock.t.Fatalf("AuthUseCaseMock.ExchangeExternalToken mock is already set by Set")
 	}
 
-	expectation := &AuthMockExchangeExternalTokenExpectation{
+	expectation := &AuthUseCaseMockExchangeExternalTokenExpectation{
 		mock:               mmExchangeExternalToken.mock,
-		params:             &AuthMockExchangeExternalTokenParams{ctx, tenantID, clientID, subjectToken, subjectTokenType},
-		expectationOrigins: AuthMockExchangeExternalTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
+		params:             &AuthUseCaseMockExchangeExternalTokenParams{ctx, tenantID, clientID, subjectToken, subjectTokenType},
+		expectationOrigins: AuthUseCaseMockExchangeExternalTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmExchangeExternalToken.expectations = append(mmExchangeExternalToken.expectations, expectation)
 	return expectation
 }
 
 // Then sets up AuthUseCase.ExchangeExternalToken return parameters for the expectation previously defined by the When method
-func (e *AuthMockExchangeExternalTokenExpectation) Then(tp1 *model.TokenSetResponse, err error) *AuthMock {
-	e.results = &AuthMockExchangeExternalTokenResults{tp1, err}
+func (e *AuthUseCaseMockExchangeExternalTokenExpectation) Then(tp1 *model.TokenSetResponse, err error) *AuthUseCaseMock {
+	e.results = &AuthUseCaseMockExchangeExternalTokenResults{tp1, err}
 	return e.mock
 }
 
 // Times sets number of times AuthUseCase.ExchangeExternalToken should be invoked
-func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Times(n uint64) *mAuthMockExchangeExternalToken {
+func (mmExchangeExternalToken *mAuthUseCaseMockExchangeExternalToken) Times(n uint64) *mAuthUseCaseMockExchangeExternalToken {
 	if n == 0 {
-		mmExchangeExternalToken.mock.t.Fatalf("Times of AuthMock.ExchangeExternalToken mock can not be zero")
+		mmExchangeExternalToken.mock.t.Fatalf("Times of AuthUseCaseMock.ExchangeExternalToken mock can not be zero")
 	}
 	mm_atomic.StoreUint64(&mmExchangeExternalToken.expectedInvocations, n)
 	mmExchangeExternalToken.expectedInvocationsOrigin = minimock.CallerInfo(1)
 	return mmExchangeExternalToken
 }
 
-func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) invocationsDone() bool {
+func (mmExchangeExternalToken *mAuthUseCaseMockExchangeExternalToken) invocationsDone() bool {
 	if len(mmExchangeExternalToken.expectations) == 0 && mmExchangeExternalToken.defaultExpectation == nil && mmExchangeExternalToken.mock.funcExchangeExternalToken == nil {
 		return true
 	}
@@ -1173,7 +1173,7 @@ func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) invocationsDone()
 }
 
 // ExchangeExternalToken implements mm_port.AuthUseCase
-func (mmExchangeExternalToken *AuthMock) ExchangeExternalToken(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType model.TokenType) (tp1 *model.TokenSetResponse, err error) {
+func (mmExchangeExternalToken *AuthUseCaseMock) ExchangeExternalToken(ctx context.Context, tenantID uuid.UUID, clientID string, subjectToken string, subjectTokenType model.TokenType) (tp1 *model.TokenSetResponse, err error) {
 	mm_atomic.AddUint64(&mmExchangeExternalToken.beforeExchangeExternalTokenCounter, 1)
 	defer mm_atomic.AddUint64(&mmExchangeExternalToken.afterExchangeExternalTokenCounter, 1)
 
@@ -1183,7 +1183,7 @@ func (mmExchangeExternalToken *AuthMock) ExchangeExternalToken(ctx context.Conte
 		mmExchangeExternalToken.inspectFuncExchangeExternalToken(ctx, tenantID, clientID, subjectToken, subjectTokenType)
 	}
 
-	mm_params := AuthMockExchangeExternalTokenParams{ctx, tenantID, clientID, subjectToken, subjectTokenType}
+	mm_params := AuthUseCaseMockExchangeExternalTokenParams{ctx, tenantID, clientID, subjectToken, subjectTokenType}
 
 	// Record call args
 	mmExchangeExternalToken.ExchangeExternalTokenMock.mutex.Lock()
@@ -1202,69 +1202,69 @@ func (mmExchangeExternalToken *AuthMock) ExchangeExternalToken(ctx context.Conte
 		mm_want := mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.params
 		mm_want_ptrs := mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockExchangeExternalTokenParams{ctx, tenantID, clientID, subjectToken, subjectTokenType}
+		mm_got := AuthUseCaseMockExchangeExternalTokenParams{ctx, tenantID, clientID, subjectToken, subjectTokenType}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmExchangeExternalToken.t.Errorf("AuthMock.ExchangeExternalToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmExchangeExternalToken.t.Errorf("AuthUseCaseMock.ExchangeExternalToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
 			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
-				mmExchangeExternalToken.t.Errorf("AuthMock.ExchangeExternalToken got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmExchangeExternalToken.t.Errorf("AuthUseCaseMock.ExchangeExternalToken got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
 			}
 
 			if mm_want_ptrs.clientID != nil && !minimock.Equal(*mm_want_ptrs.clientID, mm_got.clientID) {
-				mmExchangeExternalToken.t.Errorf("AuthMock.ExchangeExternalToken got unexpected parameter clientID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmExchangeExternalToken.t.Errorf("AuthUseCaseMock.ExchangeExternalToken got unexpected parameter clientID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.expectationOrigins.originClientID, *mm_want_ptrs.clientID, mm_got.clientID, minimock.Diff(*mm_want_ptrs.clientID, mm_got.clientID))
 			}
 
 			if mm_want_ptrs.subjectToken != nil && !minimock.Equal(*mm_want_ptrs.subjectToken, mm_got.subjectToken) {
-				mmExchangeExternalToken.t.Errorf("AuthMock.ExchangeExternalToken got unexpected parameter subjectToken, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmExchangeExternalToken.t.Errorf("AuthUseCaseMock.ExchangeExternalToken got unexpected parameter subjectToken, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.expectationOrigins.originSubjectToken, *mm_want_ptrs.subjectToken, mm_got.subjectToken, minimock.Diff(*mm_want_ptrs.subjectToken, mm_got.subjectToken))
 			}
 
 			if mm_want_ptrs.subjectTokenType != nil && !minimock.Equal(*mm_want_ptrs.subjectTokenType, mm_got.subjectTokenType) {
-				mmExchangeExternalToken.t.Errorf("AuthMock.ExchangeExternalToken got unexpected parameter subjectTokenType, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmExchangeExternalToken.t.Errorf("AuthUseCaseMock.ExchangeExternalToken got unexpected parameter subjectTokenType, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.expectationOrigins.originSubjectTokenType, *mm_want_ptrs.subjectTokenType, mm_got.subjectTokenType, minimock.Diff(*mm_want_ptrs.subjectTokenType, mm_got.subjectTokenType))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmExchangeExternalToken.t.Errorf("AuthMock.ExchangeExternalToken got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+			mmExchangeExternalToken.t.Errorf("AuthUseCaseMock.ExchangeExternalToken got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
 		mm_results := mmExchangeExternalToken.ExchangeExternalTokenMock.defaultExpectation.results
 		if mm_results == nil {
-			mmExchangeExternalToken.t.Fatal("No results are set for the AuthMock.ExchangeExternalToken")
+			mmExchangeExternalToken.t.Fatal("No results are set for the AuthUseCaseMock.ExchangeExternalToken")
 		}
 		return (*mm_results).tp1, (*mm_results).err
 	}
 	if mmExchangeExternalToken.funcExchangeExternalToken != nil {
 		return mmExchangeExternalToken.funcExchangeExternalToken(ctx, tenantID, clientID, subjectToken, subjectTokenType)
 	}
-	mmExchangeExternalToken.t.Fatalf("Unexpected call to AuthMock.ExchangeExternalToken. %v %v %v %v %v", ctx, tenantID, clientID, subjectToken, subjectTokenType)
+	mmExchangeExternalToken.t.Fatalf("Unexpected call to AuthUseCaseMock.ExchangeExternalToken. %v %v %v %v %v", ctx, tenantID, clientID, subjectToken, subjectTokenType)
 	return
 }
 
-// ExchangeExternalTokenAfterCounter returns a count of finished AuthMock.ExchangeExternalToken invocations
-func (mmExchangeExternalToken *AuthMock) ExchangeExternalTokenAfterCounter() uint64 {
+// ExchangeExternalTokenAfterCounter returns a count of finished AuthUseCaseMock.ExchangeExternalToken invocations
+func (mmExchangeExternalToken *AuthUseCaseMock) ExchangeExternalTokenAfterCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmExchangeExternalToken.afterExchangeExternalTokenCounter)
 }
 
-// ExchangeExternalTokenBeforeCounter returns a count of AuthMock.ExchangeExternalToken invocations
-func (mmExchangeExternalToken *AuthMock) ExchangeExternalTokenBeforeCounter() uint64 {
+// ExchangeExternalTokenBeforeCounter returns a count of AuthUseCaseMock.ExchangeExternalToken invocations
+func (mmExchangeExternalToken *AuthUseCaseMock) ExchangeExternalTokenBeforeCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmExchangeExternalToken.beforeExchangeExternalTokenCounter)
 }
 
-// Calls returns a list of arguments used in each call to AuthMock.ExchangeExternalToken.
+// Calls returns a list of arguments used in each call to AuthUseCaseMock.ExchangeExternalToken.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Calls() []*AuthMockExchangeExternalTokenParams {
+func (mmExchangeExternalToken *mAuthUseCaseMockExchangeExternalToken) Calls() []*AuthUseCaseMockExchangeExternalTokenParams {
 	mmExchangeExternalToken.mutex.RLock()
 
-	argCopy := make([]*AuthMockExchangeExternalTokenParams, len(mmExchangeExternalToken.callArgs))
+	argCopy := make([]*AuthUseCaseMockExchangeExternalTokenParams, len(mmExchangeExternalToken.callArgs))
 	copy(argCopy, mmExchangeExternalToken.callArgs)
 
 	mmExchangeExternalToken.mutex.RUnlock()
@@ -1274,7 +1274,7 @@ func (mmExchangeExternalToken *mAuthMockExchangeExternalToken) Calls() []*AuthMo
 
 // MinimockExchangeExternalTokenDone returns true if the count of the ExchangeExternalToken invocations corresponds
 // the number of defined expectations
-func (m *AuthMock) MinimockExchangeExternalTokenDone() bool {
+func (m *AuthUseCaseMock) MinimockExchangeExternalTokenDone() bool {
 	if m.ExchangeExternalTokenMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
@@ -1290,10 +1290,10 @@ func (m *AuthMock) MinimockExchangeExternalTokenDone() bool {
 }
 
 // MinimockExchangeExternalTokenInspect logs each unmet expectation
-func (m *AuthMock) MinimockExchangeExternalTokenInspect() {
+func (m *AuthUseCaseMock) MinimockExchangeExternalTokenInspect() {
 	for _, e := range m.ExchangeExternalTokenMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to AuthMock.ExchangeExternalToken at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ExchangeExternalToken at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
@@ -1301,70 +1301,70 @@ func (m *AuthMock) MinimockExchangeExternalTokenInspect() {
 	// if default expectation was set then invocations count should be greater than zero
 	if m.ExchangeExternalTokenMock.defaultExpectation != nil && afterExchangeExternalTokenCounter < 1 {
 		if m.ExchangeExternalTokenMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to AuthMock.ExchangeExternalToken at\n%s", m.ExchangeExternalTokenMock.defaultExpectation.returnOrigin)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ExchangeExternalToken at\n%s", m.ExchangeExternalTokenMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to AuthMock.ExchangeExternalToken at\n%s with params: %#v", m.ExchangeExternalTokenMock.defaultExpectation.expectationOrigins.origin, *m.ExchangeExternalTokenMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ExchangeExternalToken at\n%s with params: %#v", m.ExchangeExternalTokenMock.defaultExpectation.expectationOrigins.origin, *m.ExchangeExternalTokenMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
 	if m.funcExchangeExternalToken != nil && afterExchangeExternalTokenCounter < 1 {
-		m.t.Errorf("Expected call to AuthMock.ExchangeExternalToken at\n%s", m.funcExchangeExternalTokenOrigin)
+		m.t.Errorf("Expected call to AuthUseCaseMock.ExchangeExternalToken at\n%s", m.funcExchangeExternalTokenOrigin)
 	}
 
 	if !m.ExchangeExternalTokenMock.invocationsDone() && afterExchangeExternalTokenCounter > 0 {
-		m.t.Errorf("Expected %d calls to AuthMock.ExchangeExternalToken at\n%s but found %d calls",
+		m.t.Errorf("Expected %d calls to AuthUseCaseMock.ExchangeExternalToken at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ExchangeExternalTokenMock.expectedInvocations), m.ExchangeExternalTokenMock.expectedInvocationsOrigin, afterExchangeExternalTokenCounter)
 	}
 }
 
-type mAuthMockIntrospectToken struct {
+type mAuthUseCaseMockIntrospectToken struct {
 	optional           bool
-	mock               *AuthMock
-	defaultExpectation *AuthMockIntrospectTokenExpectation
-	expectations       []*AuthMockIntrospectTokenExpectation
+	mock               *AuthUseCaseMock
+	defaultExpectation *AuthUseCaseMockIntrospectTokenExpectation
+	expectations       []*AuthUseCaseMockIntrospectTokenExpectation
 
-	callArgs []*AuthMockIntrospectTokenParams
+	callArgs []*AuthUseCaseMockIntrospectTokenParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// AuthMockIntrospectTokenExpectation specifies expectation struct of the AuthUseCase.IntrospectToken
-type AuthMockIntrospectTokenExpectation struct {
-	mock               *AuthMock
-	params             *AuthMockIntrospectTokenParams
-	paramPtrs          *AuthMockIntrospectTokenParamPtrs
-	expectationOrigins AuthMockIntrospectTokenExpectationOrigins
-	results            *AuthMockIntrospectTokenResults
+// AuthUseCaseMockIntrospectTokenExpectation specifies expectation struct of the AuthUseCase.IntrospectToken
+type AuthUseCaseMockIntrospectTokenExpectation struct {
+	mock               *AuthUseCaseMock
+	params             *AuthUseCaseMockIntrospectTokenParams
+	paramPtrs          *AuthUseCaseMockIntrospectTokenParamPtrs
+	expectationOrigins AuthUseCaseMockIntrospectTokenExpectationOrigins
+	results            *AuthUseCaseMockIntrospectTokenResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// AuthMockIntrospectTokenParams contains parameters of the AuthUseCase.IntrospectToken
-type AuthMockIntrospectTokenParams struct {
+// AuthUseCaseMockIntrospectTokenParams contains parameters of the AuthUseCase.IntrospectToken
+type AuthUseCaseMockIntrospectTokenParams struct {
 	ctx      context.Context
 	tenantID uuid.UUID
 	clientID string
 	tokenStr string
 }
 
-// AuthMockIntrospectTokenParamPtrs contains pointers to parameters of the AuthUseCase.IntrospectToken
-type AuthMockIntrospectTokenParamPtrs struct {
+// AuthUseCaseMockIntrospectTokenParamPtrs contains pointers to parameters of the AuthUseCase.IntrospectToken
+type AuthUseCaseMockIntrospectTokenParamPtrs struct {
 	ctx      *context.Context
 	tenantID *uuid.UUID
 	clientID *string
 	tokenStr *string
 }
 
-// AuthMockIntrospectTokenResults contains results of the AuthUseCase.IntrospectToken
-type AuthMockIntrospectTokenResults struct {
+// AuthUseCaseMockIntrospectTokenResults contains results of the AuthUseCase.IntrospectToken
+type AuthUseCaseMockIntrospectTokenResults struct {
 	ip1 *model.IntrospectionResponse
 	err error
 }
 
-// AuthMockIntrospectTokenOrigins contains origins of expectations of the AuthUseCase.IntrospectToken
-type AuthMockIntrospectTokenExpectationOrigins struct {
+// AuthUseCaseMockIntrospectTokenOrigins contains origins of expectations of the AuthUseCase.IntrospectToken
+type AuthUseCaseMockIntrospectTokenExpectationOrigins struct {
 	origin         string
 	originCtx      string
 	originTenantID string
@@ -1377,26 +1377,26 @@ type AuthMockIntrospectTokenExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmIntrospectToken *mAuthMockIntrospectToken) Optional() *mAuthMockIntrospectToken {
+func (mmIntrospectToken *mAuthUseCaseMockIntrospectToken) Optional() *mAuthUseCaseMockIntrospectToken {
 	mmIntrospectToken.optional = true
 	return mmIntrospectToken
 }
 
 // Expect sets up expected params for AuthUseCase.IntrospectToken
-func (mmIntrospectToken *mAuthMockIntrospectToken) Expect(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) *mAuthMockIntrospectToken {
+func (mmIntrospectToken *mAuthUseCaseMockIntrospectToken) Expect(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) *mAuthUseCaseMockIntrospectToken {
 	if mmIntrospectToken.mock.funcIntrospectToken != nil {
-		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Set")
+		mmIntrospectToken.mock.t.Fatalf("AuthUseCaseMock.IntrospectToken mock is already set by Set")
 	}
 
 	if mmIntrospectToken.defaultExpectation == nil {
-		mmIntrospectToken.defaultExpectation = &AuthMockIntrospectTokenExpectation{}
+		mmIntrospectToken.defaultExpectation = &AuthUseCaseMockIntrospectTokenExpectation{}
 	}
 
 	if mmIntrospectToken.defaultExpectation.paramPtrs != nil {
-		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by ExpectParams functions")
+		mmIntrospectToken.mock.t.Fatalf("AuthUseCaseMock.IntrospectToken mock is already set by ExpectParams functions")
 	}
 
-	mmIntrospectToken.defaultExpectation.params = &AuthMockIntrospectTokenParams{ctx, tenantID, clientID, tokenStr}
+	mmIntrospectToken.defaultExpectation.params = &AuthUseCaseMockIntrospectTokenParams{ctx, tenantID, clientID, tokenStr}
 	mmIntrospectToken.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmIntrospectToken.expectations {
 		if minimock.Equal(e.params, mmIntrospectToken.defaultExpectation.params) {
@@ -1408,21 +1408,21 @@ func (mmIntrospectToken *mAuthMockIntrospectToken) Expect(ctx context.Context, t
 }
 
 // ExpectCtxParam1 sets up expected param ctx for AuthUseCase.IntrospectToken
-func (mmIntrospectToken *mAuthMockIntrospectToken) ExpectCtxParam1(ctx context.Context) *mAuthMockIntrospectToken {
+func (mmIntrospectToken *mAuthUseCaseMockIntrospectToken) ExpectCtxParam1(ctx context.Context) *mAuthUseCaseMockIntrospectToken {
 	if mmIntrospectToken.mock.funcIntrospectToken != nil {
-		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Set")
+		mmIntrospectToken.mock.t.Fatalf("AuthUseCaseMock.IntrospectToken mock is already set by Set")
 	}
 
 	if mmIntrospectToken.defaultExpectation == nil {
-		mmIntrospectToken.defaultExpectation = &AuthMockIntrospectTokenExpectation{}
+		mmIntrospectToken.defaultExpectation = &AuthUseCaseMockIntrospectTokenExpectation{}
 	}
 
 	if mmIntrospectToken.defaultExpectation.params != nil {
-		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Expect")
+		mmIntrospectToken.mock.t.Fatalf("AuthUseCaseMock.IntrospectToken mock is already set by Expect")
 	}
 
 	if mmIntrospectToken.defaultExpectation.paramPtrs == nil {
-		mmIntrospectToken.defaultExpectation.paramPtrs = &AuthMockIntrospectTokenParamPtrs{}
+		mmIntrospectToken.defaultExpectation.paramPtrs = &AuthUseCaseMockIntrospectTokenParamPtrs{}
 	}
 	mmIntrospectToken.defaultExpectation.paramPtrs.ctx = &ctx
 	mmIntrospectToken.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
@@ -1431,21 +1431,21 @@ func (mmIntrospectToken *mAuthMockIntrospectToken) ExpectCtxParam1(ctx context.C
 }
 
 // ExpectTenantIDParam2 sets up expected param tenantID for AuthUseCase.IntrospectToken
-func (mmIntrospectToken *mAuthMockIntrospectToken) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthMockIntrospectToken {
+func (mmIntrospectToken *mAuthUseCaseMockIntrospectToken) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthUseCaseMockIntrospectToken {
 	if mmIntrospectToken.mock.funcIntrospectToken != nil {
-		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Set")
+		mmIntrospectToken.mock.t.Fatalf("AuthUseCaseMock.IntrospectToken mock is already set by Set")
 	}
 
 	if mmIntrospectToken.defaultExpectation == nil {
-		mmIntrospectToken.defaultExpectation = &AuthMockIntrospectTokenExpectation{}
+		mmIntrospectToken.defaultExpectation = &AuthUseCaseMockIntrospectTokenExpectation{}
 	}
 
 	if mmIntrospectToken.defaultExpectation.params != nil {
-		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Expect")
+		mmIntrospectToken.mock.t.Fatalf("AuthUseCaseMock.IntrospectToken mock is already set by Expect")
 	}
 
 	if mmIntrospectToken.defaultExpectation.paramPtrs == nil {
-		mmIntrospectToken.defaultExpectation.paramPtrs = &AuthMockIntrospectTokenParamPtrs{}
+		mmIntrospectToken.defaultExpectation.paramPtrs = &AuthUseCaseMockIntrospectTokenParamPtrs{}
 	}
 	mmIntrospectToken.defaultExpectation.paramPtrs.tenantID = &tenantID
 	mmIntrospectToken.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
@@ -1454,21 +1454,21 @@ func (mmIntrospectToken *mAuthMockIntrospectToken) ExpectTenantIDParam2(tenantID
 }
 
 // ExpectClientIDParam3 sets up expected param clientID for AuthUseCase.IntrospectToken
-func (mmIntrospectToken *mAuthMockIntrospectToken) ExpectClientIDParam3(clientID string) *mAuthMockIntrospectToken {
+func (mmIntrospectToken *mAuthUseCaseMockIntrospectToken) ExpectClientIDParam3(clientID string) *mAuthUseCaseMockIntrospectToken {
 	if mmIntrospectToken.mock.funcIntrospectToken != nil {
-		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Set")
+		mmIntrospectToken.mock.t.Fatalf("AuthUseCaseMock.IntrospectToken mock is already set by Set")
 	}
 
 	if mmIntrospectToken.defaultExpectation == nil {
-		mmIntrospectToken.defaultExpectation = &AuthMockIntrospectTokenExpectation{}
+		mmIntrospectToken.defaultExpectation = &AuthUseCaseMockIntrospectTokenExpectation{}
 	}
 
 	if mmIntrospectToken.defaultExpectation.params != nil {
-		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Expect")
+		mmIntrospectToken.mock.t.Fatalf("AuthUseCaseMock.IntrospectToken mock is already set by Expect")
 	}
 
 	if mmIntrospectToken.defaultExpectation.paramPtrs == nil {
-		mmIntrospectToken.defaultExpectation.paramPtrs = &AuthMockIntrospectTokenParamPtrs{}
+		mmIntrospectToken.defaultExpectation.paramPtrs = &AuthUseCaseMockIntrospectTokenParamPtrs{}
 	}
 	mmIntrospectToken.defaultExpectation.paramPtrs.clientID = &clientID
 	mmIntrospectToken.defaultExpectation.expectationOrigins.originClientID = minimock.CallerInfo(1)
@@ -1477,21 +1477,21 @@ func (mmIntrospectToken *mAuthMockIntrospectToken) ExpectClientIDParam3(clientID
 }
 
 // ExpectTokenStrParam4 sets up expected param tokenStr for AuthUseCase.IntrospectToken
-func (mmIntrospectToken *mAuthMockIntrospectToken) ExpectTokenStrParam4(tokenStr string) *mAuthMockIntrospectToken {
+func (mmIntrospectToken *mAuthUseCaseMockIntrospectToken) ExpectTokenStrParam4(tokenStr string) *mAuthUseCaseMockIntrospectToken {
 	if mmIntrospectToken.mock.funcIntrospectToken != nil {
-		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Set")
+		mmIntrospectToken.mock.t.Fatalf("AuthUseCaseMock.IntrospectToken mock is already set by Set")
 	}
 
 	if mmIntrospectToken.defaultExpectation == nil {
-		mmIntrospectToken.defaultExpectation = &AuthMockIntrospectTokenExpectation{}
+		mmIntrospectToken.defaultExpectation = &AuthUseCaseMockIntrospectTokenExpectation{}
 	}
 
 	if mmIntrospectToken.defaultExpectation.params != nil {
-		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Expect")
+		mmIntrospectToken.mock.t.Fatalf("AuthUseCaseMock.IntrospectToken mock is already set by Expect")
 	}
 
 	if mmIntrospectToken.defaultExpectation.paramPtrs == nil {
-		mmIntrospectToken.defaultExpectation.paramPtrs = &AuthMockIntrospectTokenParamPtrs{}
+		mmIntrospectToken.defaultExpectation.paramPtrs = &AuthUseCaseMockIntrospectTokenParamPtrs{}
 	}
 	mmIntrospectToken.defaultExpectation.paramPtrs.tokenStr = &tokenStr
 	mmIntrospectToken.defaultExpectation.expectationOrigins.originTokenStr = minimock.CallerInfo(1)
@@ -1500,9 +1500,9 @@ func (mmIntrospectToken *mAuthMockIntrospectToken) ExpectTokenStrParam4(tokenStr
 }
 
 // Inspect accepts an inspector function that has same arguments as the AuthUseCase.IntrospectToken
-func (mmIntrospectToken *mAuthMockIntrospectToken) Inspect(f func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string)) *mAuthMockIntrospectToken {
+func (mmIntrospectToken *mAuthUseCaseMockIntrospectToken) Inspect(f func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string)) *mAuthUseCaseMockIntrospectToken {
 	if mmIntrospectToken.mock.inspectFuncIntrospectToken != nil {
-		mmIntrospectToken.mock.t.Fatalf("Inspect function is already set for AuthMock.IntrospectToken")
+		mmIntrospectToken.mock.t.Fatalf("Inspect function is already set for AuthUseCaseMock.IntrospectToken")
 	}
 
 	mmIntrospectToken.mock.inspectFuncIntrospectToken = f
@@ -1511,21 +1511,21 @@ func (mmIntrospectToken *mAuthMockIntrospectToken) Inspect(f func(ctx context.Co
 }
 
 // Return sets up results that will be returned by AuthUseCase.IntrospectToken
-func (mmIntrospectToken *mAuthMockIntrospectToken) Return(ip1 *model.IntrospectionResponse, err error) *AuthMock {
+func (mmIntrospectToken *mAuthUseCaseMockIntrospectToken) Return(ip1 *model.IntrospectionResponse, err error) *AuthUseCaseMock {
 	if mmIntrospectToken.mock.funcIntrospectToken != nil {
-		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Set")
+		mmIntrospectToken.mock.t.Fatalf("AuthUseCaseMock.IntrospectToken mock is already set by Set")
 	}
 
 	if mmIntrospectToken.defaultExpectation == nil {
-		mmIntrospectToken.defaultExpectation = &AuthMockIntrospectTokenExpectation{mock: mmIntrospectToken.mock}
+		mmIntrospectToken.defaultExpectation = &AuthUseCaseMockIntrospectTokenExpectation{mock: mmIntrospectToken.mock}
 	}
-	mmIntrospectToken.defaultExpectation.results = &AuthMockIntrospectTokenResults{ip1, err}
+	mmIntrospectToken.defaultExpectation.results = &AuthUseCaseMockIntrospectTokenResults{ip1, err}
 	mmIntrospectToken.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmIntrospectToken.mock
 }
 
 // Set uses given function f to mock the AuthUseCase.IntrospectToken method
-func (mmIntrospectToken *mAuthMockIntrospectToken) Set(f func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (ip1 *model.IntrospectionResponse, err error)) *AuthMock {
+func (mmIntrospectToken *mAuthUseCaseMockIntrospectToken) Set(f func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (ip1 *model.IntrospectionResponse, err error)) *AuthUseCaseMock {
 	if mmIntrospectToken.defaultExpectation != nil {
 		mmIntrospectToken.mock.t.Fatalf("Default expectation is already set for the AuthUseCase.IntrospectToken method")
 	}
@@ -1541,37 +1541,37 @@ func (mmIntrospectToken *mAuthMockIntrospectToken) Set(f func(ctx context.Contex
 
 // When sets expectation for the AuthUseCase.IntrospectToken which will trigger the result defined by the following
 // Then helper
-func (mmIntrospectToken *mAuthMockIntrospectToken) When(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) *AuthMockIntrospectTokenExpectation {
+func (mmIntrospectToken *mAuthUseCaseMockIntrospectToken) When(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) *AuthUseCaseMockIntrospectTokenExpectation {
 	if mmIntrospectToken.mock.funcIntrospectToken != nil {
-		mmIntrospectToken.mock.t.Fatalf("AuthMock.IntrospectToken mock is already set by Set")
+		mmIntrospectToken.mock.t.Fatalf("AuthUseCaseMock.IntrospectToken mock is already set by Set")
 	}
 
-	expectation := &AuthMockIntrospectTokenExpectation{
+	expectation := &AuthUseCaseMockIntrospectTokenExpectation{
 		mock:               mmIntrospectToken.mock,
-		params:             &AuthMockIntrospectTokenParams{ctx, tenantID, clientID, tokenStr},
-		expectationOrigins: AuthMockIntrospectTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
+		params:             &AuthUseCaseMockIntrospectTokenParams{ctx, tenantID, clientID, tokenStr},
+		expectationOrigins: AuthUseCaseMockIntrospectTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmIntrospectToken.expectations = append(mmIntrospectToken.expectations, expectation)
 	return expectation
 }
 
 // Then sets up AuthUseCase.IntrospectToken return parameters for the expectation previously defined by the When method
-func (e *AuthMockIntrospectTokenExpectation) Then(ip1 *model.IntrospectionResponse, err error) *AuthMock {
-	e.results = &AuthMockIntrospectTokenResults{ip1, err}
+func (e *AuthUseCaseMockIntrospectTokenExpectation) Then(ip1 *model.IntrospectionResponse, err error) *AuthUseCaseMock {
+	e.results = &AuthUseCaseMockIntrospectTokenResults{ip1, err}
 	return e.mock
 }
 
 // Times sets number of times AuthUseCase.IntrospectToken should be invoked
-func (mmIntrospectToken *mAuthMockIntrospectToken) Times(n uint64) *mAuthMockIntrospectToken {
+func (mmIntrospectToken *mAuthUseCaseMockIntrospectToken) Times(n uint64) *mAuthUseCaseMockIntrospectToken {
 	if n == 0 {
-		mmIntrospectToken.mock.t.Fatalf("Times of AuthMock.IntrospectToken mock can not be zero")
+		mmIntrospectToken.mock.t.Fatalf("Times of AuthUseCaseMock.IntrospectToken mock can not be zero")
 	}
 	mm_atomic.StoreUint64(&mmIntrospectToken.expectedInvocations, n)
 	mmIntrospectToken.expectedInvocationsOrigin = minimock.CallerInfo(1)
 	return mmIntrospectToken
 }
 
-func (mmIntrospectToken *mAuthMockIntrospectToken) invocationsDone() bool {
+func (mmIntrospectToken *mAuthUseCaseMockIntrospectToken) invocationsDone() bool {
 	if len(mmIntrospectToken.expectations) == 0 && mmIntrospectToken.defaultExpectation == nil && mmIntrospectToken.mock.funcIntrospectToken == nil {
 		return true
 	}
@@ -1583,7 +1583,7 @@ func (mmIntrospectToken *mAuthMockIntrospectToken) invocationsDone() bool {
 }
 
 // IntrospectToken implements mm_port.AuthUseCase
-func (mmIntrospectToken *AuthMock) IntrospectToken(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (ip1 *model.IntrospectionResponse, err error) {
+func (mmIntrospectToken *AuthUseCaseMock) IntrospectToken(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (ip1 *model.IntrospectionResponse, err error) {
 	mm_atomic.AddUint64(&mmIntrospectToken.beforeIntrospectTokenCounter, 1)
 	defer mm_atomic.AddUint64(&mmIntrospectToken.afterIntrospectTokenCounter, 1)
 
@@ -1593,7 +1593,7 @@ func (mmIntrospectToken *AuthMock) IntrospectToken(ctx context.Context, tenantID
 		mmIntrospectToken.inspectFuncIntrospectToken(ctx, tenantID, clientID, tokenStr)
 	}
 
-	mm_params := AuthMockIntrospectTokenParams{ctx, tenantID, clientID, tokenStr}
+	mm_params := AuthUseCaseMockIntrospectTokenParams{ctx, tenantID, clientID, tokenStr}
 
 	// Record call args
 	mmIntrospectToken.IntrospectTokenMock.mutex.Lock()
@@ -1612,64 +1612,64 @@ func (mmIntrospectToken *AuthMock) IntrospectToken(ctx context.Context, tenantID
 		mm_want := mmIntrospectToken.IntrospectTokenMock.defaultExpectation.params
 		mm_want_ptrs := mmIntrospectToken.IntrospectTokenMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockIntrospectTokenParams{ctx, tenantID, clientID, tokenStr}
+		mm_got := AuthUseCaseMockIntrospectTokenParams{ctx, tenantID, clientID, tokenStr}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmIntrospectToken.t.Errorf("AuthMock.IntrospectToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmIntrospectToken.t.Errorf("AuthUseCaseMock.IntrospectToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmIntrospectToken.IntrospectTokenMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
 			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
-				mmIntrospectToken.t.Errorf("AuthMock.IntrospectToken got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmIntrospectToken.t.Errorf("AuthUseCaseMock.IntrospectToken got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmIntrospectToken.IntrospectTokenMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
 			}
 
 			if mm_want_ptrs.clientID != nil && !minimock.Equal(*mm_want_ptrs.clientID, mm_got.clientID) {
-				mmIntrospectToken.t.Errorf("AuthMock.IntrospectToken got unexpected parameter clientID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmIntrospectToken.t.Errorf("AuthUseCaseMock.IntrospectToken got unexpected parameter clientID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmIntrospectToken.IntrospectTokenMock.defaultExpectation.expectationOrigins.originClientID, *mm_want_ptrs.clientID, mm_got.clientID, minimock.Diff(*mm_want_ptrs.clientID, mm_got.clientID))
 			}
 
 			if mm_want_ptrs.tokenStr != nil && !minimock.Equal(*mm_want_ptrs.tokenStr, mm_got.tokenStr) {
-				mmIntrospectToken.t.Errorf("AuthMock.IntrospectToken got unexpected parameter tokenStr, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmIntrospectToken.t.Errorf("AuthUseCaseMock.IntrospectToken got unexpected parameter tokenStr, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmIntrospectToken.IntrospectTokenMock.defaultExpectation.expectationOrigins.originTokenStr, *mm_want_ptrs.tokenStr, mm_got.tokenStr, minimock.Diff(*mm_want_ptrs.tokenStr, mm_got.tokenStr))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmIntrospectToken.t.Errorf("AuthMock.IntrospectToken got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+			mmIntrospectToken.t.Errorf("AuthUseCaseMock.IntrospectToken got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmIntrospectToken.IntrospectTokenMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
 		mm_results := mmIntrospectToken.IntrospectTokenMock.defaultExpectation.results
 		if mm_results == nil {
-			mmIntrospectToken.t.Fatal("No results are set for the AuthMock.IntrospectToken")
+			mmIntrospectToken.t.Fatal("No results are set for the AuthUseCaseMock.IntrospectToken")
 		}
 		return (*mm_results).ip1, (*mm_results).err
 	}
 	if mmIntrospectToken.funcIntrospectToken != nil {
 		return mmIntrospectToken.funcIntrospectToken(ctx, tenantID, clientID, tokenStr)
 	}
-	mmIntrospectToken.t.Fatalf("Unexpected call to AuthMock.IntrospectToken. %v %v %v %v", ctx, tenantID, clientID, tokenStr)
+	mmIntrospectToken.t.Fatalf("Unexpected call to AuthUseCaseMock.IntrospectToken. %v %v %v %v", ctx, tenantID, clientID, tokenStr)
 	return
 }
 
-// IntrospectTokenAfterCounter returns a count of finished AuthMock.IntrospectToken invocations
-func (mmIntrospectToken *AuthMock) IntrospectTokenAfterCounter() uint64 {
+// IntrospectTokenAfterCounter returns a count of finished AuthUseCaseMock.IntrospectToken invocations
+func (mmIntrospectToken *AuthUseCaseMock) IntrospectTokenAfterCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmIntrospectToken.afterIntrospectTokenCounter)
 }
 
-// IntrospectTokenBeforeCounter returns a count of AuthMock.IntrospectToken invocations
-func (mmIntrospectToken *AuthMock) IntrospectTokenBeforeCounter() uint64 {
+// IntrospectTokenBeforeCounter returns a count of AuthUseCaseMock.IntrospectToken invocations
+func (mmIntrospectToken *AuthUseCaseMock) IntrospectTokenBeforeCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmIntrospectToken.beforeIntrospectTokenCounter)
 }
 
-// Calls returns a list of arguments used in each call to AuthMock.IntrospectToken.
+// Calls returns a list of arguments used in each call to AuthUseCaseMock.IntrospectToken.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmIntrospectToken *mAuthMockIntrospectToken) Calls() []*AuthMockIntrospectTokenParams {
+func (mmIntrospectToken *mAuthUseCaseMockIntrospectToken) Calls() []*AuthUseCaseMockIntrospectTokenParams {
 	mmIntrospectToken.mutex.RLock()
 
-	argCopy := make([]*AuthMockIntrospectTokenParams, len(mmIntrospectToken.callArgs))
+	argCopy := make([]*AuthUseCaseMockIntrospectTokenParams, len(mmIntrospectToken.callArgs))
 	copy(argCopy, mmIntrospectToken.callArgs)
 
 	mmIntrospectToken.mutex.RUnlock()
@@ -1679,7 +1679,7 @@ func (mmIntrospectToken *mAuthMockIntrospectToken) Calls() []*AuthMockIntrospect
 
 // MinimockIntrospectTokenDone returns true if the count of the IntrospectToken invocations corresponds
 // the number of defined expectations
-func (m *AuthMock) MinimockIntrospectTokenDone() bool {
+func (m *AuthUseCaseMock) MinimockIntrospectTokenDone() bool {
 	if m.IntrospectTokenMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
@@ -1695,10 +1695,10 @@ func (m *AuthMock) MinimockIntrospectTokenDone() bool {
 }
 
 // MinimockIntrospectTokenInspect logs each unmet expectation
-func (m *AuthMock) MinimockIntrospectTokenInspect() {
+func (m *AuthUseCaseMock) MinimockIntrospectTokenInspect() {
 	for _, e := range m.IntrospectTokenMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to AuthMock.IntrospectToken at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.IntrospectToken at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
@@ -1706,66 +1706,66 @@ func (m *AuthMock) MinimockIntrospectTokenInspect() {
 	// if default expectation was set then invocations count should be greater than zero
 	if m.IntrospectTokenMock.defaultExpectation != nil && afterIntrospectTokenCounter < 1 {
 		if m.IntrospectTokenMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to AuthMock.IntrospectToken at\n%s", m.IntrospectTokenMock.defaultExpectation.returnOrigin)
+			m.t.Errorf("Expected call to AuthUseCaseMock.IntrospectToken at\n%s", m.IntrospectTokenMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to AuthMock.IntrospectToken at\n%s with params: %#v", m.IntrospectTokenMock.defaultExpectation.expectationOrigins.origin, *m.IntrospectTokenMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.IntrospectToken at\n%s with params: %#v", m.IntrospectTokenMock.defaultExpectation.expectationOrigins.origin, *m.IntrospectTokenMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
 	if m.funcIntrospectToken != nil && afterIntrospectTokenCounter < 1 {
-		m.t.Errorf("Expected call to AuthMock.IntrospectToken at\n%s", m.funcIntrospectTokenOrigin)
+		m.t.Errorf("Expected call to AuthUseCaseMock.IntrospectToken at\n%s", m.funcIntrospectTokenOrigin)
 	}
 
 	if !m.IntrospectTokenMock.invocationsDone() && afterIntrospectTokenCounter > 0 {
-		m.t.Errorf("Expected %d calls to AuthMock.IntrospectToken at\n%s but found %d calls",
+		m.t.Errorf("Expected %d calls to AuthUseCaseMock.IntrospectToken at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.IntrospectTokenMock.expectedInvocations), m.IntrospectTokenMock.expectedInvocationsOrigin, afterIntrospectTokenCounter)
 	}
 }
 
-type mAuthMockProcessAuthorizeRequest struct {
+type mAuthUseCaseMockProcessAuthorizeRequest struct {
 	optional           bool
-	mock               *AuthMock
-	defaultExpectation *AuthMockProcessAuthorizeRequestExpectation
-	expectations       []*AuthMockProcessAuthorizeRequestExpectation
+	mock               *AuthUseCaseMock
+	defaultExpectation *AuthUseCaseMockProcessAuthorizeRequestExpectation
+	expectations       []*AuthUseCaseMockProcessAuthorizeRequestExpectation
 
-	callArgs []*AuthMockProcessAuthorizeRequestParams
+	callArgs []*AuthUseCaseMockProcessAuthorizeRequestParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// AuthMockProcessAuthorizeRequestExpectation specifies expectation struct of the AuthUseCase.ProcessAuthorizeRequest
-type AuthMockProcessAuthorizeRequestExpectation struct {
-	mock               *AuthMock
-	params             *AuthMockProcessAuthorizeRequestParams
-	paramPtrs          *AuthMockProcessAuthorizeRequestParamPtrs
-	expectationOrigins AuthMockProcessAuthorizeRequestExpectationOrigins
-	results            *AuthMockProcessAuthorizeRequestResults
+// AuthUseCaseMockProcessAuthorizeRequestExpectation specifies expectation struct of the AuthUseCase.ProcessAuthorizeRequest
+type AuthUseCaseMockProcessAuthorizeRequestExpectation struct {
+	mock               *AuthUseCaseMock
+	params             *AuthUseCaseMockProcessAuthorizeRequestParams
+	paramPtrs          *AuthUseCaseMockProcessAuthorizeRequestParamPtrs
+	expectationOrigins AuthUseCaseMockProcessAuthorizeRequestExpectationOrigins
+	results            *AuthUseCaseMockProcessAuthorizeRequestResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// AuthMockProcessAuthorizeRequestParams contains parameters of the AuthUseCase.ProcessAuthorizeRequest
-type AuthMockProcessAuthorizeRequestParams struct {
+// AuthUseCaseMockProcessAuthorizeRequestParams contains parameters of the AuthUseCase.ProcessAuthorizeRequest
+type AuthUseCaseMockProcessAuthorizeRequestParams struct {
 	ctx context.Context
 	cmd mm_port.AuthorizeRequestCommand
 }
 
-// AuthMockProcessAuthorizeRequestParamPtrs contains pointers to parameters of the AuthUseCase.ProcessAuthorizeRequest
-type AuthMockProcessAuthorizeRequestParamPtrs struct {
+// AuthUseCaseMockProcessAuthorizeRequestParamPtrs contains pointers to parameters of the AuthUseCase.ProcessAuthorizeRequest
+type AuthUseCaseMockProcessAuthorizeRequestParamPtrs struct {
 	ctx *context.Context
 	cmd *mm_port.AuthorizeRequestCommand
 }
 
-// AuthMockProcessAuthorizeRequestResults contains results of the AuthUseCase.ProcessAuthorizeRequest
-type AuthMockProcessAuthorizeRequestResults struct {
+// AuthUseCaseMockProcessAuthorizeRequestResults contains results of the AuthUseCase.ProcessAuthorizeRequest
+type AuthUseCaseMockProcessAuthorizeRequestResults struct {
 	ap1 *mm_port.AuthorizeExecutionResult
 	err error
 }
 
-// AuthMockProcessAuthorizeRequestOrigins contains origins of expectations of the AuthUseCase.ProcessAuthorizeRequest
-type AuthMockProcessAuthorizeRequestExpectationOrigins struct {
+// AuthUseCaseMockProcessAuthorizeRequestOrigins contains origins of expectations of the AuthUseCase.ProcessAuthorizeRequest
+type AuthUseCaseMockProcessAuthorizeRequestExpectationOrigins struct {
 	origin    string
 	originCtx string
 	originCmd string
@@ -1776,26 +1776,26 @@ type AuthMockProcessAuthorizeRequestExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) Optional() *mAuthMockProcessAuthorizeRequest {
+func (mmProcessAuthorizeRequest *mAuthUseCaseMockProcessAuthorizeRequest) Optional() *mAuthUseCaseMockProcessAuthorizeRequest {
 	mmProcessAuthorizeRequest.optional = true
 	return mmProcessAuthorizeRequest
 }
 
 // Expect sets up expected params for AuthUseCase.ProcessAuthorizeRequest
-func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) Expect(ctx context.Context, cmd mm_port.AuthorizeRequestCommand) *mAuthMockProcessAuthorizeRequest {
+func (mmProcessAuthorizeRequest *mAuthUseCaseMockProcessAuthorizeRequest) Expect(ctx context.Context, cmd mm_port.AuthorizeRequestCommand) *mAuthUseCaseMockProcessAuthorizeRequest {
 	if mmProcessAuthorizeRequest.mock.funcProcessAuthorizeRequest != nil {
-		mmProcessAuthorizeRequest.mock.t.Fatalf("AuthMock.ProcessAuthorizeRequest mock is already set by Set")
+		mmProcessAuthorizeRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessAuthorizeRequest mock is already set by Set")
 	}
 
 	if mmProcessAuthorizeRequest.defaultExpectation == nil {
-		mmProcessAuthorizeRequest.defaultExpectation = &AuthMockProcessAuthorizeRequestExpectation{}
+		mmProcessAuthorizeRequest.defaultExpectation = &AuthUseCaseMockProcessAuthorizeRequestExpectation{}
 	}
 
 	if mmProcessAuthorizeRequest.defaultExpectation.paramPtrs != nil {
-		mmProcessAuthorizeRequest.mock.t.Fatalf("AuthMock.ProcessAuthorizeRequest mock is already set by ExpectParams functions")
+		mmProcessAuthorizeRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessAuthorizeRequest mock is already set by ExpectParams functions")
 	}
 
-	mmProcessAuthorizeRequest.defaultExpectation.params = &AuthMockProcessAuthorizeRequestParams{ctx, cmd}
+	mmProcessAuthorizeRequest.defaultExpectation.params = &AuthUseCaseMockProcessAuthorizeRequestParams{ctx, cmd}
 	mmProcessAuthorizeRequest.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmProcessAuthorizeRequest.expectations {
 		if minimock.Equal(e.params, mmProcessAuthorizeRequest.defaultExpectation.params) {
@@ -1807,21 +1807,21 @@ func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) Expect(ctx co
 }
 
 // ExpectCtxParam1 sets up expected param ctx for AuthUseCase.ProcessAuthorizeRequest
-func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) ExpectCtxParam1(ctx context.Context) *mAuthMockProcessAuthorizeRequest {
+func (mmProcessAuthorizeRequest *mAuthUseCaseMockProcessAuthorizeRequest) ExpectCtxParam1(ctx context.Context) *mAuthUseCaseMockProcessAuthorizeRequest {
 	if mmProcessAuthorizeRequest.mock.funcProcessAuthorizeRequest != nil {
-		mmProcessAuthorizeRequest.mock.t.Fatalf("AuthMock.ProcessAuthorizeRequest mock is already set by Set")
+		mmProcessAuthorizeRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessAuthorizeRequest mock is already set by Set")
 	}
 
 	if mmProcessAuthorizeRequest.defaultExpectation == nil {
-		mmProcessAuthorizeRequest.defaultExpectation = &AuthMockProcessAuthorizeRequestExpectation{}
+		mmProcessAuthorizeRequest.defaultExpectation = &AuthUseCaseMockProcessAuthorizeRequestExpectation{}
 	}
 
 	if mmProcessAuthorizeRequest.defaultExpectation.params != nil {
-		mmProcessAuthorizeRequest.mock.t.Fatalf("AuthMock.ProcessAuthorizeRequest mock is already set by Expect")
+		mmProcessAuthorizeRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessAuthorizeRequest mock is already set by Expect")
 	}
 
 	if mmProcessAuthorizeRequest.defaultExpectation.paramPtrs == nil {
-		mmProcessAuthorizeRequest.defaultExpectation.paramPtrs = &AuthMockProcessAuthorizeRequestParamPtrs{}
+		mmProcessAuthorizeRequest.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessAuthorizeRequestParamPtrs{}
 	}
 	mmProcessAuthorizeRequest.defaultExpectation.paramPtrs.ctx = &ctx
 	mmProcessAuthorizeRequest.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
@@ -1830,21 +1830,21 @@ func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) ExpectCtxPara
 }
 
 // ExpectCmdParam2 sets up expected param cmd for AuthUseCase.ProcessAuthorizeRequest
-func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) ExpectCmdParam2(cmd mm_port.AuthorizeRequestCommand) *mAuthMockProcessAuthorizeRequest {
+func (mmProcessAuthorizeRequest *mAuthUseCaseMockProcessAuthorizeRequest) ExpectCmdParam2(cmd mm_port.AuthorizeRequestCommand) *mAuthUseCaseMockProcessAuthorizeRequest {
 	if mmProcessAuthorizeRequest.mock.funcProcessAuthorizeRequest != nil {
-		mmProcessAuthorizeRequest.mock.t.Fatalf("AuthMock.ProcessAuthorizeRequest mock is already set by Set")
+		mmProcessAuthorizeRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessAuthorizeRequest mock is already set by Set")
 	}
 
 	if mmProcessAuthorizeRequest.defaultExpectation == nil {
-		mmProcessAuthorizeRequest.defaultExpectation = &AuthMockProcessAuthorizeRequestExpectation{}
+		mmProcessAuthorizeRequest.defaultExpectation = &AuthUseCaseMockProcessAuthorizeRequestExpectation{}
 	}
 
 	if mmProcessAuthorizeRequest.defaultExpectation.params != nil {
-		mmProcessAuthorizeRequest.mock.t.Fatalf("AuthMock.ProcessAuthorizeRequest mock is already set by Expect")
+		mmProcessAuthorizeRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessAuthorizeRequest mock is already set by Expect")
 	}
 
 	if mmProcessAuthorizeRequest.defaultExpectation.paramPtrs == nil {
-		mmProcessAuthorizeRequest.defaultExpectation.paramPtrs = &AuthMockProcessAuthorizeRequestParamPtrs{}
+		mmProcessAuthorizeRequest.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessAuthorizeRequestParamPtrs{}
 	}
 	mmProcessAuthorizeRequest.defaultExpectation.paramPtrs.cmd = &cmd
 	mmProcessAuthorizeRequest.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
@@ -1853,9 +1853,9 @@ func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) ExpectCmdPara
 }
 
 // Inspect accepts an inspector function that has same arguments as the AuthUseCase.ProcessAuthorizeRequest
-func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) Inspect(f func(ctx context.Context, cmd mm_port.AuthorizeRequestCommand)) *mAuthMockProcessAuthorizeRequest {
+func (mmProcessAuthorizeRequest *mAuthUseCaseMockProcessAuthorizeRequest) Inspect(f func(ctx context.Context, cmd mm_port.AuthorizeRequestCommand)) *mAuthUseCaseMockProcessAuthorizeRequest {
 	if mmProcessAuthorizeRequest.mock.inspectFuncProcessAuthorizeRequest != nil {
-		mmProcessAuthorizeRequest.mock.t.Fatalf("Inspect function is already set for AuthMock.ProcessAuthorizeRequest")
+		mmProcessAuthorizeRequest.mock.t.Fatalf("Inspect function is already set for AuthUseCaseMock.ProcessAuthorizeRequest")
 	}
 
 	mmProcessAuthorizeRequest.mock.inspectFuncProcessAuthorizeRequest = f
@@ -1864,21 +1864,21 @@ func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) Inspect(f fun
 }
 
 // Return sets up results that will be returned by AuthUseCase.ProcessAuthorizeRequest
-func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) Return(ap1 *mm_port.AuthorizeExecutionResult, err error) *AuthMock {
+func (mmProcessAuthorizeRequest *mAuthUseCaseMockProcessAuthorizeRequest) Return(ap1 *mm_port.AuthorizeExecutionResult, err error) *AuthUseCaseMock {
 	if mmProcessAuthorizeRequest.mock.funcProcessAuthorizeRequest != nil {
-		mmProcessAuthorizeRequest.mock.t.Fatalf("AuthMock.ProcessAuthorizeRequest mock is already set by Set")
+		mmProcessAuthorizeRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessAuthorizeRequest mock is already set by Set")
 	}
 
 	if mmProcessAuthorizeRequest.defaultExpectation == nil {
-		mmProcessAuthorizeRequest.defaultExpectation = &AuthMockProcessAuthorizeRequestExpectation{mock: mmProcessAuthorizeRequest.mock}
+		mmProcessAuthorizeRequest.defaultExpectation = &AuthUseCaseMockProcessAuthorizeRequestExpectation{mock: mmProcessAuthorizeRequest.mock}
 	}
-	mmProcessAuthorizeRequest.defaultExpectation.results = &AuthMockProcessAuthorizeRequestResults{ap1, err}
+	mmProcessAuthorizeRequest.defaultExpectation.results = &AuthUseCaseMockProcessAuthorizeRequestResults{ap1, err}
 	mmProcessAuthorizeRequest.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmProcessAuthorizeRequest.mock
 }
 
 // Set uses given function f to mock the AuthUseCase.ProcessAuthorizeRequest method
-func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) Set(f func(ctx context.Context, cmd mm_port.AuthorizeRequestCommand) (ap1 *mm_port.AuthorizeExecutionResult, err error)) *AuthMock {
+func (mmProcessAuthorizeRequest *mAuthUseCaseMockProcessAuthorizeRequest) Set(f func(ctx context.Context, cmd mm_port.AuthorizeRequestCommand) (ap1 *mm_port.AuthorizeExecutionResult, err error)) *AuthUseCaseMock {
 	if mmProcessAuthorizeRequest.defaultExpectation != nil {
 		mmProcessAuthorizeRequest.mock.t.Fatalf("Default expectation is already set for the AuthUseCase.ProcessAuthorizeRequest method")
 	}
@@ -1894,37 +1894,37 @@ func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) Set(f func(ct
 
 // When sets expectation for the AuthUseCase.ProcessAuthorizeRequest which will trigger the result defined by the following
 // Then helper
-func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) When(ctx context.Context, cmd mm_port.AuthorizeRequestCommand) *AuthMockProcessAuthorizeRequestExpectation {
+func (mmProcessAuthorizeRequest *mAuthUseCaseMockProcessAuthorizeRequest) When(ctx context.Context, cmd mm_port.AuthorizeRequestCommand) *AuthUseCaseMockProcessAuthorizeRequestExpectation {
 	if mmProcessAuthorizeRequest.mock.funcProcessAuthorizeRequest != nil {
-		mmProcessAuthorizeRequest.mock.t.Fatalf("AuthMock.ProcessAuthorizeRequest mock is already set by Set")
+		mmProcessAuthorizeRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessAuthorizeRequest mock is already set by Set")
 	}
 
-	expectation := &AuthMockProcessAuthorizeRequestExpectation{
+	expectation := &AuthUseCaseMockProcessAuthorizeRequestExpectation{
 		mock:               mmProcessAuthorizeRequest.mock,
-		params:             &AuthMockProcessAuthorizeRequestParams{ctx, cmd},
-		expectationOrigins: AuthMockProcessAuthorizeRequestExpectationOrigins{origin: minimock.CallerInfo(1)},
+		params:             &AuthUseCaseMockProcessAuthorizeRequestParams{ctx, cmd},
+		expectationOrigins: AuthUseCaseMockProcessAuthorizeRequestExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmProcessAuthorizeRequest.expectations = append(mmProcessAuthorizeRequest.expectations, expectation)
 	return expectation
 }
 
 // Then sets up AuthUseCase.ProcessAuthorizeRequest return parameters for the expectation previously defined by the When method
-func (e *AuthMockProcessAuthorizeRequestExpectation) Then(ap1 *mm_port.AuthorizeExecutionResult, err error) *AuthMock {
-	e.results = &AuthMockProcessAuthorizeRequestResults{ap1, err}
+func (e *AuthUseCaseMockProcessAuthorizeRequestExpectation) Then(ap1 *mm_port.AuthorizeExecutionResult, err error) *AuthUseCaseMock {
+	e.results = &AuthUseCaseMockProcessAuthorizeRequestResults{ap1, err}
 	return e.mock
 }
 
 // Times sets number of times AuthUseCase.ProcessAuthorizeRequest should be invoked
-func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) Times(n uint64) *mAuthMockProcessAuthorizeRequest {
+func (mmProcessAuthorizeRequest *mAuthUseCaseMockProcessAuthorizeRequest) Times(n uint64) *mAuthUseCaseMockProcessAuthorizeRequest {
 	if n == 0 {
-		mmProcessAuthorizeRequest.mock.t.Fatalf("Times of AuthMock.ProcessAuthorizeRequest mock can not be zero")
+		mmProcessAuthorizeRequest.mock.t.Fatalf("Times of AuthUseCaseMock.ProcessAuthorizeRequest mock can not be zero")
 	}
 	mm_atomic.StoreUint64(&mmProcessAuthorizeRequest.expectedInvocations, n)
 	mmProcessAuthorizeRequest.expectedInvocationsOrigin = minimock.CallerInfo(1)
 	return mmProcessAuthorizeRequest
 }
 
-func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) invocationsDone() bool {
+func (mmProcessAuthorizeRequest *mAuthUseCaseMockProcessAuthorizeRequest) invocationsDone() bool {
 	if len(mmProcessAuthorizeRequest.expectations) == 0 && mmProcessAuthorizeRequest.defaultExpectation == nil && mmProcessAuthorizeRequest.mock.funcProcessAuthorizeRequest == nil {
 		return true
 	}
@@ -1936,7 +1936,7 @@ func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) invocationsDo
 }
 
 // ProcessAuthorizeRequest implements mm_port.AuthUseCase
-func (mmProcessAuthorizeRequest *AuthMock) ProcessAuthorizeRequest(ctx context.Context, cmd mm_port.AuthorizeRequestCommand) (ap1 *mm_port.AuthorizeExecutionResult, err error) {
+func (mmProcessAuthorizeRequest *AuthUseCaseMock) ProcessAuthorizeRequest(ctx context.Context, cmd mm_port.AuthorizeRequestCommand) (ap1 *mm_port.AuthorizeExecutionResult, err error) {
 	mm_atomic.AddUint64(&mmProcessAuthorizeRequest.beforeProcessAuthorizeRequestCounter, 1)
 	defer mm_atomic.AddUint64(&mmProcessAuthorizeRequest.afterProcessAuthorizeRequestCounter, 1)
 
@@ -1946,7 +1946,7 @@ func (mmProcessAuthorizeRequest *AuthMock) ProcessAuthorizeRequest(ctx context.C
 		mmProcessAuthorizeRequest.inspectFuncProcessAuthorizeRequest(ctx, cmd)
 	}
 
-	mm_params := AuthMockProcessAuthorizeRequestParams{ctx, cmd}
+	mm_params := AuthUseCaseMockProcessAuthorizeRequestParams{ctx, cmd}
 
 	// Record call args
 	mmProcessAuthorizeRequest.ProcessAuthorizeRequestMock.mutex.Lock()
@@ -1965,54 +1965,54 @@ func (mmProcessAuthorizeRequest *AuthMock) ProcessAuthorizeRequest(ctx context.C
 		mm_want := mmProcessAuthorizeRequest.ProcessAuthorizeRequestMock.defaultExpectation.params
 		mm_want_ptrs := mmProcessAuthorizeRequest.ProcessAuthorizeRequestMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockProcessAuthorizeRequestParams{ctx, cmd}
+		mm_got := AuthUseCaseMockProcessAuthorizeRequestParams{ctx, cmd}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmProcessAuthorizeRequest.t.Errorf("AuthMock.ProcessAuthorizeRequest got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessAuthorizeRequest.t.Errorf("AuthUseCaseMock.ProcessAuthorizeRequest got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessAuthorizeRequest.ProcessAuthorizeRequestMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
 			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
-				mmProcessAuthorizeRequest.t.Errorf("AuthMock.ProcessAuthorizeRequest got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessAuthorizeRequest.t.Errorf("AuthUseCaseMock.ProcessAuthorizeRequest got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessAuthorizeRequest.ProcessAuthorizeRequestMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmProcessAuthorizeRequest.t.Errorf("AuthMock.ProcessAuthorizeRequest got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+			mmProcessAuthorizeRequest.t.Errorf("AuthUseCaseMock.ProcessAuthorizeRequest got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmProcessAuthorizeRequest.ProcessAuthorizeRequestMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
 		mm_results := mmProcessAuthorizeRequest.ProcessAuthorizeRequestMock.defaultExpectation.results
 		if mm_results == nil {
-			mmProcessAuthorizeRequest.t.Fatal("No results are set for the AuthMock.ProcessAuthorizeRequest")
+			mmProcessAuthorizeRequest.t.Fatal("No results are set for the AuthUseCaseMock.ProcessAuthorizeRequest")
 		}
 		return (*mm_results).ap1, (*mm_results).err
 	}
 	if mmProcessAuthorizeRequest.funcProcessAuthorizeRequest != nil {
 		return mmProcessAuthorizeRequest.funcProcessAuthorizeRequest(ctx, cmd)
 	}
-	mmProcessAuthorizeRequest.t.Fatalf("Unexpected call to AuthMock.ProcessAuthorizeRequest. %v %v", ctx, cmd)
+	mmProcessAuthorizeRequest.t.Fatalf("Unexpected call to AuthUseCaseMock.ProcessAuthorizeRequest. %v %v", ctx, cmd)
 	return
 }
 
-// ProcessAuthorizeRequestAfterCounter returns a count of finished AuthMock.ProcessAuthorizeRequest invocations
-func (mmProcessAuthorizeRequest *AuthMock) ProcessAuthorizeRequestAfterCounter() uint64 {
+// ProcessAuthorizeRequestAfterCounter returns a count of finished AuthUseCaseMock.ProcessAuthorizeRequest invocations
+func (mmProcessAuthorizeRequest *AuthUseCaseMock) ProcessAuthorizeRequestAfterCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessAuthorizeRequest.afterProcessAuthorizeRequestCounter)
 }
 
-// ProcessAuthorizeRequestBeforeCounter returns a count of AuthMock.ProcessAuthorizeRequest invocations
-func (mmProcessAuthorizeRequest *AuthMock) ProcessAuthorizeRequestBeforeCounter() uint64 {
+// ProcessAuthorizeRequestBeforeCounter returns a count of AuthUseCaseMock.ProcessAuthorizeRequest invocations
+func (mmProcessAuthorizeRequest *AuthUseCaseMock) ProcessAuthorizeRequestBeforeCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessAuthorizeRequest.beforeProcessAuthorizeRequestCounter)
 }
 
-// Calls returns a list of arguments used in each call to AuthMock.ProcessAuthorizeRequest.
+// Calls returns a list of arguments used in each call to AuthUseCaseMock.ProcessAuthorizeRequest.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) Calls() []*AuthMockProcessAuthorizeRequestParams {
+func (mmProcessAuthorizeRequest *mAuthUseCaseMockProcessAuthorizeRequest) Calls() []*AuthUseCaseMockProcessAuthorizeRequestParams {
 	mmProcessAuthorizeRequest.mutex.RLock()
 
-	argCopy := make([]*AuthMockProcessAuthorizeRequestParams, len(mmProcessAuthorizeRequest.callArgs))
+	argCopy := make([]*AuthUseCaseMockProcessAuthorizeRequestParams, len(mmProcessAuthorizeRequest.callArgs))
 	copy(argCopy, mmProcessAuthorizeRequest.callArgs)
 
 	mmProcessAuthorizeRequest.mutex.RUnlock()
@@ -2022,7 +2022,7 @@ func (mmProcessAuthorizeRequest *mAuthMockProcessAuthorizeRequest) Calls() []*Au
 
 // MinimockProcessAuthorizeRequestDone returns true if the count of the ProcessAuthorizeRequest invocations corresponds
 // the number of defined expectations
-func (m *AuthMock) MinimockProcessAuthorizeRequestDone() bool {
+func (m *AuthUseCaseMock) MinimockProcessAuthorizeRequestDone() bool {
 	if m.ProcessAuthorizeRequestMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
@@ -2038,10 +2038,10 @@ func (m *AuthMock) MinimockProcessAuthorizeRequestDone() bool {
 }
 
 // MinimockProcessAuthorizeRequestInspect logs each unmet expectation
-func (m *AuthMock) MinimockProcessAuthorizeRequestInspect() {
+func (m *AuthUseCaseMock) MinimockProcessAuthorizeRequestInspect() {
 	for _, e := range m.ProcessAuthorizeRequestMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to AuthMock.ProcessAuthorizeRequest at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessAuthorizeRequest at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
@@ -2049,68 +2049,68 @@ func (m *AuthMock) MinimockProcessAuthorizeRequestInspect() {
 	// if default expectation was set then invocations count should be greater than zero
 	if m.ProcessAuthorizeRequestMock.defaultExpectation != nil && afterProcessAuthorizeRequestCounter < 1 {
 		if m.ProcessAuthorizeRequestMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to AuthMock.ProcessAuthorizeRequest at\n%s", m.ProcessAuthorizeRequestMock.defaultExpectation.returnOrigin)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessAuthorizeRequest at\n%s", m.ProcessAuthorizeRequestMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to AuthMock.ProcessAuthorizeRequest at\n%s with params: %#v", m.ProcessAuthorizeRequestMock.defaultExpectation.expectationOrigins.origin, *m.ProcessAuthorizeRequestMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessAuthorizeRequest at\n%s with params: %#v", m.ProcessAuthorizeRequestMock.defaultExpectation.expectationOrigins.origin, *m.ProcessAuthorizeRequestMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
 	if m.funcProcessAuthorizeRequest != nil && afterProcessAuthorizeRequestCounter < 1 {
-		m.t.Errorf("Expected call to AuthMock.ProcessAuthorizeRequest at\n%s", m.funcProcessAuthorizeRequestOrigin)
+		m.t.Errorf("Expected call to AuthUseCaseMock.ProcessAuthorizeRequest at\n%s", m.funcProcessAuthorizeRequestOrigin)
 	}
 
 	if !m.ProcessAuthorizeRequestMock.invocationsDone() && afterProcessAuthorizeRequestCounter > 0 {
-		m.t.Errorf("Expected %d calls to AuthMock.ProcessAuthorizeRequest at\n%s but found %d calls",
+		m.t.Errorf("Expected %d calls to AuthUseCaseMock.ProcessAuthorizeRequest at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ProcessAuthorizeRequestMock.expectedInvocations), m.ProcessAuthorizeRequestMock.expectedInvocationsOrigin, afterProcessAuthorizeRequestCounter)
 	}
 }
 
-type mAuthMockProcessDiscoveryMetadata struct {
+type mAuthUseCaseMockProcessDiscoveryMetadata struct {
 	optional           bool
-	mock               *AuthMock
-	defaultExpectation *AuthMockProcessDiscoveryMetadataExpectation
-	expectations       []*AuthMockProcessDiscoveryMetadataExpectation
+	mock               *AuthUseCaseMock
+	defaultExpectation *AuthUseCaseMockProcessDiscoveryMetadataExpectation
+	expectations       []*AuthUseCaseMockProcessDiscoveryMetadataExpectation
 
-	callArgs []*AuthMockProcessDiscoveryMetadataParams
+	callArgs []*AuthUseCaseMockProcessDiscoveryMetadataParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// AuthMockProcessDiscoveryMetadataExpectation specifies expectation struct of the AuthUseCase.ProcessDiscoveryMetadata
-type AuthMockProcessDiscoveryMetadataExpectation struct {
-	mock               *AuthMock
-	params             *AuthMockProcessDiscoveryMetadataParams
-	paramPtrs          *AuthMockProcessDiscoveryMetadataParamPtrs
-	expectationOrigins AuthMockProcessDiscoveryMetadataExpectationOrigins
-	results            *AuthMockProcessDiscoveryMetadataResults
+// AuthUseCaseMockProcessDiscoveryMetadataExpectation specifies expectation struct of the AuthUseCase.ProcessDiscoveryMetadata
+type AuthUseCaseMockProcessDiscoveryMetadataExpectation struct {
+	mock               *AuthUseCaseMock
+	params             *AuthUseCaseMockProcessDiscoveryMetadataParams
+	paramPtrs          *AuthUseCaseMockProcessDiscoveryMetadataParamPtrs
+	expectationOrigins AuthUseCaseMockProcessDiscoveryMetadataExpectationOrigins
+	results            *AuthUseCaseMockProcessDiscoveryMetadataResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// AuthMockProcessDiscoveryMetadataParams contains parameters of the AuthUseCase.ProcessDiscoveryMetadata
-type AuthMockProcessDiscoveryMetadataParams struct {
+// AuthUseCaseMockProcessDiscoveryMetadataParams contains parameters of the AuthUseCase.ProcessDiscoveryMetadata
+type AuthUseCaseMockProcessDiscoveryMetadataParams struct {
 	ctx      context.Context
 	tenantID uuid.UUID
 	isOIDC   bool
 }
 
-// AuthMockProcessDiscoveryMetadataParamPtrs contains pointers to parameters of the AuthUseCase.ProcessDiscoveryMetadata
-type AuthMockProcessDiscoveryMetadataParamPtrs struct {
+// AuthUseCaseMockProcessDiscoveryMetadataParamPtrs contains pointers to parameters of the AuthUseCase.ProcessDiscoveryMetadata
+type AuthUseCaseMockProcessDiscoveryMetadataParamPtrs struct {
 	ctx      *context.Context
 	tenantID *uuid.UUID
 	isOIDC   *bool
 }
 
-// AuthMockProcessDiscoveryMetadataResults contains results of the AuthUseCase.ProcessDiscoveryMetadata
-type AuthMockProcessDiscoveryMetadataResults struct {
+// AuthUseCaseMockProcessDiscoveryMetadataResults contains results of the AuthUseCase.ProcessDiscoveryMetadata
+type AuthUseCaseMockProcessDiscoveryMetadataResults struct {
 	dp1 *mm_port.DiscoveryResponse
 	err error
 }
 
-// AuthMockProcessDiscoveryMetadataOrigins contains origins of expectations of the AuthUseCase.ProcessDiscoveryMetadata
-type AuthMockProcessDiscoveryMetadataExpectationOrigins struct {
+// AuthUseCaseMockProcessDiscoveryMetadataOrigins contains origins of expectations of the AuthUseCase.ProcessDiscoveryMetadata
+type AuthUseCaseMockProcessDiscoveryMetadataExpectationOrigins struct {
 	origin         string
 	originCtx      string
 	originTenantID string
@@ -2122,26 +2122,26 @@ type AuthMockProcessDiscoveryMetadataExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) Optional() *mAuthMockProcessDiscoveryMetadata {
+func (mmProcessDiscoveryMetadata *mAuthUseCaseMockProcessDiscoveryMetadata) Optional() *mAuthUseCaseMockProcessDiscoveryMetadata {
 	mmProcessDiscoveryMetadata.optional = true
 	return mmProcessDiscoveryMetadata
 }
 
 // Expect sets up expected params for AuthUseCase.ProcessDiscoveryMetadata
-func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) Expect(ctx context.Context, tenantID uuid.UUID, isOIDC bool) *mAuthMockProcessDiscoveryMetadata {
+func (mmProcessDiscoveryMetadata *mAuthUseCaseMockProcessDiscoveryMetadata) Expect(ctx context.Context, tenantID uuid.UUID, isOIDC bool) *mAuthUseCaseMockProcessDiscoveryMetadata {
 	if mmProcessDiscoveryMetadata.mock.funcProcessDiscoveryMetadata != nil {
-		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthMock.ProcessDiscoveryMetadata mock is already set by Set")
+		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthUseCaseMock.ProcessDiscoveryMetadata mock is already set by Set")
 	}
 
 	if mmProcessDiscoveryMetadata.defaultExpectation == nil {
-		mmProcessDiscoveryMetadata.defaultExpectation = &AuthMockProcessDiscoveryMetadataExpectation{}
+		mmProcessDiscoveryMetadata.defaultExpectation = &AuthUseCaseMockProcessDiscoveryMetadataExpectation{}
 	}
 
 	if mmProcessDiscoveryMetadata.defaultExpectation.paramPtrs != nil {
-		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthMock.ProcessDiscoveryMetadata mock is already set by ExpectParams functions")
+		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthUseCaseMock.ProcessDiscoveryMetadata mock is already set by ExpectParams functions")
 	}
 
-	mmProcessDiscoveryMetadata.defaultExpectation.params = &AuthMockProcessDiscoveryMetadataParams{ctx, tenantID, isOIDC}
+	mmProcessDiscoveryMetadata.defaultExpectation.params = &AuthUseCaseMockProcessDiscoveryMetadataParams{ctx, tenantID, isOIDC}
 	mmProcessDiscoveryMetadata.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmProcessDiscoveryMetadata.expectations {
 		if minimock.Equal(e.params, mmProcessDiscoveryMetadata.defaultExpectation.params) {
@@ -2153,21 +2153,21 @@ func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) Expect(ctx 
 }
 
 // ExpectCtxParam1 sets up expected param ctx for AuthUseCase.ProcessDiscoveryMetadata
-func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) ExpectCtxParam1(ctx context.Context) *mAuthMockProcessDiscoveryMetadata {
+func (mmProcessDiscoveryMetadata *mAuthUseCaseMockProcessDiscoveryMetadata) ExpectCtxParam1(ctx context.Context) *mAuthUseCaseMockProcessDiscoveryMetadata {
 	if mmProcessDiscoveryMetadata.mock.funcProcessDiscoveryMetadata != nil {
-		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthMock.ProcessDiscoveryMetadata mock is already set by Set")
+		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthUseCaseMock.ProcessDiscoveryMetadata mock is already set by Set")
 	}
 
 	if mmProcessDiscoveryMetadata.defaultExpectation == nil {
-		mmProcessDiscoveryMetadata.defaultExpectation = &AuthMockProcessDiscoveryMetadataExpectation{}
+		mmProcessDiscoveryMetadata.defaultExpectation = &AuthUseCaseMockProcessDiscoveryMetadataExpectation{}
 	}
 
 	if mmProcessDiscoveryMetadata.defaultExpectation.params != nil {
-		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthMock.ProcessDiscoveryMetadata mock is already set by Expect")
+		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthUseCaseMock.ProcessDiscoveryMetadata mock is already set by Expect")
 	}
 
 	if mmProcessDiscoveryMetadata.defaultExpectation.paramPtrs == nil {
-		mmProcessDiscoveryMetadata.defaultExpectation.paramPtrs = &AuthMockProcessDiscoveryMetadataParamPtrs{}
+		mmProcessDiscoveryMetadata.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessDiscoveryMetadataParamPtrs{}
 	}
 	mmProcessDiscoveryMetadata.defaultExpectation.paramPtrs.ctx = &ctx
 	mmProcessDiscoveryMetadata.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
@@ -2176,21 +2176,21 @@ func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) ExpectCtxPa
 }
 
 // ExpectTenantIDParam2 sets up expected param tenantID for AuthUseCase.ProcessDiscoveryMetadata
-func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthMockProcessDiscoveryMetadata {
+func (mmProcessDiscoveryMetadata *mAuthUseCaseMockProcessDiscoveryMetadata) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthUseCaseMockProcessDiscoveryMetadata {
 	if mmProcessDiscoveryMetadata.mock.funcProcessDiscoveryMetadata != nil {
-		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthMock.ProcessDiscoveryMetadata mock is already set by Set")
+		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthUseCaseMock.ProcessDiscoveryMetadata mock is already set by Set")
 	}
 
 	if mmProcessDiscoveryMetadata.defaultExpectation == nil {
-		mmProcessDiscoveryMetadata.defaultExpectation = &AuthMockProcessDiscoveryMetadataExpectation{}
+		mmProcessDiscoveryMetadata.defaultExpectation = &AuthUseCaseMockProcessDiscoveryMetadataExpectation{}
 	}
 
 	if mmProcessDiscoveryMetadata.defaultExpectation.params != nil {
-		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthMock.ProcessDiscoveryMetadata mock is already set by Expect")
+		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthUseCaseMock.ProcessDiscoveryMetadata mock is already set by Expect")
 	}
 
 	if mmProcessDiscoveryMetadata.defaultExpectation.paramPtrs == nil {
-		mmProcessDiscoveryMetadata.defaultExpectation.paramPtrs = &AuthMockProcessDiscoveryMetadataParamPtrs{}
+		mmProcessDiscoveryMetadata.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessDiscoveryMetadataParamPtrs{}
 	}
 	mmProcessDiscoveryMetadata.defaultExpectation.paramPtrs.tenantID = &tenantID
 	mmProcessDiscoveryMetadata.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
@@ -2199,21 +2199,21 @@ func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) ExpectTenan
 }
 
 // ExpectIsOIDCParam3 sets up expected param isOIDC for AuthUseCase.ProcessDiscoveryMetadata
-func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) ExpectIsOIDCParam3(isOIDC bool) *mAuthMockProcessDiscoveryMetadata {
+func (mmProcessDiscoveryMetadata *mAuthUseCaseMockProcessDiscoveryMetadata) ExpectIsOIDCParam3(isOIDC bool) *mAuthUseCaseMockProcessDiscoveryMetadata {
 	if mmProcessDiscoveryMetadata.mock.funcProcessDiscoveryMetadata != nil {
-		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthMock.ProcessDiscoveryMetadata mock is already set by Set")
+		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthUseCaseMock.ProcessDiscoveryMetadata mock is already set by Set")
 	}
 
 	if mmProcessDiscoveryMetadata.defaultExpectation == nil {
-		mmProcessDiscoveryMetadata.defaultExpectation = &AuthMockProcessDiscoveryMetadataExpectation{}
+		mmProcessDiscoveryMetadata.defaultExpectation = &AuthUseCaseMockProcessDiscoveryMetadataExpectation{}
 	}
 
 	if mmProcessDiscoveryMetadata.defaultExpectation.params != nil {
-		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthMock.ProcessDiscoveryMetadata mock is already set by Expect")
+		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthUseCaseMock.ProcessDiscoveryMetadata mock is already set by Expect")
 	}
 
 	if mmProcessDiscoveryMetadata.defaultExpectation.paramPtrs == nil {
-		mmProcessDiscoveryMetadata.defaultExpectation.paramPtrs = &AuthMockProcessDiscoveryMetadataParamPtrs{}
+		mmProcessDiscoveryMetadata.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessDiscoveryMetadataParamPtrs{}
 	}
 	mmProcessDiscoveryMetadata.defaultExpectation.paramPtrs.isOIDC = &isOIDC
 	mmProcessDiscoveryMetadata.defaultExpectation.expectationOrigins.originIsOIDC = minimock.CallerInfo(1)
@@ -2222,9 +2222,9 @@ func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) ExpectIsOID
 }
 
 // Inspect accepts an inspector function that has same arguments as the AuthUseCase.ProcessDiscoveryMetadata
-func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) Inspect(f func(ctx context.Context, tenantID uuid.UUID, isOIDC bool)) *mAuthMockProcessDiscoveryMetadata {
+func (mmProcessDiscoveryMetadata *mAuthUseCaseMockProcessDiscoveryMetadata) Inspect(f func(ctx context.Context, tenantID uuid.UUID, isOIDC bool)) *mAuthUseCaseMockProcessDiscoveryMetadata {
 	if mmProcessDiscoveryMetadata.mock.inspectFuncProcessDiscoveryMetadata != nil {
-		mmProcessDiscoveryMetadata.mock.t.Fatalf("Inspect function is already set for AuthMock.ProcessDiscoveryMetadata")
+		mmProcessDiscoveryMetadata.mock.t.Fatalf("Inspect function is already set for AuthUseCaseMock.ProcessDiscoveryMetadata")
 	}
 
 	mmProcessDiscoveryMetadata.mock.inspectFuncProcessDiscoveryMetadata = f
@@ -2233,21 +2233,21 @@ func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) Inspect(f f
 }
 
 // Return sets up results that will be returned by AuthUseCase.ProcessDiscoveryMetadata
-func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) Return(dp1 *mm_port.DiscoveryResponse, err error) *AuthMock {
+func (mmProcessDiscoveryMetadata *mAuthUseCaseMockProcessDiscoveryMetadata) Return(dp1 *mm_port.DiscoveryResponse, err error) *AuthUseCaseMock {
 	if mmProcessDiscoveryMetadata.mock.funcProcessDiscoveryMetadata != nil {
-		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthMock.ProcessDiscoveryMetadata mock is already set by Set")
+		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthUseCaseMock.ProcessDiscoveryMetadata mock is already set by Set")
 	}
 
 	if mmProcessDiscoveryMetadata.defaultExpectation == nil {
-		mmProcessDiscoveryMetadata.defaultExpectation = &AuthMockProcessDiscoveryMetadataExpectation{mock: mmProcessDiscoveryMetadata.mock}
+		mmProcessDiscoveryMetadata.defaultExpectation = &AuthUseCaseMockProcessDiscoveryMetadataExpectation{mock: mmProcessDiscoveryMetadata.mock}
 	}
-	mmProcessDiscoveryMetadata.defaultExpectation.results = &AuthMockProcessDiscoveryMetadataResults{dp1, err}
+	mmProcessDiscoveryMetadata.defaultExpectation.results = &AuthUseCaseMockProcessDiscoveryMetadataResults{dp1, err}
 	mmProcessDiscoveryMetadata.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmProcessDiscoveryMetadata.mock
 }
 
 // Set uses given function f to mock the AuthUseCase.ProcessDiscoveryMetadata method
-func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) Set(f func(ctx context.Context, tenantID uuid.UUID, isOIDC bool) (dp1 *mm_port.DiscoveryResponse, err error)) *AuthMock {
+func (mmProcessDiscoveryMetadata *mAuthUseCaseMockProcessDiscoveryMetadata) Set(f func(ctx context.Context, tenantID uuid.UUID, isOIDC bool) (dp1 *mm_port.DiscoveryResponse, err error)) *AuthUseCaseMock {
 	if mmProcessDiscoveryMetadata.defaultExpectation != nil {
 		mmProcessDiscoveryMetadata.mock.t.Fatalf("Default expectation is already set for the AuthUseCase.ProcessDiscoveryMetadata method")
 	}
@@ -2263,37 +2263,37 @@ func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) Set(f func(
 
 // When sets expectation for the AuthUseCase.ProcessDiscoveryMetadata which will trigger the result defined by the following
 // Then helper
-func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) When(ctx context.Context, tenantID uuid.UUID, isOIDC bool) *AuthMockProcessDiscoveryMetadataExpectation {
+func (mmProcessDiscoveryMetadata *mAuthUseCaseMockProcessDiscoveryMetadata) When(ctx context.Context, tenantID uuid.UUID, isOIDC bool) *AuthUseCaseMockProcessDiscoveryMetadataExpectation {
 	if mmProcessDiscoveryMetadata.mock.funcProcessDiscoveryMetadata != nil {
-		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthMock.ProcessDiscoveryMetadata mock is already set by Set")
+		mmProcessDiscoveryMetadata.mock.t.Fatalf("AuthUseCaseMock.ProcessDiscoveryMetadata mock is already set by Set")
 	}
 
-	expectation := &AuthMockProcessDiscoveryMetadataExpectation{
+	expectation := &AuthUseCaseMockProcessDiscoveryMetadataExpectation{
 		mock:               mmProcessDiscoveryMetadata.mock,
-		params:             &AuthMockProcessDiscoveryMetadataParams{ctx, tenantID, isOIDC},
-		expectationOrigins: AuthMockProcessDiscoveryMetadataExpectationOrigins{origin: minimock.CallerInfo(1)},
+		params:             &AuthUseCaseMockProcessDiscoveryMetadataParams{ctx, tenantID, isOIDC},
+		expectationOrigins: AuthUseCaseMockProcessDiscoveryMetadataExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmProcessDiscoveryMetadata.expectations = append(mmProcessDiscoveryMetadata.expectations, expectation)
 	return expectation
 }
 
 // Then sets up AuthUseCase.ProcessDiscoveryMetadata return parameters for the expectation previously defined by the When method
-func (e *AuthMockProcessDiscoveryMetadataExpectation) Then(dp1 *mm_port.DiscoveryResponse, err error) *AuthMock {
-	e.results = &AuthMockProcessDiscoveryMetadataResults{dp1, err}
+func (e *AuthUseCaseMockProcessDiscoveryMetadataExpectation) Then(dp1 *mm_port.DiscoveryResponse, err error) *AuthUseCaseMock {
+	e.results = &AuthUseCaseMockProcessDiscoveryMetadataResults{dp1, err}
 	return e.mock
 }
 
 // Times sets number of times AuthUseCase.ProcessDiscoveryMetadata should be invoked
-func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) Times(n uint64) *mAuthMockProcessDiscoveryMetadata {
+func (mmProcessDiscoveryMetadata *mAuthUseCaseMockProcessDiscoveryMetadata) Times(n uint64) *mAuthUseCaseMockProcessDiscoveryMetadata {
 	if n == 0 {
-		mmProcessDiscoveryMetadata.mock.t.Fatalf("Times of AuthMock.ProcessDiscoveryMetadata mock can not be zero")
+		mmProcessDiscoveryMetadata.mock.t.Fatalf("Times of AuthUseCaseMock.ProcessDiscoveryMetadata mock can not be zero")
 	}
 	mm_atomic.StoreUint64(&mmProcessDiscoveryMetadata.expectedInvocations, n)
 	mmProcessDiscoveryMetadata.expectedInvocationsOrigin = minimock.CallerInfo(1)
 	return mmProcessDiscoveryMetadata
 }
 
-func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) invocationsDone() bool {
+func (mmProcessDiscoveryMetadata *mAuthUseCaseMockProcessDiscoveryMetadata) invocationsDone() bool {
 	if len(mmProcessDiscoveryMetadata.expectations) == 0 && mmProcessDiscoveryMetadata.defaultExpectation == nil && mmProcessDiscoveryMetadata.mock.funcProcessDiscoveryMetadata == nil {
 		return true
 	}
@@ -2305,7 +2305,7 @@ func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) invocations
 }
 
 // ProcessDiscoveryMetadata implements mm_port.AuthUseCase
-func (mmProcessDiscoveryMetadata *AuthMock) ProcessDiscoveryMetadata(ctx context.Context, tenantID uuid.UUID, isOIDC bool) (dp1 *mm_port.DiscoveryResponse, err error) {
+func (mmProcessDiscoveryMetadata *AuthUseCaseMock) ProcessDiscoveryMetadata(ctx context.Context, tenantID uuid.UUID, isOIDC bool) (dp1 *mm_port.DiscoveryResponse, err error) {
 	mm_atomic.AddUint64(&mmProcessDiscoveryMetadata.beforeProcessDiscoveryMetadataCounter, 1)
 	defer mm_atomic.AddUint64(&mmProcessDiscoveryMetadata.afterProcessDiscoveryMetadataCounter, 1)
 
@@ -2315,7 +2315,7 @@ func (mmProcessDiscoveryMetadata *AuthMock) ProcessDiscoveryMetadata(ctx context
 		mmProcessDiscoveryMetadata.inspectFuncProcessDiscoveryMetadata(ctx, tenantID, isOIDC)
 	}
 
-	mm_params := AuthMockProcessDiscoveryMetadataParams{ctx, tenantID, isOIDC}
+	mm_params := AuthUseCaseMockProcessDiscoveryMetadataParams{ctx, tenantID, isOIDC}
 
 	// Record call args
 	mmProcessDiscoveryMetadata.ProcessDiscoveryMetadataMock.mutex.Lock()
@@ -2334,59 +2334,59 @@ func (mmProcessDiscoveryMetadata *AuthMock) ProcessDiscoveryMetadata(ctx context
 		mm_want := mmProcessDiscoveryMetadata.ProcessDiscoveryMetadataMock.defaultExpectation.params
 		mm_want_ptrs := mmProcessDiscoveryMetadata.ProcessDiscoveryMetadataMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockProcessDiscoveryMetadataParams{ctx, tenantID, isOIDC}
+		mm_got := AuthUseCaseMockProcessDiscoveryMetadataParams{ctx, tenantID, isOIDC}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmProcessDiscoveryMetadata.t.Errorf("AuthMock.ProcessDiscoveryMetadata got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessDiscoveryMetadata.t.Errorf("AuthUseCaseMock.ProcessDiscoveryMetadata got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessDiscoveryMetadata.ProcessDiscoveryMetadataMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
 			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
-				mmProcessDiscoveryMetadata.t.Errorf("AuthMock.ProcessDiscoveryMetadata got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessDiscoveryMetadata.t.Errorf("AuthUseCaseMock.ProcessDiscoveryMetadata got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessDiscoveryMetadata.ProcessDiscoveryMetadataMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
 			}
 
 			if mm_want_ptrs.isOIDC != nil && !minimock.Equal(*mm_want_ptrs.isOIDC, mm_got.isOIDC) {
-				mmProcessDiscoveryMetadata.t.Errorf("AuthMock.ProcessDiscoveryMetadata got unexpected parameter isOIDC, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessDiscoveryMetadata.t.Errorf("AuthUseCaseMock.ProcessDiscoveryMetadata got unexpected parameter isOIDC, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessDiscoveryMetadata.ProcessDiscoveryMetadataMock.defaultExpectation.expectationOrigins.originIsOIDC, *mm_want_ptrs.isOIDC, mm_got.isOIDC, minimock.Diff(*mm_want_ptrs.isOIDC, mm_got.isOIDC))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmProcessDiscoveryMetadata.t.Errorf("AuthMock.ProcessDiscoveryMetadata got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+			mmProcessDiscoveryMetadata.t.Errorf("AuthUseCaseMock.ProcessDiscoveryMetadata got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmProcessDiscoveryMetadata.ProcessDiscoveryMetadataMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
 		mm_results := mmProcessDiscoveryMetadata.ProcessDiscoveryMetadataMock.defaultExpectation.results
 		if mm_results == nil {
-			mmProcessDiscoveryMetadata.t.Fatal("No results are set for the AuthMock.ProcessDiscoveryMetadata")
+			mmProcessDiscoveryMetadata.t.Fatal("No results are set for the AuthUseCaseMock.ProcessDiscoveryMetadata")
 		}
 		return (*mm_results).dp1, (*mm_results).err
 	}
 	if mmProcessDiscoveryMetadata.funcProcessDiscoveryMetadata != nil {
 		return mmProcessDiscoveryMetadata.funcProcessDiscoveryMetadata(ctx, tenantID, isOIDC)
 	}
-	mmProcessDiscoveryMetadata.t.Fatalf("Unexpected call to AuthMock.ProcessDiscoveryMetadata. %v %v %v", ctx, tenantID, isOIDC)
+	mmProcessDiscoveryMetadata.t.Fatalf("Unexpected call to AuthUseCaseMock.ProcessDiscoveryMetadata. %v %v %v", ctx, tenantID, isOIDC)
 	return
 }
 
-// ProcessDiscoveryMetadataAfterCounter returns a count of finished AuthMock.ProcessDiscoveryMetadata invocations
-func (mmProcessDiscoveryMetadata *AuthMock) ProcessDiscoveryMetadataAfterCounter() uint64 {
+// ProcessDiscoveryMetadataAfterCounter returns a count of finished AuthUseCaseMock.ProcessDiscoveryMetadata invocations
+func (mmProcessDiscoveryMetadata *AuthUseCaseMock) ProcessDiscoveryMetadataAfterCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessDiscoveryMetadata.afterProcessDiscoveryMetadataCounter)
 }
 
-// ProcessDiscoveryMetadataBeforeCounter returns a count of AuthMock.ProcessDiscoveryMetadata invocations
-func (mmProcessDiscoveryMetadata *AuthMock) ProcessDiscoveryMetadataBeforeCounter() uint64 {
+// ProcessDiscoveryMetadataBeforeCounter returns a count of AuthUseCaseMock.ProcessDiscoveryMetadata invocations
+func (mmProcessDiscoveryMetadata *AuthUseCaseMock) ProcessDiscoveryMetadataBeforeCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessDiscoveryMetadata.beforeProcessDiscoveryMetadataCounter)
 }
 
-// Calls returns a list of arguments used in each call to AuthMock.ProcessDiscoveryMetadata.
+// Calls returns a list of arguments used in each call to AuthUseCaseMock.ProcessDiscoveryMetadata.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) Calls() []*AuthMockProcessDiscoveryMetadataParams {
+func (mmProcessDiscoveryMetadata *mAuthUseCaseMockProcessDiscoveryMetadata) Calls() []*AuthUseCaseMockProcessDiscoveryMetadataParams {
 	mmProcessDiscoveryMetadata.mutex.RLock()
 
-	argCopy := make([]*AuthMockProcessDiscoveryMetadataParams, len(mmProcessDiscoveryMetadata.callArgs))
+	argCopy := make([]*AuthUseCaseMockProcessDiscoveryMetadataParams, len(mmProcessDiscoveryMetadata.callArgs))
 	copy(argCopy, mmProcessDiscoveryMetadata.callArgs)
 
 	mmProcessDiscoveryMetadata.mutex.RUnlock()
@@ -2396,7 +2396,7 @@ func (mmProcessDiscoveryMetadata *mAuthMockProcessDiscoveryMetadata) Calls() []*
 
 // MinimockProcessDiscoveryMetadataDone returns true if the count of the ProcessDiscoveryMetadata invocations corresponds
 // the number of defined expectations
-func (m *AuthMock) MinimockProcessDiscoveryMetadataDone() bool {
+func (m *AuthUseCaseMock) MinimockProcessDiscoveryMetadataDone() bool {
 	if m.ProcessDiscoveryMetadataMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
@@ -2412,10 +2412,10 @@ func (m *AuthMock) MinimockProcessDiscoveryMetadataDone() bool {
 }
 
 // MinimockProcessDiscoveryMetadataInspect logs each unmet expectation
-func (m *AuthMock) MinimockProcessDiscoveryMetadataInspect() {
+func (m *AuthUseCaseMock) MinimockProcessDiscoveryMetadataInspect() {
 	for _, e := range m.ProcessDiscoveryMetadataMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to AuthMock.ProcessDiscoveryMetadata at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessDiscoveryMetadata at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
@@ -2423,68 +2423,68 @@ func (m *AuthMock) MinimockProcessDiscoveryMetadataInspect() {
 	// if default expectation was set then invocations count should be greater than zero
 	if m.ProcessDiscoveryMetadataMock.defaultExpectation != nil && afterProcessDiscoveryMetadataCounter < 1 {
 		if m.ProcessDiscoveryMetadataMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to AuthMock.ProcessDiscoveryMetadata at\n%s", m.ProcessDiscoveryMetadataMock.defaultExpectation.returnOrigin)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessDiscoveryMetadata at\n%s", m.ProcessDiscoveryMetadataMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to AuthMock.ProcessDiscoveryMetadata at\n%s with params: %#v", m.ProcessDiscoveryMetadataMock.defaultExpectation.expectationOrigins.origin, *m.ProcessDiscoveryMetadataMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessDiscoveryMetadata at\n%s with params: %#v", m.ProcessDiscoveryMetadataMock.defaultExpectation.expectationOrigins.origin, *m.ProcessDiscoveryMetadataMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
 	if m.funcProcessDiscoveryMetadata != nil && afterProcessDiscoveryMetadataCounter < 1 {
-		m.t.Errorf("Expected call to AuthMock.ProcessDiscoveryMetadata at\n%s", m.funcProcessDiscoveryMetadataOrigin)
+		m.t.Errorf("Expected call to AuthUseCaseMock.ProcessDiscoveryMetadata at\n%s", m.funcProcessDiscoveryMetadataOrigin)
 	}
 
 	if !m.ProcessDiscoveryMetadataMock.invocationsDone() && afterProcessDiscoveryMetadataCounter > 0 {
-		m.t.Errorf("Expected %d calls to AuthMock.ProcessDiscoveryMetadata at\n%s but found %d calls",
+		m.t.Errorf("Expected %d calls to AuthUseCaseMock.ProcessDiscoveryMetadata at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ProcessDiscoveryMetadataMock.expectedInvocations), m.ProcessDiscoveryMetadataMock.expectedInvocationsOrigin, afterProcessDiscoveryMetadataCounter)
 	}
 }
 
-type mAuthMockProcessDynamicRegistration struct {
+type mAuthUseCaseMockProcessDynamicRegistration struct {
 	optional           bool
-	mock               *AuthMock
-	defaultExpectation *AuthMockProcessDynamicRegistrationExpectation
-	expectations       []*AuthMockProcessDynamicRegistrationExpectation
+	mock               *AuthUseCaseMock
+	defaultExpectation *AuthUseCaseMockProcessDynamicRegistrationExpectation
+	expectations       []*AuthUseCaseMockProcessDynamicRegistrationExpectation
 
-	callArgs []*AuthMockProcessDynamicRegistrationParams
+	callArgs []*AuthUseCaseMockProcessDynamicRegistrationParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// AuthMockProcessDynamicRegistrationExpectation specifies expectation struct of the AuthUseCase.ProcessDynamicRegistration
-type AuthMockProcessDynamicRegistrationExpectation struct {
-	mock               *AuthMock
-	params             *AuthMockProcessDynamicRegistrationParams
-	paramPtrs          *AuthMockProcessDynamicRegistrationParamPtrs
-	expectationOrigins AuthMockProcessDynamicRegistrationExpectationOrigins
-	results            *AuthMockProcessDynamicRegistrationResults
+// AuthUseCaseMockProcessDynamicRegistrationExpectation specifies expectation struct of the AuthUseCase.ProcessDynamicRegistration
+type AuthUseCaseMockProcessDynamicRegistrationExpectation struct {
+	mock               *AuthUseCaseMock
+	params             *AuthUseCaseMockProcessDynamicRegistrationParams
+	paramPtrs          *AuthUseCaseMockProcessDynamicRegistrationParamPtrs
+	expectationOrigins AuthUseCaseMockProcessDynamicRegistrationExpectationOrigins
+	results            *AuthUseCaseMockProcessDynamicRegistrationResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// AuthMockProcessDynamicRegistrationParams contains parameters of the AuthUseCase.ProcessDynamicRegistration
-type AuthMockProcessDynamicRegistrationParams struct {
+// AuthUseCaseMockProcessDynamicRegistrationParams contains parameters of the AuthUseCase.ProcessDynamicRegistration
+type AuthUseCaseMockProcessDynamicRegistrationParams struct {
 	ctx      context.Context
 	tenantID uuid.UUID
 	payload  model.DynamicRegistrationPayload
 }
 
-// AuthMockProcessDynamicRegistrationParamPtrs contains pointers to parameters of the AuthUseCase.ProcessDynamicRegistration
-type AuthMockProcessDynamicRegistrationParamPtrs struct {
+// AuthUseCaseMockProcessDynamicRegistrationParamPtrs contains pointers to parameters of the AuthUseCase.ProcessDynamicRegistration
+type AuthUseCaseMockProcessDynamicRegistrationParamPtrs struct {
 	ctx      *context.Context
 	tenantID *uuid.UUID
 	payload  *model.DynamicRegistrationPayload
 }
 
-// AuthMockProcessDynamicRegistrationResults contains results of the AuthUseCase.ProcessDynamicRegistration
-type AuthMockProcessDynamicRegistrationResults struct {
+// AuthUseCaseMockProcessDynamicRegistrationResults contains results of the AuthUseCase.ProcessDynamicRegistration
+type AuthUseCaseMockProcessDynamicRegistrationResults struct {
 	dp1 *mm_port.DynamicRegistrationResult
 	err error
 }
 
-// AuthMockProcessDynamicRegistrationOrigins contains origins of expectations of the AuthUseCase.ProcessDynamicRegistration
-type AuthMockProcessDynamicRegistrationExpectationOrigins struct {
+// AuthUseCaseMockProcessDynamicRegistrationOrigins contains origins of expectations of the AuthUseCase.ProcessDynamicRegistration
+type AuthUseCaseMockProcessDynamicRegistrationExpectationOrigins struct {
 	origin         string
 	originCtx      string
 	originTenantID string
@@ -2496,26 +2496,26 @@ type AuthMockProcessDynamicRegistrationExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) Optional() *mAuthMockProcessDynamicRegistration {
+func (mmProcessDynamicRegistration *mAuthUseCaseMockProcessDynamicRegistration) Optional() *mAuthUseCaseMockProcessDynamicRegistration {
 	mmProcessDynamicRegistration.optional = true
 	return mmProcessDynamicRegistration
 }
 
 // Expect sets up expected params for AuthUseCase.ProcessDynamicRegistration
-func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) Expect(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) *mAuthMockProcessDynamicRegistration {
+func (mmProcessDynamicRegistration *mAuthUseCaseMockProcessDynamicRegistration) Expect(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) *mAuthUseCaseMockProcessDynamicRegistration {
 	if mmProcessDynamicRegistration.mock.funcProcessDynamicRegistration != nil {
-		mmProcessDynamicRegistration.mock.t.Fatalf("AuthMock.ProcessDynamicRegistration mock is already set by Set")
+		mmProcessDynamicRegistration.mock.t.Fatalf("AuthUseCaseMock.ProcessDynamicRegistration mock is already set by Set")
 	}
 
 	if mmProcessDynamicRegistration.defaultExpectation == nil {
-		mmProcessDynamicRegistration.defaultExpectation = &AuthMockProcessDynamicRegistrationExpectation{}
+		mmProcessDynamicRegistration.defaultExpectation = &AuthUseCaseMockProcessDynamicRegistrationExpectation{}
 	}
 
 	if mmProcessDynamicRegistration.defaultExpectation.paramPtrs != nil {
-		mmProcessDynamicRegistration.mock.t.Fatalf("AuthMock.ProcessDynamicRegistration mock is already set by ExpectParams functions")
+		mmProcessDynamicRegistration.mock.t.Fatalf("AuthUseCaseMock.ProcessDynamicRegistration mock is already set by ExpectParams functions")
 	}
 
-	mmProcessDynamicRegistration.defaultExpectation.params = &AuthMockProcessDynamicRegistrationParams{ctx, tenantID, payload}
+	mmProcessDynamicRegistration.defaultExpectation.params = &AuthUseCaseMockProcessDynamicRegistrationParams{ctx, tenantID, payload}
 	mmProcessDynamicRegistration.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmProcessDynamicRegistration.expectations {
 		if minimock.Equal(e.params, mmProcessDynamicRegistration.defaultExpectation.params) {
@@ -2527,21 +2527,21 @@ func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) Expect(
 }
 
 // ExpectCtxParam1 sets up expected param ctx for AuthUseCase.ProcessDynamicRegistration
-func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) ExpectCtxParam1(ctx context.Context) *mAuthMockProcessDynamicRegistration {
+func (mmProcessDynamicRegistration *mAuthUseCaseMockProcessDynamicRegistration) ExpectCtxParam1(ctx context.Context) *mAuthUseCaseMockProcessDynamicRegistration {
 	if mmProcessDynamicRegistration.mock.funcProcessDynamicRegistration != nil {
-		mmProcessDynamicRegistration.mock.t.Fatalf("AuthMock.ProcessDynamicRegistration mock is already set by Set")
+		mmProcessDynamicRegistration.mock.t.Fatalf("AuthUseCaseMock.ProcessDynamicRegistration mock is already set by Set")
 	}
 
 	if mmProcessDynamicRegistration.defaultExpectation == nil {
-		mmProcessDynamicRegistration.defaultExpectation = &AuthMockProcessDynamicRegistrationExpectation{}
+		mmProcessDynamicRegistration.defaultExpectation = &AuthUseCaseMockProcessDynamicRegistrationExpectation{}
 	}
 
 	if mmProcessDynamicRegistration.defaultExpectation.params != nil {
-		mmProcessDynamicRegistration.mock.t.Fatalf("AuthMock.ProcessDynamicRegistration mock is already set by Expect")
+		mmProcessDynamicRegistration.mock.t.Fatalf("AuthUseCaseMock.ProcessDynamicRegistration mock is already set by Expect")
 	}
 
 	if mmProcessDynamicRegistration.defaultExpectation.paramPtrs == nil {
-		mmProcessDynamicRegistration.defaultExpectation.paramPtrs = &AuthMockProcessDynamicRegistrationParamPtrs{}
+		mmProcessDynamicRegistration.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessDynamicRegistrationParamPtrs{}
 	}
 	mmProcessDynamicRegistration.defaultExpectation.paramPtrs.ctx = &ctx
 	mmProcessDynamicRegistration.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
@@ -2550,21 +2550,21 @@ func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) ExpectC
 }
 
 // ExpectTenantIDParam2 sets up expected param tenantID for AuthUseCase.ProcessDynamicRegistration
-func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthMockProcessDynamicRegistration {
+func (mmProcessDynamicRegistration *mAuthUseCaseMockProcessDynamicRegistration) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthUseCaseMockProcessDynamicRegistration {
 	if mmProcessDynamicRegistration.mock.funcProcessDynamicRegistration != nil {
-		mmProcessDynamicRegistration.mock.t.Fatalf("AuthMock.ProcessDynamicRegistration mock is already set by Set")
+		mmProcessDynamicRegistration.mock.t.Fatalf("AuthUseCaseMock.ProcessDynamicRegistration mock is already set by Set")
 	}
 
 	if mmProcessDynamicRegistration.defaultExpectation == nil {
-		mmProcessDynamicRegistration.defaultExpectation = &AuthMockProcessDynamicRegistrationExpectation{}
+		mmProcessDynamicRegistration.defaultExpectation = &AuthUseCaseMockProcessDynamicRegistrationExpectation{}
 	}
 
 	if mmProcessDynamicRegistration.defaultExpectation.params != nil {
-		mmProcessDynamicRegistration.mock.t.Fatalf("AuthMock.ProcessDynamicRegistration mock is already set by Expect")
+		mmProcessDynamicRegistration.mock.t.Fatalf("AuthUseCaseMock.ProcessDynamicRegistration mock is already set by Expect")
 	}
 
 	if mmProcessDynamicRegistration.defaultExpectation.paramPtrs == nil {
-		mmProcessDynamicRegistration.defaultExpectation.paramPtrs = &AuthMockProcessDynamicRegistrationParamPtrs{}
+		mmProcessDynamicRegistration.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessDynamicRegistrationParamPtrs{}
 	}
 	mmProcessDynamicRegistration.defaultExpectation.paramPtrs.tenantID = &tenantID
 	mmProcessDynamicRegistration.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
@@ -2573,21 +2573,21 @@ func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) ExpectT
 }
 
 // ExpectPayloadParam3 sets up expected param payload for AuthUseCase.ProcessDynamicRegistration
-func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) ExpectPayloadParam3(payload model.DynamicRegistrationPayload) *mAuthMockProcessDynamicRegistration {
+func (mmProcessDynamicRegistration *mAuthUseCaseMockProcessDynamicRegistration) ExpectPayloadParam3(payload model.DynamicRegistrationPayload) *mAuthUseCaseMockProcessDynamicRegistration {
 	if mmProcessDynamicRegistration.mock.funcProcessDynamicRegistration != nil {
-		mmProcessDynamicRegistration.mock.t.Fatalf("AuthMock.ProcessDynamicRegistration mock is already set by Set")
+		mmProcessDynamicRegistration.mock.t.Fatalf("AuthUseCaseMock.ProcessDynamicRegistration mock is already set by Set")
 	}
 
 	if mmProcessDynamicRegistration.defaultExpectation == nil {
-		mmProcessDynamicRegistration.defaultExpectation = &AuthMockProcessDynamicRegistrationExpectation{}
+		mmProcessDynamicRegistration.defaultExpectation = &AuthUseCaseMockProcessDynamicRegistrationExpectation{}
 	}
 
 	if mmProcessDynamicRegistration.defaultExpectation.params != nil {
-		mmProcessDynamicRegistration.mock.t.Fatalf("AuthMock.ProcessDynamicRegistration mock is already set by Expect")
+		mmProcessDynamicRegistration.mock.t.Fatalf("AuthUseCaseMock.ProcessDynamicRegistration mock is already set by Expect")
 	}
 
 	if mmProcessDynamicRegistration.defaultExpectation.paramPtrs == nil {
-		mmProcessDynamicRegistration.defaultExpectation.paramPtrs = &AuthMockProcessDynamicRegistrationParamPtrs{}
+		mmProcessDynamicRegistration.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessDynamicRegistrationParamPtrs{}
 	}
 	mmProcessDynamicRegistration.defaultExpectation.paramPtrs.payload = &payload
 	mmProcessDynamicRegistration.defaultExpectation.expectationOrigins.originPayload = minimock.CallerInfo(1)
@@ -2596,9 +2596,9 @@ func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) ExpectP
 }
 
 // Inspect accepts an inspector function that has same arguments as the AuthUseCase.ProcessDynamicRegistration
-func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) Inspect(f func(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload)) *mAuthMockProcessDynamicRegistration {
+func (mmProcessDynamicRegistration *mAuthUseCaseMockProcessDynamicRegistration) Inspect(f func(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload)) *mAuthUseCaseMockProcessDynamicRegistration {
 	if mmProcessDynamicRegistration.mock.inspectFuncProcessDynamicRegistration != nil {
-		mmProcessDynamicRegistration.mock.t.Fatalf("Inspect function is already set for AuthMock.ProcessDynamicRegistration")
+		mmProcessDynamicRegistration.mock.t.Fatalf("Inspect function is already set for AuthUseCaseMock.ProcessDynamicRegistration")
 	}
 
 	mmProcessDynamicRegistration.mock.inspectFuncProcessDynamicRegistration = f
@@ -2607,21 +2607,21 @@ func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) Inspect
 }
 
 // Return sets up results that will be returned by AuthUseCase.ProcessDynamicRegistration
-func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) Return(dp1 *mm_port.DynamicRegistrationResult, err error) *AuthMock {
+func (mmProcessDynamicRegistration *mAuthUseCaseMockProcessDynamicRegistration) Return(dp1 *mm_port.DynamicRegistrationResult, err error) *AuthUseCaseMock {
 	if mmProcessDynamicRegistration.mock.funcProcessDynamicRegistration != nil {
-		mmProcessDynamicRegistration.mock.t.Fatalf("AuthMock.ProcessDynamicRegistration mock is already set by Set")
+		mmProcessDynamicRegistration.mock.t.Fatalf("AuthUseCaseMock.ProcessDynamicRegistration mock is already set by Set")
 	}
 
 	if mmProcessDynamicRegistration.defaultExpectation == nil {
-		mmProcessDynamicRegistration.defaultExpectation = &AuthMockProcessDynamicRegistrationExpectation{mock: mmProcessDynamicRegistration.mock}
+		mmProcessDynamicRegistration.defaultExpectation = &AuthUseCaseMockProcessDynamicRegistrationExpectation{mock: mmProcessDynamicRegistration.mock}
 	}
-	mmProcessDynamicRegistration.defaultExpectation.results = &AuthMockProcessDynamicRegistrationResults{dp1, err}
+	mmProcessDynamicRegistration.defaultExpectation.results = &AuthUseCaseMockProcessDynamicRegistrationResults{dp1, err}
 	mmProcessDynamicRegistration.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmProcessDynamicRegistration.mock
 }
 
 // Set uses given function f to mock the AuthUseCase.ProcessDynamicRegistration method
-func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) Set(f func(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) (dp1 *mm_port.DynamicRegistrationResult, err error)) *AuthMock {
+func (mmProcessDynamicRegistration *mAuthUseCaseMockProcessDynamicRegistration) Set(f func(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) (dp1 *mm_port.DynamicRegistrationResult, err error)) *AuthUseCaseMock {
 	if mmProcessDynamicRegistration.defaultExpectation != nil {
 		mmProcessDynamicRegistration.mock.t.Fatalf("Default expectation is already set for the AuthUseCase.ProcessDynamicRegistration method")
 	}
@@ -2637,37 +2637,37 @@ func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) Set(f f
 
 // When sets expectation for the AuthUseCase.ProcessDynamicRegistration which will trigger the result defined by the following
 // Then helper
-func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) When(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) *AuthMockProcessDynamicRegistrationExpectation {
+func (mmProcessDynamicRegistration *mAuthUseCaseMockProcessDynamicRegistration) When(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) *AuthUseCaseMockProcessDynamicRegistrationExpectation {
 	if mmProcessDynamicRegistration.mock.funcProcessDynamicRegistration != nil {
-		mmProcessDynamicRegistration.mock.t.Fatalf("AuthMock.ProcessDynamicRegistration mock is already set by Set")
+		mmProcessDynamicRegistration.mock.t.Fatalf("AuthUseCaseMock.ProcessDynamicRegistration mock is already set by Set")
 	}
 
-	expectation := &AuthMockProcessDynamicRegistrationExpectation{
+	expectation := &AuthUseCaseMockProcessDynamicRegistrationExpectation{
 		mock:               mmProcessDynamicRegistration.mock,
-		params:             &AuthMockProcessDynamicRegistrationParams{ctx, tenantID, payload},
-		expectationOrigins: AuthMockProcessDynamicRegistrationExpectationOrigins{origin: minimock.CallerInfo(1)},
+		params:             &AuthUseCaseMockProcessDynamicRegistrationParams{ctx, tenantID, payload},
+		expectationOrigins: AuthUseCaseMockProcessDynamicRegistrationExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmProcessDynamicRegistration.expectations = append(mmProcessDynamicRegistration.expectations, expectation)
 	return expectation
 }
 
 // Then sets up AuthUseCase.ProcessDynamicRegistration return parameters for the expectation previously defined by the When method
-func (e *AuthMockProcessDynamicRegistrationExpectation) Then(dp1 *mm_port.DynamicRegistrationResult, err error) *AuthMock {
-	e.results = &AuthMockProcessDynamicRegistrationResults{dp1, err}
+func (e *AuthUseCaseMockProcessDynamicRegistrationExpectation) Then(dp1 *mm_port.DynamicRegistrationResult, err error) *AuthUseCaseMock {
+	e.results = &AuthUseCaseMockProcessDynamicRegistrationResults{dp1, err}
 	return e.mock
 }
 
 // Times sets number of times AuthUseCase.ProcessDynamicRegistration should be invoked
-func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) Times(n uint64) *mAuthMockProcessDynamicRegistration {
+func (mmProcessDynamicRegistration *mAuthUseCaseMockProcessDynamicRegistration) Times(n uint64) *mAuthUseCaseMockProcessDynamicRegistration {
 	if n == 0 {
-		mmProcessDynamicRegistration.mock.t.Fatalf("Times of AuthMock.ProcessDynamicRegistration mock can not be zero")
+		mmProcessDynamicRegistration.mock.t.Fatalf("Times of AuthUseCaseMock.ProcessDynamicRegistration mock can not be zero")
 	}
 	mm_atomic.StoreUint64(&mmProcessDynamicRegistration.expectedInvocations, n)
 	mmProcessDynamicRegistration.expectedInvocationsOrigin = minimock.CallerInfo(1)
 	return mmProcessDynamicRegistration
 }
 
-func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) invocationsDone() bool {
+func (mmProcessDynamicRegistration *mAuthUseCaseMockProcessDynamicRegistration) invocationsDone() bool {
 	if len(mmProcessDynamicRegistration.expectations) == 0 && mmProcessDynamicRegistration.defaultExpectation == nil && mmProcessDynamicRegistration.mock.funcProcessDynamicRegistration == nil {
 		return true
 	}
@@ -2679,7 +2679,7 @@ func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) invocat
 }
 
 // ProcessDynamicRegistration implements mm_port.AuthUseCase
-func (mmProcessDynamicRegistration *AuthMock) ProcessDynamicRegistration(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) (dp1 *mm_port.DynamicRegistrationResult, err error) {
+func (mmProcessDynamicRegistration *AuthUseCaseMock) ProcessDynamicRegistration(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) (dp1 *mm_port.DynamicRegistrationResult, err error) {
 	mm_atomic.AddUint64(&mmProcessDynamicRegistration.beforeProcessDynamicRegistrationCounter, 1)
 	defer mm_atomic.AddUint64(&mmProcessDynamicRegistration.afterProcessDynamicRegistrationCounter, 1)
 
@@ -2689,7 +2689,7 @@ func (mmProcessDynamicRegistration *AuthMock) ProcessDynamicRegistration(ctx con
 		mmProcessDynamicRegistration.inspectFuncProcessDynamicRegistration(ctx, tenantID, payload)
 	}
 
-	mm_params := AuthMockProcessDynamicRegistrationParams{ctx, tenantID, payload}
+	mm_params := AuthUseCaseMockProcessDynamicRegistrationParams{ctx, tenantID, payload}
 
 	// Record call args
 	mmProcessDynamicRegistration.ProcessDynamicRegistrationMock.mutex.Lock()
@@ -2708,59 +2708,59 @@ func (mmProcessDynamicRegistration *AuthMock) ProcessDynamicRegistration(ctx con
 		mm_want := mmProcessDynamicRegistration.ProcessDynamicRegistrationMock.defaultExpectation.params
 		mm_want_ptrs := mmProcessDynamicRegistration.ProcessDynamicRegistrationMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockProcessDynamicRegistrationParams{ctx, tenantID, payload}
+		mm_got := AuthUseCaseMockProcessDynamicRegistrationParams{ctx, tenantID, payload}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmProcessDynamicRegistration.t.Errorf("AuthMock.ProcessDynamicRegistration got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessDynamicRegistration.t.Errorf("AuthUseCaseMock.ProcessDynamicRegistration got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessDynamicRegistration.ProcessDynamicRegistrationMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
 			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
-				mmProcessDynamicRegistration.t.Errorf("AuthMock.ProcessDynamicRegistration got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessDynamicRegistration.t.Errorf("AuthUseCaseMock.ProcessDynamicRegistration got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessDynamicRegistration.ProcessDynamicRegistrationMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
 			}
 
 			if mm_want_ptrs.payload != nil && !minimock.Equal(*mm_want_ptrs.payload, mm_got.payload) {
-				mmProcessDynamicRegistration.t.Errorf("AuthMock.ProcessDynamicRegistration got unexpected parameter payload, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessDynamicRegistration.t.Errorf("AuthUseCaseMock.ProcessDynamicRegistration got unexpected parameter payload, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessDynamicRegistration.ProcessDynamicRegistrationMock.defaultExpectation.expectationOrigins.originPayload, *mm_want_ptrs.payload, mm_got.payload, minimock.Diff(*mm_want_ptrs.payload, mm_got.payload))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmProcessDynamicRegistration.t.Errorf("AuthMock.ProcessDynamicRegistration got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+			mmProcessDynamicRegistration.t.Errorf("AuthUseCaseMock.ProcessDynamicRegistration got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmProcessDynamicRegistration.ProcessDynamicRegistrationMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
 		mm_results := mmProcessDynamicRegistration.ProcessDynamicRegistrationMock.defaultExpectation.results
 		if mm_results == nil {
-			mmProcessDynamicRegistration.t.Fatal("No results are set for the AuthMock.ProcessDynamicRegistration")
+			mmProcessDynamicRegistration.t.Fatal("No results are set for the AuthUseCaseMock.ProcessDynamicRegistration")
 		}
 		return (*mm_results).dp1, (*mm_results).err
 	}
 	if mmProcessDynamicRegistration.funcProcessDynamicRegistration != nil {
 		return mmProcessDynamicRegistration.funcProcessDynamicRegistration(ctx, tenantID, payload)
 	}
-	mmProcessDynamicRegistration.t.Fatalf("Unexpected call to AuthMock.ProcessDynamicRegistration. %v %v %v", ctx, tenantID, payload)
+	mmProcessDynamicRegistration.t.Fatalf("Unexpected call to AuthUseCaseMock.ProcessDynamicRegistration. %v %v %v", ctx, tenantID, payload)
 	return
 }
 
-// ProcessDynamicRegistrationAfterCounter returns a count of finished AuthMock.ProcessDynamicRegistration invocations
-func (mmProcessDynamicRegistration *AuthMock) ProcessDynamicRegistrationAfterCounter() uint64 {
+// ProcessDynamicRegistrationAfterCounter returns a count of finished AuthUseCaseMock.ProcessDynamicRegistration invocations
+func (mmProcessDynamicRegistration *AuthUseCaseMock) ProcessDynamicRegistrationAfterCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessDynamicRegistration.afterProcessDynamicRegistrationCounter)
 }
 
-// ProcessDynamicRegistrationBeforeCounter returns a count of AuthMock.ProcessDynamicRegistration invocations
-func (mmProcessDynamicRegistration *AuthMock) ProcessDynamicRegistrationBeforeCounter() uint64 {
+// ProcessDynamicRegistrationBeforeCounter returns a count of AuthUseCaseMock.ProcessDynamicRegistration invocations
+func (mmProcessDynamicRegistration *AuthUseCaseMock) ProcessDynamicRegistrationBeforeCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessDynamicRegistration.beforeProcessDynamicRegistrationCounter)
 }
 
-// Calls returns a list of arguments used in each call to AuthMock.ProcessDynamicRegistration.
+// Calls returns a list of arguments used in each call to AuthUseCaseMock.ProcessDynamicRegistration.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) Calls() []*AuthMockProcessDynamicRegistrationParams {
+func (mmProcessDynamicRegistration *mAuthUseCaseMockProcessDynamicRegistration) Calls() []*AuthUseCaseMockProcessDynamicRegistrationParams {
 	mmProcessDynamicRegistration.mutex.RLock()
 
-	argCopy := make([]*AuthMockProcessDynamicRegistrationParams, len(mmProcessDynamicRegistration.callArgs))
+	argCopy := make([]*AuthUseCaseMockProcessDynamicRegistrationParams, len(mmProcessDynamicRegistration.callArgs))
 	copy(argCopy, mmProcessDynamicRegistration.callArgs)
 
 	mmProcessDynamicRegistration.mutex.RUnlock()
@@ -2770,7 +2770,7 @@ func (mmProcessDynamicRegistration *mAuthMockProcessDynamicRegistration) Calls()
 
 // MinimockProcessDynamicRegistrationDone returns true if the count of the ProcessDynamicRegistration invocations corresponds
 // the number of defined expectations
-func (m *AuthMock) MinimockProcessDynamicRegistrationDone() bool {
+func (m *AuthUseCaseMock) MinimockProcessDynamicRegistrationDone() bool {
 	if m.ProcessDynamicRegistrationMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
@@ -2786,10 +2786,10 @@ func (m *AuthMock) MinimockProcessDynamicRegistrationDone() bool {
 }
 
 // MinimockProcessDynamicRegistrationInspect logs each unmet expectation
-func (m *AuthMock) MinimockProcessDynamicRegistrationInspect() {
+func (m *AuthUseCaseMock) MinimockProcessDynamicRegistrationInspect() {
 	for _, e := range m.ProcessDynamicRegistrationMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to AuthMock.ProcessDynamicRegistration at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessDynamicRegistration at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
@@ -2797,70 +2797,70 @@ func (m *AuthMock) MinimockProcessDynamicRegistrationInspect() {
 	// if default expectation was set then invocations count should be greater than zero
 	if m.ProcessDynamicRegistrationMock.defaultExpectation != nil && afterProcessDynamicRegistrationCounter < 1 {
 		if m.ProcessDynamicRegistrationMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to AuthMock.ProcessDynamicRegistration at\n%s", m.ProcessDynamicRegistrationMock.defaultExpectation.returnOrigin)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessDynamicRegistration at\n%s", m.ProcessDynamicRegistrationMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to AuthMock.ProcessDynamicRegistration at\n%s with params: %#v", m.ProcessDynamicRegistrationMock.defaultExpectation.expectationOrigins.origin, *m.ProcessDynamicRegistrationMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessDynamicRegistration at\n%s with params: %#v", m.ProcessDynamicRegistrationMock.defaultExpectation.expectationOrigins.origin, *m.ProcessDynamicRegistrationMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
 	if m.funcProcessDynamicRegistration != nil && afterProcessDynamicRegistrationCounter < 1 {
-		m.t.Errorf("Expected call to AuthMock.ProcessDynamicRegistration at\n%s", m.funcProcessDynamicRegistrationOrigin)
+		m.t.Errorf("Expected call to AuthUseCaseMock.ProcessDynamicRegistration at\n%s", m.funcProcessDynamicRegistrationOrigin)
 	}
 
 	if !m.ProcessDynamicRegistrationMock.invocationsDone() && afterProcessDynamicRegistrationCounter > 0 {
-		m.t.Errorf("Expected %d calls to AuthMock.ProcessDynamicRegistration at\n%s but found %d calls",
+		m.t.Errorf("Expected %d calls to AuthUseCaseMock.ProcessDynamicRegistration at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ProcessDynamicRegistrationMock.expectedInvocations), m.ProcessDynamicRegistrationMock.expectedInvocationsOrigin, afterProcessDynamicRegistrationCounter)
 	}
 }
 
-type mAuthMockProcessJWKSetRetrieval struct {
+type mAuthUseCaseMockProcessJWKSetRetrieval struct {
 	optional           bool
-	mock               *AuthMock
-	defaultExpectation *AuthMockProcessJWKSetRetrievalExpectation
-	expectations       []*AuthMockProcessJWKSetRetrievalExpectation
+	mock               *AuthUseCaseMock
+	defaultExpectation *AuthUseCaseMockProcessJWKSetRetrievalExpectation
+	expectations       []*AuthUseCaseMockProcessJWKSetRetrievalExpectation
 
-	callArgs []*AuthMockProcessJWKSetRetrievalParams
+	callArgs []*AuthUseCaseMockProcessJWKSetRetrievalParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// AuthMockProcessJWKSetRetrievalExpectation specifies expectation struct of the AuthUseCase.ProcessJWKSetRetrieval
-type AuthMockProcessJWKSetRetrievalExpectation struct {
-	mock               *AuthMock
-	params             *AuthMockProcessJWKSetRetrievalParams
-	paramPtrs          *AuthMockProcessJWKSetRetrievalParamPtrs
-	expectationOrigins AuthMockProcessJWKSetRetrievalExpectationOrigins
-	results            *AuthMockProcessJWKSetRetrievalResults
+// AuthUseCaseMockProcessJWKSetRetrievalExpectation specifies expectation struct of the AuthUseCase.ProcessJWKSetRetrieval
+type AuthUseCaseMockProcessJWKSetRetrievalExpectation struct {
+	mock               *AuthUseCaseMock
+	params             *AuthUseCaseMockProcessJWKSetRetrievalParams
+	paramPtrs          *AuthUseCaseMockProcessJWKSetRetrievalParamPtrs
+	expectationOrigins AuthUseCaseMockProcessJWKSetRetrievalExpectationOrigins
+	results            *AuthUseCaseMockProcessJWKSetRetrievalResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// AuthMockProcessJWKSetRetrievalParams contains parameters of the AuthUseCase.ProcessJWKSetRetrieval
-type AuthMockProcessJWKSetRetrievalParams struct {
+// AuthUseCaseMockProcessJWKSetRetrievalParams contains parameters of the AuthUseCase.ProcessJWKSetRetrieval
+type AuthUseCaseMockProcessJWKSetRetrievalParams struct {
 	ctx      context.Context
 	tenantID uuid.UUID
 	host     string
 	scheme   string
 }
 
-// AuthMockProcessJWKSetRetrievalParamPtrs contains pointers to parameters of the AuthUseCase.ProcessJWKSetRetrieval
-type AuthMockProcessJWKSetRetrievalParamPtrs struct {
+// AuthUseCaseMockProcessJWKSetRetrievalParamPtrs contains pointers to parameters of the AuthUseCase.ProcessJWKSetRetrieval
+type AuthUseCaseMockProcessJWKSetRetrievalParamPtrs struct {
 	ctx      *context.Context
 	tenantID *uuid.UUID
 	host     *string
 	scheme   *string
 }
 
-// AuthMockProcessJWKSetRetrievalResults contains results of the AuthUseCase.ProcessJWKSetRetrieval
-type AuthMockProcessJWKSetRetrievalResults struct {
+// AuthUseCaseMockProcessJWKSetRetrievalResults contains results of the AuthUseCase.ProcessJWKSetRetrieval
+type AuthUseCaseMockProcessJWKSetRetrievalResults struct {
 	m1  map[string]any
 	err error
 }
 
-// AuthMockProcessJWKSetRetrievalOrigins contains origins of expectations of the AuthUseCase.ProcessJWKSetRetrieval
-type AuthMockProcessJWKSetRetrievalExpectationOrigins struct {
+// AuthUseCaseMockProcessJWKSetRetrievalOrigins contains origins of expectations of the AuthUseCase.ProcessJWKSetRetrieval
+type AuthUseCaseMockProcessJWKSetRetrievalExpectationOrigins struct {
 	origin         string
 	originCtx      string
 	originTenantID string
@@ -2873,26 +2873,26 @@ type AuthMockProcessJWKSetRetrievalExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) Optional() *mAuthMockProcessJWKSetRetrieval {
+func (mmProcessJWKSetRetrieval *mAuthUseCaseMockProcessJWKSetRetrieval) Optional() *mAuthUseCaseMockProcessJWKSetRetrieval {
 	mmProcessJWKSetRetrieval.optional = true
 	return mmProcessJWKSetRetrieval
 }
 
 // Expect sets up expected params for AuthUseCase.ProcessJWKSetRetrieval
-func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) Expect(ctx context.Context, tenantID uuid.UUID, host string, scheme string) *mAuthMockProcessJWKSetRetrieval {
+func (mmProcessJWKSetRetrieval *mAuthUseCaseMockProcessJWKSetRetrieval) Expect(ctx context.Context, tenantID uuid.UUID, host string, scheme string) *mAuthUseCaseMockProcessJWKSetRetrieval {
 	if mmProcessJWKSetRetrieval.mock.funcProcessJWKSetRetrieval != nil {
-		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthMock.ProcessJWKSetRetrieval mock is already set by Set")
+		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthUseCaseMock.ProcessJWKSetRetrieval mock is already set by Set")
 	}
 
 	if mmProcessJWKSetRetrieval.defaultExpectation == nil {
-		mmProcessJWKSetRetrieval.defaultExpectation = &AuthMockProcessJWKSetRetrievalExpectation{}
+		mmProcessJWKSetRetrieval.defaultExpectation = &AuthUseCaseMockProcessJWKSetRetrievalExpectation{}
 	}
 
 	if mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs != nil {
-		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthMock.ProcessJWKSetRetrieval mock is already set by ExpectParams functions")
+		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthUseCaseMock.ProcessJWKSetRetrieval mock is already set by ExpectParams functions")
 	}
 
-	mmProcessJWKSetRetrieval.defaultExpectation.params = &AuthMockProcessJWKSetRetrievalParams{ctx, tenantID, host, scheme}
+	mmProcessJWKSetRetrieval.defaultExpectation.params = &AuthUseCaseMockProcessJWKSetRetrievalParams{ctx, tenantID, host, scheme}
 	mmProcessJWKSetRetrieval.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmProcessJWKSetRetrieval.expectations {
 		if minimock.Equal(e.params, mmProcessJWKSetRetrieval.defaultExpectation.params) {
@@ -2904,21 +2904,21 @@ func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) Expect(ctx cont
 }
 
 // ExpectCtxParam1 sets up expected param ctx for AuthUseCase.ProcessJWKSetRetrieval
-func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) ExpectCtxParam1(ctx context.Context) *mAuthMockProcessJWKSetRetrieval {
+func (mmProcessJWKSetRetrieval *mAuthUseCaseMockProcessJWKSetRetrieval) ExpectCtxParam1(ctx context.Context) *mAuthUseCaseMockProcessJWKSetRetrieval {
 	if mmProcessJWKSetRetrieval.mock.funcProcessJWKSetRetrieval != nil {
-		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthMock.ProcessJWKSetRetrieval mock is already set by Set")
+		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthUseCaseMock.ProcessJWKSetRetrieval mock is already set by Set")
 	}
 
 	if mmProcessJWKSetRetrieval.defaultExpectation == nil {
-		mmProcessJWKSetRetrieval.defaultExpectation = &AuthMockProcessJWKSetRetrievalExpectation{}
+		mmProcessJWKSetRetrieval.defaultExpectation = &AuthUseCaseMockProcessJWKSetRetrievalExpectation{}
 	}
 
 	if mmProcessJWKSetRetrieval.defaultExpectation.params != nil {
-		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthMock.ProcessJWKSetRetrieval mock is already set by Expect")
+		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthUseCaseMock.ProcessJWKSetRetrieval mock is already set by Expect")
 	}
 
 	if mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs == nil {
-		mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs = &AuthMockProcessJWKSetRetrievalParamPtrs{}
+		mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessJWKSetRetrievalParamPtrs{}
 	}
 	mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs.ctx = &ctx
 	mmProcessJWKSetRetrieval.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
@@ -2927,21 +2927,21 @@ func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) ExpectCtxParam1
 }
 
 // ExpectTenantIDParam2 sets up expected param tenantID for AuthUseCase.ProcessJWKSetRetrieval
-func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthMockProcessJWKSetRetrieval {
+func (mmProcessJWKSetRetrieval *mAuthUseCaseMockProcessJWKSetRetrieval) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthUseCaseMockProcessJWKSetRetrieval {
 	if mmProcessJWKSetRetrieval.mock.funcProcessJWKSetRetrieval != nil {
-		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthMock.ProcessJWKSetRetrieval mock is already set by Set")
+		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthUseCaseMock.ProcessJWKSetRetrieval mock is already set by Set")
 	}
 
 	if mmProcessJWKSetRetrieval.defaultExpectation == nil {
-		mmProcessJWKSetRetrieval.defaultExpectation = &AuthMockProcessJWKSetRetrievalExpectation{}
+		mmProcessJWKSetRetrieval.defaultExpectation = &AuthUseCaseMockProcessJWKSetRetrievalExpectation{}
 	}
 
 	if mmProcessJWKSetRetrieval.defaultExpectation.params != nil {
-		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthMock.ProcessJWKSetRetrieval mock is already set by Expect")
+		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthUseCaseMock.ProcessJWKSetRetrieval mock is already set by Expect")
 	}
 
 	if mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs == nil {
-		mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs = &AuthMockProcessJWKSetRetrievalParamPtrs{}
+		mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessJWKSetRetrievalParamPtrs{}
 	}
 	mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs.tenantID = &tenantID
 	mmProcessJWKSetRetrieval.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
@@ -2950,21 +2950,21 @@ func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) ExpectTenantIDP
 }
 
 // ExpectHostParam3 sets up expected param host for AuthUseCase.ProcessJWKSetRetrieval
-func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) ExpectHostParam3(host string) *mAuthMockProcessJWKSetRetrieval {
+func (mmProcessJWKSetRetrieval *mAuthUseCaseMockProcessJWKSetRetrieval) ExpectHostParam3(host string) *mAuthUseCaseMockProcessJWKSetRetrieval {
 	if mmProcessJWKSetRetrieval.mock.funcProcessJWKSetRetrieval != nil {
-		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthMock.ProcessJWKSetRetrieval mock is already set by Set")
+		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthUseCaseMock.ProcessJWKSetRetrieval mock is already set by Set")
 	}
 
 	if mmProcessJWKSetRetrieval.defaultExpectation == nil {
-		mmProcessJWKSetRetrieval.defaultExpectation = &AuthMockProcessJWKSetRetrievalExpectation{}
+		mmProcessJWKSetRetrieval.defaultExpectation = &AuthUseCaseMockProcessJWKSetRetrievalExpectation{}
 	}
 
 	if mmProcessJWKSetRetrieval.defaultExpectation.params != nil {
-		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthMock.ProcessJWKSetRetrieval mock is already set by Expect")
+		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthUseCaseMock.ProcessJWKSetRetrieval mock is already set by Expect")
 	}
 
 	if mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs == nil {
-		mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs = &AuthMockProcessJWKSetRetrievalParamPtrs{}
+		mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessJWKSetRetrievalParamPtrs{}
 	}
 	mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs.host = &host
 	mmProcessJWKSetRetrieval.defaultExpectation.expectationOrigins.originHost = minimock.CallerInfo(1)
@@ -2973,21 +2973,21 @@ func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) ExpectHostParam
 }
 
 // ExpectSchemeParam4 sets up expected param scheme for AuthUseCase.ProcessJWKSetRetrieval
-func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) ExpectSchemeParam4(scheme string) *mAuthMockProcessJWKSetRetrieval {
+func (mmProcessJWKSetRetrieval *mAuthUseCaseMockProcessJWKSetRetrieval) ExpectSchemeParam4(scheme string) *mAuthUseCaseMockProcessJWKSetRetrieval {
 	if mmProcessJWKSetRetrieval.mock.funcProcessJWKSetRetrieval != nil {
-		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthMock.ProcessJWKSetRetrieval mock is already set by Set")
+		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthUseCaseMock.ProcessJWKSetRetrieval mock is already set by Set")
 	}
 
 	if mmProcessJWKSetRetrieval.defaultExpectation == nil {
-		mmProcessJWKSetRetrieval.defaultExpectation = &AuthMockProcessJWKSetRetrievalExpectation{}
+		mmProcessJWKSetRetrieval.defaultExpectation = &AuthUseCaseMockProcessJWKSetRetrievalExpectation{}
 	}
 
 	if mmProcessJWKSetRetrieval.defaultExpectation.params != nil {
-		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthMock.ProcessJWKSetRetrieval mock is already set by Expect")
+		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthUseCaseMock.ProcessJWKSetRetrieval mock is already set by Expect")
 	}
 
 	if mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs == nil {
-		mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs = &AuthMockProcessJWKSetRetrievalParamPtrs{}
+		mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessJWKSetRetrievalParamPtrs{}
 	}
 	mmProcessJWKSetRetrieval.defaultExpectation.paramPtrs.scheme = &scheme
 	mmProcessJWKSetRetrieval.defaultExpectation.expectationOrigins.originScheme = minimock.CallerInfo(1)
@@ -2996,9 +2996,9 @@ func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) ExpectSchemePar
 }
 
 // Inspect accepts an inspector function that has same arguments as the AuthUseCase.ProcessJWKSetRetrieval
-func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) Inspect(f func(ctx context.Context, tenantID uuid.UUID, host string, scheme string)) *mAuthMockProcessJWKSetRetrieval {
+func (mmProcessJWKSetRetrieval *mAuthUseCaseMockProcessJWKSetRetrieval) Inspect(f func(ctx context.Context, tenantID uuid.UUID, host string, scheme string)) *mAuthUseCaseMockProcessJWKSetRetrieval {
 	if mmProcessJWKSetRetrieval.mock.inspectFuncProcessJWKSetRetrieval != nil {
-		mmProcessJWKSetRetrieval.mock.t.Fatalf("Inspect function is already set for AuthMock.ProcessJWKSetRetrieval")
+		mmProcessJWKSetRetrieval.mock.t.Fatalf("Inspect function is already set for AuthUseCaseMock.ProcessJWKSetRetrieval")
 	}
 
 	mmProcessJWKSetRetrieval.mock.inspectFuncProcessJWKSetRetrieval = f
@@ -3007,21 +3007,21 @@ func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) Inspect(f func(
 }
 
 // Return sets up results that will be returned by AuthUseCase.ProcessJWKSetRetrieval
-func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) Return(m1 map[string]any, err error) *AuthMock {
+func (mmProcessJWKSetRetrieval *mAuthUseCaseMockProcessJWKSetRetrieval) Return(m1 map[string]any, err error) *AuthUseCaseMock {
 	if mmProcessJWKSetRetrieval.mock.funcProcessJWKSetRetrieval != nil {
-		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthMock.ProcessJWKSetRetrieval mock is already set by Set")
+		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthUseCaseMock.ProcessJWKSetRetrieval mock is already set by Set")
 	}
 
 	if mmProcessJWKSetRetrieval.defaultExpectation == nil {
-		mmProcessJWKSetRetrieval.defaultExpectation = &AuthMockProcessJWKSetRetrievalExpectation{mock: mmProcessJWKSetRetrieval.mock}
+		mmProcessJWKSetRetrieval.defaultExpectation = &AuthUseCaseMockProcessJWKSetRetrievalExpectation{mock: mmProcessJWKSetRetrieval.mock}
 	}
-	mmProcessJWKSetRetrieval.defaultExpectation.results = &AuthMockProcessJWKSetRetrievalResults{m1, err}
+	mmProcessJWKSetRetrieval.defaultExpectation.results = &AuthUseCaseMockProcessJWKSetRetrievalResults{m1, err}
 	mmProcessJWKSetRetrieval.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmProcessJWKSetRetrieval.mock
 }
 
 // Set uses given function f to mock the AuthUseCase.ProcessJWKSetRetrieval method
-func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) Set(f func(ctx context.Context, tenantID uuid.UUID, host string, scheme string) (m1 map[string]any, err error)) *AuthMock {
+func (mmProcessJWKSetRetrieval *mAuthUseCaseMockProcessJWKSetRetrieval) Set(f func(ctx context.Context, tenantID uuid.UUID, host string, scheme string) (m1 map[string]any, err error)) *AuthUseCaseMock {
 	if mmProcessJWKSetRetrieval.defaultExpectation != nil {
 		mmProcessJWKSetRetrieval.mock.t.Fatalf("Default expectation is already set for the AuthUseCase.ProcessJWKSetRetrieval method")
 	}
@@ -3037,37 +3037,37 @@ func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) Set(f func(ctx 
 
 // When sets expectation for the AuthUseCase.ProcessJWKSetRetrieval which will trigger the result defined by the following
 // Then helper
-func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) When(ctx context.Context, tenantID uuid.UUID, host string, scheme string) *AuthMockProcessJWKSetRetrievalExpectation {
+func (mmProcessJWKSetRetrieval *mAuthUseCaseMockProcessJWKSetRetrieval) When(ctx context.Context, tenantID uuid.UUID, host string, scheme string) *AuthUseCaseMockProcessJWKSetRetrievalExpectation {
 	if mmProcessJWKSetRetrieval.mock.funcProcessJWKSetRetrieval != nil {
-		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthMock.ProcessJWKSetRetrieval mock is already set by Set")
+		mmProcessJWKSetRetrieval.mock.t.Fatalf("AuthUseCaseMock.ProcessJWKSetRetrieval mock is already set by Set")
 	}
 
-	expectation := &AuthMockProcessJWKSetRetrievalExpectation{
+	expectation := &AuthUseCaseMockProcessJWKSetRetrievalExpectation{
 		mock:               mmProcessJWKSetRetrieval.mock,
-		params:             &AuthMockProcessJWKSetRetrievalParams{ctx, tenantID, host, scheme},
-		expectationOrigins: AuthMockProcessJWKSetRetrievalExpectationOrigins{origin: minimock.CallerInfo(1)},
+		params:             &AuthUseCaseMockProcessJWKSetRetrievalParams{ctx, tenantID, host, scheme},
+		expectationOrigins: AuthUseCaseMockProcessJWKSetRetrievalExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmProcessJWKSetRetrieval.expectations = append(mmProcessJWKSetRetrieval.expectations, expectation)
 	return expectation
 }
 
 // Then sets up AuthUseCase.ProcessJWKSetRetrieval return parameters for the expectation previously defined by the When method
-func (e *AuthMockProcessJWKSetRetrievalExpectation) Then(m1 map[string]any, err error) *AuthMock {
-	e.results = &AuthMockProcessJWKSetRetrievalResults{m1, err}
+func (e *AuthUseCaseMockProcessJWKSetRetrievalExpectation) Then(m1 map[string]any, err error) *AuthUseCaseMock {
+	e.results = &AuthUseCaseMockProcessJWKSetRetrievalResults{m1, err}
 	return e.mock
 }
 
 // Times sets number of times AuthUseCase.ProcessJWKSetRetrieval should be invoked
-func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) Times(n uint64) *mAuthMockProcessJWKSetRetrieval {
+func (mmProcessJWKSetRetrieval *mAuthUseCaseMockProcessJWKSetRetrieval) Times(n uint64) *mAuthUseCaseMockProcessJWKSetRetrieval {
 	if n == 0 {
-		mmProcessJWKSetRetrieval.mock.t.Fatalf("Times of AuthMock.ProcessJWKSetRetrieval mock can not be zero")
+		mmProcessJWKSetRetrieval.mock.t.Fatalf("Times of AuthUseCaseMock.ProcessJWKSetRetrieval mock can not be zero")
 	}
 	mm_atomic.StoreUint64(&mmProcessJWKSetRetrieval.expectedInvocations, n)
 	mmProcessJWKSetRetrieval.expectedInvocationsOrigin = minimock.CallerInfo(1)
 	return mmProcessJWKSetRetrieval
 }
 
-func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) invocationsDone() bool {
+func (mmProcessJWKSetRetrieval *mAuthUseCaseMockProcessJWKSetRetrieval) invocationsDone() bool {
 	if len(mmProcessJWKSetRetrieval.expectations) == 0 && mmProcessJWKSetRetrieval.defaultExpectation == nil && mmProcessJWKSetRetrieval.mock.funcProcessJWKSetRetrieval == nil {
 		return true
 	}
@@ -3079,7 +3079,7 @@ func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) invocationsDone
 }
 
 // ProcessJWKSetRetrieval implements mm_port.AuthUseCase
-func (mmProcessJWKSetRetrieval *AuthMock) ProcessJWKSetRetrieval(ctx context.Context, tenantID uuid.UUID, host string, scheme string) (m1 map[string]any, err error) {
+func (mmProcessJWKSetRetrieval *AuthUseCaseMock) ProcessJWKSetRetrieval(ctx context.Context, tenantID uuid.UUID, host string, scheme string) (m1 map[string]any, err error) {
 	mm_atomic.AddUint64(&mmProcessJWKSetRetrieval.beforeProcessJWKSetRetrievalCounter, 1)
 	defer mm_atomic.AddUint64(&mmProcessJWKSetRetrieval.afterProcessJWKSetRetrievalCounter, 1)
 
@@ -3089,7 +3089,7 @@ func (mmProcessJWKSetRetrieval *AuthMock) ProcessJWKSetRetrieval(ctx context.Con
 		mmProcessJWKSetRetrieval.inspectFuncProcessJWKSetRetrieval(ctx, tenantID, host, scheme)
 	}
 
-	mm_params := AuthMockProcessJWKSetRetrievalParams{ctx, tenantID, host, scheme}
+	mm_params := AuthUseCaseMockProcessJWKSetRetrievalParams{ctx, tenantID, host, scheme}
 
 	// Record call args
 	mmProcessJWKSetRetrieval.ProcessJWKSetRetrievalMock.mutex.Lock()
@@ -3108,64 +3108,64 @@ func (mmProcessJWKSetRetrieval *AuthMock) ProcessJWKSetRetrieval(ctx context.Con
 		mm_want := mmProcessJWKSetRetrieval.ProcessJWKSetRetrievalMock.defaultExpectation.params
 		mm_want_ptrs := mmProcessJWKSetRetrieval.ProcessJWKSetRetrievalMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockProcessJWKSetRetrievalParams{ctx, tenantID, host, scheme}
+		mm_got := AuthUseCaseMockProcessJWKSetRetrievalParams{ctx, tenantID, host, scheme}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmProcessJWKSetRetrieval.t.Errorf("AuthMock.ProcessJWKSetRetrieval got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessJWKSetRetrieval.t.Errorf("AuthUseCaseMock.ProcessJWKSetRetrieval got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessJWKSetRetrieval.ProcessJWKSetRetrievalMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
 			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
-				mmProcessJWKSetRetrieval.t.Errorf("AuthMock.ProcessJWKSetRetrieval got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessJWKSetRetrieval.t.Errorf("AuthUseCaseMock.ProcessJWKSetRetrieval got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessJWKSetRetrieval.ProcessJWKSetRetrievalMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
 			}
 
 			if mm_want_ptrs.host != nil && !minimock.Equal(*mm_want_ptrs.host, mm_got.host) {
-				mmProcessJWKSetRetrieval.t.Errorf("AuthMock.ProcessJWKSetRetrieval got unexpected parameter host, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessJWKSetRetrieval.t.Errorf("AuthUseCaseMock.ProcessJWKSetRetrieval got unexpected parameter host, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessJWKSetRetrieval.ProcessJWKSetRetrievalMock.defaultExpectation.expectationOrigins.originHost, *mm_want_ptrs.host, mm_got.host, minimock.Diff(*mm_want_ptrs.host, mm_got.host))
 			}
 
 			if mm_want_ptrs.scheme != nil && !minimock.Equal(*mm_want_ptrs.scheme, mm_got.scheme) {
-				mmProcessJWKSetRetrieval.t.Errorf("AuthMock.ProcessJWKSetRetrieval got unexpected parameter scheme, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessJWKSetRetrieval.t.Errorf("AuthUseCaseMock.ProcessJWKSetRetrieval got unexpected parameter scheme, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessJWKSetRetrieval.ProcessJWKSetRetrievalMock.defaultExpectation.expectationOrigins.originScheme, *mm_want_ptrs.scheme, mm_got.scheme, minimock.Diff(*mm_want_ptrs.scheme, mm_got.scheme))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmProcessJWKSetRetrieval.t.Errorf("AuthMock.ProcessJWKSetRetrieval got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+			mmProcessJWKSetRetrieval.t.Errorf("AuthUseCaseMock.ProcessJWKSetRetrieval got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmProcessJWKSetRetrieval.ProcessJWKSetRetrievalMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
 		mm_results := mmProcessJWKSetRetrieval.ProcessJWKSetRetrievalMock.defaultExpectation.results
 		if mm_results == nil {
-			mmProcessJWKSetRetrieval.t.Fatal("No results are set for the AuthMock.ProcessJWKSetRetrieval")
+			mmProcessJWKSetRetrieval.t.Fatal("No results are set for the AuthUseCaseMock.ProcessJWKSetRetrieval")
 		}
 		return (*mm_results).m1, (*mm_results).err
 	}
 	if mmProcessJWKSetRetrieval.funcProcessJWKSetRetrieval != nil {
 		return mmProcessJWKSetRetrieval.funcProcessJWKSetRetrieval(ctx, tenantID, host, scheme)
 	}
-	mmProcessJWKSetRetrieval.t.Fatalf("Unexpected call to AuthMock.ProcessJWKSetRetrieval. %v %v %v %v", ctx, tenantID, host, scheme)
+	mmProcessJWKSetRetrieval.t.Fatalf("Unexpected call to AuthUseCaseMock.ProcessJWKSetRetrieval. %v %v %v %v", ctx, tenantID, host, scheme)
 	return
 }
 
-// ProcessJWKSetRetrievalAfterCounter returns a count of finished AuthMock.ProcessJWKSetRetrieval invocations
-func (mmProcessJWKSetRetrieval *AuthMock) ProcessJWKSetRetrievalAfterCounter() uint64 {
+// ProcessJWKSetRetrievalAfterCounter returns a count of finished AuthUseCaseMock.ProcessJWKSetRetrieval invocations
+func (mmProcessJWKSetRetrieval *AuthUseCaseMock) ProcessJWKSetRetrievalAfterCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessJWKSetRetrieval.afterProcessJWKSetRetrievalCounter)
 }
 
-// ProcessJWKSetRetrievalBeforeCounter returns a count of AuthMock.ProcessJWKSetRetrieval invocations
-func (mmProcessJWKSetRetrieval *AuthMock) ProcessJWKSetRetrievalBeforeCounter() uint64 {
+// ProcessJWKSetRetrievalBeforeCounter returns a count of AuthUseCaseMock.ProcessJWKSetRetrieval invocations
+func (mmProcessJWKSetRetrieval *AuthUseCaseMock) ProcessJWKSetRetrievalBeforeCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessJWKSetRetrieval.beforeProcessJWKSetRetrievalCounter)
 }
 
-// Calls returns a list of arguments used in each call to AuthMock.ProcessJWKSetRetrieval.
+// Calls returns a list of arguments used in each call to AuthUseCaseMock.ProcessJWKSetRetrieval.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) Calls() []*AuthMockProcessJWKSetRetrievalParams {
+func (mmProcessJWKSetRetrieval *mAuthUseCaseMockProcessJWKSetRetrieval) Calls() []*AuthUseCaseMockProcessJWKSetRetrievalParams {
 	mmProcessJWKSetRetrieval.mutex.RLock()
 
-	argCopy := make([]*AuthMockProcessJWKSetRetrievalParams, len(mmProcessJWKSetRetrieval.callArgs))
+	argCopy := make([]*AuthUseCaseMockProcessJWKSetRetrievalParams, len(mmProcessJWKSetRetrieval.callArgs))
 	copy(argCopy, mmProcessJWKSetRetrieval.callArgs)
 
 	mmProcessJWKSetRetrieval.mutex.RUnlock()
@@ -3175,7 +3175,7 @@ func (mmProcessJWKSetRetrieval *mAuthMockProcessJWKSetRetrieval) Calls() []*Auth
 
 // MinimockProcessJWKSetRetrievalDone returns true if the count of the ProcessJWKSetRetrieval invocations corresponds
 // the number of defined expectations
-func (m *AuthMock) MinimockProcessJWKSetRetrievalDone() bool {
+func (m *AuthUseCaseMock) MinimockProcessJWKSetRetrievalDone() bool {
 	if m.ProcessJWKSetRetrievalMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
@@ -3191,10 +3191,10 @@ func (m *AuthMock) MinimockProcessJWKSetRetrievalDone() bool {
 }
 
 // MinimockProcessJWKSetRetrievalInspect logs each unmet expectation
-func (m *AuthMock) MinimockProcessJWKSetRetrievalInspect() {
+func (m *AuthUseCaseMock) MinimockProcessJWKSetRetrievalInspect() {
 	for _, e := range m.ProcessJWKSetRetrievalMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to AuthMock.ProcessJWKSetRetrieval at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessJWKSetRetrieval at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
@@ -3202,66 +3202,66 @@ func (m *AuthMock) MinimockProcessJWKSetRetrievalInspect() {
 	// if default expectation was set then invocations count should be greater than zero
 	if m.ProcessJWKSetRetrievalMock.defaultExpectation != nil && afterProcessJWKSetRetrievalCounter < 1 {
 		if m.ProcessJWKSetRetrievalMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to AuthMock.ProcessJWKSetRetrieval at\n%s", m.ProcessJWKSetRetrievalMock.defaultExpectation.returnOrigin)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessJWKSetRetrieval at\n%s", m.ProcessJWKSetRetrievalMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to AuthMock.ProcessJWKSetRetrieval at\n%s with params: %#v", m.ProcessJWKSetRetrievalMock.defaultExpectation.expectationOrigins.origin, *m.ProcessJWKSetRetrievalMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessJWKSetRetrieval at\n%s with params: %#v", m.ProcessJWKSetRetrievalMock.defaultExpectation.expectationOrigins.origin, *m.ProcessJWKSetRetrievalMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
 	if m.funcProcessJWKSetRetrieval != nil && afterProcessJWKSetRetrievalCounter < 1 {
-		m.t.Errorf("Expected call to AuthMock.ProcessJWKSetRetrieval at\n%s", m.funcProcessJWKSetRetrievalOrigin)
+		m.t.Errorf("Expected call to AuthUseCaseMock.ProcessJWKSetRetrieval at\n%s", m.funcProcessJWKSetRetrievalOrigin)
 	}
 
 	if !m.ProcessJWKSetRetrievalMock.invocationsDone() && afterProcessJWKSetRetrievalCounter > 0 {
-		m.t.Errorf("Expected %d calls to AuthMock.ProcessJWKSetRetrieval at\n%s but found %d calls",
+		m.t.Errorf("Expected %d calls to AuthUseCaseMock.ProcessJWKSetRetrieval at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ProcessJWKSetRetrievalMock.expectedInvocations), m.ProcessJWKSetRetrievalMock.expectedInvocationsOrigin, afterProcessJWKSetRetrievalCounter)
 	}
 }
 
-type mAuthMockProcessLogoutRequest struct {
+type mAuthUseCaseMockProcessLogoutRequest struct {
 	optional           bool
-	mock               *AuthMock
-	defaultExpectation *AuthMockProcessLogoutRequestExpectation
-	expectations       []*AuthMockProcessLogoutRequestExpectation
+	mock               *AuthUseCaseMock
+	defaultExpectation *AuthUseCaseMockProcessLogoutRequestExpectation
+	expectations       []*AuthUseCaseMockProcessLogoutRequestExpectation
 
-	callArgs []*AuthMockProcessLogoutRequestParams
+	callArgs []*AuthUseCaseMockProcessLogoutRequestParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// AuthMockProcessLogoutRequestExpectation specifies expectation struct of the AuthUseCase.ProcessLogoutRequest
-type AuthMockProcessLogoutRequestExpectation struct {
-	mock               *AuthMock
-	params             *AuthMockProcessLogoutRequestParams
-	paramPtrs          *AuthMockProcessLogoutRequestParamPtrs
-	expectationOrigins AuthMockProcessLogoutRequestExpectationOrigins
-	results            *AuthMockProcessLogoutRequestResults
+// AuthUseCaseMockProcessLogoutRequestExpectation specifies expectation struct of the AuthUseCase.ProcessLogoutRequest
+type AuthUseCaseMockProcessLogoutRequestExpectation struct {
+	mock               *AuthUseCaseMock
+	params             *AuthUseCaseMockProcessLogoutRequestParams
+	paramPtrs          *AuthUseCaseMockProcessLogoutRequestParamPtrs
+	expectationOrigins AuthUseCaseMockProcessLogoutRequestExpectationOrigins
+	results            *AuthUseCaseMockProcessLogoutRequestResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// AuthMockProcessLogoutRequestParams contains parameters of the AuthUseCase.ProcessLogoutRequest
-type AuthMockProcessLogoutRequestParams struct {
+// AuthUseCaseMockProcessLogoutRequestParams contains parameters of the AuthUseCase.ProcessLogoutRequest
+type AuthUseCaseMockProcessLogoutRequestParams struct {
 	ctx context.Context
 	cmd mm_port.LogoutRequestCommand
 }
 
-// AuthMockProcessLogoutRequestParamPtrs contains pointers to parameters of the AuthUseCase.ProcessLogoutRequest
-type AuthMockProcessLogoutRequestParamPtrs struct {
+// AuthUseCaseMockProcessLogoutRequestParamPtrs contains pointers to parameters of the AuthUseCase.ProcessLogoutRequest
+type AuthUseCaseMockProcessLogoutRequestParamPtrs struct {
 	ctx *context.Context
 	cmd *mm_port.LogoutRequestCommand
 }
 
-// AuthMockProcessLogoutRequestResults contains results of the AuthUseCase.ProcessLogoutRequest
-type AuthMockProcessLogoutRequestResults struct {
+// AuthUseCaseMockProcessLogoutRequestResults contains results of the AuthUseCase.ProcessLogoutRequest
+type AuthUseCaseMockProcessLogoutRequestResults struct {
 	lp1 *mm_port.LogoutExecutionResult
 	err error
 }
 
-// AuthMockProcessLogoutRequestOrigins contains origins of expectations of the AuthUseCase.ProcessLogoutRequest
-type AuthMockProcessLogoutRequestExpectationOrigins struct {
+// AuthUseCaseMockProcessLogoutRequestOrigins contains origins of expectations of the AuthUseCase.ProcessLogoutRequest
+type AuthUseCaseMockProcessLogoutRequestExpectationOrigins struct {
 	origin    string
 	originCtx string
 	originCmd string
@@ -3272,26 +3272,26 @@ type AuthMockProcessLogoutRequestExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) Optional() *mAuthMockProcessLogoutRequest {
+func (mmProcessLogoutRequest *mAuthUseCaseMockProcessLogoutRequest) Optional() *mAuthUseCaseMockProcessLogoutRequest {
 	mmProcessLogoutRequest.optional = true
 	return mmProcessLogoutRequest
 }
 
 // Expect sets up expected params for AuthUseCase.ProcessLogoutRequest
-func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) Expect(ctx context.Context, cmd mm_port.LogoutRequestCommand) *mAuthMockProcessLogoutRequest {
+func (mmProcessLogoutRequest *mAuthUseCaseMockProcessLogoutRequest) Expect(ctx context.Context, cmd mm_port.LogoutRequestCommand) *mAuthUseCaseMockProcessLogoutRequest {
 	if mmProcessLogoutRequest.mock.funcProcessLogoutRequest != nil {
-		mmProcessLogoutRequest.mock.t.Fatalf("AuthMock.ProcessLogoutRequest mock is already set by Set")
+		mmProcessLogoutRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessLogoutRequest mock is already set by Set")
 	}
 
 	if mmProcessLogoutRequest.defaultExpectation == nil {
-		mmProcessLogoutRequest.defaultExpectation = &AuthMockProcessLogoutRequestExpectation{}
+		mmProcessLogoutRequest.defaultExpectation = &AuthUseCaseMockProcessLogoutRequestExpectation{}
 	}
 
 	if mmProcessLogoutRequest.defaultExpectation.paramPtrs != nil {
-		mmProcessLogoutRequest.mock.t.Fatalf("AuthMock.ProcessLogoutRequest mock is already set by ExpectParams functions")
+		mmProcessLogoutRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessLogoutRequest mock is already set by ExpectParams functions")
 	}
 
-	mmProcessLogoutRequest.defaultExpectation.params = &AuthMockProcessLogoutRequestParams{ctx, cmd}
+	mmProcessLogoutRequest.defaultExpectation.params = &AuthUseCaseMockProcessLogoutRequestParams{ctx, cmd}
 	mmProcessLogoutRequest.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmProcessLogoutRequest.expectations {
 		if minimock.Equal(e.params, mmProcessLogoutRequest.defaultExpectation.params) {
@@ -3303,21 +3303,21 @@ func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) Expect(ctx context.
 }
 
 // ExpectCtxParam1 sets up expected param ctx for AuthUseCase.ProcessLogoutRequest
-func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) ExpectCtxParam1(ctx context.Context) *mAuthMockProcessLogoutRequest {
+func (mmProcessLogoutRequest *mAuthUseCaseMockProcessLogoutRequest) ExpectCtxParam1(ctx context.Context) *mAuthUseCaseMockProcessLogoutRequest {
 	if mmProcessLogoutRequest.mock.funcProcessLogoutRequest != nil {
-		mmProcessLogoutRequest.mock.t.Fatalf("AuthMock.ProcessLogoutRequest mock is already set by Set")
+		mmProcessLogoutRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessLogoutRequest mock is already set by Set")
 	}
 
 	if mmProcessLogoutRequest.defaultExpectation == nil {
-		mmProcessLogoutRequest.defaultExpectation = &AuthMockProcessLogoutRequestExpectation{}
+		mmProcessLogoutRequest.defaultExpectation = &AuthUseCaseMockProcessLogoutRequestExpectation{}
 	}
 
 	if mmProcessLogoutRequest.defaultExpectation.params != nil {
-		mmProcessLogoutRequest.mock.t.Fatalf("AuthMock.ProcessLogoutRequest mock is already set by Expect")
+		mmProcessLogoutRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessLogoutRequest mock is already set by Expect")
 	}
 
 	if mmProcessLogoutRequest.defaultExpectation.paramPtrs == nil {
-		mmProcessLogoutRequest.defaultExpectation.paramPtrs = &AuthMockProcessLogoutRequestParamPtrs{}
+		mmProcessLogoutRequest.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessLogoutRequestParamPtrs{}
 	}
 	mmProcessLogoutRequest.defaultExpectation.paramPtrs.ctx = &ctx
 	mmProcessLogoutRequest.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
@@ -3326,21 +3326,21 @@ func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) ExpectCtxParam1(ctx
 }
 
 // ExpectCmdParam2 sets up expected param cmd for AuthUseCase.ProcessLogoutRequest
-func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) ExpectCmdParam2(cmd mm_port.LogoutRequestCommand) *mAuthMockProcessLogoutRequest {
+func (mmProcessLogoutRequest *mAuthUseCaseMockProcessLogoutRequest) ExpectCmdParam2(cmd mm_port.LogoutRequestCommand) *mAuthUseCaseMockProcessLogoutRequest {
 	if mmProcessLogoutRequest.mock.funcProcessLogoutRequest != nil {
-		mmProcessLogoutRequest.mock.t.Fatalf("AuthMock.ProcessLogoutRequest mock is already set by Set")
+		mmProcessLogoutRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessLogoutRequest mock is already set by Set")
 	}
 
 	if mmProcessLogoutRequest.defaultExpectation == nil {
-		mmProcessLogoutRequest.defaultExpectation = &AuthMockProcessLogoutRequestExpectation{}
+		mmProcessLogoutRequest.defaultExpectation = &AuthUseCaseMockProcessLogoutRequestExpectation{}
 	}
 
 	if mmProcessLogoutRequest.defaultExpectation.params != nil {
-		mmProcessLogoutRequest.mock.t.Fatalf("AuthMock.ProcessLogoutRequest mock is already set by Expect")
+		mmProcessLogoutRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessLogoutRequest mock is already set by Expect")
 	}
 
 	if mmProcessLogoutRequest.defaultExpectation.paramPtrs == nil {
-		mmProcessLogoutRequest.defaultExpectation.paramPtrs = &AuthMockProcessLogoutRequestParamPtrs{}
+		mmProcessLogoutRequest.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessLogoutRequestParamPtrs{}
 	}
 	mmProcessLogoutRequest.defaultExpectation.paramPtrs.cmd = &cmd
 	mmProcessLogoutRequest.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
@@ -3349,9 +3349,9 @@ func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) ExpectCmdParam2(cmd
 }
 
 // Inspect accepts an inspector function that has same arguments as the AuthUseCase.ProcessLogoutRequest
-func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) Inspect(f func(ctx context.Context, cmd mm_port.LogoutRequestCommand)) *mAuthMockProcessLogoutRequest {
+func (mmProcessLogoutRequest *mAuthUseCaseMockProcessLogoutRequest) Inspect(f func(ctx context.Context, cmd mm_port.LogoutRequestCommand)) *mAuthUseCaseMockProcessLogoutRequest {
 	if mmProcessLogoutRequest.mock.inspectFuncProcessLogoutRequest != nil {
-		mmProcessLogoutRequest.mock.t.Fatalf("Inspect function is already set for AuthMock.ProcessLogoutRequest")
+		mmProcessLogoutRequest.mock.t.Fatalf("Inspect function is already set for AuthUseCaseMock.ProcessLogoutRequest")
 	}
 
 	mmProcessLogoutRequest.mock.inspectFuncProcessLogoutRequest = f
@@ -3360,21 +3360,21 @@ func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) Inspect(f func(ctx 
 }
 
 // Return sets up results that will be returned by AuthUseCase.ProcessLogoutRequest
-func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) Return(lp1 *mm_port.LogoutExecutionResult, err error) *AuthMock {
+func (mmProcessLogoutRequest *mAuthUseCaseMockProcessLogoutRequest) Return(lp1 *mm_port.LogoutExecutionResult, err error) *AuthUseCaseMock {
 	if mmProcessLogoutRequest.mock.funcProcessLogoutRequest != nil {
-		mmProcessLogoutRequest.mock.t.Fatalf("AuthMock.ProcessLogoutRequest mock is already set by Set")
+		mmProcessLogoutRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessLogoutRequest mock is already set by Set")
 	}
 
 	if mmProcessLogoutRequest.defaultExpectation == nil {
-		mmProcessLogoutRequest.defaultExpectation = &AuthMockProcessLogoutRequestExpectation{mock: mmProcessLogoutRequest.mock}
+		mmProcessLogoutRequest.defaultExpectation = &AuthUseCaseMockProcessLogoutRequestExpectation{mock: mmProcessLogoutRequest.mock}
 	}
-	mmProcessLogoutRequest.defaultExpectation.results = &AuthMockProcessLogoutRequestResults{lp1, err}
+	mmProcessLogoutRequest.defaultExpectation.results = &AuthUseCaseMockProcessLogoutRequestResults{lp1, err}
 	mmProcessLogoutRequest.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmProcessLogoutRequest.mock
 }
 
 // Set uses given function f to mock the AuthUseCase.ProcessLogoutRequest method
-func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) Set(f func(ctx context.Context, cmd mm_port.LogoutRequestCommand) (lp1 *mm_port.LogoutExecutionResult, err error)) *AuthMock {
+func (mmProcessLogoutRequest *mAuthUseCaseMockProcessLogoutRequest) Set(f func(ctx context.Context, cmd mm_port.LogoutRequestCommand) (lp1 *mm_port.LogoutExecutionResult, err error)) *AuthUseCaseMock {
 	if mmProcessLogoutRequest.defaultExpectation != nil {
 		mmProcessLogoutRequest.mock.t.Fatalf("Default expectation is already set for the AuthUseCase.ProcessLogoutRequest method")
 	}
@@ -3390,37 +3390,37 @@ func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) Set(f func(ctx cont
 
 // When sets expectation for the AuthUseCase.ProcessLogoutRequest which will trigger the result defined by the following
 // Then helper
-func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) When(ctx context.Context, cmd mm_port.LogoutRequestCommand) *AuthMockProcessLogoutRequestExpectation {
+func (mmProcessLogoutRequest *mAuthUseCaseMockProcessLogoutRequest) When(ctx context.Context, cmd mm_port.LogoutRequestCommand) *AuthUseCaseMockProcessLogoutRequestExpectation {
 	if mmProcessLogoutRequest.mock.funcProcessLogoutRequest != nil {
-		mmProcessLogoutRequest.mock.t.Fatalf("AuthMock.ProcessLogoutRequest mock is already set by Set")
+		mmProcessLogoutRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessLogoutRequest mock is already set by Set")
 	}
 
-	expectation := &AuthMockProcessLogoutRequestExpectation{
+	expectation := &AuthUseCaseMockProcessLogoutRequestExpectation{
 		mock:               mmProcessLogoutRequest.mock,
-		params:             &AuthMockProcessLogoutRequestParams{ctx, cmd},
-		expectationOrigins: AuthMockProcessLogoutRequestExpectationOrigins{origin: minimock.CallerInfo(1)},
+		params:             &AuthUseCaseMockProcessLogoutRequestParams{ctx, cmd},
+		expectationOrigins: AuthUseCaseMockProcessLogoutRequestExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmProcessLogoutRequest.expectations = append(mmProcessLogoutRequest.expectations, expectation)
 	return expectation
 }
 
 // Then sets up AuthUseCase.ProcessLogoutRequest return parameters for the expectation previously defined by the When method
-func (e *AuthMockProcessLogoutRequestExpectation) Then(lp1 *mm_port.LogoutExecutionResult, err error) *AuthMock {
-	e.results = &AuthMockProcessLogoutRequestResults{lp1, err}
+func (e *AuthUseCaseMockProcessLogoutRequestExpectation) Then(lp1 *mm_port.LogoutExecutionResult, err error) *AuthUseCaseMock {
+	e.results = &AuthUseCaseMockProcessLogoutRequestResults{lp1, err}
 	return e.mock
 }
 
 // Times sets number of times AuthUseCase.ProcessLogoutRequest should be invoked
-func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) Times(n uint64) *mAuthMockProcessLogoutRequest {
+func (mmProcessLogoutRequest *mAuthUseCaseMockProcessLogoutRequest) Times(n uint64) *mAuthUseCaseMockProcessLogoutRequest {
 	if n == 0 {
-		mmProcessLogoutRequest.mock.t.Fatalf("Times of AuthMock.ProcessLogoutRequest mock can not be zero")
+		mmProcessLogoutRequest.mock.t.Fatalf("Times of AuthUseCaseMock.ProcessLogoutRequest mock can not be zero")
 	}
 	mm_atomic.StoreUint64(&mmProcessLogoutRequest.expectedInvocations, n)
 	mmProcessLogoutRequest.expectedInvocationsOrigin = minimock.CallerInfo(1)
 	return mmProcessLogoutRequest
 }
 
-func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) invocationsDone() bool {
+func (mmProcessLogoutRequest *mAuthUseCaseMockProcessLogoutRequest) invocationsDone() bool {
 	if len(mmProcessLogoutRequest.expectations) == 0 && mmProcessLogoutRequest.defaultExpectation == nil && mmProcessLogoutRequest.mock.funcProcessLogoutRequest == nil {
 		return true
 	}
@@ -3432,7 +3432,7 @@ func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) invocationsDone() b
 }
 
 // ProcessLogoutRequest implements mm_port.AuthUseCase
-func (mmProcessLogoutRequest *AuthMock) ProcessLogoutRequest(ctx context.Context, cmd mm_port.LogoutRequestCommand) (lp1 *mm_port.LogoutExecutionResult, err error) {
+func (mmProcessLogoutRequest *AuthUseCaseMock) ProcessLogoutRequest(ctx context.Context, cmd mm_port.LogoutRequestCommand) (lp1 *mm_port.LogoutExecutionResult, err error) {
 	mm_atomic.AddUint64(&mmProcessLogoutRequest.beforeProcessLogoutRequestCounter, 1)
 	defer mm_atomic.AddUint64(&mmProcessLogoutRequest.afterProcessLogoutRequestCounter, 1)
 
@@ -3442,7 +3442,7 @@ func (mmProcessLogoutRequest *AuthMock) ProcessLogoutRequest(ctx context.Context
 		mmProcessLogoutRequest.inspectFuncProcessLogoutRequest(ctx, cmd)
 	}
 
-	mm_params := AuthMockProcessLogoutRequestParams{ctx, cmd}
+	mm_params := AuthUseCaseMockProcessLogoutRequestParams{ctx, cmd}
 
 	// Record call args
 	mmProcessLogoutRequest.ProcessLogoutRequestMock.mutex.Lock()
@@ -3461,54 +3461,54 @@ func (mmProcessLogoutRequest *AuthMock) ProcessLogoutRequest(ctx context.Context
 		mm_want := mmProcessLogoutRequest.ProcessLogoutRequestMock.defaultExpectation.params
 		mm_want_ptrs := mmProcessLogoutRequest.ProcessLogoutRequestMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockProcessLogoutRequestParams{ctx, cmd}
+		mm_got := AuthUseCaseMockProcessLogoutRequestParams{ctx, cmd}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmProcessLogoutRequest.t.Errorf("AuthMock.ProcessLogoutRequest got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessLogoutRequest.t.Errorf("AuthUseCaseMock.ProcessLogoutRequest got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessLogoutRequest.ProcessLogoutRequestMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
 			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
-				mmProcessLogoutRequest.t.Errorf("AuthMock.ProcessLogoutRequest got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessLogoutRequest.t.Errorf("AuthUseCaseMock.ProcessLogoutRequest got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessLogoutRequest.ProcessLogoutRequestMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmProcessLogoutRequest.t.Errorf("AuthMock.ProcessLogoutRequest got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+			mmProcessLogoutRequest.t.Errorf("AuthUseCaseMock.ProcessLogoutRequest got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmProcessLogoutRequest.ProcessLogoutRequestMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
 		mm_results := mmProcessLogoutRequest.ProcessLogoutRequestMock.defaultExpectation.results
 		if mm_results == nil {
-			mmProcessLogoutRequest.t.Fatal("No results are set for the AuthMock.ProcessLogoutRequest")
+			mmProcessLogoutRequest.t.Fatal("No results are set for the AuthUseCaseMock.ProcessLogoutRequest")
 		}
 		return (*mm_results).lp1, (*mm_results).err
 	}
 	if mmProcessLogoutRequest.funcProcessLogoutRequest != nil {
 		return mmProcessLogoutRequest.funcProcessLogoutRequest(ctx, cmd)
 	}
-	mmProcessLogoutRequest.t.Fatalf("Unexpected call to AuthMock.ProcessLogoutRequest. %v %v", ctx, cmd)
+	mmProcessLogoutRequest.t.Fatalf("Unexpected call to AuthUseCaseMock.ProcessLogoutRequest. %v %v", ctx, cmd)
 	return
 }
 
-// ProcessLogoutRequestAfterCounter returns a count of finished AuthMock.ProcessLogoutRequest invocations
-func (mmProcessLogoutRequest *AuthMock) ProcessLogoutRequestAfterCounter() uint64 {
+// ProcessLogoutRequestAfterCounter returns a count of finished AuthUseCaseMock.ProcessLogoutRequest invocations
+func (mmProcessLogoutRequest *AuthUseCaseMock) ProcessLogoutRequestAfterCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessLogoutRequest.afterProcessLogoutRequestCounter)
 }
 
-// ProcessLogoutRequestBeforeCounter returns a count of AuthMock.ProcessLogoutRequest invocations
-func (mmProcessLogoutRequest *AuthMock) ProcessLogoutRequestBeforeCounter() uint64 {
+// ProcessLogoutRequestBeforeCounter returns a count of AuthUseCaseMock.ProcessLogoutRequest invocations
+func (mmProcessLogoutRequest *AuthUseCaseMock) ProcessLogoutRequestBeforeCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessLogoutRequest.beforeProcessLogoutRequestCounter)
 }
 
-// Calls returns a list of arguments used in each call to AuthMock.ProcessLogoutRequest.
+// Calls returns a list of arguments used in each call to AuthUseCaseMock.ProcessLogoutRequest.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) Calls() []*AuthMockProcessLogoutRequestParams {
+func (mmProcessLogoutRequest *mAuthUseCaseMockProcessLogoutRequest) Calls() []*AuthUseCaseMockProcessLogoutRequestParams {
 	mmProcessLogoutRequest.mutex.RLock()
 
-	argCopy := make([]*AuthMockProcessLogoutRequestParams, len(mmProcessLogoutRequest.callArgs))
+	argCopy := make([]*AuthUseCaseMockProcessLogoutRequestParams, len(mmProcessLogoutRequest.callArgs))
 	copy(argCopy, mmProcessLogoutRequest.callArgs)
 
 	mmProcessLogoutRequest.mutex.RUnlock()
@@ -3518,7 +3518,7 @@ func (mmProcessLogoutRequest *mAuthMockProcessLogoutRequest) Calls() []*AuthMock
 
 // MinimockProcessLogoutRequestDone returns true if the count of the ProcessLogoutRequest invocations corresponds
 // the number of defined expectations
-func (m *AuthMock) MinimockProcessLogoutRequestDone() bool {
+func (m *AuthUseCaseMock) MinimockProcessLogoutRequestDone() bool {
 	if m.ProcessLogoutRequestMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
@@ -3534,10 +3534,10 @@ func (m *AuthMock) MinimockProcessLogoutRequestDone() bool {
 }
 
 // MinimockProcessLogoutRequestInspect logs each unmet expectation
-func (m *AuthMock) MinimockProcessLogoutRequestInspect() {
+func (m *AuthUseCaseMock) MinimockProcessLogoutRequestInspect() {
 	for _, e := range m.ProcessLogoutRequestMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to AuthMock.ProcessLogoutRequest at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessLogoutRequest at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
@@ -3545,66 +3545,66 @@ func (m *AuthMock) MinimockProcessLogoutRequestInspect() {
 	// if default expectation was set then invocations count should be greater than zero
 	if m.ProcessLogoutRequestMock.defaultExpectation != nil && afterProcessLogoutRequestCounter < 1 {
 		if m.ProcessLogoutRequestMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to AuthMock.ProcessLogoutRequest at\n%s", m.ProcessLogoutRequestMock.defaultExpectation.returnOrigin)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessLogoutRequest at\n%s", m.ProcessLogoutRequestMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to AuthMock.ProcessLogoutRequest at\n%s with params: %#v", m.ProcessLogoutRequestMock.defaultExpectation.expectationOrigins.origin, *m.ProcessLogoutRequestMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessLogoutRequest at\n%s with params: %#v", m.ProcessLogoutRequestMock.defaultExpectation.expectationOrigins.origin, *m.ProcessLogoutRequestMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
 	if m.funcProcessLogoutRequest != nil && afterProcessLogoutRequestCounter < 1 {
-		m.t.Errorf("Expected call to AuthMock.ProcessLogoutRequest at\n%s", m.funcProcessLogoutRequestOrigin)
+		m.t.Errorf("Expected call to AuthUseCaseMock.ProcessLogoutRequest at\n%s", m.funcProcessLogoutRequestOrigin)
 	}
 
 	if !m.ProcessLogoutRequestMock.invocationsDone() && afterProcessLogoutRequestCounter > 0 {
-		m.t.Errorf("Expected %d calls to AuthMock.ProcessLogoutRequest at\n%s but found %d calls",
+		m.t.Errorf("Expected %d calls to AuthUseCaseMock.ProcessLogoutRequest at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ProcessLogoutRequestMock.expectedInvocations), m.ProcessLogoutRequestMock.expectedInvocationsOrigin, afterProcessLogoutRequestCounter)
 	}
 }
 
-type mAuthMockProcessPushedAuthorization struct {
+type mAuthUseCaseMockProcessPushedAuthorization struct {
 	optional           bool
-	mock               *AuthMock
-	defaultExpectation *AuthMockProcessPushedAuthorizationExpectation
-	expectations       []*AuthMockProcessPushedAuthorizationExpectation
+	mock               *AuthUseCaseMock
+	defaultExpectation *AuthUseCaseMockProcessPushedAuthorizationExpectation
+	expectations       []*AuthUseCaseMockProcessPushedAuthorizationExpectation
 
-	callArgs []*AuthMockProcessPushedAuthorizationParams
+	callArgs []*AuthUseCaseMockProcessPushedAuthorizationParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// AuthMockProcessPushedAuthorizationExpectation specifies expectation struct of the AuthUseCase.ProcessPushedAuthorization
-type AuthMockProcessPushedAuthorizationExpectation struct {
-	mock               *AuthMock
-	params             *AuthMockProcessPushedAuthorizationParams
-	paramPtrs          *AuthMockProcessPushedAuthorizationParamPtrs
-	expectationOrigins AuthMockProcessPushedAuthorizationExpectationOrigins
-	results            *AuthMockProcessPushedAuthorizationResults
+// AuthUseCaseMockProcessPushedAuthorizationExpectation specifies expectation struct of the AuthUseCase.ProcessPushedAuthorization
+type AuthUseCaseMockProcessPushedAuthorizationExpectation struct {
+	mock               *AuthUseCaseMock
+	params             *AuthUseCaseMockProcessPushedAuthorizationParams
+	paramPtrs          *AuthUseCaseMockProcessPushedAuthorizationParamPtrs
+	expectationOrigins AuthUseCaseMockProcessPushedAuthorizationExpectationOrigins
+	results            *AuthUseCaseMockProcessPushedAuthorizationResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// AuthMockProcessPushedAuthorizationParams contains parameters of the AuthUseCase.ProcessPushedAuthorization
-type AuthMockProcessPushedAuthorizationParams struct {
+// AuthUseCaseMockProcessPushedAuthorizationParams contains parameters of the AuthUseCase.ProcessPushedAuthorization
+type AuthUseCaseMockProcessPushedAuthorizationParams struct {
 	ctx context.Context
 	cmd mm_port.PushedAuthCommand
 }
 
-// AuthMockProcessPushedAuthorizationParamPtrs contains pointers to parameters of the AuthUseCase.ProcessPushedAuthorization
-type AuthMockProcessPushedAuthorizationParamPtrs struct {
+// AuthUseCaseMockProcessPushedAuthorizationParamPtrs contains pointers to parameters of the AuthUseCase.ProcessPushedAuthorization
+type AuthUseCaseMockProcessPushedAuthorizationParamPtrs struct {
 	ctx *context.Context
 	cmd *mm_port.PushedAuthCommand
 }
 
-// AuthMockProcessPushedAuthorizationResults contains results of the AuthUseCase.ProcessPushedAuthorization
-type AuthMockProcessPushedAuthorizationResults struct {
+// AuthUseCaseMockProcessPushedAuthorizationResults contains results of the AuthUseCase.ProcessPushedAuthorization
+type AuthUseCaseMockProcessPushedAuthorizationResults struct {
 	pp1 *mm_port.PushedAuthResponse
 	err error
 }
 
-// AuthMockProcessPushedAuthorizationOrigins contains origins of expectations of the AuthUseCase.ProcessPushedAuthorization
-type AuthMockProcessPushedAuthorizationExpectationOrigins struct {
+// AuthUseCaseMockProcessPushedAuthorizationOrigins contains origins of expectations of the AuthUseCase.ProcessPushedAuthorization
+type AuthUseCaseMockProcessPushedAuthorizationExpectationOrigins struct {
 	origin    string
 	originCtx string
 	originCmd string
@@ -3615,26 +3615,26 @@ type AuthMockProcessPushedAuthorizationExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) Optional() *mAuthMockProcessPushedAuthorization {
+func (mmProcessPushedAuthorization *mAuthUseCaseMockProcessPushedAuthorization) Optional() *mAuthUseCaseMockProcessPushedAuthorization {
 	mmProcessPushedAuthorization.optional = true
 	return mmProcessPushedAuthorization
 }
 
 // Expect sets up expected params for AuthUseCase.ProcessPushedAuthorization
-func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) Expect(ctx context.Context, cmd mm_port.PushedAuthCommand) *mAuthMockProcessPushedAuthorization {
+func (mmProcessPushedAuthorization *mAuthUseCaseMockProcessPushedAuthorization) Expect(ctx context.Context, cmd mm_port.PushedAuthCommand) *mAuthUseCaseMockProcessPushedAuthorization {
 	if mmProcessPushedAuthorization.mock.funcProcessPushedAuthorization != nil {
-		mmProcessPushedAuthorization.mock.t.Fatalf("AuthMock.ProcessPushedAuthorization mock is already set by Set")
+		mmProcessPushedAuthorization.mock.t.Fatalf("AuthUseCaseMock.ProcessPushedAuthorization mock is already set by Set")
 	}
 
 	if mmProcessPushedAuthorization.defaultExpectation == nil {
-		mmProcessPushedAuthorization.defaultExpectation = &AuthMockProcessPushedAuthorizationExpectation{}
+		mmProcessPushedAuthorization.defaultExpectation = &AuthUseCaseMockProcessPushedAuthorizationExpectation{}
 	}
 
 	if mmProcessPushedAuthorization.defaultExpectation.paramPtrs != nil {
-		mmProcessPushedAuthorization.mock.t.Fatalf("AuthMock.ProcessPushedAuthorization mock is already set by ExpectParams functions")
+		mmProcessPushedAuthorization.mock.t.Fatalf("AuthUseCaseMock.ProcessPushedAuthorization mock is already set by ExpectParams functions")
 	}
 
-	mmProcessPushedAuthorization.defaultExpectation.params = &AuthMockProcessPushedAuthorizationParams{ctx, cmd}
+	mmProcessPushedAuthorization.defaultExpectation.params = &AuthUseCaseMockProcessPushedAuthorizationParams{ctx, cmd}
 	mmProcessPushedAuthorization.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmProcessPushedAuthorization.expectations {
 		if minimock.Equal(e.params, mmProcessPushedAuthorization.defaultExpectation.params) {
@@ -3646,21 +3646,21 @@ func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) Expect(
 }
 
 // ExpectCtxParam1 sets up expected param ctx for AuthUseCase.ProcessPushedAuthorization
-func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) ExpectCtxParam1(ctx context.Context) *mAuthMockProcessPushedAuthorization {
+func (mmProcessPushedAuthorization *mAuthUseCaseMockProcessPushedAuthorization) ExpectCtxParam1(ctx context.Context) *mAuthUseCaseMockProcessPushedAuthorization {
 	if mmProcessPushedAuthorization.mock.funcProcessPushedAuthorization != nil {
-		mmProcessPushedAuthorization.mock.t.Fatalf("AuthMock.ProcessPushedAuthorization mock is already set by Set")
+		mmProcessPushedAuthorization.mock.t.Fatalf("AuthUseCaseMock.ProcessPushedAuthorization mock is already set by Set")
 	}
 
 	if mmProcessPushedAuthorization.defaultExpectation == nil {
-		mmProcessPushedAuthorization.defaultExpectation = &AuthMockProcessPushedAuthorizationExpectation{}
+		mmProcessPushedAuthorization.defaultExpectation = &AuthUseCaseMockProcessPushedAuthorizationExpectation{}
 	}
 
 	if mmProcessPushedAuthorization.defaultExpectation.params != nil {
-		mmProcessPushedAuthorization.mock.t.Fatalf("AuthMock.ProcessPushedAuthorization mock is already set by Expect")
+		mmProcessPushedAuthorization.mock.t.Fatalf("AuthUseCaseMock.ProcessPushedAuthorization mock is already set by Expect")
 	}
 
 	if mmProcessPushedAuthorization.defaultExpectation.paramPtrs == nil {
-		mmProcessPushedAuthorization.defaultExpectation.paramPtrs = &AuthMockProcessPushedAuthorizationParamPtrs{}
+		mmProcessPushedAuthorization.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessPushedAuthorizationParamPtrs{}
 	}
 	mmProcessPushedAuthorization.defaultExpectation.paramPtrs.ctx = &ctx
 	mmProcessPushedAuthorization.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
@@ -3669,21 +3669,21 @@ func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) ExpectC
 }
 
 // ExpectCmdParam2 sets up expected param cmd for AuthUseCase.ProcessPushedAuthorization
-func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) ExpectCmdParam2(cmd mm_port.PushedAuthCommand) *mAuthMockProcessPushedAuthorization {
+func (mmProcessPushedAuthorization *mAuthUseCaseMockProcessPushedAuthorization) ExpectCmdParam2(cmd mm_port.PushedAuthCommand) *mAuthUseCaseMockProcessPushedAuthorization {
 	if mmProcessPushedAuthorization.mock.funcProcessPushedAuthorization != nil {
-		mmProcessPushedAuthorization.mock.t.Fatalf("AuthMock.ProcessPushedAuthorization mock is already set by Set")
+		mmProcessPushedAuthorization.mock.t.Fatalf("AuthUseCaseMock.ProcessPushedAuthorization mock is already set by Set")
 	}
 
 	if mmProcessPushedAuthorization.defaultExpectation == nil {
-		mmProcessPushedAuthorization.defaultExpectation = &AuthMockProcessPushedAuthorizationExpectation{}
+		mmProcessPushedAuthorization.defaultExpectation = &AuthUseCaseMockProcessPushedAuthorizationExpectation{}
 	}
 
 	if mmProcessPushedAuthorization.defaultExpectation.params != nil {
-		mmProcessPushedAuthorization.mock.t.Fatalf("AuthMock.ProcessPushedAuthorization mock is already set by Expect")
+		mmProcessPushedAuthorization.mock.t.Fatalf("AuthUseCaseMock.ProcessPushedAuthorization mock is already set by Expect")
 	}
 
 	if mmProcessPushedAuthorization.defaultExpectation.paramPtrs == nil {
-		mmProcessPushedAuthorization.defaultExpectation.paramPtrs = &AuthMockProcessPushedAuthorizationParamPtrs{}
+		mmProcessPushedAuthorization.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessPushedAuthorizationParamPtrs{}
 	}
 	mmProcessPushedAuthorization.defaultExpectation.paramPtrs.cmd = &cmd
 	mmProcessPushedAuthorization.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
@@ -3692,9 +3692,9 @@ func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) ExpectC
 }
 
 // Inspect accepts an inspector function that has same arguments as the AuthUseCase.ProcessPushedAuthorization
-func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) Inspect(f func(ctx context.Context, cmd mm_port.PushedAuthCommand)) *mAuthMockProcessPushedAuthorization {
+func (mmProcessPushedAuthorization *mAuthUseCaseMockProcessPushedAuthorization) Inspect(f func(ctx context.Context, cmd mm_port.PushedAuthCommand)) *mAuthUseCaseMockProcessPushedAuthorization {
 	if mmProcessPushedAuthorization.mock.inspectFuncProcessPushedAuthorization != nil {
-		mmProcessPushedAuthorization.mock.t.Fatalf("Inspect function is already set for AuthMock.ProcessPushedAuthorization")
+		mmProcessPushedAuthorization.mock.t.Fatalf("Inspect function is already set for AuthUseCaseMock.ProcessPushedAuthorization")
 	}
 
 	mmProcessPushedAuthorization.mock.inspectFuncProcessPushedAuthorization = f
@@ -3703,21 +3703,21 @@ func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) Inspect
 }
 
 // Return sets up results that will be returned by AuthUseCase.ProcessPushedAuthorization
-func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) Return(pp1 *mm_port.PushedAuthResponse, err error) *AuthMock {
+func (mmProcessPushedAuthorization *mAuthUseCaseMockProcessPushedAuthorization) Return(pp1 *mm_port.PushedAuthResponse, err error) *AuthUseCaseMock {
 	if mmProcessPushedAuthorization.mock.funcProcessPushedAuthorization != nil {
-		mmProcessPushedAuthorization.mock.t.Fatalf("AuthMock.ProcessPushedAuthorization mock is already set by Set")
+		mmProcessPushedAuthorization.mock.t.Fatalf("AuthUseCaseMock.ProcessPushedAuthorization mock is already set by Set")
 	}
 
 	if mmProcessPushedAuthorization.defaultExpectation == nil {
-		mmProcessPushedAuthorization.defaultExpectation = &AuthMockProcessPushedAuthorizationExpectation{mock: mmProcessPushedAuthorization.mock}
+		mmProcessPushedAuthorization.defaultExpectation = &AuthUseCaseMockProcessPushedAuthorizationExpectation{mock: mmProcessPushedAuthorization.mock}
 	}
-	mmProcessPushedAuthorization.defaultExpectation.results = &AuthMockProcessPushedAuthorizationResults{pp1, err}
+	mmProcessPushedAuthorization.defaultExpectation.results = &AuthUseCaseMockProcessPushedAuthorizationResults{pp1, err}
 	mmProcessPushedAuthorization.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmProcessPushedAuthorization.mock
 }
 
 // Set uses given function f to mock the AuthUseCase.ProcessPushedAuthorization method
-func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) Set(f func(ctx context.Context, cmd mm_port.PushedAuthCommand) (pp1 *mm_port.PushedAuthResponse, err error)) *AuthMock {
+func (mmProcessPushedAuthorization *mAuthUseCaseMockProcessPushedAuthorization) Set(f func(ctx context.Context, cmd mm_port.PushedAuthCommand) (pp1 *mm_port.PushedAuthResponse, err error)) *AuthUseCaseMock {
 	if mmProcessPushedAuthorization.defaultExpectation != nil {
 		mmProcessPushedAuthorization.mock.t.Fatalf("Default expectation is already set for the AuthUseCase.ProcessPushedAuthorization method")
 	}
@@ -3733,37 +3733,37 @@ func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) Set(f f
 
 // When sets expectation for the AuthUseCase.ProcessPushedAuthorization which will trigger the result defined by the following
 // Then helper
-func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) When(ctx context.Context, cmd mm_port.PushedAuthCommand) *AuthMockProcessPushedAuthorizationExpectation {
+func (mmProcessPushedAuthorization *mAuthUseCaseMockProcessPushedAuthorization) When(ctx context.Context, cmd mm_port.PushedAuthCommand) *AuthUseCaseMockProcessPushedAuthorizationExpectation {
 	if mmProcessPushedAuthorization.mock.funcProcessPushedAuthorization != nil {
-		mmProcessPushedAuthorization.mock.t.Fatalf("AuthMock.ProcessPushedAuthorization mock is already set by Set")
+		mmProcessPushedAuthorization.mock.t.Fatalf("AuthUseCaseMock.ProcessPushedAuthorization mock is already set by Set")
 	}
 
-	expectation := &AuthMockProcessPushedAuthorizationExpectation{
+	expectation := &AuthUseCaseMockProcessPushedAuthorizationExpectation{
 		mock:               mmProcessPushedAuthorization.mock,
-		params:             &AuthMockProcessPushedAuthorizationParams{ctx, cmd},
-		expectationOrigins: AuthMockProcessPushedAuthorizationExpectationOrigins{origin: minimock.CallerInfo(1)},
+		params:             &AuthUseCaseMockProcessPushedAuthorizationParams{ctx, cmd},
+		expectationOrigins: AuthUseCaseMockProcessPushedAuthorizationExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmProcessPushedAuthorization.expectations = append(mmProcessPushedAuthorization.expectations, expectation)
 	return expectation
 }
 
 // Then sets up AuthUseCase.ProcessPushedAuthorization return parameters for the expectation previously defined by the When method
-func (e *AuthMockProcessPushedAuthorizationExpectation) Then(pp1 *mm_port.PushedAuthResponse, err error) *AuthMock {
-	e.results = &AuthMockProcessPushedAuthorizationResults{pp1, err}
+func (e *AuthUseCaseMockProcessPushedAuthorizationExpectation) Then(pp1 *mm_port.PushedAuthResponse, err error) *AuthUseCaseMock {
+	e.results = &AuthUseCaseMockProcessPushedAuthorizationResults{pp1, err}
 	return e.mock
 }
 
 // Times sets number of times AuthUseCase.ProcessPushedAuthorization should be invoked
-func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) Times(n uint64) *mAuthMockProcessPushedAuthorization {
+func (mmProcessPushedAuthorization *mAuthUseCaseMockProcessPushedAuthorization) Times(n uint64) *mAuthUseCaseMockProcessPushedAuthorization {
 	if n == 0 {
-		mmProcessPushedAuthorization.mock.t.Fatalf("Times of AuthMock.ProcessPushedAuthorization mock can not be zero")
+		mmProcessPushedAuthorization.mock.t.Fatalf("Times of AuthUseCaseMock.ProcessPushedAuthorization mock can not be zero")
 	}
 	mm_atomic.StoreUint64(&mmProcessPushedAuthorization.expectedInvocations, n)
 	mmProcessPushedAuthorization.expectedInvocationsOrigin = minimock.CallerInfo(1)
 	return mmProcessPushedAuthorization
 }
 
-func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) invocationsDone() bool {
+func (mmProcessPushedAuthorization *mAuthUseCaseMockProcessPushedAuthorization) invocationsDone() bool {
 	if len(mmProcessPushedAuthorization.expectations) == 0 && mmProcessPushedAuthorization.defaultExpectation == nil && mmProcessPushedAuthorization.mock.funcProcessPushedAuthorization == nil {
 		return true
 	}
@@ -3775,7 +3775,7 @@ func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) invocat
 }
 
 // ProcessPushedAuthorization implements mm_port.AuthUseCase
-func (mmProcessPushedAuthorization *AuthMock) ProcessPushedAuthorization(ctx context.Context, cmd mm_port.PushedAuthCommand) (pp1 *mm_port.PushedAuthResponse, err error) {
+func (mmProcessPushedAuthorization *AuthUseCaseMock) ProcessPushedAuthorization(ctx context.Context, cmd mm_port.PushedAuthCommand) (pp1 *mm_port.PushedAuthResponse, err error) {
 	mm_atomic.AddUint64(&mmProcessPushedAuthorization.beforeProcessPushedAuthorizationCounter, 1)
 	defer mm_atomic.AddUint64(&mmProcessPushedAuthorization.afterProcessPushedAuthorizationCounter, 1)
 
@@ -3785,7 +3785,7 @@ func (mmProcessPushedAuthorization *AuthMock) ProcessPushedAuthorization(ctx con
 		mmProcessPushedAuthorization.inspectFuncProcessPushedAuthorization(ctx, cmd)
 	}
 
-	mm_params := AuthMockProcessPushedAuthorizationParams{ctx, cmd}
+	mm_params := AuthUseCaseMockProcessPushedAuthorizationParams{ctx, cmd}
 
 	// Record call args
 	mmProcessPushedAuthorization.ProcessPushedAuthorizationMock.mutex.Lock()
@@ -3804,54 +3804,54 @@ func (mmProcessPushedAuthorization *AuthMock) ProcessPushedAuthorization(ctx con
 		mm_want := mmProcessPushedAuthorization.ProcessPushedAuthorizationMock.defaultExpectation.params
 		mm_want_ptrs := mmProcessPushedAuthorization.ProcessPushedAuthorizationMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockProcessPushedAuthorizationParams{ctx, cmd}
+		mm_got := AuthUseCaseMockProcessPushedAuthorizationParams{ctx, cmd}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmProcessPushedAuthorization.t.Errorf("AuthMock.ProcessPushedAuthorization got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessPushedAuthorization.t.Errorf("AuthUseCaseMock.ProcessPushedAuthorization got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessPushedAuthorization.ProcessPushedAuthorizationMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
 			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
-				mmProcessPushedAuthorization.t.Errorf("AuthMock.ProcessPushedAuthorization got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessPushedAuthorization.t.Errorf("AuthUseCaseMock.ProcessPushedAuthorization got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessPushedAuthorization.ProcessPushedAuthorizationMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmProcessPushedAuthorization.t.Errorf("AuthMock.ProcessPushedAuthorization got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+			mmProcessPushedAuthorization.t.Errorf("AuthUseCaseMock.ProcessPushedAuthorization got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmProcessPushedAuthorization.ProcessPushedAuthorizationMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
 		mm_results := mmProcessPushedAuthorization.ProcessPushedAuthorizationMock.defaultExpectation.results
 		if mm_results == nil {
-			mmProcessPushedAuthorization.t.Fatal("No results are set for the AuthMock.ProcessPushedAuthorization")
+			mmProcessPushedAuthorization.t.Fatal("No results are set for the AuthUseCaseMock.ProcessPushedAuthorization")
 		}
 		return (*mm_results).pp1, (*mm_results).err
 	}
 	if mmProcessPushedAuthorization.funcProcessPushedAuthorization != nil {
 		return mmProcessPushedAuthorization.funcProcessPushedAuthorization(ctx, cmd)
 	}
-	mmProcessPushedAuthorization.t.Fatalf("Unexpected call to AuthMock.ProcessPushedAuthorization. %v %v", ctx, cmd)
+	mmProcessPushedAuthorization.t.Fatalf("Unexpected call to AuthUseCaseMock.ProcessPushedAuthorization. %v %v", ctx, cmd)
 	return
 }
 
-// ProcessPushedAuthorizationAfterCounter returns a count of finished AuthMock.ProcessPushedAuthorization invocations
-func (mmProcessPushedAuthorization *AuthMock) ProcessPushedAuthorizationAfterCounter() uint64 {
+// ProcessPushedAuthorizationAfterCounter returns a count of finished AuthUseCaseMock.ProcessPushedAuthorization invocations
+func (mmProcessPushedAuthorization *AuthUseCaseMock) ProcessPushedAuthorizationAfterCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessPushedAuthorization.afterProcessPushedAuthorizationCounter)
 }
 
-// ProcessPushedAuthorizationBeforeCounter returns a count of AuthMock.ProcessPushedAuthorization invocations
-func (mmProcessPushedAuthorization *AuthMock) ProcessPushedAuthorizationBeforeCounter() uint64 {
+// ProcessPushedAuthorizationBeforeCounter returns a count of AuthUseCaseMock.ProcessPushedAuthorization invocations
+func (mmProcessPushedAuthorization *AuthUseCaseMock) ProcessPushedAuthorizationBeforeCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessPushedAuthorization.beforeProcessPushedAuthorizationCounter)
 }
 
-// Calls returns a list of arguments used in each call to AuthMock.ProcessPushedAuthorization.
+// Calls returns a list of arguments used in each call to AuthUseCaseMock.ProcessPushedAuthorization.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) Calls() []*AuthMockProcessPushedAuthorizationParams {
+func (mmProcessPushedAuthorization *mAuthUseCaseMockProcessPushedAuthorization) Calls() []*AuthUseCaseMockProcessPushedAuthorizationParams {
 	mmProcessPushedAuthorization.mutex.RLock()
 
-	argCopy := make([]*AuthMockProcessPushedAuthorizationParams, len(mmProcessPushedAuthorization.callArgs))
+	argCopy := make([]*AuthUseCaseMockProcessPushedAuthorizationParams, len(mmProcessPushedAuthorization.callArgs))
 	copy(argCopy, mmProcessPushedAuthorization.callArgs)
 
 	mmProcessPushedAuthorization.mutex.RUnlock()
@@ -3861,7 +3861,7 @@ func (mmProcessPushedAuthorization *mAuthMockProcessPushedAuthorization) Calls()
 
 // MinimockProcessPushedAuthorizationDone returns true if the count of the ProcessPushedAuthorization invocations corresponds
 // the number of defined expectations
-func (m *AuthMock) MinimockProcessPushedAuthorizationDone() bool {
+func (m *AuthUseCaseMock) MinimockProcessPushedAuthorizationDone() bool {
 	if m.ProcessPushedAuthorizationMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
@@ -3877,10 +3877,10 @@ func (m *AuthMock) MinimockProcessPushedAuthorizationDone() bool {
 }
 
 // MinimockProcessPushedAuthorizationInspect logs each unmet expectation
-func (m *AuthMock) MinimockProcessPushedAuthorizationInspect() {
+func (m *AuthUseCaseMock) MinimockProcessPushedAuthorizationInspect() {
 	for _, e := range m.ProcessPushedAuthorizationMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to AuthMock.ProcessPushedAuthorization at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessPushedAuthorization at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
@@ -3888,66 +3888,66 @@ func (m *AuthMock) MinimockProcessPushedAuthorizationInspect() {
 	// if default expectation was set then invocations count should be greater than zero
 	if m.ProcessPushedAuthorizationMock.defaultExpectation != nil && afterProcessPushedAuthorizationCounter < 1 {
 		if m.ProcessPushedAuthorizationMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to AuthMock.ProcessPushedAuthorization at\n%s", m.ProcessPushedAuthorizationMock.defaultExpectation.returnOrigin)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessPushedAuthorization at\n%s", m.ProcessPushedAuthorizationMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to AuthMock.ProcessPushedAuthorization at\n%s with params: %#v", m.ProcessPushedAuthorizationMock.defaultExpectation.expectationOrigins.origin, *m.ProcessPushedAuthorizationMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessPushedAuthorization at\n%s with params: %#v", m.ProcessPushedAuthorizationMock.defaultExpectation.expectationOrigins.origin, *m.ProcessPushedAuthorizationMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
 	if m.funcProcessPushedAuthorization != nil && afterProcessPushedAuthorizationCounter < 1 {
-		m.t.Errorf("Expected call to AuthMock.ProcessPushedAuthorization at\n%s", m.funcProcessPushedAuthorizationOrigin)
+		m.t.Errorf("Expected call to AuthUseCaseMock.ProcessPushedAuthorization at\n%s", m.funcProcessPushedAuthorizationOrigin)
 	}
 
 	if !m.ProcessPushedAuthorizationMock.invocationsDone() && afterProcessPushedAuthorizationCounter > 0 {
-		m.t.Errorf("Expected %d calls to AuthMock.ProcessPushedAuthorization at\n%s but found %d calls",
+		m.t.Errorf("Expected %d calls to AuthUseCaseMock.ProcessPushedAuthorization at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ProcessPushedAuthorizationMock.expectedInvocations), m.ProcessPushedAuthorizationMock.expectedInvocationsOrigin, afterProcessPushedAuthorizationCounter)
 	}
 }
 
-type mAuthMockProcessTokenIntrospection struct {
+type mAuthUseCaseMockProcessTokenIntrospection struct {
 	optional           bool
-	mock               *AuthMock
-	defaultExpectation *AuthMockProcessTokenIntrospectionExpectation
-	expectations       []*AuthMockProcessTokenIntrospectionExpectation
+	mock               *AuthUseCaseMock
+	defaultExpectation *AuthUseCaseMockProcessTokenIntrospectionExpectation
+	expectations       []*AuthUseCaseMockProcessTokenIntrospectionExpectation
 
-	callArgs []*AuthMockProcessTokenIntrospectionParams
+	callArgs []*AuthUseCaseMockProcessTokenIntrospectionParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// AuthMockProcessTokenIntrospectionExpectation specifies expectation struct of the AuthUseCase.ProcessTokenIntrospection
-type AuthMockProcessTokenIntrospectionExpectation struct {
-	mock               *AuthMock
-	params             *AuthMockProcessTokenIntrospectionParams
-	paramPtrs          *AuthMockProcessTokenIntrospectionParamPtrs
-	expectationOrigins AuthMockProcessTokenIntrospectionExpectationOrigins
-	results            *AuthMockProcessTokenIntrospectionResults
+// AuthUseCaseMockProcessTokenIntrospectionExpectation specifies expectation struct of the AuthUseCase.ProcessTokenIntrospection
+type AuthUseCaseMockProcessTokenIntrospectionExpectation struct {
+	mock               *AuthUseCaseMock
+	params             *AuthUseCaseMockProcessTokenIntrospectionParams
+	paramPtrs          *AuthUseCaseMockProcessTokenIntrospectionParamPtrs
+	expectationOrigins AuthUseCaseMockProcessTokenIntrospectionExpectationOrigins
+	results            *AuthUseCaseMockProcessTokenIntrospectionResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// AuthMockProcessTokenIntrospectionParams contains parameters of the AuthUseCase.ProcessTokenIntrospection
-type AuthMockProcessTokenIntrospectionParams struct {
+// AuthUseCaseMockProcessTokenIntrospectionParams contains parameters of the AuthUseCase.ProcessTokenIntrospection
+type AuthUseCaseMockProcessTokenIntrospectionParams struct {
 	ctx context.Context
 	cmd mm_port.IntrospectTokenCommand
 }
 
-// AuthMockProcessTokenIntrospectionParamPtrs contains pointers to parameters of the AuthUseCase.ProcessTokenIntrospection
-type AuthMockProcessTokenIntrospectionParamPtrs struct {
+// AuthUseCaseMockProcessTokenIntrospectionParamPtrs contains pointers to parameters of the AuthUseCase.ProcessTokenIntrospection
+type AuthUseCaseMockProcessTokenIntrospectionParamPtrs struct {
 	ctx *context.Context
 	cmd *mm_port.IntrospectTokenCommand
 }
 
-// AuthMockProcessTokenIntrospectionResults contains results of the AuthUseCase.ProcessTokenIntrospection
-type AuthMockProcessTokenIntrospectionResults struct {
+// AuthUseCaseMockProcessTokenIntrospectionResults contains results of the AuthUseCase.ProcessTokenIntrospection
+type AuthUseCaseMockProcessTokenIntrospectionResults struct {
 	ip1 *model.IntrospectionResponse
 	err error
 }
 
-// AuthMockProcessTokenIntrospectionOrigins contains origins of expectations of the AuthUseCase.ProcessTokenIntrospection
-type AuthMockProcessTokenIntrospectionExpectationOrigins struct {
+// AuthUseCaseMockProcessTokenIntrospectionOrigins contains origins of expectations of the AuthUseCase.ProcessTokenIntrospection
+type AuthUseCaseMockProcessTokenIntrospectionExpectationOrigins struct {
 	origin    string
 	originCtx string
 	originCmd string
@@ -3958,26 +3958,26 @@ type AuthMockProcessTokenIntrospectionExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) Optional() *mAuthMockProcessTokenIntrospection {
+func (mmProcessTokenIntrospection *mAuthUseCaseMockProcessTokenIntrospection) Optional() *mAuthUseCaseMockProcessTokenIntrospection {
 	mmProcessTokenIntrospection.optional = true
 	return mmProcessTokenIntrospection
 }
 
 // Expect sets up expected params for AuthUseCase.ProcessTokenIntrospection
-func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) Expect(ctx context.Context, cmd mm_port.IntrospectTokenCommand) *mAuthMockProcessTokenIntrospection {
+func (mmProcessTokenIntrospection *mAuthUseCaseMockProcessTokenIntrospection) Expect(ctx context.Context, cmd mm_port.IntrospectTokenCommand) *mAuthUseCaseMockProcessTokenIntrospection {
 	if mmProcessTokenIntrospection.mock.funcProcessTokenIntrospection != nil {
-		mmProcessTokenIntrospection.mock.t.Fatalf("AuthMock.ProcessTokenIntrospection mock is already set by Set")
+		mmProcessTokenIntrospection.mock.t.Fatalf("AuthUseCaseMock.ProcessTokenIntrospection mock is already set by Set")
 	}
 
 	if mmProcessTokenIntrospection.defaultExpectation == nil {
-		mmProcessTokenIntrospection.defaultExpectation = &AuthMockProcessTokenIntrospectionExpectation{}
+		mmProcessTokenIntrospection.defaultExpectation = &AuthUseCaseMockProcessTokenIntrospectionExpectation{}
 	}
 
 	if mmProcessTokenIntrospection.defaultExpectation.paramPtrs != nil {
-		mmProcessTokenIntrospection.mock.t.Fatalf("AuthMock.ProcessTokenIntrospection mock is already set by ExpectParams functions")
+		mmProcessTokenIntrospection.mock.t.Fatalf("AuthUseCaseMock.ProcessTokenIntrospection mock is already set by ExpectParams functions")
 	}
 
-	mmProcessTokenIntrospection.defaultExpectation.params = &AuthMockProcessTokenIntrospectionParams{ctx, cmd}
+	mmProcessTokenIntrospection.defaultExpectation.params = &AuthUseCaseMockProcessTokenIntrospectionParams{ctx, cmd}
 	mmProcessTokenIntrospection.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmProcessTokenIntrospection.expectations {
 		if minimock.Equal(e.params, mmProcessTokenIntrospection.defaultExpectation.params) {
@@ -3989,21 +3989,21 @@ func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) Expect(ct
 }
 
 // ExpectCtxParam1 sets up expected param ctx for AuthUseCase.ProcessTokenIntrospection
-func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) ExpectCtxParam1(ctx context.Context) *mAuthMockProcessTokenIntrospection {
+func (mmProcessTokenIntrospection *mAuthUseCaseMockProcessTokenIntrospection) ExpectCtxParam1(ctx context.Context) *mAuthUseCaseMockProcessTokenIntrospection {
 	if mmProcessTokenIntrospection.mock.funcProcessTokenIntrospection != nil {
-		mmProcessTokenIntrospection.mock.t.Fatalf("AuthMock.ProcessTokenIntrospection mock is already set by Set")
+		mmProcessTokenIntrospection.mock.t.Fatalf("AuthUseCaseMock.ProcessTokenIntrospection mock is already set by Set")
 	}
 
 	if mmProcessTokenIntrospection.defaultExpectation == nil {
-		mmProcessTokenIntrospection.defaultExpectation = &AuthMockProcessTokenIntrospectionExpectation{}
+		mmProcessTokenIntrospection.defaultExpectation = &AuthUseCaseMockProcessTokenIntrospectionExpectation{}
 	}
 
 	if mmProcessTokenIntrospection.defaultExpectation.params != nil {
-		mmProcessTokenIntrospection.mock.t.Fatalf("AuthMock.ProcessTokenIntrospection mock is already set by Expect")
+		mmProcessTokenIntrospection.mock.t.Fatalf("AuthUseCaseMock.ProcessTokenIntrospection mock is already set by Expect")
 	}
 
 	if mmProcessTokenIntrospection.defaultExpectation.paramPtrs == nil {
-		mmProcessTokenIntrospection.defaultExpectation.paramPtrs = &AuthMockProcessTokenIntrospectionParamPtrs{}
+		mmProcessTokenIntrospection.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessTokenIntrospectionParamPtrs{}
 	}
 	mmProcessTokenIntrospection.defaultExpectation.paramPtrs.ctx = &ctx
 	mmProcessTokenIntrospection.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
@@ -4012,21 +4012,21 @@ func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) ExpectCtx
 }
 
 // ExpectCmdParam2 sets up expected param cmd for AuthUseCase.ProcessTokenIntrospection
-func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) ExpectCmdParam2(cmd mm_port.IntrospectTokenCommand) *mAuthMockProcessTokenIntrospection {
+func (mmProcessTokenIntrospection *mAuthUseCaseMockProcessTokenIntrospection) ExpectCmdParam2(cmd mm_port.IntrospectTokenCommand) *mAuthUseCaseMockProcessTokenIntrospection {
 	if mmProcessTokenIntrospection.mock.funcProcessTokenIntrospection != nil {
-		mmProcessTokenIntrospection.mock.t.Fatalf("AuthMock.ProcessTokenIntrospection mock is already set by Set")
+		mmProcessTokenIntrospection.mock.t.Fatalf("AuthUseCaseMock.ProcessTokenIntrospection mock is already set by Set")
 	}
 
 	if mmProcessTokenIntrospection.defaultExpectation == nil {
-		mmProcessTokenIntrospection.defaultExpectation = &AuthMockProcessTokenIntrospectionExpectation{}
+		mmProcessTokenIntrospection.defaultExpectation = &AuthUseCaseMockProcessTokenIntrospectionExpectation{}
 	}
 
 	if mmProcessTokenIntrospection.defaultExpectation.params != nil {
-		mmProcessTokenIntrospection.mock.t.Fatalf("AuthMock.ProcessTokenIntrospection mock is already set by Expect")
+		mmProcessTokenIntrospection.mock.t.Fatalf("AuthUseCaseMock.ProcessTokenIntrospection mock is already set by Expect")
 	}
 
 	if mmProcessTokenIntrospection.defaultExpectation.paramPtrs == nil {
-		mmProcessTokenIntrospection.defaultExpectation.paramPtrs = &AuthMockProcessTokenIntrospectionParamPtrs{}
+		mmProcessTokenIntrospection.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessTokenIntrospectionParamPtrs{}
 	}
 	mmProcessTokenIntrospection.defaultExpectation.paramPtrs.cmd = &cmd
 	mmProcessTokenIntrospection.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
@@ -4035,9 +4035,9 @@ func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) ExpectCmd
 }
 
 // Inspect accepts an inspector function that has same arguments as the AuthUseCase.ProcessTokenIntrospection
-func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) Inspect(f func(ctx context.Context, cmd mm_port.IntrospectTokenCommand)) *mAuthMockProcessTokenIntrospection {
+func (mmProcessTokenIntrospection *mAuthUseCaseMockProcessTokenIntrospection) Inspect(f func(ctx context.Context, cmd mm_port.IntrospectTokenCommand)) *mAuthUseCaseMockProcessTokenIntrospection {
 	if mmProcessTokenIntrospection.mock.inspectFuncProcessTokenIntrospection != nil {
-		mmProcessTokenIntrospection.mock.t.Fatalf("Inspect function is already set for AuthMock.ProcessTokenIntrospection")
+		mmProcessTokenIntrospection.mock.t.Fatalf("Inspect function is already set for AuthUseCaseMock.ProcessTokenIntrospection")
 	}
 
 	mmProcessTokenIntrospection.mock.inspectFuncProcessTokenIntrospection = f
@@ -4046,21 +4046,21 @@ func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) Inspect(f
 }
 
 // Return sets up results that will be returned by AuthUseCase.ProcessTokenIntrospection
-func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) Return(ip1 *model.IntrospectionResponse, err error) *AuthMock {
+func (mmProcessTokenIntrospection *mAuthUseCaseMockProcessTokenIntrospection) Return(ip1 *model.IntrospectionResponse, err error) *AuthUseCaseMock {
 	if mmProcessTokenIntrospection.mock.funcProcessTokenIntrospection != nil {
-		mmProcessTokenIntrospection.mock.t.Fatalf("AuthMock.ProcessTokenIntrospection mock is already set by Set")
+		mmProcessTokenIntrospection.mock.t.Fatalf("AuthUseCaseMock.ProcessTokenIntrospection mock is already set by Set")
 	}
 
 	if mmProcessTokenIntrospection.defaultExpectation == nil {
-		mmProcessTokenIntrospection.defaultExpectation = &AuthMockProcessTokenIntrospectionExpectation{mock: mmProcessTokenIntrospection.mock}
+		mmProcessTokenIntrospection.defaultExpectation = &AuthUseCaseMockProcessTokenIntrospectionExpectation{mock: mmProcessTokenIntrospection.mock}
 	}
-	mmProcessTokenIntrospection.defaultExpectation.results = &AuthMockProcessTokenIntrospectionResults{ip1, err}
+	mmProcessTokenIntrospection.defaultExpectation.results = &AuthUseCaseMockProcessTokenIntrospectionResults{ip1, err}
 	mmProcessTokenIntrospection.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmProcessTokenIntrospection.mock
 }
 
 // Set uses given function f to mock the AuthUseCase.ProcessTokenIntrospection method
-func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) Set(f func(ctx context.Context, cmd mm_port.IntrospectTokenCommand) (ip1 *model.IntrospectionResponse, err error)) *AuthMock {
+func (mmProcessTokenIntrospection *mAuthUseCaseMockProcessTokenIntrospection) Set(f func(ctx context.Context, cmd mm_port.IntrospectTokenCommand) (ip1 *model.IntrospectionResponse, err error)) *AuthUseCaseMock {
 	if mmProcessTokenIntrospection.defaultExpectation != nil {
 		mmProcessTokenIntrospection.mock.t.Fatalf("Default expectation is already set for the AuthUseCase.ProcessTokenIntrospection method")
 	}
@@ -4076,37 +4076,37 @@ func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) Set(f fun
 
 // When sets expectation for the AuthUseCase.ProcessTokenIntrospection which will trigger the result defined by the following
 // Then helper
-func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) When(ctx context.Context, cmd mm_port.IntrospectTokenCommand) *AuthMockProcessTokenIntrospectionExpectation {
+func (mmProcessTokenIntrospection *mAuthUseCaseMockProcessTokenIntrospection) When(ctx context.Context, cmd mm_port.IntrospectTokenCommand) *AuthUseCaseMockProcessTokenIntrospectionExpectation {
 	if mmProcessTokenIntrospection.mock.funcProcessTokenIntrospection != nil {
-		mmProcessTokenIntrospection.mock.t.Fatalf("AuthMock.ProcessTokenIntrospection mock is already set by Set")
+		mmProcessTokenIntrospection.mock.t.Fatalf("AuthUseCaseMock.ProcessTokenIntrospection mock is already set by Set")
 	}
 
-	expectation := &AuthMockProcessTokenIntrospectionExpectation{
+	expectation := &AuthUseCaseMockProcessTokenIntrospectionExpectation{
 		mock:               mmProcessTokenIntrospection.mock,
-		params:             &AuthMockProcessTokenIntrospectionParams{ctx, cmd},
-		expectationOrigins: AuthMockProcessTokenIntrospectionExpectationOrigins{origin: minimock.CallerInfo(1)},
+		params:             &AuthUseCaseMockProcessTokenIntrospectionParams{ctx, cmd},
+		expectationOrigins: AuthUseCaseMockProcessTokenIntrospectionExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmProcessTokenIntrospection.expectations = append(mmProcessTokenIntrospection.expectations, expectation)
 	return expectation
 }
 
 // Then sets up AuthUseCase.ProcessTokenIntrospection return parameters for the expectation previously defined by the When method
-func (e *AuthMockProcessTokenIntrospectionExpectation) Then(ip1 *model.IntrospectionResponse, err error) *AuthMock {
-	e.results = &AuthMockProcessTokenIntrospectionResults{ip1, err}
+func (e *AuthUseCaseMockProcessTokenIntrospectionExpectation) Then(ip1 *model.IntrospectionResponse, err error) *AuthUseCaseMock {
+	e.results = &AuthUseCaseMockProcessTokenIntrospectionResults{ip1, err}
 	return e.mock
 }
 
 // Times sets number of times AuthUseCase.ProcessTokenIntrospection should be invoked
-func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) Times(n uint64) *mAuthMockProcessTokenIntrospection {
+func (mmProcessTokenIntrospection *mAuthUseCaseMockProcessTokenIntrospection) Times(n uint64) *mAuthUseCaseMockProcessTokenIntrospection {
 	if n == 0 {
-		mmProcessTokenIntrospection.mock.t.Fatalf("Times of AuthMock.ProcessTokenIntrospection mock can not be zero")
+		mmProcessTokenIntrospection.mock.t.Fatalf("Times of AuthUseCaseMock.ProcessTokenIntrospection mock can not be zero")
 	}
 	mm_atomic.StoreUint64(&mmProcessTokenIntrospection.expectedInvocations, n)
 	mmProcessTokenIntrospection.expectedInvocationsOrigin = minimock.CallerInfo(1)
 	return mmProcessTokenIntrospection
 }
 
-func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) invocationsDone() bool {
+func (mmProcessTokenIntrospection *mAuthUseCaseMockProcessTokenIntrospection) invocationsDone() bool {
 	if len(mmProcessTokenIntrospection.expectations) == 0 && mmProcessTokenIntrospection.defaultExpectation == nil && mmProcessTokenIntrospection.mock.funcProcessTokenIntrospection == nil {
 		return true
 	}
@@ -4118,7 +4118,7 @@ func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) invocatio
 }
 
 // ProcessTokenIntrospection implements mm_port.AuthUseCase
-func (mmProcessTokenIntrospection *AuthMock) ProcessTokenIntrospection(ctx context.Context, cmd mm_port.IntrospectTokenCommand) (ip1 *model.IntrospectionResponse, err error) {
+func (mmProcessTokenIntrospection *AuthUseCaseMock) ProcessTokenIntrospection(ctx context.Context, cmd mm_port.IntrospectTokenCommand) (ip1 *model.IntrospectionResponse, err error) {
 	mm_atomic.AddUint64(&mmProcessTokenIntrospection.beforeProcessTokenIntrospectionCounter, 1)
 	defer mm_atomic.AddUint64(&mmProcessTokenIntrospection.afterProcessTokenIntrospectionCounter, 1)
 
@@ -4128,7 +4128,7 @@ func (mmProcessTokenIntrospection *AuthMock) ProcessTokenIntrospection(ctx conte
 		mmProcessTokenIntrospection.inspectFuncProcessTokenIntrospection(ctx, cmd)
 	}
 
-	mm_params := AuthMockProcessTokenIntrospectionParams{ctx, cmd}
+	mm_params := AuthUseCaseMockProcessTokenIntrospectionParams{ctx, cmd}
 
 	// Record call args
 	mmProcessTokenIntrospection.ProcessTokenIntrospectionMock.mutex.Lock()
@@ -4147,54 +4147,54 @@ func (mmProcessTokenIntrospection *AuthMock) ProcessTokenIntrospection(ctx conte
 		mm_want := mmProcessTokenIntrospection.ProcessTokenIntrospectionMock.defaultExpectation.params
 		mm_want_ptrs := mmProcessTokenIntrospection.ProcessTokenIntrospectionMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockProcessTokenIntrospectionParams{ctx, cmd}
+		mm_got := AuthUseCaseMockProcessTokenIntrospectionParams{ctx, cmd}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmProcessTokenIntrospection.t.Errorf("AuthMock.ProcessTokenIntrospection got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessTokenIntrospection.t.Errorf("AuthUseCaseMock.ProcessTokenIntrospection got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessTokenIntrospection.ProcessTokenIntrospectionMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
 			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
-				mmProcessTokenIntrospection.t.Errorf("AuthMock.ProcessTokenIntrospection got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessTokenIntrospection.t.Errorf("AuthUseCaseMock.ProcessTokenIntrospection got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessTokenIntrospection.ProcessTokenIntrospectionMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmProcessTokenIntrospection.t.Errorf("AuthMock.ProcessTokenIntrospection got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+			mmProcessTokenIntrospection.t.Errorf("AuthUseCaseMock.ProcessTokenIntrospection got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmProcessTokenIntrospection.ProcessTokenIntrospectionMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
 		mm_results := mmProcessTokenIntrospection.ProcessTokenIntrospectionMock.defaultExpectation.results
 		if mm_results == nil {
-			mmProcessTokenIntrospection.t.Fatal("No results are set for the AuthMock.ProcessTokenIntrospection")
+			mmProcessTokenIntrospection.t.Fatal("No results are set for the AuthUseCaseMock.ProcessTokenIntrospection")
 		}
 		return (*mm_results).ip1, (*mm_results).err
 	}
 	if mmProcessTokenIntrospection.funcProcessTokenIntrospection != nil {
 		return mmProcessTokenIntrospection.funcProcessTokenIntrospection(ctx, cmd)
 	}
-	mmProcessTokenIntrospection.t.Fatalf("Unexpected call to AuthMock.ProcessTokenIntrospection. %v %v", ctx, cmd)
+	mmProcessTokenIntrospection.t.Fatalf("Unexpected call to AuthUseCaseMock.ProcessTokenIntrospection. %v %v", ctx, cmd)
 	return
 }
 
-// ProcessTokenIntrospectionAfterCounter returns a count of finished AuthMock.ProcessTokenIntrospection invocations
-func (mmProcessTokenIntrospection *AuthMock) ProcessTokenIntrospectionAfterCounter() uint64 {
+// ProcessTokenIntrospectionAfterCounter returns a count of finished AuthUseCaseMock.ProcessTokenIntrospection invocations
+func (mmProcessTokenIntrospection *AuthUseCaseMock) ProcessTokenIntrospectionAfterCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessTokenIntrospection.afterProcessTokenIntrospectionCounter)
 }
 
-// ProcessTokenIntrospectionBeforeCounter returns a count of AuthMock.ProcessTokenIntrospection invocations
-func (mmProcessTokenIntrospection *AuthMock) ProcessTokenIntrospectionBeforeCounter() uint64 {
+// ProcessTokenIntrospectionBeforeCounter returns a count of AuthUseCaseMock.ProcessTokenIntrospection invocations
+func (mmProcessTokenIntrospection *AuthUseCaseMock) ProcessTokenIntrospectionBeforeCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessTokenIntrospection.beforeProcessTokenIntrospectionCounter)
 }
 
-// Calls returns a list of arguments used in each call to AuthMock.ProcessTokenIntrospection.
+// Calls returns a list of arguments used in each call to AuthUseCaseMock.ProcessTokenIntrospection.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) Calls() []*AuthMockProcessTokenIntrospectionParams {
+func (mmProcessTokenIntrospection *mAuthUseCaseMockProcessTokenIntrospection) Calls() []*AuthUseCaseMockProcessTokenIntrospectionParams {
 	mmProcessTokenIntrospection.mutex.RLock()
 
-	argCopy := make([]*AuthMockProcessTokenIntrospectionParams, len(mmProcessTokenIntrospection.callArgs))
+	argCopy := make([]*AuthUseCaseMockProcessTokenIntrospectionParams, len(mmProcessTokenIntrospection.callArgs))
 	copy(argCopy, mmProcessTokenIntrospection.callArgs)
 
 	mmProcessTokenIntrospection.mutex.RUnlock()
@@ -4204,7 +4204,7 @@ func (mmProcessTokenIntrospection *mAuthMockProcessTokenIntrospection) Calls() [
 
 // MinimockProcessTokenIntrospectionDone returns true if the count of the ProcessTokenIntrospection invocations corresponds
 // the number of defined expectations
-func (m *AuthMock) MinimockProcessTokenIntrospectionDone() bool {
+func (m *AuthUseCaseMock) MinimockProcessTokenIntrospectionDone() bool {
 	if m.ProcessTokenIntrospectionMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
@@ -4220,10 +4220,10 @@ func (m *AuthMock) MinimockProcessTokenIntrospectionDone() bool {
 }
 
 // MinimockProcessTokenIntrospectionInspect logs each unmet expectation
-func (m *AuthMock) MinimockProcessTokenIntrospectionInspect() {
+func (m *AuthUseCaseMock) MinimockProcessTokenIntrospectionInspect() {
 	for _, e := range m.ProcessTokenIntrospectionMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to AuthMock.ProcessTokenIntrospection at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessTokenIntrospection at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
@@ -4231,65 +4231,65 @@ func (m *AuthMock) MinimockProcessTokenIntrospectionInspect() {
 	// if default expectation was set then invocations count should be greater than zero
 	if m.ProcessTokenIntrospectionMock.defaultExpectation != nil && afterProcessTokenIntrospectionCounter < 1 {
 		if m.ProcessTokenIntrospectionMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to AuthMock.ProcessTokenIntrospection at\n%s", m.ProcessTokenIntrospectionMock.defaultExpectation.returnOrigin)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessTokenIntrospection at\n%s", m.ProcessTokenIntrospectionMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to AuthMock.ProcessTokenIntrospection at\n%s with params: %#v", m.ProcessTokenIntrospectionMock.defaultExpectation.expectationOrigins.origin, *m.ProcessTokenIntrospectionMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessTokenIntrospection at\n%s with params: %#v", m.ProcessTokenIntrospectionMock.defaultExpectation.expectationOrigins.origin, *m.ProcessTokenIntrospectionMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
 	if m.funcProcessTokenIntrospection != nil && afterProcessTokenIntrospectionCounter < 1 {
-		m.t.Errorf("Expected call to AuthMock.ProcessTokenIntrospection at\n%s", m.funcProcessTokenIntrospectionOrigin)
+		m.t.Errorf("Expected call to AuthUseCaseMock.ProcessTokenIntrospection at\n%s", m.funcProcessTokenIntrospectionOrigin)
 	}
 
 	if !m.ProcessTokenIntrospectionMock.invocationsDone() && afterProcessTokenIntrospectionCounter > 0 {
-		m.t.Errorf("Expected %d calls to AuthMock.ProcessTokenIntrospection at\n%s but found %d calls",
+		m.t.Errorf("Expected %d calls to AuthUseCaseMock.ProcessTokenIntrospection at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ProcessTokenIntrospectionMock.expectedInvocations), m.ProcessTokenIntrospectionMock.expectedInvocationsOrigin, afterProcessTokenIntrospectionCounter)
 	}
 }
 
-type mAuthMockProcessTokenRevocation struct {
+type mAuthUseCaseMockProcessTokenRevocation struct {
 	optional           bool
-	mock               *AuthMock
-	defaultExpectation *AuthMockProcessTokenRevocationExpectation
-	expectations       []*AuthMockProcessTokenRevocationExpectation
+	mock               *AuthUseCaseMock
+	defaultExpectation *AuthUseCaseMockProcessTokenRevocationExpectation
+	expectations       []*AuthUseCaseMockProcessTokenRevocationExpectation
 
-	callArgs []*AuthMockProcessTokenRevocationParams
+	callArgs []*AuthUseCaseMockProcessTokenRevocationParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// AuthMockProcessTokenRevocationExpectation specifies expectation struct of the AuthUseCase.ProcessTokenRevocation
-type AuthMockProcessTokenRevocationExpectation struct {
-	mock               *AuthMock
-	params             *AuthMockProcessTokenRevocationParams
-	paramPtrs          *AuthMockProcessTokenRevocationParamPtrs
-	expectationOrigins AuthMockProcessTokenRevocationExpectationOrigins
-	results            *AuthMockProcessTokenRevocationResults
+// AuthUseCaseMockProcessTokenRevocationExpectation specifies expectation struct of the AuthUseCase.ProcessTokenRevocation
+type AuthUseCaseMockProcessTokenRevocationExpectation struct {
+	mock               *AuthUseCaseMock
+	params             *AuthUseCaseMockProcessTokenRevocationParams
+	paramPtrs          *AuthUseCaseMockProcessTokenRevocationParamPtrs
+	expectationOrigins AuthUseCaseMockProcessTokenRevocationExpectationOrigins
+	results            *AuthUseCaseMockProcessTokenRevocationResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// AuthMockProcessTokenRevocationParams contains parameters of the AuthUseCase.ProcessTokenRevocation
-type AuthMockProcessTokenRevocationParams struct {
+// AuthUseCaseMockProcessTokenRevocationParams contains parameters of the AuthUseCase.ProcessTokenRevocation
+type AuthUseCaseMockProcessTokenRevocationParams struct {
 	ctx context.Context
 	cmd mm_port.RevokeTokenCommand
 }
 
-// AuthMockProcessTokenRevocationParamPtrs contains pointers to parameters of the AuthUseCase.ProcessTokenRevocation
-type AuthMockProcessTokenRevocationParamPtrs struct {
+// AuthUseCaseMockProcessTokenRevocationParamPtrs contains pointers to parameters of the AuthUseCase.ProcessTokenRevocation
+type AuthUseCaseMockProcessTokenRevocationParamPtrs struct {
 	ctx *context.Context
 	cmd *mm_port.RevokeTokenCommand
 }
 
-// AuthMockProcessTokenRevocationResults contains results of the AuthUseCase.ProcessTokenRevocation
-type AuthMockProcessTokenRevocationResults struct {
+// AuthUseCaseMockProcessTokenRevocationResults contains results of the AuthUseCase.ProcessTokenRevocation
+type AuthUseCaseMockProcessTokenRevocationResults struct {
 	err error
 }
 
-// AuthMockProcessTokenRevocationOrigins contains origins of expectations of the AuthUseCase.ProcessTokenRevocation
-type AuthMockProcessTokenRevocationExpectationOrigins struct {
+// AuthUseCaseMockProcessTokenRevocationOrigins contains origins of expectations of the AuthUseCase.ProcessTokenRevocation
+type AuthUseCaseMockProcessTokenRevocationExpectationOrigins struct {
 	origin    string
 	originCtx string
 	originCmd string
@@ -4300,26 +4300,26 @@ type AuthMockProcessTokenRevocationExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) Optional() *mAuthMockProcessTokenRevocation {
+func (mmProcessTokenRevocation *mAuthUseCaseMockProcessTokenRevocation) Optional() *mAuthUseCaseMockProcessTokenRevocation {
 	mmProcessTokenRevocation.optional = true
 	return mmProcessTokenRevocation
 }
 
 // Expect sets up expected params for AuthUseCase.ProcessTokenRevocation
-func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) Expect(ctx context.Context, cmd mm_port.RevokeTokenCommand) *mAuthMockProcessTokenRevocation {
+func (mmProcessTokenRevocation *mAuthUseCaseMockProcessTokenRevocation) Expect(ctx context.Context, cmd mm_port.RevokeTokenCommand) *mAuthUseCaseMockProcessTokenRevocation {
 	if mmProcessTokenRevocation.mock.funcProcessTokenRevocation != nil {
-		mmProcessTokenRevocation.mock.t.Fatalf("AuthMock.ProcessTokenRevocation mock is already set by Set")
+		mmProcessTokenRevocation.mock.t.Fatalf("AuthUseCaseMock.ProcessTokenRevocation mock is already set by Set")
 	}
 
 	if mmProcessTokenRevocation.defaultExpectation == nil {
-		mmProcessTokenRevocation.defaultExpectation = &AuthMockProcessTokenRevocationExpectation{}
+		mmProcessTokenRevocation.defaultExpectation = &AuthUseCaseMockProcessTokenRevocationExpectation{}
 	}
 
 	if mmProcessTokenRevocation.defaultExpectation.paramPtrs != nil {
-		mmProcessTokenRevocation.mock.t.Fatalf("AuthMock.ProcessTokenRevocation mock is already set by ExpectParams functions")
+		mmProcessTokenRevocation.mock.t.Fatalf("AuthUseCaseMock.ProcessTokenRevocation mock is already set by ExpectParams functions")
 	}
 
-	mmProcessTokenRevocation.defaultExpectation.params = &AuthMockProcessTokenRevocationParams{ctx, cmd}
+	mmProcessTokenRevocation.defaultExpectation.params = &AuthUseCaseMockProcessTokenRevocationParams{ctx, cmd}
 	mmProcessTokenRevocation.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmProcessTokenRevocation.expectations {
 		if minimock.Equal(e.params, mmProcessTokenRevocation.defaultExpectation.params) {
@@ -4331,21 +4331,21 @@ func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) Expect(ctx cont
 }
 
 // ExpectCtxParam1 sets up expected param ctx for AuthUseCase.ProcessTokenRevocation
-func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) ExpectCtxParam1(ctx context.Context) *mAuthMockProcessTokenRevocation {
+func (mmProcessTokenRevocation *mAuthUseCaseMockProcessTokenRevocation) ExpectCtxParam1(ctx context.Context) *mAuthUseCaseMockProcessTokenRevocation {
 	if mmProcessTokenRevocation.mock.funcProcessTokenRevocation != nil {
-		mmProcessTokenRevocation.mock.t.Fatalf("AuthMock.ProcessTokenRevocation mock is already set by Set")
+		mmProcessTokenRevocation.mock.t.Fatalf("AuthUseCaseMock.ProcessTokenRevocation mock is already set by Set")
 	}
 
 	if mmProcessTokenRevocation.defaultExpectation == nil {
-		mmProcessTokenRevocation.defaultExpectation = &AuthMockProcessTokenRevocationExpectation{}
+		mmProcessTokenRevocation.defaultExpectation = &AuthUseCaseMockProcessTokenRevocationExpectation{}
 	}
 
 	if mmProcessTokenRevocation.defaultExpectation.params != nil {
-		mmProcessTokenRevocation.mock.t.Fatalf("AuthMock.ProcessTokenRevocation mock is already set by Expect")
+		mmProcessTokenRevocation.mock.t.Fatalf("AuthUseCaseMock.ProcessTokenRevocation mock is already set by Expect")
 	}
 
 	if mmProcessTokenRevocation.defaultExpectation.paramPtrs == nil {
-		mmProcessTokenRevocation.defaultExpectation.paramPtrs = &AuthMockProcessTokenRevocationParamPtrs{}
+		mmProcessTokenRevocation.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessTokenRevocationParamPtrs{}
 	}
 	mmProcessTokenRevocation.defaultExpectation.paramPtrs.ctx = &ctx
 	mmProcessTokenRevocation.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
@@ -4354,21 +4354,21 @@ func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) ExpectCtxParam1
 }
 
 // ExpectCmdParam2 sets up expected param cmd for AuthUseCase.ProcessTokenRevocation
-func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) ExpectCmdParam2(cmd mm_port.RevokeTokenCommand) *mAuthMockProcessTokenRevocation {
+func (mmProcessTokenRevocation *mAuthUseCaseMockProcessTokenRevocation) ExpectCmdParam2(cmd mm_port.RevokeTokenCommand) *mAuthUseCaseMockProcessTokenRevocation {
 	if mmProcessTokenRevocation.mock.funcProcessTokenRevocation != nil {
-		mmProcessTokenRevocation.mock.t.Fatalf("AuthMock.ProcessTokenRevocation mock is already set by Set")
+		mmProcessTokenRevocation.mock.t.Fatalf("AuthUseCaseMock.ProcessTokenRevocation mock is already set by Set")
 	}
 
 	if mmProcessTokenRevocation.defaultExpectation == nil {
-		mmProcessTokenRevocation.defaultExpectation = &AuthMockProcessTokenRevocationExpectation{}
+		mmProcessTokenRevocation.defaultExpectation = &AuthUseCaseMockProcessTokenRevocationExpectation{}
 	}
 
 	if mmProcessTokenRevocation.defaultExpectation.params != nil {
-		mmProcessTokenRevocation.mock.t.Fatalf("AuthMock.ProcessTokenRevocation mock is already set by Expect")
+		mmProcessTokenRevocation.mock.t.Fatalf("AuthUseCaseMock.ProcessTokenRevocation mock is already set by Expect")
 	}
 
 	if mmProcessTokenRevocation.defaultExpectation.paramPtrs == nil {
-		mmProcessTokenRevocation.defaultExpectation.paramPtrs = &AuthMockProcessTokenRevocationParamPtrs{}
+		mmProcessTokenRevocation.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessTokenRevocationParamPtrs{}
 	}
 	mmProcessTokenRevocation.defaultExpectation.paramPtrs.cmd = &cmd
 	mmProcessTokenRevocation.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
@@ -4377,9 +4377,9 @@ func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) ExpectCmdParam2
 }
 
 // Inspect accepts an inspector function that has same arguments as the AuthUseCase.ProcessTokenRevocation
-func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) Inspect(f func(ctx context.Context, cmd mm_port.RevokeTokenCommand)) *mAuthMockProcessTokenRevocation {
+func (mmProcessTokenRevocation *mAuthUseCaseMockProcessTokenRevocation) Inspect(f func(ctx context.Context, cmd mm_port.RevokeTokenCommand)) *mAuthUseCaseMockProcessTokenRevocation {
 	if mmProcessTokenRevocation.mock.inspectFuncProcessTokenRevocation != nil {
-		mmProcessTokenRevocation.mock.t.Fatalf("Inspect function is already set for AuthMock.ProcessTokenRevocation")
+		mmProcessTokenRevocation.mock.t.Fatalf("Inspect function is already set for AuthUseCaseMock.ProcessTokenRevocation")
 	}
 
 	mmProcessTokenRevocation.mock.inspectFuncProcessTokenRevocation = f
@@ -4388,21 +4388,21 @@ func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) Inspect(f func(
 }
 
 // Return sets up results that will be returned by AuthUseCase.ProcessTokenRevocation
-func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) Return(err error) *AuthMock {
+func (mmProcessTokenRevocation *mAuthUseCaseMockProcessTokenRevocation) Return(err error) *AuthUseCaseMock {
 	if mmProcessTokenRevocation.mock.funcProcessTokenRevocation != nil {
-		mmProcessTokenRevocation.mock.t.Fatalf("AuthMock.ProcessTokenRevocation mock is already set by Set")
+		mmProcessTokenRevocation.mock.t.Fatalf("AuthUseCaseMock.ProcessTokenRevocation mock is already set by Set")
 	}
 
 	if mmProcessTokenRevocation.defaultExpectation == nil {
-		mmProcessTokenRevocation.defaultExpectation = &AuthMockProcessTokenRevocationExpectation{mock: mmProcessTokenRevocation.mock}
+		mmProcessTokenRevocation.defaultExpectation = &AuthUseCaseMockProcessTokenRevocationExpectation{mock: mmProcessTokenRevocation.mock}
 	}
-	mmProcessTokenRevocation.defaultExpectation.results = &AuthMockProcessTokenRevocationResults{err}
+	mmProcessTokenRevocation.defaultExpectation.results = &AuthUseCaseMockProcessTokenRevocationResults{err}
 	mmProcessTokenRevocation.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmProcessTokenRevocation.mock
 }
 
 // Set uses given function f to mock the AuthUseCase.ProcessTokenRevocation method
-func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) Set(f func(ctx context.Context, cmd mm_port.RevokeTokenCommand) (err error)) *AuthMock {
+func (mmProcessTokenRevocation *mAuthUseCaseMockProcessTokenRevocation) Set(f func(ctx context.Context, cmd mm_port.RevokeTokenCommand) (err error)) *AuthUseCaseMock {
 	if mmProcessTokenRevocation.defaultExpectation != nil {
 		mmProcessTokenRevocation.mock.t.Fatalf("Default expectation is already set for the AuthUseCase.ProcessTokenRevocation method")
 	}
@@ -4418,37 +4418,37 @@ func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) Set(f func(ctx 
 
 // When sets expectation for the AuthUseCase.ProcessTokenRevocation which will trigger the result defined by the following
 // Then helper
-func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) When(ctx context.Context, cmd mm_port.RevokeTokenCommand) *AuthMockProcessTokenRevocationExpectation {
+func (mmProcessTokenRevocation *mAuthUseCaseMockProcessTokenRevocation) When(ctx context.Context, cmd mm_port.RevokeTokenCommand) *AuthUseCaseMockProcessTokenRevocationExpectation {
 	if mmProcessTokenRevocation.mock.funcProcessTokenRevocation != nil {
-		mmProcessTokenRevocation.mock.t.Fatalf("AuthMock.ProcessTokenRevocation mock is already set by Set")
+		mmProcessTokenRevocation.mock.t.Fatalf("AuthUseCaseMock.ProcessTokenRevocation mock is already set by Set")
 	}
 
-	expectation := &AuthMockProcessTokenRevocationExpectation{
+	expectation := &AuthUseCaseMockProcessTokenRevocationExpectation{
 		mock:               mmProcessTokenRevocation.mock,
-		params:             &AuthMockProcessTokenRevocationParams{ctx, cmd},
-		expectationOrigins: AuthMockProcessTokenRevocationExpectationOrigins{origin: minimock.CallerInfo(1)},
+		params:             &AuthUseCaseMockProcessTokenRevocationParams{ctx, cmd},
+		expectationOrigins: AuthUseCaseMockProcessTokenRevocationExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmProcessTokenRevocation.expectations = append(mmProcessTokenRevocation.expectations, expectation)
 	return expectation
 }
 
 // Then sets up AuthUseCase.ProcessTokenRevocation return parameters for the expectation previously defined by the When method
-func (e *AuthMockProcessTokenRevocationExpectation) Then(err error) *AuthMock {
-	e.results = &AuthMockProcessTokenRevocationResults{err}
+func (e *AuthUseCaseMockProcessTokenRevocationExpectation) Then(err error) *AuthUseCaseMock {
+	e.results = &AuthUseCaseMockProcessTokenRevocationResults{err}
 	return e.mock
 }
 
 // Times sets number of times AuthUseCase.ProcessTokenRevocation should be invoked
-func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) Times(n uint64) *mAuthMockProcessTokenRevocation {
+func (mmProcessTokenRevocation *mAuthUseCaseMockProcessTokenRevocation) Times(n uint64) *mAuthUseCaseMockProcessTokenRevocation {
 	if n == 0 {
-		mmProcessTokenRevocation.mock.t.Fatalf("Times of AuthMock.ProcessTokenRevocation mock can not be zero")
+		mmProcessTokenRevocation.mock.t.Fatalf("Times of AuthUseCaseMock.ProcessTokenRevocation mock can not be zero")
 	}
 	mm_atomic.StoreUint64(&mmProcessTokenRevocation.expectedInvocations, n)
 	mmProcessTokenRevocation.expectedInvocationsOrigin = minimock.CallerInfo(1)
 	return mmProcessTokenRevocation
 }
 
-func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) invocationsDone() bool {
+func (mmProcessTokenRevocation *mAuthUseCaseMockProcessTokenRevocation) invocationsDone() bool {
 	if len(mmProcessTokenRevocation.expectations) == 0 && mmProcessTokenRevocation.defaultExpectation == nil && mmProcessTokenRevocation.mock.funcProcessTokenRevocation == nil {
 		return true
 	}
@@ -4460,7 +4460,7 @@ func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) invocationsDone
 }
 
 // ProcessTokenRevocation implements mm_port.AuthUseCase
-func (mmProcessTokenRevocation *AuthMock) ProcessTokenRevocation(ctx context.Context, cmd mm_port.RevokeTokenCommand) (err error) {
+func (mmProcessTokenRevocation *AuthUseCaseMock) ProcessTokenRevocation(ctx context.Context, cmd mm_port.RevokeTokenCommand) (err error) {
 	mm_atomic.AddUint64(&mmProcessTokenRevocation.beforeProcessTokenRevocationCounter, 1)
 	defer mm_atomic.AddUint64(&mmProcessTokenRevocation.afterProcessTokenRevocationCounter, 1)
 
@@ -4470,7 +4470,7 @@ func (mmProcessTokenRevocation *AuthMock) ProcessTokenRevocation(ctx context.Con
 		mmProcessTokenRevocation.inspectFuncProcessTokenRevocation(ctx, cmd)
 	}
 
-	mm_params := AuthMockProcessTokenRevocationParams{ctx, cmd}
+	mm_params := AuthUseCaseMockProcessTokenRevocationParams{ctx, cmd}
 
 	// Record call args
 	mmProcessTokenRevocation.ProcessTokenRevocationMock.mutex.Lock()
@@ -4489,54 +4489,54 @@ func (mmProcessTokenRevocation *AuthMock) ProcessTokenRevocation(ctx context.Con
 		mm_want := mmProcessTokenRevocation.ProcessTokenRevocationMock.defaultExpectation.params
 		mm_want_ptrs := mmProcessTokenRevocation.ProcessTokenRevocationMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockProcessTokenRevocationParams{ctx, cmd}
+		mm_got := AuthUseCaseMockProcessTokenRevocationParams{ctx, cmd}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmProcessTokenRevocation.t.Errorf("AuthMock.ProcessTokenRevocation got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessTokenRevocation.t.Errorf("AuthUseCaseMock.ProcessTokenRevocation got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessTokenRevocation.ProcessTokenRevocationMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
 			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
-				mmProcessTokenRevocation.t.Errorf("AuthMock.ProcessTokenRevocation got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessTokenRevocation.t.Errorf("AuthUseCaseMock.ProcessTokenRevocation got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessTokenRevocation.ProcessTokenRevocationMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmProcessTokenRevocation.t.Errorf("AuthMock.ProcessTokenRevocation got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+			mmProcessTokenRevocation.t.Errorf("AuthUseCaseMock.ProcessTokenRevocation got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmProcessTokenRevocation.ProcessTokenRevocationMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
 		mm_results := mmProcessTokenRevocation.ProcessTokenRevocationMock.defaultExpectation.results
 		if mm_results == nil {
-			mmProcessTokenRevocation.t.Fatal("No results are set for the AuthMock.ProcessTokenRevocation")
+			mmProcessTokenRevocation.t.Fatal("No results are set for the AuthUseCaseMock.ProcessTokenRevocation")
 		}
 		return (*mm_results).err
 	}
 	if mmProcessTokenRevocation.funcProcessTokenRevocation != nil {
 		return mmProcessTokenRevocation.funcProcessTokenRevocation(ctx, cmd)
 	}
-	mmProcessTokenRevocation.t.Fatalf("Unexpected call to AuthMock.ProcessTokenRevocation. %v %v", ctx, cmd)
+	mmProcessTokenRevocation.t.Fatalf("Unexpected call to AuthUseCaseMock.ProcessTokenRevocation. %v %v", ctx, cmd)
 	return
 }
 
-// ProcessTokenRevocationAfterCounter returns a count of finished AuthMock.ProcessTokenRevocation invocations
-func (mmProcessTokenRevocation *AuthMock) ProcessTokenRevocationAfterCounter() uint64 {
+// ProcessTokenRevocationAfterCounter returns a count of finished AuthUseCaseMock.ProcessTokenRevocation invocations
+func (mmProcessTokenRevocation *AuthUseCaseMock) ProcessTokenRevocationAfterCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessTokenRevocation.afterProcessTokenRevocationCounter)
 }
 
-// ProcessTokenRevocationBeforeCounter returns a count of AuthMock.ProcessTokenRevocation invocations
-func (mmProcessTokenRevocation *AuthMock) ProcessTokenRevocationBeforeCounter() uint64 {
+// ProcessTokenRevocationBeforeCounter returns a count of AuthUseCaseMock.ProcessTokenRevocation invocations
+func (mmProcessTokenRevocation *AuthUseCaseMock) ProcessTokenRevocationBeforeCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessTokenRevocation.beforeProcessTokenRevocationCounter)
 }
 
-// Calls returns a list of arguments used in each call to AuthMock.ProcessTokenRevocation.
+// Calls returns a list of arguments used in each call to AuthUseCaseMock.ProcessTokenRevocation.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) Calls() []*AuthMockProcessTokenRevocationParams {
+func (mmProcessTokenRevocation *mAuthUseCaseMockProcessTokenRevocation) Calls() []*AuthUseCaseMockProcessTokenRevocationParams {
 	mmProcessTokenRevocation.mutex.RLock()
 
-	argCopy := make([]*AuthMockProcessTokenRevocationParams, len(mmProcessTokenRevocation.callArgs))
+	argCopy := make([]*AuthUseCaseMockProcessTokenRevocationParams, len(mmProcessTokenRevocation.callArgs))
 	copy(argCopy, mmProcessTokenRevocation.callArgs)
 
 	mmProcessTokenRevocation.mutex.RUnlock()
@@ -4546,7 +4546,7 @@ func (mmProcessTokenRevocation *mAuthMockProcessTokenRevocation) Calls() []*Auth
 
 // MinimockProcessTokenRevocationDone returns true if the count of the ProcessTokenRevocation invocations corresponds
 // the number of defined expectations
-func (m *AuthMock) MinimockProcessTokenRevocationDone() bool {
+func (m *AuthUseCaseMock) MinimockProcessTokenRevocationDone() bool {
 	if m.ProcessTokenRevocationMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
@@ -4562,10 +4562,10 @@ func (m *AuthMock) MinimockProcessTokenRevocationDone() bool {
 }
 
 // MinimockProcessTokenRevocationInspect logs each unmet expectation
-func (m *AuthMock) MinimockProcessTokenRevocationInspect() {
+func (m *AuthUseCaseMock) MinimockProcessTokenRevocationInspect() {
 	for _, e := range m.ProcessTokenRevocationMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to AuthMock.ProcessTokenRevocation at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessTokenRevocation at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
@@ -4573,66 +4573,66 @@ func (m *AuthMock) MinimockProcessTokenRevocationInspect() {
 	// if default expectation was set then invocations count should be greater than zero
 	if m.ProcessTokenRevocationMock.defaultExpectation != nil && afterProcessTokenRevocationCounter < 1 {
 		if m.ProcessTokenRevocationMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to AuthMock.ProcessTokenRevocation at\n%s", m.ProcessTokenRevocationMock.defaultExpectation.returnOrigin)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessTokenRevocation at\n%s", m.ProcessTokenRevocationMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to AuthMock.ProcessTokenRevocation at\n%s with params: %#v", m.ProcessTokenRevocationMock.defaultExpectation.expectationOrigins.origin, *m.ProcessTokenRevocationMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessTokenRevocation at\n%s with params: %#v", m.ProcessTokenRevocationMock.defaultExpectation.expectationOrigins.origin, *m.ProcessTokenRevocationMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
 	if m.funcProcessTokenRevocation != nil && afterProcessTokenRevocationCounter < 1 {
-		m.t.Errorf("Expected call to AuthMock.ProcessTokenRevocation at\n%s", m.funcProcessTokenRevocationOrigin)
+		m.t.Errorf("Expected call to AuthUseCaseMock.ProcessTokenRevocation at\n%s", m.funcProcessTokenRevocationOrigin)
 	}
 
 	if !m.ProcessTokenRevocationMock.invocationsDone() && afterProcessTokenRevocationCounter > 0 {
-		m.t.Errorf("Expected %d calls to AuthMock.ProcessTokenRevocation at\n%s but found %d calls",
+		m.t.Errorf("Expected %d calls to AuthUseCaseMock.ProcessTokenRevocation at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ProcessTokenRevocationMock.expectedInvocations), m.ProcessTokenRevocationMock.expectedInvocationsOrigin, afterProcessTokenRevocationCounter)
 	}
 }
 
-type mAuthMockProcessUserInfoRequest struct {
+type mAuthUseCaseMockProcessUserInfoRequest struct {
 	optional           bool
-	mock               *AuthMock
-	defaultExpectation *AuthMockProcessUserInfoRequestExpectation
-	expectations       []*AuthMockProcessUserInfoRequestExpectation
+	mock               *AuthUseCaseMock
+	defaultExpectation *AuthUseCaseMockProcessUserInfoRequestExpectation
+	expectations       []*AuthUseCaseMockProcessUserInfoRequestExpectation
 
-	callArgs []*AuthMockProcessUserInfoRequestParams
+	callArgs []*AuthUseCaseMockProcessUserInfoRequestParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// AuthMockProcessUserInfoRequestExpectation specifies expectation struct of the AuthUseCase.ProcessUserInfoRequest
-type AuthMockProcessUserInfoRequestExpectation struct {
-	mock               *AuthMock
-	params             *AuthMockProcessUserInfoRequestParams
-	paramPtrs          *AuthMockProcessUserInfoRequestParamPtrs
-	expectationOrigins AuthMockProcessUserInfoRequestExpectationOrigins
-	results            *AuthMockProcessUserInfoRequestResults
+// AuthUseCaseMockProcessUserInfoRequestExpectation specifies expectation struct of the AuthUseCase.ProcessUserInfoRequest
+type AuthUseCaseMockProcessUserInfoRequestExpectation struct {
+	mock               *AuthUseCaseMock
+	params             *AuthUseCaseMockProcessUserInfoRequestParams
+	paramPtrs          *AuthUseCaseMockProcessUserInfoRequestParamPtrs
+	expectationOrigins AuthUseCaseMockProcessUserInfoRequestExpectationOrigins
+	results            *AuthUseCaseMockProcessUserInfoRequestResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// AuthMockProcessUserInfoRequestParams contains parameters of the AuthUseCase.ProcessUserInfoRequest
-type AuthMockProcessUserInfoRequestParams struct {
+// AuthUseCaseMockProcessUserInfoRequestParams contains parameters of the AuthUseCase.ProcessUserInfoRequest
+type AuthUseCaseMockProcessUserInfoRequestParams struct {
 	ctx context.Context
 	cmd mm_port.UserInfoRequestCommand
 }
 
-// AuthMockProcessUserInfoRequestParamPtrs contains pointers to parameters of the AuthUseCase.ProcessUserInfoRequest
-type AuthMockProcessUserInfoRequestParamPtrs struct {
+// AuthUseCaseMockProcessUserInfoRequestParamPtrs contains pointers to parameters of the AuthUseCase.ProcessUserInfoRequest
+type AuthUseCaseMockProcessUserInfoRequestParamPtrs struct {
 	ctx *context.Context
 	cmd *mm_port.UserInfoRequestCommand
 }
 
-// AuthMockProcessUserInfoRequestResults contains results of the AuthUseCase.ProcessUserInfoRequest
-type AuthMockProcessUserInfoRequestResults struct {
+// AuthUseCaseMockProcessUserInfoRequestResults contains results of the AuthUseCase.ProcessUserInfoRequest
+type AuthUseCaseMockProcessUserInfoRequestResults struct {
 	op1 *model.OIDCTokenClaims
 	err error
 }
 
-// AuthMockProcessUserInfoRequestOrigins contains origins of expectations of the AuthUseCase.ProcessUserInfoRequest
-type AuthMockProcessUserInfoRequestExpectationOrigins struct {
+// AuthUseCaseMockProcessUserInfoRequestOrigins contains origins of expectations of the AuthUseCase.ProcessUserInfoRequest
+type AuthUseCaseMockProcessUserInfoRequestExpectationOrigins struct {
 	origin    string
 	originCtx string
 	originCmd string
@@ -4643,26 +4643,26 @@ type AuthMockProcessUserInfoRequestExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) Optional() *mAuthMockProcessUserInfoRequest {
+func (mmProcessUserInfoRequest *mAuthUseCaseMockProcessUserInfoRequest) Optional() *mAuthUseCaseMockProcessUserInfoRequest {
 	mmProcessUserInfoRequest.optional = true
 	return mmProcessUserInfoRequest
 }
 
 // Expect sets up expected params for AuthUseCase.ProcessUserInfoRequest
-func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) Expect(ctx context.Context, cmd mm_port.UserInfoRequestCommand) *mAuthMockProcessUserInfoRequest {
+func (mmProcessUserInfoRequest *mAuthUseCaseMockProcessUserInfoRequest) Expect(ctx context.Context, cmd mm_port.UserInfoRequestCommand) *mAuthUseCaseMockProcessUserInfoRequest {
 	if mmProcessUserInfoRequest.mock.funcProcessUserInfoRequest != nil {
-		mmProcessUserInfoRequest.mock.t.Fatalf("AuthMock.ProcessUserInfoRequest mock is already set by Set")
+		mmProcessUserInfoRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessUserInfoRequest mock is already set by Set")
 	}
 
 	if mmProcessUserInfoRequest.defaultExpectation == nil {
-		mmProcessUserInfoRequest.defaultExpectation = &AuthMockProcessUserInfoRequestExpectation{}
+		mmProcessUserInfoRequest.defaultExpectation = &AuthUseCaseMockProcessUserInfoRequestExpectation{}
 	}
 
 	if mmProcessUserInfoRequest.defaultExpectation.paramPtrs != nil {
-		mmProcessUserInfoRequest.mock.t.Fatalf("AuthMock.ProcessUserInfoRequest mock is already set by ExpectParams functions")
+		mmProcessUserInfoRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessUserInfoRequest mock is already set by ExpectParams functions")
 	}
 
-	mmProcessUserInfoRequest.defaultExpectation.params = &AuthMockProcessUserInfoRequestParams{ctx, cmd}
+	mmProcessUserInfoRequest.defaultExpectation.params = &AuthUseCaseMockProcessUserInfoRequestParams{ctx, cmd}
 	mmProcessUserInfoRequest.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmProcessUserInfoRequest.expectations {
 		if minimock.Equal(e.params, mmProcessUserInfoRequest.defaultExpectation.params) {
@@ -4674,21 +4674,21 @@ func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) Expect(ctx cont
 }
 
 // ExpectCtxParam1 sets up expected param ctx for AuthUseCase.ProcessUserInfoRequest
-func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) ExpectCtxParam1(ctx context.Context) *mAuthMockProcessUserInfoRequest {
+func (mmProcessUserInfoRequest *mAuthUseCaseMockProcessUserInfoRequest) ExpectCtxParam1(ctx context.Context) *mAuthUseCaseMockProcessUserInfoRequest {
 	if mmProcessUserInfoRequest.mock.funcProcessUserInfoRequest != nil {
-		mmProcessUserInfoRequest.mock.t.Fatalf("AuthMock.ProcessUserInfoRequest mock is already set by Set")
+		mmProcessUserInfoRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessUserInfoRequest mock is already set by Set")
 	}
 
 	if mmProcessUserInfoRequest.defaultExpectation == nil {
-		mmProcessUserInfoRequest.defaultExpectation = &AuthMockProcessUserInfoRequestExpectation{}
+		mmProcessUserInfoRequest.defaultExpectation = &AuthUseCaseMockProcessUserInfoRequestExpectation{}
 	}
 
 	if mmProcessUserInfoRequest.defaultExpectation.params != nil {
-		mmProcessUserInfoRequest.mock.t.Fatalf("AuthMock.ProcessUserInfoRequest mock is already set by Expect")
+		mmProcessUserInfoRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessUserInfoRequest mock is already set by Expect")
 	}
 
 	if mmProcessUserInfoRequest.defaultExpectation.paramPtrs == nil {
-		mmProcessUserInfoRequest.defaultExpectation.paramPtrs = &AuthMockProcessUserInfoRequestParamPtrs{}
+		mmProcessUserInfoRequest.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessUserInfoRequestParamPtrs{}
 	}
 	mmProcessUserInfoRequest.defaultExpectation.paramPtrs.ctx = &ctx
 	mmProcessUserInfoRequest.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
@@ -4697,21 +4697,21 @@ func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) ExpectCtxParam1
 }
 
 // ExpectCmdParam2 sets up expected param cmd for AuthUseCase.ProcessUserInfoRequest
-func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) ExpectCmdParam2(cmd mm_port.UserInfoRequestCommand) *mAuthMockProcessUserInfoRequest {
+func (mmProcessUserInfoRequest *mAuthUseCaseMockProcessUserInfoRequest) ExpectCmdParam2(cmd mm_port.UserInfoRequestCommand) *mAuthUseCaseMockProcessUserInfoRequest {
 	if mmProcessUserInfoRequest.mock.funcProcessUserInfoRequest != nil {
-		mmProcessUserInfoRequest.mock.t.Fatalf("AuthMock.ProcessUserInfoRequest mock is already set by Set")
+		mmProcessUserInfoRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessUserInfoRequest mock is already set by Set")
 	}
 
 	if mmProcessUserInfoRequest.defaultExpectation == nil {
-		mmProcessUserInfoRequest.defaultExpectation = &AuthMockProcessUserInfoRequestExpectation{}
+		mmProcessUserInfoRequest.defaultExpectation = &AuthUseCaseMockProcessUserInfoRequestExpectation{}
 	}
 
 	if mmProcessUserInfoRequest.defaultExpectation.params != nil {
-		mmProcessUserInfoRequest.mock.t.Fatalf("AuthMock.ProcessUserInfoRequest mock is already set by Expect")
+		mmProcessUserInfoRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessUserInfoRequest mock is already set by Expect")
 	}
 
 	if mmProcessUserInfoRequest.defaultExpectation.paramPtrs == nil {
-		mmProcessUserInfoRequest.defaultExpectation.paramPtrs = &AuthMockProcessUserInfoRequestParamPtrs{}
+		mmProcessUserInfoRequest.defaultExpectation.paramPtrs = &AuthUseCaseMockProcessUserInfoRequestParamPtrs{}
 	}
 	mmProcessUserInfoRequest.defaultExpectation.paramPtrs.cmd = &cmd
 	mmProcessUserInfoRequest.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
@@ -4720,9 +4720,9 @@ func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) ExpectCmdParam2
 }
 
 // Inspect accepts an inspector function that has same arguments as the AuthUseCase.ProcessUserInfoRequest
-func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) Inspect(f func(ctx context.Context, cmd mm_port.UserInfoRequestCommand)) *mAuthMockProcessUserInfoRequest {
+func (mmProcessUserInfoRequest *mAuthUseCaseMockProcessUserInfoRequest) Inspect(f func(ctx context.Context, cmd mm_port.UserInfoRequestCommand)) *mAuthUseCaseMockProcessUserInfoRequest {
 	if mmProcessUserInfoRequest.mock.inspectFuncProcessUserInfoRequest != nil {
-		mmProcessUserInfoRequest.mock.t.Fatalf("Inspect function is already set for AuthMock.ProcessUserInfoRequest")
+		mmProcessUserInfoRequest.mock.t.Fatalf("Inspect function is already set for AuthUseCaseMock.ProcessUserInfoRequest")
 	}
 
 	mmProcessUserInfoRequest.mock.inspectFuncProcessUserInfoRequest = f
@@ -4731,21 +4731,21 @@ func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) Inspect(f func(
 }
 
 // Return sets up results that will be returned by AuthUseCase.ProcessUserInfoRequest
-func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) Return(op1 *model.OIDCTokenClaims, err error) *AuthMock {
+func (mmProcessUserInfoRequest *mAuthUseCaseMockProcessUserInfoRequest) Return(op1 *model.OIDCTokenClaims, err error) *AuthUseCaseMock {
 	if mmProcessUserInfoRequest.mock.funcProcessUserInfoRequest != nil {
-		mmProcessUserInfoRequest.mock.t.Fatalf("AuthMock.ProcessUserInfoRequest mock is already set by Set")
+		mmProcessUserInfoRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessUserInfoRequest mock is already set by Set")
 	}
 
 	if mmProcessUserInfoRequest.defaultExpectation == nil {
-		mmProcessUserInfoRequest.defaultExpectation = &AuthMockProcessUserInfoRequestExpectation{mock: mmProcessUserInfoRequest.mock}
+		mmProcessUserInfoRequest.defaultExpectation = &AuthUseCaseMockProcessUserInfoRequestExpectation{mock: mmProcessUserInfoRequest.mock}
 	}
-	mmProcessUserInfoRequest.defaultExpectation.results = &AuthMockProcessUserInfoRequestResults{op1, err}
+	mmProcessUserInfoRequest.defaultExpectation.results = &AuthUseCaseMockProcessUserInfoRequestResults{op1, err}
 	mmProcessUserInfoRequest.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmProcessUserInfoRequest.mock
 }
 
 // Set uses given function f to mock the AuthUseCase.ProcessUserInfoRequest method
-func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) Set(f func(ctx context.Context, cmd mm_port.UserInfoRequestCommand) (op1 *model.OIDCTokenClaims, err error)) *AuthMock {
+func (mmProcessUserInfoRequest *mAuthUseCaseMockProcessUserInfoRequest) Set(f func(ctx context.Context, cmd mm_port.UserInfoRequestCommand) (op1 *model.OIDCTokenClaims, err error)) *AuthUseCaseMock {
 	if mmProcessUserInfoRequest.defaultExpectation != nil {
 		mmProcessUserInfoRequest.mock.t.Fatalf("Default expectation is already set for the AuthUseCase.ProcessUserInfoRequest method")
 	}
@@ -4761,37 +4761,37 @@ func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) Set(f func(ctx 
 
 // When sets expectation for the AuthUseCase.ProcessUserInfoRequest which will trigger the result defined by the following
 // Then helper
-func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) When(ctx context.Context, cmd mm_port.UserInfoRequestCommand) *AuthMockProcessUserInfoRequestExpectation {
+func (mmProcessUserInfoRequest *mAuthUseCaseMockProcessUserInfoRequest) When(ctx context.Context, cmd mm_port.UserInfoRequestCommand) *AuthUseCaseMockProcessUserInfoRequestExpectation {
 	if mmProcessUserInfoRequest.mock.funcProcessUserInfoRequest != nil {
-		mmProcessUserInfoRequest.mock.t.Fatalf("AuthMock.ProcessUserInfoRequest mock is already set by Set")
+		mmProcessUserInfoRequest.mock.t.Fatalf("AuthUseCaseMock.ProcessUserInfoRequest mock is already set by Set")
 	}
 
-	expectation := &AuthMockProcessUserInfoRequestExpectation{
+	expectation := &AuthUseCaseMockProcessUserInfoRequestExpectation{
 		mock:               mmProcessUserInfoRequest.mock,
-		params:             &AuthMockProcessUserInfoRequestParams{ctx, cmd},
-		expectationOrigins: AuthMockProcessUserInfoRequestExpectationOrigins{origin: minimock.CallerInfo(1)},
+		params:             &AuthUseCaseMockProcessUserInfoRequestParams{ctx, cmd},
+		expectationOrigins: AuthUseCaseMockProcessUserInfoRequestExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmProcessUserInfoRequest.expectations = append(mmProcessUserInfoRequest.expectations, expectation)
 	return expectation
 }
 
 // Then sets up AuthUseCase.ProcessUserInfoRequest return parameters for the expectation previously defined by the When method
-func (e *AuthMockProcessUserInfoRequestExpectation) Then(op1 *model.OIDCTokenClaims, err error) *AuthMock {
-	e.results = &AuthMockProcessUserInfoRequestResults{op1, err}
+func (e *AuthUseCaseMockProcessUserInfoRequestExpectation) Then(op1 *model.OIDCTokenClaims, err error) *AuthUseCaseMock {
+	e.results = &AuthUseCaseMockProcessUserInfoRequestResults{op1, err}
 	return e.mock
 }
 
 // Times sets number of times AuthUseCase.ProcessUserInfoRequest should be invoked
-func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) Times(n uint64) *mAuthMockProcessUserInfoRequest {
+func (mmProcessUserInfoRequest *mAuthUseCaseMockProcessUserInfoRequest) Times(n uint64) *mAuthUseCaseMockProcessUserInfoRequest {
 	if n == 0 {
-		mmProcessUserInfoRequest.mock.t.Fatalf("Times of AuthMock.ProcessUserInfoRequest mock can not be zero")
+		mmProcessUserInfoRequest.mock.t.Fatalf("Times of AuthUseCaseMock.ProcessUserInfoRequest mock can not be zero")
 	}
 	mm_atomic.StoreUint64(&mmProcessUserInfoRequest.expectedInvocations, n)
 	mmProcessUserInfoRequest.expectedInvocationsOrigin = minimock.CallerInfo(1)
 	return mmProcessUserInfoRequest
 }
 
-func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) invocationsDone() bool {
+func (mmProcessUserInfoRequest *mAuthUseCaseMockProcessUserInfoRequest) invocationsDone() bool {
 	if len(mmProcessUserInfoRequest.expectations) == 0 && mmProcessUserInfoRequest.defaultExpectation == nil && mmProcessUserInfoRequest.mock.funcProcessUserInfoRequest == nil {
 		return true
 	}
@@ -4803,7 +4803,7 @@ func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) invocationsDone
 }
 
 // ProcessUserInfoRequest implements mm_port.AuthUseCase
-func (mmProcessUserInfoRequest *AuthMock) ProcessUserInfoRequest(ctx context.Context, cmd mm_port.UserInfoRequestCommand) (op1 *model.OIDCTokenClaims, err error) {
+func (mmProcessUserInfoRequest *AuthUseCaseMock) ProcessUserInfoRequest(ctx context.Context, cmd mm_port.UserInfoRequestCommand) (op1 *model.OIDCTokenClaims, err error) {
 	mm_atomic.AddUint64(&mmProcessUserInfoRequest.beforeProcessUserInfoRequestCounter, 1)
 	defer mm_atomic.AddUint64(&mmProcessUserInfoRequest.afterProcessUserInfoRequestCounter, 1)
 
@@ -4813,7 +4813,7 @@ func (mmProcessUserInfoRequest *AuthMock) ProcessUserInfoRequest(ctx context.Con
 		mmProcessUserInfoRequest.inspectFuncProcessUserInfoRequest(ctx, cmd)
 	}
 
-	mm_params := AuthMockProcessUserInfoRequestParams{ctx, cmd}
+	mm_params := AuthUseCaseMockProcessUserInfoRequestParams{ctx, cmd}
 
 	// Record call args
 	mmProcessUserInfoRequest.ProcessUserInfoRequestMock.mutex.Lock()
@@ -4832,54 +4832,54 @@ func (mmProcessUserInfoRequest *AuthMock) ProcessUserInfoRequest(ctx context.Con
 		mm_want := mmProcessUserInfoRequest.ProcessUserInfoRequestMock.defaultExpectation.params
 		mm_want_ptrs := mmProcessUserInfoRequest.ProcessUserInfoRequestMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockProcessUserInfoRequestParams{ctx, cmd}
+		mm_got := AuthUseCaseMockProcessUserInfoRequestParams{ctx, cmd}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmProcessUserInfoRequest.t.Errorf("AuthMock.ProcessUserInfoRequest got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessUserInfoRequest.t.Errorf("AuthUseCaseMock.ProcessUserInfoRequest got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessUserInfoRequest.ProcessUserInfoRequestMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
 			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
-				mmProcessUserInfoRequest.t.Errorf("AuthMock.ProcessUserInfoRequest got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmProcessUserInfoRequest.t.Errorf("AuthUseCaseMock.ProcessUserInfoRequest got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmProcessUserInfoRequest.ProcessUserInfoRequestMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmProcessUserInfoRequest.t.Errorf("AuthMock.ProcessUserInfoRequest got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+			mmProcessUserInfoRequest.t.Errorf("AuthUseCaseMock.ProcessUserInfoRequest got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmProcessUserInfoRequest.ProcessUserInfoRequestMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
 		mm_results := mmProcessUserInfoRequest.ProcessUserInfoRequestMock.defaultExpectation.results
 		if mm_results == nil {
-			mmProcessUserInfoRequest.t.Fatal("No results are set for the AuthMock.ProcessUserInfoRequest")
+			mmProcessUserInfoRequest.t.Fatal("No results are set for the AuthUseCaseMock.ProcessUserInfoRequest")
 		}
 		return (*mm_results).op1, (*mm_results).err
 	}
 	if mmProcessUserInfoRequest.funcProcessUserInfoRequest != nil {
 		return mmProcessUserInfoRequest.funcProcessUserInfoRequest(ctx, cmd)
 	}
-	mmProcessUserInfoRequest.t.Fatalf("Unexpected call to AuthMock.ProcessUserInfoRequest. %v %v", ctx, cmd)
+	mmProcessUserInfoRequest.t.Fatalf("Unexpected call to AuthUseCaseMock.ProcessUserInfoRequest. %v %v", ctx, cmd)
 	return
 }
 
-// ProcessUserInfoRequestAfterCounter returns a count of finished AuthMock.ProcessUserInfoRequest invocations
-func (mmProcessUserInfoRequest *AuthMock) ProcessUserInfoRequestAfterCounter() uint64 {
+// ProcessUserInfoRequestAfterCounter returns a count of finished AuthUseCaseMock.ProcessUserInfoRequest invocations
+func (mmProcessUserInfoRequest *AuthUseCaseMock) ProcessUserInfoRequestAfterCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessUserInfoRequest.afterProcessUserInfoRequestCounter)
 }
 
-// ProcessUserInfoRequestBeforeCounter returns a count of AuthMock.ProcessUserInfoRequest invocations
-func (mmProcessUserInfoRequest *AuthMock) ProcessUserInfoRequestBeforeCounter() uint64 {
+// ProcessUserInfoRequestBeforeCounter returns a count of AuthUseCaseMock.ProcessUserInfoRequest invocations
+func (mmProcessUserInfoRequest *AuthUseCaseMock) ProcessUserInfoRequestBeforeCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmProcessUserInfoRequest.beforeProcessUserInfoRequestCounter)
 }
 
-// Calls returns a list of arguments used in each call to AuthMock.ProcessUserInfoRequest.
+// Calls returns a list of arguments used in each call to AuthUseCaseMock.ProcessUserInfoRequest.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) Calls() []*AuthMockProcessUserInfoRequestParams {
+func (mmProcessUserInfoRequest *mAuthUseCaseMockProcessUserInfoRequest) Calls() []*AuthUseCaseMockProcessUserInfoRequestParams {
 	mmProcessUserInfoRequest.mutex.RLock()
 
-	argCopy := make([]*AuthMockProcessUserInfoRequestParams, len(mmProcessUserInfoRequest.callArgs))
+	argCopy := make([]*AuthUseCaseMockProcessUserInfoRequestParams, len(mmProcessUserInfoRequest.callArgs))
 	copy(argCopy, mmProcessUserInfoRequest.callArgs)
 
 	mmProcessUserInfoRequest.mutex.RUnlock()
@@ -4889,7 +4889,7 @@ func (mmProcessUserInfoRequest *mAuthMockProcessUserInfoRequest) Calls() []*Auth
 
 // MinimockProcessUserInfoRequestDone returns true if the count of the ProcessUserInfoRequest invocations corresponds
 // the number of defined expectations
-func (m *AuthMock) MinimockProcessUserInfoRequestDone() bool {
+func (m *AuthUseCaseMock) MinimockProcessUserInfoRequestDone() bool {
 	if m.ProcessUserInfoRequestMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
@@ -4905,10 +4905,10 @@ func (m *AuthMock) MinimockProcessUserInfoRequestDone() bool {
 }
 
 // MinimockProcessUserInfoRequestInspect logs each unmet expectation
-func (m *AuthMock) MinimockProcessUserInfoRequestInspect() {
+func (m *AuthUseCaseMock) MinimockProcessUserInfoRequestInspect() {
 	for _, e := range m.ProcessUserInfoRequestMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to AuthMock.ProcessUserInfoRequest at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessUserInfoRequest at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
@@ -4916,69 +4916,69 @@ func (m *AuthMock) MinimockProcessUserInfoRequestInspect() {
 	// if default expectation was set then invocations count should be greater than zero
 	if m.ProcessUserInfoRequestMock.defaultExpectation != nil && afterProcessUserInfoRequestCounter < 1 {
 		if m.ProcessUserInfoRequestMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to AuthMock.ProcessUserInfoRequest at\n%s", m.ProcessUserInfoRequestMock.defaultExpectation.returnOrigin)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessUserInfoRequest at\n%s", m.ProcessUserInfoRequestMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to AuthMock.ProcessUserInfoRequest at\n%s with params: %#v", m.ProcessUserInfoRequestMock.defaultExpectation.expectationOrigins.origin, *m.ProcessUserInfoRequestMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.ProcessUserInfoRequest at\n%s with params: %#v", m.ProcessUserInfoRequestMock.defaultExpectation.expectationOrigins.origin, *m.ProcessUserInfoRequestMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
 	if m.funcProcessUserInfoRequest != nil && afterProcessUserInfoRequestCounter < 1 {
-		m.t.Errorf("Expected call to AuthMock.ProcessUserInfoRequest at\n%s", m.funcProcessUserInfoRequestOrigin)
+		m.t.Errorf("Expected call to AuthUseCaseMock.ProcessUserInfoRequest at\n%s", m.funcProcessUserInfoRequestOrigin)
 	}
 
 	if !m.ProcessUserInfoRequestMock.invocationsDone() && afterProcessUserInfoRequestCounter > 0 {
-		m.t.Errorf("Expected %d calls to AuthMock.ProcessUserInfoRequest at\n%s but found %d calls",
+		m.t.Errorf("Expected %d calls to AuthUseCaseMock.ProcessUserInfoRequest at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ProcessUserInfoRequestMock.expectedInvocations), m.ProcessUserInfoRequestMock.expectedInvocationsOrigin, afterProcessUserInfoRequestCounter)
 	}
 }
 
-type mAuthMockRegisterDynamicApplication struct {
+type mAuthUseCaseMockRegisterDynamicApplication struct {
 	optional           bool
-	mock               *AuthMock
-	defaultExpectation *AuthMockRegisterDynamicApplicationExpectation
-	expectations       []*AuthMockRegisterDynamicApplicationExpectation
+	mock               *AuthUseCaseMock
+	defaultExpectation *AuthUseCaseMockRegisterDynamicApplicationExpectation
+	expectations       []*AuthUseCaseMockRegisterDynamicApplicationExpectation
 
-	callArgs []*AuthMockRegisterDynamicApplicationParams
+	callArgs []*AuthUseCaseMockRegisterDynamicApplicationParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// AuthMockRegisterDynamicApplicationExpectation specifies expectation struct of the AuthUseCase.RegisterDynamicApplication
-type AuthMockRegisterDynamicApplicationExpectation struct {
-	mock               *AuthMock
-	params             *AuthMockRegisterDynamicApplicationParams
-	paramPtrs          *AuthMockRegisterDynamicApplicationParamPtrs
-	expectationOrigins AuthMockRegisterDynamicApplicationExpectationOrigins
-	results            *AuthMockRegisterDynamicApplicationResults
+// AuthUseCaseMockRegisterDynamicApplicationExpectation specifies expectation struct of the AuthUseCase.RegisterDynamicApplication
+type AuthUseCaseMockRegisterDynamicApplicationExpectation struct {
+	mock               *AuthUseCaseMock
+	params             *AuthUseCaseMockRegisterDynamicApplicationParams
+	paramPtrs          *AuthUseCaseMockRegisterDynamicApplicationParamPtrs
+	expectationOrigins AuthUseCaseMockRegisterDynamicApplicationExpectationOrigins
+	results            *AuthUseCaseMockRegisterDynamicApplicationResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// AuthMockRegisterDynamicApplicationParams contains parameters of the AuthUseCase.RegisterDynamicApplication
-type AuthMockRegisterDynamicApplicationParams struct {
+// AuthUseCaseMockRegisterDynamicApplicationParams contains parameters of the AuthUseCase.RegisterDynamicApplication
+type AuthUseCaseMockRegisterDynamicApplicationParams struct {
 	ctx      context.Context
 	tenantID uuid.UUID
 	payload  model.DynamicRegistrationPayload
 }
 
-// AuthMockRegisterDynamicApplicationParamPtrs contains pointers to parameters of the AuthUseCase.RegisterDynamicApplication
-type AuthMockRegisterDynamicApplicationParamPtrs struct {
+// AuthUseCaseMockRegisterDynamicApplicationParamPtrs contains pointers to parameters of the AuthUseCase.RegisterDynamicApplication
+type AuthUseCaseMockRegisterDynamicApplicationParamPtrs struct {
 	ctx      *context.Context
 	tenantID *uuid.UUID
 	payload  *model.DynamicRegistrationPayload
 }
 
-// AuthMockRegisterDynamicApplicationResults contains results of the AuthUseCase.RegisterDynamicApplication
-type AuthMockRegisterDynamicApplicationResults struct {
+// AuthUseCaseMockRegisterDynamicApplicationResults contains results of the AuthUseCase.RegisterDynamicApplication
+type AuthUseCaseMockRegisterDynamicApplicationResults struct {
 	ap1 *model.Application
 	s1  string
 	err error
 }
 
-// AuthMockRegisterDynamicApplicationOrigins contains origins of expectations of the AuthUseCase.RegisterDynamicApplication
-type AuthMockRegisterDynamicApplicationExpectationOrigins struct {
+// AuthUseCaseMockRegisterDynamicApplicationOrigins contains origins of expectations of the AuthUseCase.RegisterDynamicApplication
+type AuthUseCaseMockRegisterDynamicApplicationExpectationOrigins struct {
 	origin         string
 	originCtx      string
 	originTenantID string
@@ -4990,26 +4990,26 @@ type AuthMockRegisterDynamicApplicationExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) Optional() *mAuthMockRegisterDynamicApplication {
+func (mmRegisterDynamicApplication *mAuthUseCaseMockRegisterDynamicApplication) Optional() *mAuthUseCaseMockRegisterDynamicApplication {
 	mmRegisterDynamicApplication.optional = true
 	return mmRegisterDynamicApplication
 }
 
 // Expect sets up expected params for AuthUseCase.RegisterDynamicApplication
-func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) Expect(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) *mAuthMockRegisterDynamicApplication {
+func (mmRegisterDynamicApplication *mAuthUseCaseMockRegisterDynamicApplication) Expect(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) *mAuthUseCaseMockRegisterDynamicApplication {
 	if mmRegisterDynamicApplication.mock.funcRegisterDynamicApplication != nil {
-		mmRegisterDynamicApplication.mock.t.Fatalf("AuthMock.RegisterDynamicApplication mock is already set by Set")
+		mmRegisterDynamicApplication.mock.t.Fatalf("AuthUseCaseMock.RegisterDynamicApplication mock is already set by Set")
 	}
 
 	if mmRegisterDynamicApplication.defaultExpectation == nil {
-		mmRegisterDynamicApplication.defaultExpectation = &AuthMockRegisterDynamicApplicationExpectation{}
+		mmRegisterDynamicApplication.defaultExpectation = &AuthUseCaseMockRegisterDynamicApplicationExpectation{}
 	}
 
 	if mmRegisterDynamicApplication.defaultExpectation.paramPtrs != nil {
-		mmRegisterDynamicApplication.mock.t.Fatalf("AuthMock.RegisterDynamicApplication mock is already set by ExpectParams functions")
+		mmRegisterDynamicApplication.mock.t.Fatalf("AuthUseCaseMock.RegisterDynamicApplication mock is already set by ExpectParams functions")
 	}
 
-	mmRegisterDynamicApplication.defaultExpectation.params = &AuthMockRegisterDynamicApplicationParams{ctx, tenantID, payload}
+	mmRegisterDynamicApplication.defaultExpectation.params = &AuthUseCaseMockRegisterDynamicApplicationParams{ctx, tenantID, payload}
 	mmRegisterDynamicApplication.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmRegisterDynamicApplication.expectations {
 		if minimock.Equal(e.params, mmRegisterDynamicApplication.defaultExpectation.params) {
@@ -5021,21 +5021,21 @@ func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) Expect(
 }
 
 // ExpectCtxParam1 sets up expected param ctx for AuthUseCase.RegisterDynamicApplication
-func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) ExpectCtxParam1(ctx context.Context) *mAuthMockRegisterDynamicApplication {
+func (mmRegisterDynamicApplication *mAuthUseCaseMockRegisterDynamicApplication) ExpectCtxParam1(ctx context.Context) *mAuthUseCaseMockRegisterDynamicApplication {
 	if mmRegisterDynamicApplication.mock.funcRegisterDynamicApplication != nil {
-		mmRegisterDynamicApplication.mock.t.Fatalf("AuthMock.RegisterDynamicApplication mock is already set by Set")
+		mmRegisterDynamicApplication.mock.t.Fatalf("AuthUseCaseMock.RegisterDynamicApplication mock is already set by Set")
 	}
 
 	if mmRegisterDynamicApplication.defaultExpectation == nil {
-		mmRegisterDynamicApplication.defaultExpectation = &AuthMockRegisterDynamicApplicationExpectation{}
+		mmRegisterDynamicApplication.defaultExpectation = &AuthUseCaseMockRegisterDynamicApplicationExpectation{}
 	}
 
 	if mmRegisterDynamicApplication.defaultExpectation.params != nil {
-		mmRegisterDynamicApplication.mock.t.Fatalf("AuthMock.RegisterDynamicApplication mock is already set by Expect")
+		mmRegisterDynamicApplication.mock.t.Fatalf("AuthUseCaseMock.RegisterDynamicApplication mock is already set by Expect")
 	}
 
 	if mmRegisterDynamicApplication.defaultExpectation.paramPtrs == nil {
-		mmRegisterDynamicApplication.defaultExpectation.paramPtrs = &AuthMockRegisterDynamicApplicationParamPtrs{}
+		mmRegisterDynamicApplication.defaultExpectation.paramPtrs = &AuthUseCaseMockRegisterDynamicApplicationParamPtrs{}
 	}
 	mmRegisterDynamicApplication.defaultExpectation.paramPtrs.ctx = &ctx
 	mmRegisterDynamicApplication.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
@@ -5044,21 +5044,21 @@ func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) ExpectC
 }
 
 // ExpectTenantIDParam2 sets up expected param tenantID for AuthUseCase.RegisterDynamicApplication
-func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthMockRegisterDynamicApplication {
+func (mmRegisterDynamicApplication *mAuthUseCaseMockRegisterDynamicApplication) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthUseCaseMockRegisterDynamicApplication {
 	if mmRegisterDynamicApplication.mock.funcRegisterDynamicApplication != nil {
-		mmRegisterDynamicApplication.mock.t.Fatalf("AuthMock.RegisterDynamicApplication mock is already set by Set")
+		mmRegisterDynamicApplication.mock.t.Fatalf("AuthUseCaseMock.RegisterDynamicApplication mock is already set by Set")
 	}
 
 	if mmRegisterDynamicApplication.defaultExpectation == nil {
-		mmRegisterDynamicApplication.defaultExpectation = &AuthMockRegisterDynamicApplicationExpectation{}
+		mmRegisterDynamicApplication.defaultExpectation = &AuthUseCaseMockRegisterDynamicApplicationExpectation{}
 	}
 
 	if mmRegisterDynamicApplication.defaultExpectation.params != nil {
-		mmRegisterDynamicApplication.mock.t.Fatalf("AuthMock.RegisterDynamicApplication mock is already set by Expect")
+		mmRegisterDynamicApplication.mock.t.Fatalf("AuthUseCaseMock.RegisterDynamicApplication mock is already set by Expect")
 	}
 
 	if mmRegisterDynamicApplication.defaultExpectation.paramPtrs == nil {
-		mmRegisterDynamicApplication.defaultExpectation.paramPtrs = &AuthMockRegisterDynamicApplicationParamPtrs{}
+		mmRegisterDynamicApplication.defaultExpectation.paramPtrs = &AuthUseCaseMockRegisterDynamicApplicationParamPtrs{}
 	}
 	mmRegisterDynamicApplication.defaultExpectation.paramPtrs.tenantID = &tenantID
 	mmRegisterDynamicApplication.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
@@ -5067,21 +5067,21 @@ func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) ExpectT
 }
 
 // ExpectPayloadParam3 sets up expected param payload for AuthUseCase.RegisterDynamicApplication
-func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) ExpectPayloadParam3(payload model.DynamicRegistrationPayload) *mAuthMockRegisterDynamicApplication {
+func (mmRegisterDynamicApplication *mAuthUseCaseMockRegisterDynamicApplication) ExpectPayloadParam3(payload model.DynamicRegistrationPayload) *mAuthUseCaseMockRegisterDynamicApplication {
 	if mmRegisterDynamicApplication.mock.funcRegisterDynamicApplication != nil {
-		mmRegisterDynamicApplication.mock.t.Fatalf("AuthMock.RegisterDynamicApplication mock is already set by Set")
+		mmRegisterDynamicApplication.mock.t.Fatalf("AuthUseCaseMock.RegisterDynamicApplication mock is already set by Set")
 	}
 
 	if mmRegisterDynamicApplication.defaultExpectation == nil {
-		mmRegisterDynamicApplication.defaultExpectation = &AuthMockRegisterDynamicApplicationExpectation{}
+		mmRegisterDynamicApplication.defaultExpectation = &AuthUseCaseMockRegisterDynamicApplicationExpectation{}
 	}
 
 	if mmRegisterDynamicApplication.defaultExpectation.params != nil {
-		mmRegisterDynamicApplication.mock.t.Fatalf("AuthMock.RegisterDynamicApplication mock is already set by Expect")
+		mmRegisterDynamicApplication.mock.t.Fatalf("AuthUseCaseMock.RegisterDynamicApplication mock is already set by Expect")
 	}
 
 	if mmRegisterDynamicApplication.defaultExpectation.paramPtrs == nil {
-		mmRegisterDynamicApplication.defaultExpectation.paramPtrs = &AuthMockRegisterDynamicApplicationParamPtrs{}
+		mmRegisterDynamicApplication.defaultExpectation.paramPtrs = &AuthUseCaseMockRegisterDynamicApplicationParamPtrs{}
 	}
 	mmRegisterDynamicApplication.defaultExpectation.paramPtrs.payload = &payload
 	mmRegisterDynamicApplication.defaultExpectation.expectationOrigins.originPayload = minimock.CallerInfo(1)
@@ -5090,9 +5090,9 @@ func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) ExpectP
 }
 
 // Inspect accepts an inspector function that has same arguments as the AuthUseCase.RegisterDynamicApplication
-func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) Inspect(f func(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload)) *mAuthMockRegisterDynamicApplication {
+func (mmRegisterDynamicApplication *mAuthUseCaseMockRegisterDynamicApplication) Inspect(f func(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload)) *mAuthUseCaseMockRegisterDynamicApplication {
 	if mmRegisterDynamicApplication.mock.inspectFuncRegisterDynamicApplication != nil {
-		mmRegisterDynamicApplication.mock.t.Fatalf("Inspect function is already set for AuthMock.RegisterDynamicApplication")
+		mmRegisterDynamicApplication.mock.t.Fatalf("Inspect function is already set for AuthUseCaseMock.RegisterDynamicApplication")
 	}
 
 	mmRegisterDynamicApplication.mock.inspectFuncRegisterDynamicApplication = f
@@ -5101,21 +5101,21 @@ func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) Inspect
 }
 
 // Return sets up results that will be returned by AuthUseCase.RegisterDynamicApplication
-func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) Return(ap1 *model.Application, s1 string, err error) *AuthMock {
+func (mmRegisterDynamicApplication *mAuthUseCaseMockRegisterDynamicApplication) Return(ap1 *model.Application, s1 string, err error) *AuthUseCaseMock {
 	if mmRegisterDynamicApplication.mock.funcRegisterDynamicApplication != nil {
-		mmRegisterDynamicApplication.mock.t.Fatalf("AuthMock.RegisterDynamicApplication mock is already set by Set")
+		mmRegisterDynamicApplication.mock.t.Fatalf("AuthUseCaseMock.RegisterDynamicApplication mock is already set by Set")
 	}
 
 	if mmRegisterDynamicApplication.defaultExpectation == nil {
-		mmRegisterDynamicApplication.defaultExpectation = &AuthMockRegisterDynamicApplicationExpectation{mock: mmRegisterDynamicApplication.mock}
+		mmRegisterDynamicApplication.defaultExpectation = &AuthUseCaseMockRegisterDynamicApplicationExpectation{mock: mmRegisterDynamicApplication.mock}
 	}
-	mmRegisterDynamicApplication.defaultExpectation.results = &AuthMockRegisterDynamicApplicationResults{ap1, s1, err}
+	mmRegisterDynamicApplication.defaultExpectation.results = &AuthUseCaseMockRegisterDynamicApplicationResults{ap1, s1, err}
 	mmRegisterDynamicApplication.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmRegisterDynamicApplication.mock
 }
 
 // Set uses given function f to mock the AuthUseCase.RegisterDynamicApplication method
-func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) Set(f func(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) (ap1 *model.Application, s1 string, err error)) *AuthMock {
+func (mmRegisterDynamicApplication *mAuthUseCaseMockRegisterDynamicApplication) Set(f func(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) (ap1 *model.Application, s1 string, err error)) *AuthUseCaseMock {
 	if mmRegisterDynamicApplication.defaultExpectation != nil {
 		mmRegisterDynamicApplication.mock.t.Fatalf("Default expectation is already set for the AuthUseCase.RegisterDynamicApplication method")
 	}
@@ -5131,37 +5131,37 @@ func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) Set(f f
 
 // When sets expectation for the AuthUseCase.RegisterDynamicApplication which will trigger the result defined by the following
 // Then helper
-func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) When(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) *AuthMockRegisterDynamicApplicationExpectation {
+func (mmRegisterDynamicApplication *mAuthUseCaseMockRegisterDynamicApplication) When(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) *AuthUseCaseMockRegisterDynamicApplicationExpectation {
 	if mmRegisterDynamicApplication.mock.funcRegisterDynamicApplication != nil {
-		mmRegisterDynamicApplication.mock.t.Fatalf("AuthMock.RegisterDynamicApplication mock is already set by Set")
+		mmRegisterDynamicApplication.mock.t.Fatalf("AuthUseCaseMock.RegisterDynamicApplication mock is already set by Set")
 	}
 
-	expectation := &AuthMockRegisterDynamicApplicationExpectation{
+	expectation := &AuthUseCaseMockRegisterDynamicApplicationExpectation{
 		mock:               mmRegisterDynamicApplication.mock,
-		params:             &AuthMockRegisterDynamicApplicationParams{ctx, tenantID, payload},
-		expectationOrigins: AuthMockRegisterDynamicApplicationExpectationOrigins{origin: minimock.CallerInfo(1)},
+		params:             &AuthUseCaseMockRegisterDynamicApplicationParams{ctx, tenantID, payload},
+		expectationOrigins: AuthUseCaseMockRegisterDynamicApplicationExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmRegisterDynamicApplication.expectations = append(mmRegisterDynamicApplication.expectations, expectation)
 	return expectation
 }
 
 // Then sets up AuthUseCase.RegisterDynamicApplication return parameters for the expectation previously defined by the When method
-func (e *AuthMockRegisterDynamicApplicationExpectation) Then(ap1 *model.Application, s1 string, err error) *AuthMock {
-	e.results = &AuthMockRegisterDynamicApplicationResults{ap1, s1, err}
+func (e *AuthUseCaseMockRegisterDynamicApplicationExpectation) Then(ap1 *model.Application, s1 string, err error) *AuthUseCaseMock {
+	e.results = &AuthUseCaseMockRegisterDynamicApplicationResults{ap1, s1, err}
 	return e.mock
 }
 
 // Times sets number of times AuthUseCase.RegisterDynamicApplication should be invoked
-func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) Times(n uint64) *mAuthMockRegisterDynamicApplication {
+func (mmRegisterDynamicApplication *mAuthUseCaseMockRegisterDynamicApplication) Times(n uint64) *mAuthUseCaseMockRegisterDynamicApplication {
 	if n == 0 {
-		mmRegisterDynamicApplication.mock.t.Fatalf("Times of AuthMock.RegisterDynamicApplication mock can not be zero")
+		mmRegisterDynamicApplication.mock.t.Fatalf("Times of AuthUseCaseMock.RegisterDynamicApplication mock can not be zero")
 	}
 	mm_atomic.StoreUint64(&mmRegisterDynamicApplication.expectedInvocations, n)
 	mmRegisterDynamicApplication.expectedInvocationsOrigin = minimock.CallerInfo(1)
 	return mmRegisterDynamicApplication
 }
 
-func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) invocationsDone() bool {
+func (mmRegisterDynamicApplication *mAuthUseCaseMockRegisterDynamicApplication) invocationsDone() bool {
 	if len(mmRegisterDynamicApplication.expectations) == 0 && mmRegisterDynamicApplication.defaultExpectation == nil && mmRegisterDynamicApplication.mock.funcRegisterDynamicApplication == nil {
 		return true
 	}
@@ -5173,7 +5173,7 @@ func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) invocat
 }
 
 // RegisterDynamicApplication implements mm_port.AuthUseCase
-func (mmRegisterDynamicApplication *AuthMock) RegisterDynamicApplication(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) (ap1 *model.Application, s1 string, err error) {
+func (mmRegisterDynamicApplication *AuthUseCaseMock) RegisterDynamicApplication(ctx context.Context, tenantID uuid.UUID, payload model.DynamicRegistrationPayload) (ap1 *model.Application, s1 string, err error) {
 	mm_atomic.AddUint64(&mmRegisterDynamicApplication.beforeRegisterDynamicApplicationCounter, 1)
 	defer mm_atomic.AddUint64(&mmRegisterDynamicApplication.afterRegisterDynamicApplicationCounter, 1)
 
@@ -5183,7 +5183,7 @@ func (mmRegisterDynamicApplication *AuthMock) RegisterDynamicApplication(ctx con
 		mmRegisterDynamicApplication.inspectFuncRegisterDynamicApplication(ctx, tenantID, payload)
 	}
 
-	mm_params := AuthMockRegisterDynamicApplicationParams{ctx, tenantID, payload}
+	mm_params := AuthUseCaseMockRegisterDynamicApplicationParams{ctx, tenantID, payload}
 
 	// Record call args
 	mmRegisterDynamicApplication.RegisterDynamicApplicationMock.mutex.Lock()
@@ -5202,59 +5202,59 @@ func (mmRegisterDynamicApplication *AuthMock) RegisterDynamicApplication(ctx con
 		mm_want := mmRegisterDynamicApplication.RegisterDynamicApplicationMock.defaultExpectation.params
 		mm_want_ptrs := mmRegisterDynamicApplication.RegisterDynamicApplicationMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockRegisterDynamicApplicationParams{ctx, tenantID, payload}
+		mm_got := AuthUseCaseMockRegisterDynamicApplicationParams{ctx, tenantID, payload}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmRegisterDynamicApplication.t.Errorf("AuthMock.RegisterDynamicApplication got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRegisterDynamicApplication.t.Errorf("AuthUseCaseMock.RegisterDynamicApplication got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmRegisterDynamicApplication.RegisterDynamicApplicationMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
 			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
-				mmRegisterDynamicApplication.t.Errorf("AuthMock.RegisterDynamicApplication got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRegisterDynamicApplication.t.Errorf("AuthUseCaseMock.RegisterDynamicApplication got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmRegisterDynamicApplication.RegisterDynamicApplicationMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
 			}
 
 			if mm_want_ptrs.payload != nil && !minimock.Equal(*mm_want_ptrs.payload, mm_got.payload) {
-				mmRegisterDynamicApplication.t.Errorf("AuthMock.RegisterDynamicApplication got unexpected parameter payload, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRegisterDynamicApplication.t.Errorf("AuthUseCaseMock.RegisterDynamicApplication got unexpected parameter payload, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmRegisterDynamicApplication.RegisterDynamicApplicationMock.defaultExpectation.expectationOrigins.originPayload, *mm_want_ptrs.payload, mm_got.payload, minimock.Diff(*mm_want_ptrs.payload, mm_got.payload))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmRegisterDynamicApplication.t.Errorf("AuthMock.RegisterDynamicApplication got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+			mmRegisterDynamicApplication.t.Errorf("AuthUseCaseMock.RegisterDynamicApplication got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmRegisterDynamicApplication.RegisterDynamicApplicationMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
 		mm_results := mmRegisterDynamicApplication.RegisterDynamicApplicationMock.defaultExpectation.results
 		if mm_results == nil {
-			mmRegisterDynamicApplication.t.Fatal("No results are set for the AuthMock.RegisterDynamicApplication")
+			mmRegisterDynamicApplication.t.Fatal("No results are set for the AuthUseCaseMock.RegisterDynamicApplication")
 		}
 		return (*mm_results).ap1, (*mm_results).s1, (*mm_results).err
 	}
 	if mmRegisterDynamicApplication.funcRegisterDynamicApplication != nil {
 		return mmRegisterDynamicApplication.funcRegisterDynamicApplication(ctx, tenantID, payload)
 	}
-	mmRegisterDynamicApplication.t.Fatalf("Unexpected call to AuthMock.RegisterDynamicApplication. %v %v %v", ctx, tenantID, payload)
+	mmRegisterDynamicApplication.t.Fatalf("Unexpected call to AuthUseCaseMock.RegisterDynamicApplication. %v %v %v", ctx, tenantID, payload)
 	return
 }
 
-// RegisterDynamicApplicationAfterCounter returns a count of finished AuthMock.RegisterDynamicApplication invocations
-func (mmRegisterDynamicApplication *AuthMock) RegisterDynamicApplicationAfterCounter() uint64 {
+// RegisterDynamicApplicationAfterCounter returns a count of finished AuthUseCaseMock.RegisterDynamicApplication invocations
+func (mmRegisterDynamicApplication *AuthUseCaseMock) RegisterDynamicApplicationAfterCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmRegisterDynamicApplication.afterRegisterDynamicApplicationCounter)
 }
 
-// RegisterDynamicApplicationBeforeCounter returns a count of AuthMock.RegisterDynamicApplication invocations
-func (mmRegisterDynamicApplication *AuthMock) RegisterDynamicApplicationBeforeCounter() uint64 {
+// RegisterDynamicApplicationBeforeCounter returns a count of AuthUseCaseMock.RegisterDynamicApplication invocations
+func (mmRegisterDynamicApplication *AuthUseCaseMock) RegisterDynamicApplicationBeforeCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmRegisterDynamicApplication.beforeRegisterDynamicApplicationCounter)
 }
 
-// Calls returns a list of arguments used in each call to AuthMock.RegisterDynamicApplication.
+// Calls returns a list of arguments used in each call to AuthUseCaseMock.RegisterDynamicApplication.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) Calls() []*AuthMockRegisterDynamicApplicationParams {
+func (mmRegisterDynamicApplication *mAuthUseCaseMockRegisterDynamicApplication) Calls() []*AuthUseCaseMockRegisterDynamicApplicationParams {
 	mmRegisterDynamicApplication.mutex.RLock()
 
-	argCopy := make([]*AuthMockRegisterDynamicApplicationParams, len(mmRegisterDynamicApplication.callArgs))
+	argCopy := make([]*AuthUseCaseMockRegisterDynamicApplicationParams, len(mmRegisterDynamicApplication.callArgs))
 	copy(argCopy, mmRegisterDynamicApplication.callArgs)
 
 	mmRegisterDynamicApplication.mutex.RUnlock()
@@ -5264,7 +5264,7 @@ func (mmRegisterDynamicApplication *mAuthMockRegisterDynamicApplication) Calls()
 
 // MinimockRegisterDynamicApplicationDone returns true if the count of the RegisterDynamicApplication invocations corresponds
 // the number of defined expectations
-func (m *AuthMock) MinimockRegisterDynamicApplicationDone() bool {
+func (m *AuthUseCaseMock) MinimockRegisterDynamicApplicationDone() bool {
 	if m.RegisterDynamicApplicationMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
@@ -5280,10 +5280,10 @@ func (m *AuthMock) MinimockRegisterDynamicApplicationDone() bool {
 }
 
 // MinimockRegisterDynamicApplicationInspect logs each unmet expectation
-func (m *AuthMock) MinimockRegisterDynamicApplicationInspect() {
+func (m *AuthUseCaseMock) MinimockRegisterDynamicApplicationInspect() {
 	for _, e := range m.RegisterDynamicApplicationMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to AuthMock.RegisterDynamicApplication at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.RegisterDynamicApplication at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
@@ -5291,69 +5291,69 @@ func (m *AuthMock) MinimockRegisterDynamicApplicationInspect() {
 	// if default expectation was set then invocations count should be greater than zero
 	if m.RegisterDynamicApplicationMock.defaultExpectation != nil && afterRegisterDynamicApplicationCounter < 1 {
 		if m.RegisterDynamicApplicationMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to AuthMock.RegisterDynamicApplication at\n%s", m.RegisterDynamicApplicationMock.defaultExpectation.returnOrigin)
+			m.t.Errorf("Expected call to AuthUseCaseMock.RegisterDynamicApplication at\n%s", m.RegisterDynamicApplicationMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to AuthMock.RegisterDynamicApplication at\n%s with params: %#v", m.RegisterDynamicApplicationMock.defaultExpectation.expectationOrigins.origin, *m.RegisterDynamicApplicationMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.RegisterDynamicApplication at\n%s with params: %#v", m.RegisterDynamicApplicationMock.defaultExpectation.expectationOrigins.origin, *m.RegisterDynamicApplicationMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
 	if m.funcRegisterDynamicApplication != nil && afterRegisterDynamicApplicationCounter < 1 {
-		m.t.Errorf("Expected call to AuthMock.RegisterDynamicApplication at\n%s", m.funcRegisterDynamicApplicationOrigin)
+		m.t.Errorf("Expected call to AuthUseCaseMock.RegisterDynamicApplication at\n%s", m.funcRegisterDynamicApplicationOrigin)
 	}
 
 	if !m.RegisterDynamicApplicationMock.invocationsDone() && afterRegisterDynamicApplicationCounter > 0 {
-		m.t.Errorf("Expected %d calls to AuthMock.RegisterDynamicApplication at\n%s but found %d calls",
+		m.t.Errorf("Expected %d calls to AuthUseCaseMock.RegisterDynamicApplication at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.RegisterDynamicApplicationMock.expectedInvocations), m.RegisterDynamicApplicationMock.expectedInvocationsOrigin, afterRegisterDynamicApplicationCounter)
 	}
 }
 
-type mAuthMockRevokeToken struct {
+type mAuthUseCaseMockRevokeToken struct {
 	optional           bool
-	mock               *AuthMock
-	defaultExpectation *AuthMockRevokeTokenExpectation
-	expectations       []*AuthMockRevokeTokenExpectation
+	mock               *AuthUseCaseMock
+	defaultExpectation *AuthUseCaseMockRevokeTokenExpectation
+	expectations       []*AuthUseCaseMockRevokeTokenExpectation
 
-	callArgs []*AuthMockRevokeTokenParams
+	callArgs []*AuthUseCaseMockRevokeTokenParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// AuthMockRevokeTokenExpectation specifies expectation struct of the AuthUseCase.RevokeToken
-type AuthMockRevokeTokenExpectation struct {
-	mock               *AuthMock
-	params             *AuthMockRevokeTokenParams
-	paramPtrs          *AuthMockRevokeTokenParamPtrs
-	expectationOrigins AuthMockRevokeTokenExpectationOrigins
-	results            *AuthMockRevokeTokenResults
+// AuthUseCaseMockRevokeTokenExpectation specifies expectation struct of the AuthUseCase.RevokeToken
+type AuthUseCaseMockRevokeTokenExpectation struct {
+	mock               *AuthUseCaseMock
+	params             *AuthUseCaseMockRevokeTokenParams
+	paramPtrs          *AuthUseCaseMockRevokeTokenParamPtrs
+	expectationOrigins AuthUseCaseMockRevokeTokenExpectationOrigins
+	results            *AuthUseCaseMockRevokeTokenResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// AuthMockRevokeTokenParams contains parameters of the AuthUseCase.RevokeToken
-type AuthMockRevokeTokenParams struct {
+// AuthUseCaseMockRevokeTokenParams contains parameters of the AuthUseCase.RevokeToken
+type AuthUseCaseMockRevokeTokenParams struct {
 	ctx      context.Context
 	tenantID uuid.UUID
 	clientID string
 	tokenStr string
 }
 
-// AuthMockRevokeTokenParamPtrs contains pointers to parameters of the AuthUseCase.RevokeToken
-type AuthMockRevokeTokenParamPtrs struct {
+// AuthUseCaseMockRevokeTokenParamPtrs contains pointers to parameters of the AuthUseCase.RevokeToken
+type AuthUseCaseMockRevokeTokenParamPtrs struct {
 	ctx      *context.Context
 	tenantID *uuid.UUID
 	clientID *string
 	tokenStr *string
 }
 
-// AuthMockRevokeTokenResults contains results of the AuthUseCase.RevokeToken
-type AuthMockRevokeTokenResults struct {
+// AuthUseCaseMockRevokeTokenResults contains results of the AuthUseCase.RevokeToken
+type AuthUseCaseMockRevokeTokenResults struct {
 	err error
 }
 
-// AuthMockRevokeTokenOrigins contains origins of expectations of the AuthUseCase.RevokeToken
-type AuthMockRevokeTokenExpectationOrigins struct {
+// AuthUseCaseMockRevokeTokenOrigins contains origins of expectations of the AuthUseCase.RevokeToken
+type AuthUseCaseMockRevokeTokenExpectationOrigins struct {
 	origin         string
 	originCtx      string
 	originTenantID string
@@ -5366,26 +5366,26 @@ type AuthMockRevokeTokenExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmRevokeToken *mAuthMockRevokeToken) Optional() *mAuthMockRevokeToken {
+func (mmRevokeToken *mAuthUseCaseMockRevokeToken) Optional() *mAuthUseCaseMockRevokeToken {
 	mmRevokeToken.optional = true
 	return mmRevokeToken
 }
 
 // Expect sets up expected params for AuthUseCase.RevokeToken
-func (mmRevokeToken *mAuthMockRevokeToken) Expect(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) *mAuthMockRevokeToken {
+func (mmRevokeToken *mAuthUseCaseMockRevokeToken) Expect(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) *mAuthUseCaseMockRevokeToken {
 	if mmRevokeToken.mock.funcRevokeToken != nil {
-		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Set")
+		mmRevokeToken.mock.t.Fatalf("AuthUseCaseMock.RevokeToken mock is already set by Set")
 	}
 
 	if mmRevokeToken.defaultExpectation == nil {
-		mmRevokeToken.defaultExpectation = &AuthMockRevokeTokenExpectation{}
+		mmRevokeToken.defaultExpectation = &AuthUseCaseMockRevokeTokenExpectation{}
 	}
 
 	if mmRevokeToken.defaultExpectation.paramPtrs != nil {
-		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by ExpectParams functions")
+		mmRevokeToken.mock.t.Fatalf("AuthUseCaseMock.RevokeToken mock is already set by ExpectParams functions")
 	}
 
-	mmRevokeToken.defaultExpectation.params = &AuthMockRevokeTokenParams{ctx, tenantID, clientID, tokenStr}
+	mmRevokeToken.defaultExpectation.params = &AuthUseCaseMockRevokeTokenParams{ctx, tenantID, clientID, tokenStr}
 	mmRevokeToken.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmRevokeToken.expectations {
 		if minimock.Equal(e.params, mmRevokeToken.defaultExpectation.params) {
@@ -5397,21 +5397,21 @@ func (mmRevokeToken *mAuthMockRevokeToken) Expect(ctx context.Context, tenantID 
 }
 
 // ExpectCtxParam1 sets up expected param ctx for AuthUseCase.RevokeToken
-func (mmRevokeToken *mAuthMockRevokeToken) ExpectCtxParam1(ctx context.Context) *mAuthMockRevokeToken {
+func (mmRevokeToken *mAuthUseCaseMockRevokeToken) ExpectCtxParam1(ctx context.Context) *mAuthUseCaseMockRevokeToken {
 	if mmRevokeToken.mock.funcRevokeToken != nil {
-		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Set")
+		mmRevokeToken.mock.t.Fatalf("AuthUseCaseMock.RevokeToken mock is already set by Set")
 	}
 
 	if mmRevokeToken.defaultExpectation == nil {
-		mmRevokeToken.defaultExpectation = &AuthMockRevokeTokenExpectation{}
+		mmRevokeToken.defaultExpectation = &AuthUseCaseMockRevokeTokenExpectation{}
 	}
 
 	if mmRevokeToken.defaultExpectation.params != nil {
-		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Expect")
+		mmRevokeToken.mock.t.Fatalf("AuthUseCaseMock.RevokeToken mock is already set by Expect")
 	}
 
 	if mmRevokeToken.defaultExpectation.paramPtrs == nil {
-		mmRevokeToken.defaultExpectation.paramPtrs = &AuthMockRevokeTokenParamPtrs{}
+		mmRevokeToken.defaultExpectation.paramPtrs = &AuthUseCaseMockRevokeTokenParamPtrs{}
 	}
 	mmRevokeToken.defaultExpectation.paramPtrs.ctx = &ctx
 	mmRevokeToken.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
@@ -5420,21 +5420,21 @@ func (mmRevokeToken *mAuthMockRevokeToken) ExpectCtxParam1(ctx context.Context) 
 }
 
 // ExpectTenantIDParam2 sets up expected param tenantID for AuthUseCase.RevokeToken
-func (mmRevokeToken *mAuthMockRevokeToken) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthMockRevokeToken {
+func (mmRevokeToken *mAuthUseCaseMockRevokeToken) ExpectTenantIDParam2(tenantID uuid.UUID) *mAuthUseCaseMockRevokeToken {
 	if mmRevokeToken.mock.funcRevokeToken != nil {
-		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Set")
+		mmRevokeToken.mock.t.Fatalf("AuthUseCaseMock.RevokeToken mock is already set by Set")
 	}
 
 	if mmRevokeToken.defaultExpectation == nil {
-		mmRevokeToken.defaultExpectation = &AuthMockRevokeTokenExpectation{}
+		mmRevokeToken.defaultExpectation = &AuthUseCaseMockRevokeTokenExpectation{}
 	}
 
 	if mmRevokeToken.defaultExpectation.params != nil {
-		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Expect")
+		mmRevokeToken.mock.t.Fatalf("AuthUseCaseMock.RevokeToken mock is already set by Expect")
 	}
 
 	if mmRevokeToken.defaultExpectation.paramPtrs == nil {
-		mmRevokeToken.defaultExpectation.paramPtrs = &AuthMockRevokeTokenParamPtrs{}
+		mmRevokeToken.defaultExpectation.paramPtrs = &AuthUseCaseMockRevokeTokenParamPtrs{}
 	}
 	mmRevokeToken.defaultExpectation.paramPtrs.tenantID = &tenantID
 	mmRevokeToken.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
@@ -5443,21 +5443,21 @@ func (mmRevokeToken *mAuthMockRevokeToken) ExpectTenantIDParam2(tenantID uuid.UU
 }
 
 // ExpectClientIDParam3 sets up expected param clientID for AuthUseCase.RevokeToken
-func (mmRevokeToken *mAuthMockRevokeToken) ExpectClientIDParam3(clientID string) *mAuthMockRevokeToken {
+func (mmRevokeToken *mAuthUseCaseMockRevokeToken) ExpectClientIDParam3(clientID string) *mAuthUseCaseMockRevokeToken {
 	if mmRevokeToken.mock.funcRevokeToken != nil {
-		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Set")
+		mmRevokeToken.mock.t.Fatalf("AuthUseCaseMock.RevokeToken mock is already set by Set")
 	}
 
 	if mmRevokeToken.defaultExpectation == nil {
-		mmRevokeToken.defaultExpectation = &AuthMockRevokeTokenExpectation{}
+		mmRevokeToken.defaultExpectation = &AuthUseCaseMockRevokeTokenExpectation{}
 	}
 
 	if mmRevokeToken.defaultExpectation.params != nil {
-		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Expect")
+		mmRevokeToken.mock.t.Fatalf("AuthUseCaseMock.RevokeToken mock is already set by Expect")
 	}
 
 	if mmRevokeToken.defaultExpectation.paramPtrs == nil {
-		mmRevokeToken.defaultExpectation.paramPtrs = &AuthMockRevokeTokenParamPtrs{}
+		mmRevokeToken.defaultExpectation.paramPtrs = &AuthUseCaseMockRevokeTokenParamPtrs{}
 	}
 	mmRevokeToken.defaultExpectation.paramPtrs.clientID = &clientID
 	mmRevokeToken.defaultExpectation.expectationOrigins.originClientID = minimock.CallerInfo(1)
@@ -5466,21 +5466,21 @@ func (mmRevokeToken *mAuthMockRevokeToken) ExpectClientIDParam3(clientID string)
 }
 
 // ExpectTokenStrParam4 sets up expected param tokenStr for AuthUseCase.RevokeToken
-func (mmRevokeToken *mAuthMockRevokeToken) ExpectTokenStrParam4(tokenStr string) *mAuthMockRevokeToken {
+func (mmRevokeToken *mAuthUseCaseMockRevokeToken) ExpectTokenStrParam4(tokenStr string) *mAuthUseCaseMockRevokeToken {
 	if mmRevokeToken.mock.funcRevokeToken != nil {
-		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Set")
+		mmRevokeToken.mock.t.Fatalf("AuthUseCaseMock.RevokeToken mock is already set by Set")
 	}
 
 	if mmRevokeToken.defaultExpectation == nil {
-		mmRevokeToken.defaultExpectation = &AuthMockRevokeTokenExpectation{}
+		mmRevokeToken.defaultExpectation = &AuthUseCaseMockRevokeTokenExpectation{}
 	}
 
 	if mmRevokeToken.defaultExpectation.params != nil {
-		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Expect")
+		mmRevokeToken.mock.t.Fatalf("AuthUseCaseMock.RevokeToken mock is already set by Expect")
 	}
 
 	if mmRevokeToken.defaultExpectation.paramPtrs == nil {
-		mmRevokeToken.defaultExpectation.paramPtrs = &AuthMockRevokeTokenParamPtrs{}
+		mmRevokeToken.defaultExpectation.paramPtrs = &AuthUseCaseMockRevokeTokenParamPtrs{}
 	}
 	mmRevokeToken.defaultExpectation.paramPtrs.tokenStr = &tokenStr
 	mmRevokeToken.defaultExpectation.expectationOrigins.originTokenStr = minimock.CallerInfo(1)
@@ -5489,9 +5489,9 @@ func (mmRevokeToken *mAuthMockRevokeToken) ExpectTokenStrParam4(tokenStr string)
 }
 
 // Inspect accepts an inspector function that has same arguments as the AuthUseCase.RevokeToken
-func (mmRevokeToken *mAuthMockRevokeToken) Inspect(f func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string)) *mAuthMockRevokeToken {
+func (mmRevokeToken *mAuthUseCaseMockRevokeToken) Inspect(f func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string)) *mAuthUseCaseMockRevokeToken {
 	if mmRevokeToken.mock.inspectFuncRevokeToken != nil {
-		mmRevokeToken.mock.t.Fatalf("Inspect function is already set for AuthMock.RevokeToken")
+		mmRevokeToken.mock.t.Fatalf("Inspect function is already set for AuthUseCaseMock.RevokeToken")
 	}
 
 	mmRevokeToken.mock.inspectFuncRevokeToken = f
@@ -5500,21 +5500,21 @@ func (mmRevokeToken *mAuthMockRevokeToken) Inspect(f func(ctx context.Context, t
 }
 
 // Return sets up results that will be returned by AuthUseCase.RevokeToken
-func (mmRevokeToken *mAuthMockRevokeToken) Return(err error) *AuthMock {
+func (mmRevokeToken *mAuthUseCaseMockRevokeToken) Return(err error) *AuthUseCaseMock {
 	if mmRevokeToken.mock.funcRevokeToken != nil {
-		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Set")
+		mmRevokeToken.mock.t.Fatalf("AuthUseCaseMock.RevokeToken mock is already set by Set")
 	}
 
 	if mmRevokeToken.defaultExpectation == nil {
-		mmRevokeToken.defaultExpectation = &AuthMockRevokeTokenExpectation{mock: mmRevokeToken.mock}
+		mmRevokeToken.defaultExpectation = &AuthUseCaseMockRevokeTokenExpectation{mock: mmRevokeToken.mock}
 	}
-	mmRevokeToken.defaultExpectation.results = &AuthMockRevokeTokenResults{err}
+	mmRevokeToken.defaultExpectation.results = &AuthUseCaseMockRevokeTokenResults{err}
 	mmRevokeToken.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmRevokeToken.mock
 }
 
 // Set uses given function f to mock the AuthUseCase.RevokeToken method
-func (mmRevokeToken *mAuthMockRevokeToken) Set(f func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (err error)) *AuthMock {
+func (mmRevokeToken *mAuthUseCaseMockRevokeToken) Set(f func(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (err error)) *AuthUseCaseMock {
 	if mmRevokeToken.defaultExpectation != nil {
 		mmRevokeToken.mock.t.Fatalf("Default expectation is already set for the AuthUseCase.RevokeToken method")
 	}
@@ -5530,37 +5530,37 @@ func (mmRevokeToken *mAuthMockRevokeToken) Set(f func(ctx context.Context, tenan
 
 // When sets expectation for the AuthUseCase.RevokeToken which will trigger the result defined by the following
 // Then helper
-func (mmRevokeToken *mAuthMockRevokeToken) When(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) *AuthMockRevokeTokenExpectation {
+func (mmRevokeToken *mAuthUseCaseMockRevokeToken) When(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) *AuthUseCaseMockRevokeTokenExpectation {
 	if mmRevokeToken.mock.funcRevokeToken != nil {
-		mmRevokeToken.mock.t.Fatalf("AuthMock.RevokeToken mock is already set by Set")
+		mmRevokeToken.mock.t.Fatalf("AuthUseCaseMock.RevokeToken mock is already set by Set")
 	}
 
-	expectation := &AuthMockRevokeTokenExpectation{
+	expectation := &AuthUseCaseMockRevokeTokenExpectation{
 		mock:               mmRevokeToken.mock,
-		params:             &AuthMockRevokeTokenParams{ctx, tenantID, clientID, tokenStr},
-		expectationOrigins: AuthMockRevokeTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
+		params:             &AuthUseCaseMockRevokeTokenParams{ctx, tenantID, clientID, tokenStr},
+		expectationOrigins: AuthUseCaseMockRevokeTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmRevokeToken.expectations = append(mmRevokeToken.expectations, expectation)
 	return expectation
 }
 
 // Then sets up AuthUseCase.RevokeToken return parameters for the expectation previously defined by the When method
-func (e *AuthMockRevokeTokenExpectation) Then(err error) *AuthMock {
-	e.results = &AuthMockRevokeTokenResults{err}
+func (e *AuthUseCaseMockRevokeTokenExpectation) Then(err error) *AuthUseCaseMock {
+	e.results = &AuthUseCaseMockRevokeTokenResults{err}
 	return e.mock
 }
 
 // Times sets number of times AuthUseCase.RevokeToken should be invoked
-func (mmRevokeToken *mAuthMockRevokeToken) Times(n uint64) *mAuthMockRevokeToken {
+func (mmRevokeToken *mAuthUseCaseMockRevokeToken) Times(n uint64) *mAuthUseCaseMockRevokeToken {
 	if n == 0 {
-		mmRevokeToken.mock.t.Fatalf("Times of AuthMock.RevokeToken mock can not be zero")
+		mmRevokeToken.mock.t.Fatalf("Times of AuthUseCaseMock.RevokeToken mock can not be zero")
 	}
 	mm_atomic.StoreUint64(&mmRevokeToken.expectedInvocations, n)
 	mmRevokeToken.expectedInvocationsOrigin = minimock.CallerInfo(1)
 	return mmRevokeToken
 }
 
-func (mmRevokeToken *mAuthMockRevokeToken) invocationsDone() bool {
+func (mmRevokeToken *mAuthUseCaseMockRevokeToken) invocationsDone() bool {
 	if len(mmRevokeToken.expectations) == 0 && mmRevokeToken.defaultExpectation == nil && mmRevokeToken.mock.funcRevokeToken == nil {
 		return true
 	}
@@ -5572,7 +5572,7 @@ func (mmRevokeToken *mAuthMockRevokeToken) invocationsDone() bool {
 }
 
 // RevokeToken implements mm_port.AuthUseCase
-func (mmRevokeToken *AuthMock) RevokeToken(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (err error) {
+func (mmRevokeToken *AuthUseCaseMock) RevokeToken(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (err error) {
 	mm_atomic.AddUint64(&mmRevokeToken.beforeRevokeTokenCounter, 1)
 	defer mm_atomic.AddUint64(&mmRevokeToken.afterRevokeTokenCounter, 1)
 
@@ -5582,7 +5582,7 @@ func (mmRevokeToken *AuthMock) RevokeToken(ctx context.Context, tenantID uuid.UU
 		mmRevokeToken.inspectFuncRevokeToken(ctx, tenantID, clientID, tokenStr)
 	}
 
-	mm_params := AuthMockRevokeTokenParams{ctx, tenantID, clientID, tokenStr}
+	mm_params := AuthUseCaseMockRevokeTokenParams{ctx, tenantID, clientID, tokenStr}
 
 	// Record call args
 	mmRevokeToken.RevokeTokenMock.mutex.Lock()
@@ -5601,64 +5601,64 @@ func (mmRevokeToken *AuthMock) RevokeToken(ctx context.Context, tenantID uuid.UU
 		mm_want := mmRevokeToken.RevokeTokenMock.defaultExpectation.params
 		mm_want_ptrs := mmRevokeToken.RevokeTokenMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockRevokeTokenParams{ctx, tenantID, clientID, tokenStr}
+		mm_got := AuthUseCaseMockRevokeTokenParams{ctx, tenantID, clientID, tokenStr}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmRevokeToken.t.Errorf("AuthMock.RevokeToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRevokeToken.t.Errorf("AuthUseCaseMock.RevokeToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmRevokeToken.RevokeTokenMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
 			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
-				mmRevokeToken.t.Errorf("AuthMock.RevokeToken got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRevokeToken.t.Errorf("AuthUseCaseMock.RevokeToken got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmRevokeToken.RevokeTokenMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
 			}
 
 			if mm_want_ptrs.clientID != nil && !minimock.Equal(*mm_want_ptrs.clientID, mm_got.clientID) {
-				mmRevokeToken.t.Errorf("AuthMock.RevokeToken got unexpected parameter clientID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRevokeToken.t.Errorf("AuthUseCaseMock.RevokeToken got unexpected parameter clientID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmRevokeToken.RevokeTokenMock.defaultExpectation.expectationOrigins.originClientID, *mm_want_ptrs.clientID, mm_got.clientID, minimock.Diff(*mm_want_ptrs.clientID, mm_got.clientID))
 			}
 
 			if mm_want_ptrs.tokenStr != nil && !minimock.Equal(*mm_want_ptrs.tokenStr, mm_got.tokenStr) {
-				mmRevokeToken.t.Errorf("AuthMock.RevokeToken got unexpected parameter tokenStr, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRevokeToken.t.Errorf("AuthUseCaseMock.RevokeToken got unexpected parameter tokenStr, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmRevokeToken.RevokeTokenMock.defaultExpectation.expectationOrigins.originTokenStr, *mm_want_ptrs.tokenStr, mm_got.tokenStr, minimock.Diff(*mm_want_ptrs.tokenStr, mm_got.tokenStr))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmRevokeToken.t.Errorf("AuthMock.RevokeToken got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+			mmRevokeToken.t.Errorf("AuthUseCaseMock.RevokeToken got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmRevokeToken.RevokeTokenMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
 		mm_results := mmRevokeToken.RevokeTokenMock.defaultExpectation.results
 		if mm_results == nil {
-			mmRevokeToken.t.Fatal("No results are set for the AuthMock.RevokeToken")
+			mmRevokeToken.t.Fatal("No results are set for the AuthUseCaseMock.RevokeToken")
 		}
 		return (*mm_results).err
 	}
 	if mmRevokeToken.funcRevokeToken != nil {
 		return mmRevokeToken.funcRevokeToken(ctx, tenantID, clientID, tokenStr)
 	}
-	mmRevokeToken.t.Fatalf("Unexpected call to AuthMock.RevokeToken. %v %v %v %v", ctx, tenantID, clientID, tokenStr)
+	mmRevokeToken.t.Fatalf("Unexpected call to AuthUseCaseMock.RevokeToken. %v %v %v %v", ctx, tenantID, clientID, tokenStr)
 	return
 }
 
-// RevokeTokenAfterCounter returns a count of finished AuthMock.RevokeToken invocations
-func (mmRevokeToken *AuthMock) RevokeTokenAfterCounter() uint64 {
+// RevokeTokenAfterCounter returns a count of finished AuthUseCaseMock.RevokeToken invocations
+func (mmRevokeToken *AuthUseCaseMock) RevokeTokenAfterCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmRevokeToken.afterRevokeTokenCounter)
 }
 
-// RevokeTokenBeforeCounter returns a count of AuthMock.RevokeToken invocations
-func (mmRevokeToken *AuthMock) RevokeTokenBeforeCounter() uint64 {
+// RevokeTokenBeforeCounter returns a count of AuthUseCaseMock.RevokeToken invocations
+func (mmRevokeToken *AuthUseCaseMock) RevokeTokenBeforeCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmRevokeToken.beforeRevokeTokenCounter)
 }
 
-// Calls returns a list of arguments used in each call to AuthMock.RevokeToken.
+// Calls returns a list of arguments used in each call to AuthUseCaseMock.RevokeToken.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmRevokeToken *mAuthMockRevokeToken) Calls() []*AuthMockRevokeTokenParams {
+func (mmRevokeToken *mAuthUseCaseMockRevokeToken) Calls() []*AuthUseCaseMockRevokeTokenParams {
 	mmRevokeToken.mutex.RLock()
 
-	argCopy := make([]*AuthMockRevokeTokenParams, len(mmRevokeToken.callArgs))
+	argCopy := make([]*AuthUseCaseMockRevokeTokenParams, len(mmRevokeToken.callArgs))
 	copy(argCopy, mmRevokeToken.callArgs)
 
 	mmRevokeToken.mutex.RUnlock()
@@ -5668,7 +5668,7 @@ func (mmRevokeToken *mAuthMockRevokeToken) Calls() []*AuthMockRevokeTokenParams 
 
 // MinimockRevokeTokenDone returns true if the count of the RevokeToken invocations corresponds
 // the number of defined expectations
-func (m *AuthMock) MinimockRevokeTokenDone() bool {
+func (m *AuthUseCaseMock) MinimockRevokeTokenDone() bool {
 	if m.RevokeTokenMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
@@ -5684,10 +5684,10 @@ func (m *AuthMock) MinimockRevokeTokenDone() bool {
 }
 
 // MinimockRevokeTokenInspect logs each unmet expectation
-func (m *AuthMock) MinimockRevokeTokenInspect() {
+func (m *AuthUseCaseMock) MinimockRevokeTokenInspect() {
 	for _, e := range m.RevokeTokenMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to AuthMock.RevokeToken at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.RevokeToken at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
@@ -5695,66 +5695,66 @@ func (m *AuthMock) MinimockRevokeTokenInspect() {
 	// if default expectation was set then invocations count should be greater than zero
 	if m.RevokeTokenMock.defaultExpectation != nil && afterRevokeTokenCounter < 1 {
 		if m.RevokeTokenMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to AuthMock.RevokeToken at\n%s", m.RevokeTokenMock.defaultExpectation.returnOrigin)
+			m.t.Errorf("Expected call to AuthUseCaseMock.RevokeToken at\n%s", m.RevokeTokenMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to AuthMock.RevokeToken at\n%s with params: %#v", m.RevokeTokenMock.defaultExpectation.expectationOrigins.origin, *m.RevokeTokenMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.RevokeToken at\n%s with params: %#v", m.RevokeTokenMock.defaultExpectation.expectationOrigins.origin, *m.RevokeTokenMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
 	if m.funcRevokeToken != nil && afterRevokeTokenCounter < 1 {
-		m.t.Errorf("Expected call to AuthMock.RevokeToken at\n%s", m.funcRevokeTokenOrigin)
+		m.t.Errorf("Expected call to AuthUseCaseMock.RevokeToken at\n%s", m.funcRevokeTokenOrigin)
 	}
 
 	if !m.RevokeTokenMock.invocationsDone() && afterRevokeTokenCounter > 0 {
-		m.t.Errorf("Expected %d calls to AuthMock.RevokeToken at\n%s but found %d calls",
+		m.t.Errorf("Expected %d calls to AuthUseCaseMock.RevokeToken at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.RevokeTokenMock.expectedInvocations), m.RevokeTokenMock.expectedInvocationsOrigin, afterRevokeTokenCounter)
 	}
 }
 
-type mAuthMockRotateRefreshToken struct {
+type mAuthUseCaseMockRotateRefreshToken struct {
 	optional           bool
-	mock               *AuthMock
-	defaultExpectation *AuthMockRotateRefreshTokenExpectation
-	expectations       []*AuthMockRotateRefreshTokenExpectation
+	mock               *AuthUseCaseMock
+	defaultExpectation *AuthUseCaseMockRotateRefreshTokenExpectation
+	expectations       []*AuthUseCaseMockRotateRefreshTokenExpectation
 
-	callArgs []*AuthMockRotateRefreshTokenParams
+	callArgs []*AuthUseCaseMockRotateRefreshTokenParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// AuthMockRotateRefreshTokenExpectation specifies expectation struct of the AuthUseCase.RotateRefreshToken
-type AuthMockRotateRefreshTokenExpectation struct {
-	mock               *AuthMock
-	params             *AuthMockRotateRefreshTokenParams
-	paramPtrs          *AuthMockRotateRefreshTokenParamPtrs
-	expectationOrigins AuthMockRotateRefreshTokenExpectationOrigins
-	results            *AuthMockRotateRefreshTokenResults
+// AuthUseCaseMockRotateRefreshTokenExpectation specifies expectation struct of the AuthUseCase.RotateRefreshToken
+type AuthUseCaseMockRotateRefreshTokenExpectation struct {
+	mock               *AuthUseCaseMock
+	params             *AuthUseCaseMockRotateRefreshTokenParams
+	paramPtrs          *AuthUseCaseMockRotateRefreshTokenParamPtrs
+	expectationOrigins AuthUseCaseMockRotateRefreshTokenExpectationOrigins
+	results            *AuthUseCaseMockRotateRefreshTokenResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// AuthMockRotateRefreshTokenParams contains parameters of the AuthUseCase.RotateRefreshToken
-type AuthMockRotateRefreshTokenParams struct {
+// AuthUseCaseMockRotateRefreshTokenParams contains parameters of the AuthUseCase.RotateRefreshToken
+type AuthUseCaseMockRotateRefreshTokenParams struct {
 	ctx context.Context
 	cmd mm_port.RotateRefreshTokenCommand
 }
 
-// AuthMockRotateRefreshTokenParamPtrs contains pointers to parameters of the AuthUseCase.RotateRefreshToken
-type AuthMockRotateRefreshTokenParamPtrs struct {
+// AuthUseCaseMockRotateRefreshTokenParamPtrs contains pointers to parameters of the AuthUseCase.RotateRefreshToken
+type AuthUseCaseMockRotateRefreshTokenParamPtrs struct {
 	ctx *context.Context
 	cmd *mm_port.RotateRefreshTokenCommand
 }
 
-// AuthMockRotateRefreshTokenResults contains results of the AuthUseCase.RotateRefreshToken
-type AuthMockRotateRefreshTokenResults struct {
+// AuthUseCaseMockRotateRefreshTokenResults contains results of the AuthUseCase.RotateRefreshToken
+type AuthUseCaseMockRotateRefreshTokenResults struct {
 	tp1 *model.TokenSetResponse
 	err error
 }
 
-// AuthMockRotateRefreshTokenOrigins contains origins of expectations of the AuthUseCase.RotateRefreshToken
-type AuthMockRotateRefreshTokenExpectationOrigins struct {
+// AuthUseCaseMockRotateRefreshTokenOrigins contains origins of expectations of the AuthUseCase.RotateRefreshToken
+type AuthUseCaseMockRotateRefreshTokenExpectationOrigins struct {
 	origin    string
 	originCtx string
 	originCmd string
@@ -5765,26 +5765,26 @@ type AuthMockRotateRefreshTokenExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) Optional() *mAuthMockRotateRefreshToken {
+func (mmRotateRefreshToken *mAuthUseCaseMockRotateRefreshToken) Optional() *mAuthUseCaseMockRotateRefreshToken {
 	mmRotateRefreshToken.optional = true
 	return mmRotateRefreshToken
 }
 
 // Expect sets up expected params for AuthUseCase.RotateRefreshToken
-func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) Expect(ctx context.Context, cmd mm_port.RotateRefreshTokenCommand) *mAuthMockRotateRefreshToken {
+func (mmRotateRefreshToken *mAuthUseCaseMockRotateRefreshToken) Expect(ctx context.Context, cmd mm_port.RotateRefreshTokenCommand) *mAuthUseCaseMockRotateRefreshToken {
 	if mmRotateRefreshToken.mock.funcRotateRefreshToken != nil {
-		mmRotateRefreshToken.mock.t.Fatalf("AuthMock.RotateRefreshToken mock is already set by Set")
+		mmRotateRefreshToken.mock.t.Fatalf("AuthUseCaseMock.RotateRefreshToken mock is already set by Set")
 	}
 
 	if mmRotateRefreshToken.defaultExpectation == nil {
-		mmRotateRefreshToken.defaultExpectation = &AuthMockRotateRefreshTokenExpectation{}
+		mmRotateRefreshToken.defaultExpectation = &AuthUseCaseMockRotateRefreshTokenExpectation{}
 	}
 
 	if mmRotateRefreshToken.defaultExpectation.paramPtrs != nil {
-		mmRotateRefreshToken.mock.t.Fatalf("AuthMock.RotateRefreshToken mock is already set by ExpectParams functions")
+		mmRotateRefreshToken.mock.t.Fatalf("AuthUseCaseMock.RotateRefreshToken mock is already set by ExpectParams functions")
 	}
 
-	mmRotateRefreshToken.defaultExpectation.params = &AuthMockRotateRefreshTokenParams{ctx, cmd}
+	mmRotateRefreshToken.defaultExpectation.params = &AuthUseCaseMockRotateRefreshTokenParams{ctx, cmd}
 	mmRotateRefreshToken.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmRotateRefreshToken.expectations {
 		if minimock.Equal(e.params, mmRotateRefreshToken.defaultExpectation.params) {
@@ -5796,21 +5796,21 @@ func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) Expect(ctx context.Cont
 }
 
 // ExpectCtxParam1 sets up expected param ctx for AuthUseCase.RotateRefreshToken
-func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) ExpectCtxParam1(ctx context.Context) *mAuthMockRotateRefreshToken {
+func (mmRotateRefreshToken *mAuthUseCaseMockRotateRefreshToken) ExpectCtxParam1(ctx context.Context) *mAuthUseCaseMockRotateRefreshToken {
 	if mmRotateRefreshToken.mock.funcRotateRefreshToken != nil {
-		mmRotateRefreshToken.mock.t.Fatalf("AuthMock.RotateRefreshToken mock is already set by Set")
+		mmRotateRefreshToken.mock.t.Fatalf("AuthUseCaseMock.RotateRefreshToken mock is already set by Set")
 	}
 
 	if mmRotateRefreshToken.defaultExpectation == nil {
-		mmRotateRefreshToken.defaultExpectation = &AuthMockRotateRefreshTokenExpectation{}
+		mmRotateRefreshToken.defaultExpectation = &AuthUseCaseMockRotateRefreshTokenExpectation{}
 	}
 
 	if mmRotateRefreshToken.defaultExpectation.params != nil {
-		mmRotateRefreshToken.mock.t.Fatalf("AuthMock.RotateRefreshToken mock is already set by Expect")
+		mmRotateRefreshToken.mock.t.Fatalf("AuthUseCaseMock.RotateRefreshToken mock is already set by Expect")
 	}
 
 	if mmRotateRefreshToken.defaultExpectation.paramPtrs == nil {
-		mmRotateRefreshToken.defaultExpectation.paramPtrs = &AuthMockRotateRefreshTokenParamPtrs{}
+		mmRotateRefreshToken.defaultExpectation.paramPtrs = &AuthUseCaseMockRotateRefreshTokenParamPtrs{}
 	}
 	mmRotateRefreshToken.defaultExpectation.paramPtrs.ctx = &ctx
 	mmRotateRefreshToken.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
@@ -5819,21 +5819,21 @@ func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) ExpectCtxParam1(ctx con
 }
 
 // ExpectCmdParam2 sets up expected param cmd for AuthUseCase.RotateRefreshToken
-func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) ExpectCmdParam2(cmd mm_port.RotateRefreshTokenCommand) *mAuthMockRotateRefreshToken {
+func (mmRotateRefreshToken *mAuthUseCaseMockRotateRefreshToken) ExpectCmdParam2(cmd mm_port.RotateRefreshTokenCommand) *mAuthUseCaseMockRotateRefreshToken {
 	if mmRotateRefreshToken.mock.funcRotateRefreshToken != nil {
-		mmRotateRefreshToken.mock.t.Fatalf("AuthMock.RotateRefreshToken mock is already set by Set")
+		mmRotateRefreshToken.mock.t.Fatalf("AuthUseCaseMock.RotateRefreshToken mock is already set by Set")
 	}
 
 	if mmRotateRefreshToken.defaultExpectation == nil {
-		mmRotateRefreshToken.defaultExpectation = &AuthMockRotateRefreshTokenExpectation{}
+		mmRotateRefreshToken.defaultExpectation = &AuthUseCaseMockRotateRefreshTokenExpectation{}
 	}
 
 	if mmRotateRefreshToken.defaultExpectation.params != nil {
-		mmRotateRefreshToken.mock.t.Fatalf("AuthMock.RotateRefreshToken mock is already set by Expect")
+		mmRotateRefreshToken.mock.t.Fatalf("AuthUseCaseMock.RotateRefreshToken mock is already set by Expect")
 	}
 
 	if mmRotateRefreshToken.defaultExpectation.paramPtrs == nil {
-		mmRotateRefreshToken.defaultExpectation.paramPtrs = &AuthMockRotateRefreshTokenParamPtrs{}
+		mmRotateRefreshToken.defaultExpectation.paramPtrs = &AuthUseCaseMockRotateRefreshTokenParamPtrs{}
 	}
 	mmRotateRefreshToken.defaultExpectation.paramPtrs.cmd = &cmd
 	mmRotateRefreshToken.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
@@ -5842,9 +5842,9 @@ func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) ExpectCmdParam2(cmd mm_
 }
 
 // Inspect accepts an inspector function that has same arguments as the AuthUseCase.RotateRefreshToken
-func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) Inspect(f func(ctx context.Context, cmd mm_port.RotateRefreshTokenCommand)) *mAuthMockRotateRefreshToken {
+func (mmRotateRefreshToken *mAuthUseCaseMockRotateRefreshToken) Inspect(f func(ctx context.Context, cmd mm_port.RotateRefreshTokenCommand)) *mAuthUseCaseMockRotateRefreshToken {
 	if mmRotateRefreshToken.mock.inspectFuncRotateRefreshToken != nil {
-		mmRotateRefreshToken.mock.t.Fatalf("Inspect function is already set for AuthMock.RotateRefreshToken")
+		mmRotateRefreshToken.mock.t.Fatalf("Inspect function is already set for AuthUseCaseMock.RotateRefreshToken")
 	}
 
 	mmRotateRefreshToken.mock.inspectFuncRotateRefreshToken = f
@@ -5853,21 +5853,21 @@ func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) Inspect(f func(ctx cont
 }
 
 // Return sets up results that will be returned by AuthUseCase.RotateRefreshToken
-func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) Return(tp1 *model.TokenSetResponse, err error) *AuthMock {
+func (mmRotateRefreshToken *mAuthUseCaseMockRotateRefreshToken) Return(tp1 *model.TokenSetResponse, err error) *AuthUseCaseMock {
 	if mmRotateRefreshToken.mock.funcRotateRefreshToken != nil {
-		mmRotateRefreshToken.mock.t.Fatalf("AuthMock.RotateRefreshToken mock is already set by Set")
+		mmRotateRefreshToken.mock.t.Fatalf("AuthUseCaseMock.RotateRefreshToken mock is already set by Set")
 	}
 
 	if mmRotateRefreshToken.defaultExpectation == nil {
-		mmRotateRefreshToken.defaultExpectation = &AuthMockRotateRefreshTokenExpectation{mock: mmRotateRefreshToken.mock}
+		mmRotateRefreshToken.defaultExpectation = &AuthUseCaseMockRotateRefreshTokenExpectation{mock: mmRotateRefreshToken.mock}
 	}
-	mmRotateRefreshToken.defaultExpectation.results = &AuthMockRotateRefreshTokenResults{tp1, err}
+	mmRotateRefreshToken.defaultExpectation.results = &AuthUseCaseMockRotateRefreshTokenResults{tp1, err}
 	mmRotateRefreshToken.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmRotateRefreshToken.mock
 }
 
 // Set uses given function f to mock the AuthUseCase.RotateRefreshToken method
-func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) Set(f func(ctx context.Context, cmd mm_port.RotateRefreshTokenCommand) (tp1 *model.TokenSetResponse, err error)) *AuthMock {
+func (mmRotateRefreshToken *mAuthUseCaseMockRotateRefreshToken) Set(f func(ctx context.Context, cmd mm_port.RotateRefreshTokenCommand) (tp1 *model.TokenSetResponse, err error)) *AuthUseCaseMock {
 	if mmRotateRefreshToken.defaultExpectation != nil {
 		mmRotateRefreshToken.mock.t.Fatalf("Default expectation is already set for the AuthUseCase.RotateRefreshToken method")
 	}
@@ -5883,37 +5883,37 @@ func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) Set(f func(ctx context.
 
 // When sets expectation for the AuthUseCase.RotateRefreshToken which will trigger the result defined by the following
 // Then helper
-func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) When(ctx context.Context, cmd mm_port.RotateRefreshTokenCommand) *AuthMockRotateRefreshTokenExpectation {
+func (mmRotateRefreshToken *mAuthUseCaseMockRotateRefreshToken) When(ctx context.Context, cmd mm_port.RotateRefreshTokenCommand) *AuthUseCaseMockRotateRefreshTokenExpectation {
 	if mmRotateRefreshToken.mock.funcRotateRefreshToken != nil {
-		mmRotateRefreshToken.mock.t.Fatalf("AuthMock.RotateRefreshToken mock is already set by Set")
+		mmRotateRefreshToken.mock.t.Fatalf("AuthUseCaseMock.RotateRefreshToken mock is already set by Set")
 	}
 
-	expectation := &AuthMockRotateRefreshTokenExpectation{
+	expectation := &AuthUseCaseMockRotateRefreshTokenExpectation{
 		mock:               mmRotateRefreshToken.mock,
-		params:             &AuthMockRotateRefreshTokenParams{ctx, cmd},
-		expectationOrigins: AuthMockRotateRefreshTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
+		params:             &AuthUseCaseMockRotateRefreshTokenParams{ctx, cmd},
+		expectationOrigins: AuthUseCaseMockRotateRefreshTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmRotateRefreshToken.expectations = append(mmRotateRefreshToken.expectations, expectation)
 	return expectation
 }
 
 // Then sets up AuthUseCase.RotateRefreshToken return parameters for the expectation previously defined by the When method
-func (e *AuthMockRotateRefreshTokenExpectation) Then(tp1 *model.TokenSetResponse, err error) *AuthMock {
-	e.results = &AuthMockRotateRefreshTokenResults{tp1, err}
+func (e *AuthUseCaseMockRotateRefreshTokenExpectation) Then(tp1 *model.TokenSetResponse, err error) *AuthUseCaseMock {
+	e.results = &AuthUseCaseMockRotateRefreshTokenResults{tp1, err}
 	return e.mock
 }
 
 // Times sets number of times AuthUseCase.RotateRefreshToken should be invoked
-func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) Times(n uint64) *mAuthMockRotateRefreshToken {
+func (mmRotateRefreshToken *mAuthUseCaseMockRotateRefreshToken) Times(n uint64) *mAuthUseCaseMockRotateRefreshToken {
 	if n == 0 {
-		mmRotateRefreshToken.mock.t.Fatalf("Times of AuthMock.RotateRefreshToken mock can not be zero")
+		mmRotateRefreshToken.mock.t.Fatalf("Times of AuthUseCaseMock.RotateRefreshToken mock can not be zero")
 	}
 	mm_atomic.StoreUint64(&mmRotateRefreshToken.expectedInvocations, n)
 	mmRotateRefreshToken.expectedInvocationsOrigin = minimock.CallerInfo(1)
 	return mmRotateRefreshToken
 }
 
-func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) invocationsDone() bool {
+func (mmRotateRefreshToken *mAuthUseCaseMockRotateRefreshToken) invocationsDone() bool {
 	if len(mmRotateRefreshToken.expectations) == 0 && mmRotateRefreshToken.defaultExpectation == nil && mmRotateRefreshToken.mock.funcRotateRefreshToken == nil {
 		return true
 	}
@@ -5925,7 +5925,7 @@ func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) invocationsDone() bool 
 }
 
 // RotateRefreshToken implements mm_port.AuthUseCase
-func (mmRotateRefreshToken *AuthMock) RotateRefreshToken(ctx context.Context, cmd mm_port.RotateRefreshTokenCommand) (tp1 *model.TokenSetResponse, err error) {
+func (mmRotateRefreshToken *AuthUseCaseMock) RotateRefreshToken(ctx context.Context, cmd mm_port.RotateRefreshTokenCommand) (tp1 *model.TokenSetResponse, err error) {
 	mm_atomic.AddUint64(&mmRotateRefreshToken.beforeRotateRefreshTokenCounter, 1)
 	defer mm_atomic.AddUint64(&mmRotateRefreshToken.afterRotateRefreshTokenCounter, 1)
 
@@ -5935,7 +5935,7 @@ func (mmRotateRefreshToken *AuthMock) RotateRefreshToken(ctx context.Context, cm
 		mmRotateRefreshToken.inspectFuncRotateRefreshToken(ctx, cmd)
 	}
 
-	mm_params := AuthMockRotateRefreshTokenParams{ctx, cmd}
+	mm_params := AuthUseCaseMockRotateRefreshTokenParams{ctx, cmd}
 
 	// Record call args
 	mmRotateRefreshToken.RotateRefreshTokenMock.mutex.Lock()
@@ -5954,54 +5954,54 @@ func (mmRotateRefreshToken *AuthMock) RotateRefreshToken(ctx context.Context, cm
 		mm_want := mmRotateRefreshToken.RotateRefreshTokenMock.defaultExpectation.params
 		mm_want_ptrs := mmRotateRefreshToken.RotateRefreshTokenMock.defaultExpectation.paramPtrs
 
-		mm_got := AuthMockRotateRefreshTokenParams{ctx, cmd}
+		mm_got := AuthUseCaseMockRotateRefreshTokenParams{ctx, cmd}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmRotateRefreshToken.t.Errorf("AuthMock.RotateRefreshToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRotateRefreshToken.t.Errorf("AuthUseCaseMock.RotateRefreshToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmRotateRefreshToken.RotateRefreshTokenMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
 			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
-				mmRotateRefreshToken.t.Errorf("AuthMock.RotateRefreshToken got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRotateRefreshToken.t.Errorf("AuthUseCaseMock.RotateRefreshToken got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmRotateRefreshToken.RotateRefreshTokenMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmRotateRefreshToken.t.Errorf("AuthMock.RotateRefreshToken got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+			mmRotateRefreshToken.t.Errorf("AuthUseCaseMock.RotateRefreshToken got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 				mmRotateRefreshToken.RotateRefreshTokenMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
 		mm_results := mmRotateRefreshToken.RotateRefreshTokenMock.defaultExpectation.results
 		if mm_results == nil {
-			mmRotateRefreshToken.t.Fatal("No results are set for the AuthMock.RotateRefreshToken")
+			mmRotateRefreshToken.t.Fatal("No results are set for the AuthUseCaseMock.RotateRefreshToken")
 		}
 		return (*mm_results).tp1, (*mm_results).err
 	}
 	if mmRotateRefreshToken.funcRotateRefreshToken != nil {
 		return mmRotateRefreshToken.funcRotateRefreshToken(ctx, cmd)
 	}
-	mmRotateRefreshToken.t.Fatalf("Unexpected call to AuthMock.RotateRefreshToken. %v %v", ctx, cmd)
+	mmRotateRefreshToken.t.Fatalf("Unexpected call to AuthUseCaseMock.RotateRefreshToken. %v %v", ctx, cmd)
 	return
 }
 
-// RotateRefreshTokenAfterCounter returns a count of finished AuthMock.RotateRefreshToken invocations
-func (mmRotateRefreshToken *AuthMock) RotateRefreshTokenAfterCounter() uint64 {
+// RotateRefreshTokenAfterCounter returns a count of finished AuthUseCaseMock.RotateRefreshToken invocations
+func (mmRotateRefreshToken *AuthUseCaseMock) RotateRefreshTokenAfterCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmRotateRefreshToken.afterRotateRefreshTokenCounter)
 }
 
-// RotateRefreshTokenBeforeCounter returns a count of AuthMock.RotateRefreshToken invocations
-func (mmRotateRefreshToken *AuthMock) RotateRefreshTokenBeforeCounter() uint64 {
+// RotateRefreshTokenBeforeCounter returns a count of AuthUseCaseMock.RotateRefreshToken invocations
+func (mmRotateRefreshToken *AuthUseCaseMock) RotateRefreshTokenBeforeCounter() uint64 {
 	return mm_atomic.LoadUint64(&mmRotateRefreshToken.beforeRotateRefreshTokenCounter)
 }
 
-// Calls returns a list of arguments used in each call to AuthMock.RotateRefreshToken.
+// Calls returns a list of arguments used in each call to AuthUseCaseMock.RotateRefreshToken.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) Calls() []*AuthMockRotateRefreshTokenParams {
+func (mmRotateRefreshToken *mAuthUseCaseMockRotateRefreshToken) Calls() []*AuthUseCaseMockRotateRefreshTokenParams {
 	mmRotateRefreshToken.mutex.RLock()
 
-	argCopy := make([]*AuthMockRotateRefreshTokenParams, len(mmRotateRefreshToken.callArgs))
+	argCopy := make([]*AuthUseCaseMockRotateRefreshTokenParams, len(mmRotateRefreshToken.callArgs))
 	copy(argCopy, mmRotateRefreshToken.callArgs)
 
 	mmRotateRefreshToken.mutex.RUnlock()
@@ -6011,7 +6011,7 @@ func (mmRotateRefreshToken *mAuthMockRotateRefreshToken) Calls() []*AuthMockRota
 
 // MinimockRotateRefreshTokenDone returns true if the count of the RotateRefreshToken invocations corresponds
 // the number of defined expectations
-func (m *AuthMock) MinimockRotateRefreshTokenDone() bool {
+func (m *AuthUseCaseMock) MinimockRotateRefreshTokenDone() bool {
 	if m.RotateRefreshTokenMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
@@ -6027,10 +6027,10 @@ func (m *AuthMock) MinimockRotateRefreshTokenDone() bool {
 }
 
 // MinimockRotateRefreshTokenInspect logs each unmet expectation
-func (m *AuthMock) MinimockRotateRefreshTokenInspect() {
+func (m *AuthUseCaseMock) MinimockRotateRefreshTokenInspect() {
 	for _, e := range m.RotateRefreshTokenMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to AuthMock.RotateRefreshToken at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.RotateRefreshToken at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
@@ -6038,24 +6038,24 @@ func (m *AuthMock) MinimockRotateRefreshTokenInspect() {
 	// if default expectation was set then invocations count should be greater than zero
 	if m.RotateRefreshTokenMock.defaultExpectation != nil && afterRotateRefreshTokenCounter < 1 {
 		if m.RotateRefreshTokenMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to AuthMock.RotateRefreshToken at\n%s", m.RotateRefreshTokenMock.defaultExpectation.returnOrigin)
+			m.t.Errorf("Expected call to AuthUseCaseMock.RotateRefreshToken at\n%s", m.RotateRefreshTokenMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to AuthMock.RotateRefreshToken at\n%s with params: %#v", m.RotateRefreshTokenMock.defaultExpectation.expectationOrigins.origin, *m.RotateRefreshTokenMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to AuthUseCaseMock.RotateRefreshToken at\n%s with params: %#v", m.RotateRefreshTokenMock.defaultExpectation.expectationOrigins.origin, *m.RotateRefreshTokenMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
 	if m.funcRotateRefreshToken != nil && afterRotateRefreshTokenCounter < 1 {
-		m.t.Errorf("Expected call to AuthMock.RotateRefreshToken at\n%s", m.funcRotateRefreshTokenOrigin)
+		m.t.Errorf("Expected call to AuthUseCaseMock.RotateRefreshToken at\n%s", m.funcRotateRefreshTokenOrigin)
 	}
 
 	if !m.RotateRefreshTokenMock.invocationsDone() && afterRotateRefreshTokenCounter > 0 {
-		m.t.Errorf("Expected %d calls to AuthMock.RotateRefreshToken at\n%s but found %d calls",
+		m.t.Errorf("Expected %d calls to AuthUseCaseMock.RotateRefreshToken at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.RotateRefreshTokenMock.expectedInvocations), m.RotateRefreshTokenMock.expectedInvocationsOrigin, afterRotateRefreshTokenCounter)
 	}
 }
 
 // MinimockFinish checks that all mocked methods have been called the expected number of times
-func (m *AuthMock) MinimockFinish() {
+func (m *AuthUseCaseMock) MinimockFinish() {
 	m.finishOnce.Do(func() {
 		if !m.minimockDone() {
 			m.MinimockExchangeClientCredentialsInspect()
@@ -6094,7 +6094,7 @@ func (m *AuthMock) MinimockFinish() {
 }
 
 // MinimockWait waits for all mocked methods to be called the expected number of times
-func (m *AuthMock) MinimockWait(timeout mm_time.Duration) {
+func (m *AuthUseCaseMock) MinimockWait(timeout mm_time.Duration) {
 	timeoutCh := mm_time.After(timeout)
 	for {
 		if m.minimockDone() {
@@ -6109,7 +6109,7 @@ func (m *AuthMock) MinimockWait(timeout mm_time.Duration) {
 	}
 }
 
-func (m *AuthMock) minimockDone() bool {
+func (m *AuthUseCaseMock) minimockDone() bool {
 	done := true
 	return done &&
 		m.MinimockExchangeClientCredentialsDone() &&

@@ -98,7 +98,7 @@ func TestHttpAdapter_OpenIDConfiguration_Success(t *testing.T) {
 func TestHttpAdapter_JWKS_CacheControl(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
+	auth := portmock.NewAuthUseCaseMock(ctrl)
 	clock := portmock.NewMockClock(time.Now())
 
 	tuc := portmock.NewTenantUseCaseMock(ctrl)

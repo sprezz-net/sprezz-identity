@@ -67,7 +67,7 @@ func TestAdminLogonService_InitiateAdminLogon_OnDemandDCR_Success(t *testing.T) 
 
 	storage := portmock.NewStorageMock(ctrl)
 	adminStorage := portmock.NewAdminStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
+	auth := portmock.NewAuthUseCaseMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 	fedClient := portmock.NewFederationClientMock(ctrl)
 	fedLogin := portmock.NewFederatedLoginUseCaseMock(ctrl)
@@ -156,7 +156,7 @@ func TestAdminLogonService_InitiateAdminLogon_DiscoveryPersist_Success(t *testin
 
 	storage := portmock.NewStorageMock(ctrl)
 	adminStorage := portmock.NewAdminStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
+	auth := portmock.NewAuthUseCaseMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 	fedClient := portmock.NewFederationClientMock(ctrl)
 	fedLogin := portmock.NewFederatedLoginUseCaseMock(ctrl)

@@ -15,9 +15,9 @@ import (
 	"github.com/google/uuid"
 )
 
-func buildLocalLoginTestAdapter(ctrl *minimock.Controller) (*HttpAdapter, *portmock.LocalAuthUseCaseMock, *portmock.SSOSessionUseCaseMock, *portmock.TenantUseCaseMock, *portmock.AuthMock) {
+func buildLocalLoginTestAdapter(ctrl *minimock.Controller) (*HttpAdapter, *portmock.LocalAuthUseCaseMock, *portmock.SSOSessionUseCaseMock, *portmock.TenantUseCaseMock, *portmock.AuthUseCaseMock) {
 	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
+	auth := portmock.NewAuthUseCaseMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 	tuc := portmock.NewTenantUseCaseMock(ctrl)
 	fuc := portmock.NewFederatedLoginUseCaseMock(ctrl)

@@ -3,8 +3,10 @@ package http
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -16,10 +18,22 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestHttpAdapter_Token_ClientCredentials_Success(t *testing.T) {
+// Helper function to build a pre-authenticated client request context matching ClientAuthMiddleware outputs
+func buildMockAuthenticatedContext(tenantID uuid.UUID, clientID string, isAuthenticated bool) context.Context {
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, TenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, ClientIDContextKey, clientID)
+	ctx = context.WithValue(ctx, ClientAuthFlagKey, isAuthenticated)
+	ctx = context.WithValue(ctx, AppContextKey, &model.Application{ClientID: clientID, IsEnabled: true})
+	ctx = context.WithValue(ctx, ProfileContextKey, &model.ApplicationProfile{IsEnabled: true})
+	ctx = context.WithValue(ctx, GroupContextKey, &model.ApplicationGroup{IsEnabled: true})
+	return ctx
+}
+
+func TestTokenHandler_HandleTokenRequest_ClientCredentials_Success(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
+	auth := portmock.NewAuthUseCaseMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
@@ -76,10 +90,10 @@ func TestHttpAdapter_Token_ClientCredentials_Success(t *testing.T) {
 	}
 }
 
-func TestHttpAdapter_Token_AuthCodeExchange_Success(t *testing.T) {
+func TestTokenHandler_HandleTokenRequest_AuthCodeExchange_Success(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
+	auth := portmock.NewAuthUseCaseMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
@@ -129,10 +143,10 @@ func TestHttpAdapter_Token_AuthCodeExchange_Success(t *testing.T) {
 	}
 }
 
-func TestHttpAdapter_Token_InvalidGrantType(t *testing.T) {
+func TestTokenHandler_HandleTokenRequest_InvalidGrantType(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
+	auth := portmock.NewAuthUseCaseMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
@@ -166,5 +180,175 @@ func TestHttpAdapter_Token_InvalidGrantType(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400, got %d", rec.Code)
+	}
+}
+
+func TestTokenHandler_HandleTokenRequest_AuthorizationCode_Success(t *testing.T) {
+	ctrl := minimock.NewController(t)
+
+	authMock := portmock.NewAuthUseCaseMock(ctrl)
+	handler := NewTokenHandler(authMock, nil, nil)
+
+	tenantID := uuid.New()
+	clientID := "test-client-app"
+	ctx := buildMockAuthenticatedContext(tenantID, clientID, true)
+
+	authMock.ExchangeCodeForTokensMock.Set(func(ctx context.Context, cmd port.ExchangeCodeForTokensCommand) (*model.TokenSetResponse, error) {
+		if cmd.Code != "valid-auth-code" || cmd.CodeVerifier != "valid-verifier" {
+			t.Errorf("unexpected parameters passed to authorization code use-case")
+		}
+		return &model.TokenSetResponse{
+			AccessToken:  "mock-access-token",
+			IDToken:      "mock-id-token",
+			RefreshToken: "mock-refresh-token",
+			TokenType:    "Bearer",
+			ExpiresIn:    3600,
+		}, nil
+	})
+
+	form := url.Values{}
+	form.Set("grant_type", string(model.GrantTypeAuthorizationCode))
+	form.Set("code", "valid-auth-code")
+	form.Set("code_verifier", "valid-verifier")
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.HandleTokenRequest(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp model.TokenSetResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+	if resp.AccessToken != "mock-access-token" {
+		t.Errorf("expected access token match, got: %s", resp.AccessToken)
+	}
+}
+
+func TestTokenHandler_HandleTokenRequest_RefreshToken_Success(t *testing.T) {
+	ctrl := minimock.NewController(t)
+
+	authMock := portmock.NewAuthUseCaseMock(ctrl)
+	handler := NewTokenHandler(authMock, nil, nil)
+
+	tenantID := uuid.New()
+	clientID := "test-client-app"
+	ctx := buildMockAuthenticatedContext(tenantID, clientID, true)
+
+	authMock.RotateRefreshTokenMock.Set(func(ctx context.Context, cmd port.RotateRefreshTokenCommand) (*model.TokenSetResponse, error) {
+		if cmd.RefreshToken != "active-refresh-token" {
+			t.Errorf("unexpected refresh token parameter passed downstream")
+		}
+		return &model.TokenSetResponse{
+			AccessToken:  "rotated-access-token",
+			RefreshToken: "new-refresh-token-child",
+			TokenType:    "Bearer",
+			ExpiresIn:    3600,
+		}, nil
+	})
+
+	form := url.Values{}
+	form.Set("grant_type", string(model.GrantTypeRefreshToken))
+	form.Set("refresh_token", "active-refresh-token")
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.HandleTokenRequest(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp model.TokenSetResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+	if resp.AccessToken != "rotated-access-token" {
+		t.Errorf("expected token rotation pass, got: %s", resp.AccessToken)
+	}
+}
+
+func TestTokenHandler_HandleTokenRequest_TokenExchange_Success(t *testing.T) {
+	ctrl := minimock.NewController(t)
+
+	authMock := portmock.NewAuthUseCaseMock(ctrl)
+	handler := NewTokenHandler(authMock, nil, nil)
+
+	tenantID := uuid.New()
+	clientID := "test-client-app"
+	ctx := buildMockAuthenticatedContext(tenantID, clientID, true)
+
+	authMock.ExchangeExternalTokenMock.Set(func(ctx context.Context, tenantIDParam uuid.UUID, clID string, subToken string, subTokenType model.TokenType) (*model.TokenSetResponse, error) {
+		if tenantIDParam != tenantID || clID != clientID || subToken != "external-jwt-assertion" || subTokenType != model.TokenTypeIDToken {
+			t.Errorf("mismatched RFC 8693 dynamic exchange parameters passed to service loop")
+		}
+		return &model.TokenSetResponse{
+			AccessToken: "native-federated-access-token",
+			TokenType:   "Bearer",
+			ExpiresIn:   1800,
+		}, nil
+	})
+
+	form := url.Values{}
+	form.Set("grant_type", string(model.GrantTypeTokenExchange))
+	form.Set("subject_token", "external-jwt-assertion")
+	form.Set("subject_token_type", string(model.TokenTypeIDToken))
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.HandleTokenRequest(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp model.TokenSetResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+	if resp.AccessToken != "native-federated-access-token" {
+		t.Errorf("expected successful external identity translation mapping, got: %s", resp.AccessToken)
+	}
+}
+
+func TestTokenHandler_HandleTokenRequest_InvalidContentType(t *testing.T) {
+	handler := NewTokenHandler(nil, nil, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(`{"grant_type":"client_credentials"}`))
+	req.Header.Set("Content-Type", "application/json") // VIOLATION: Mandatory urlencoded header missing
+	rec := httptest.NewRecorder()
+
+	handler.HandleTokenRequest(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected HTTP 400 Bad Request, got %d", rec.Code)
+	}
+}
+
+func TestTokenHandler_HandleTokenRequest_ClientCredentials_Unauthenticated(t *testing.T) {
+	handler := NewTokenHandler(nil, nil, nil)
+
+	tenantID := uuid.New()
+	clientID := "secure-confidential-app"
+	ctx := buildMockAuthenticatedContext(tenantID, clientID, false) // VIOLATION: Client flag unauthenticated
+
+	form := url.Values{}
+	form.Set("grant_type", string(model.GrantTypeClientCredentials))
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.HandleTokenRequest(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected HTTP 401 Unauthorized for client credentials breach, got %d", rec.Code)
 	}
 }

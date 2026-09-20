@@ -18,7 +18,7 @@ import (
 
 func buildLocalAdminTestAdapter(ctrl *minimock.Controller) (*HttpAdapter, *portmock.AdminLogonUseCaseMock, *portmock.TenantUseCaseMock, *portmock.StorageMock, *portmock.SSOSessionUseCaseMock) {
 	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
+	auth := portmock.NewAuthUseCaseMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 	tuc := portmock.NewTenantUseCaseMock(ctrl)
 	fuc := portmock.NewFederatedLoginUseCaseMock(ctrl)

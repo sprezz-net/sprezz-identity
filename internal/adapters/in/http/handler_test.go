@@ -19,7 +19,7 @@ import (
 
 func buildTestAdapter(ctrl *minimock.Controller) (*HttpAdapter, *model.Tenant) {
 	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
+	auth := portmock.NewAuthUseCaseMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
@@ -73,7 +73,7 @@ func TestHttpAdapter_CSPNonce(t *testing.T) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
+	auth := portmock.NewAuthUseCaseMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 	tuc := portmock.NewTenantUseCaseMock(ctrl)
 	fuc := portmock.NewFederatedLoginUseCaseMock(ctrl)
@@ -140,7 +140,7 @@ func TestHttpAdapter_CSPNonce(t *testing.T) {
 func TestHttpAdapter_Tenant_Middleware_Failure(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
-	auth := portmock.NewAuthMock(ctrl)
+	auth := portmock.NewAuthUseCaseMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tuc := portmock.NewTenantUseCaseMock(ctrl)
