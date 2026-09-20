@@ -1054,26 +1054,39 @@ func (s *OAuthService) ProcessLogoutRequest(ctx context.Context, cmd port.Logout
 			for _, app := range applications {
 				// Back-channel single sign-out: Dispatch concurrent out-of-band requests asynchronously
 				if app.BackChannelLogoutURI != "" {
-					logoutToken, err := s.crypto.SignLogoutToken(ctx, model.LogoutTokenClaims{
-						TokenID:   uuid.NewString(),
-						Issuer:    tenant.GetBaseURI(),
-						Subject:   subjectID,
-						Audience:  app.ClientID,
-						IssuedAt:  now.Unix(),
-						SessionID: targetSessionID,
-					}, app.SigningAlgorithm)
+					// Authoritatively verify the database string against the whitelist before firing the request
+					if err := s.validator.ValidateRedirect(ctx, tenant, nil, app.BackChannelLogoutURI); err != nil {
+						slog.Error("ProcessLogoutRequest: JIT validation failed for stored BackChannelLogoutURI. Dropping request loop.",
+							"client_id", app.ClientID, "malicious_url", app.BackChannelLogoutURI, "err", err)
+					} else {
+						logoutToken, err := s.crypto.SignLogoutToken(ctx, model.LogoutTokenClaims{
+							TokenID:   uuid.NewString(),
+							Issuer:    tenant.GetBaseURI(),
+							Subject:   subjectID,
+							Audience:  app.ClientID,
+							IssuedAt:  now.Unix(),
+							SessionID: targetSessionID,
+						}, app.SigningAlgorithm)
 
-					if err == nil && s.notifier != nil {
-						// Non-blocking asynchronous routine isolates thread execution times
-						go func(uri, token string) {
-							_ = s.notifier.SendBackChannelLogout(context.Background(), uri, token)
-						}(app.BackChannelLogoutURI, logoutToken)
+						if err == nil && s.notifier != nil {
+							// Non-blocking asynchronous routine isolates thread execution times
+							go func(uri, token string) {
+								_ = s.notifier.SendBackChannelLogout(context.Background(), uri, token)
+							}(app.BackChannelLogoutURI, logoutToken)
+						}
 					}
 				}
 
 				// Front-channel single sign-out: Harvest iframe targets for delivery projection
 				if app.FrontChannelLogoutURI != "" {
-					frontChannelURIs = append(frontChannelURIs, app.FrontChannelLogoutURI)
+					// Authoritatively verify the database string against the whitelist before rendering
+					if err := s.validator.ValidateRedirect(ctx, tenant, nil, app.FrontChannelLogoutURI); err != nil {
+						slog.Error("ProcessLogoutRequest: JIT validation failed for stored FrontChannelLogoutURI. Dropping iframe element.",
+							"client_id", app.ClientID, "malicious_url", app.FrontChannelLogoutURI, "err", err)
+					} else {
+						// Only harvest the iframe target if it is completely safe and whitelisted
+						frontChannelURIs = append(frontChannelURIs, app.FrontChannelLogoutURI)
+					}
 				}
 			}
 		}
@@ -1084,7 +1097,7 @@ func (s *OAuthService) ProcessLogoutRequest(ctx context.Context, cmd port.Logout
 
 	if targetURL != "" {
 		if err := s.validator.ValidateRedirect(ctx, tenant, nil, targetURL); err != nil {
-			slog.Warn("ProcessLogoutRequest: post_logout_redirect_uri is not white-listed", "uri", targetURL, "err", err)
+			slog.Error("ProcessLogoutRequest: post_logout_redirect_uri is not white-listed", "uri", targetURL, "err", err)
 			targetURL = ""
 		}
 	}

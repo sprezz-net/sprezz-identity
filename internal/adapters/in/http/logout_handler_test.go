@@ -17,7 +17,6 @@ import (
 // TestHttpAdapter_Logout_Success verifies standard OIDC redirect behavior
 func TestHttpAdapter_Logout_Success(t *testing.T) {
 	ctrl := minimock.NewController(t)
-	defer ctrl.Finish()
 	adapter, _, auth, _, tuc, _, suc, _, _ := setupTestEnv(ctrl)
 
 	tenantID := uuid.New()
@@ -66,7 +65,6 @@ func TestHttpAdapter_Logout_Success(t *testing.T) {
 // TestHttpAdapter_Logout_FallbackRedirectURI verifies loop recovery when no explicit URL exists
 func TestHttpAdapter_Logout_FallbackRedirectURI(t *testing.T) {
 	ctrl := minimock.NewController(t)
-	defer ctrl.Finish()
 	adapter, _, auth, _, tuc, _, suc, _, _ := setupTestEnv(ctrl)
 
 	tenantID := uuid.New()
@@ -113,7 +111,6 @@ func TestHttpAdapter_Logout_FallbackRedirectURI(t *testing.T) {
 // TestHttpAdapter_Logout_FrontChannelIframe verifies that front-channel loops skip HTTP 302 redirections
 func TestHttpAdapter_Logout_FrontChannelIframe(t *testing.T) {
 	ctrl := minimock.NewController(t)
-	defer ctrl.Finish()
 	adapter, _, auth, _, tuc, _, suc, _, _ := setupTestEnv(ctrl)
 
 	tenantID := uuid.New()
@@ -133,10 +130,10 @@ func TestHttpAdapter_Logout_FrontChannelIframe(t *testing.T) {
 
 	auth.ProcessLogoutRequestMock.Set(func(ctx context.Context, cmd port.LogoutRequestCommand) (*port.LogoutExecutionResult, error) {
 		return &port.LogoutExecutionResult{
-			PostLogoutRedirectURI:   "https://redirect-after-logout.com",
-			HasCookieIntent:         true,
-			CookieName:              "spz_session_default",
-			CookieValue:             "",
+			PostLogoutRedirectURI:  "https://redirect-after-logout.com",
+			HasCookieIntent:        true,
+			CookieName:             "spz_session_default",
+			CookieValue:            "",
 			FrontChannelLogoutURIs: []string{"https://app-one.com", "https://app-two.com"},
 		}, nil
 	})
@@ -166,7 +163,6 @@ func TestHttpAdapter_Logout_FrontChannelIframe(t *testing.T) {
 // post_logout_redirect_uri parameter is rejected, causing the handler to fallback safely to the login wall.
 func TestHttpAdapter_Logout_UnwhitelistedRedirectURI_Fallback(t *testing.T) {
 	ctrl := minimock.NewController(t)
-	defer ctrl.Finish()
 	adapter, _, auth, _, tuc, _, suc, _, _ := setupTestEnv(ctrl)
 
 	tenantID := uuid.New()

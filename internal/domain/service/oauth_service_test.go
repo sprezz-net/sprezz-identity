@@ -311,7 +311,6 @@ func TestOAuthService_ProcessAuthorizeRequest_PersistsRequestedScopes(t *testing
 
 func TestOAuthService_ProcessLogoutRequest_UnwhitelistedRedirectFallback(t *testing.T) {
 	ctrl := minimock.NewController(t)
-	defer ctrl.Finish()
 
 	storage := portmock.NewStorageMock(ctrl)
 	ssoUseCase := portmock.NewSSOSessionUseCaseMock(ctrl)
@@ -375,5 +374,135 @@ func TestOAuthService_ProcessLogoutRequest_UnwhitelistedRedirectFallback(t *test
 	expectedFallback := tenant.Config.DefaultRedirectURI
 	if res.PostLogoutRedirectURI != expectedFallback {
 		t.Errorf("SECURITY FAULT: expected fallback redirect destination path '%s', but system leaked to: '%s'", expectedFallback, res.PostLogoutRedirectURI)
+	}
+}
+
+func TestOAuthService_ProcessLogoutRequest_JITFrontChannelValidation_DropsMaliciousURI(t *testing.T) {
+	ctrl := minimock.NewController(t)
+
+	storage := portmock.NewStorageMock(ctrl)
+	ssoUseCase := portmock.NewSSOSessionUseCaseMock(ctrl)
+	now := time.Now()
+	clock := portmock.NewMockClock(now)
+
+	idpService := NewIdentityProviderService(storage, nil, clock)
+	validator := NewOAuthValidatorService(idpService)
+
+	svc := NewOAuthService(storage, nil, nil, nil, clock, ssoUseCase, validator)
+
+	tenantUUID := uuid.New()
+	tenant := &model.Tenant{
+		ID:     tenantUUID,
+		Domain: "my-tenant.com",
+		Scheme: "https",
+		Config: model.TenantConfig{
+			// The tenant whitelist ONLY permits internal domain callbacks
+			RedirectWhitelist:  []string{"https://my-tenant.com"},
+			DefaultRedirectURI: "https://my-tenant.com",
+		},
+	}
+
+	// Mock an application session link where an attacker has injected a malicious iframe hook
+	activeApps := []model.Application{
+		{
+			ID:                    uuid.New(),
+			ClientID:              "compromised-client",
+			IsEnabled:             true,
+			FrontChannelLogoutURI: "https://malicious-attacker-site.com", // Dangerous unwhitelisted destination!
+		},
+	}
+
+	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantUUID).Return(tenant, nil)
+	storage.RevokeSessionMock.Expect(minimock.AnyContext, tenantUUID, "user-uuid", "user-uuid:33").Return(nil)
+	storage.GetApplicationsLogoutContextBySessionMock.Expect(minimock.AnyContext, tenantUUID, "user-uuid:33").Return(activeApps, nil)
+
+	ssoUseCase.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
+		return &port.CookieIntentResponse{CookieName: "spz_session_default", MaxAge: -1}, nil
+	})
+
+	cmd := port.LogoutRequestCommand{
+		TenantID:              tenantUUID,
+		ActiveSessionID:       "user-uuid:33",
+		PostLogoutRedirectURI: "https://my-tenant.com",
+		RequestHost:           "my-tenant.com",
+	}
+
+	res, err := svc.ProcessLogoutRequest(context.Background(), cmd)
+	if err != nil {
+		t.Fatalf("unexpected logout processing failure: %v", err)
+	}
+
+	// VERIFY FRONT-CHANNEL SECURITY BOUNDARY:
+	// The malicious unwhitelisted URI must be caught and completely stripped from the front-channel output slice.
+	if len(res.FrontChannelLogoutURIs) != 0 {
+		t.Errorf("SECURITY FAULT: Expected 0 front-channel iframe URIs due to JIT whitelist validation failure, but system leaked: %v", res.FrontChannelLogoutURIs)
+	}
+}
+
+func TestOAuthService_ProcessLogoutRequest_JITBackChannelValidation_DropsMaliciousURI(t *testing.T) {
+	ctrl := minimock.NewController(t)
+
+	storage := portmock.NewStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl) // Track cryptographic signing assertions
+	ssoUseCase := portmock.NewSSOSessionUseCaseMock(ctrl)
+	now := time.Now()
+	clock := portmock.NewMockClock(now)
+
+	idpService := NewIdentityProviderService(storage, nil, clock)
+	validator := NewOAuthValidatorService(idpService)
+
+	svc := NewOAuthService(storage, crypto, nil, nil, clock, ssoUseCase, validator)
+
+	tenantUUID := uuid.New()
+	tenant := &model.Tenant{
+		ID:     tenantUUID,
+		Domain: "my-tenant.com",
+		Scheme: "https",
+		Config: model.TenantConfig{
+			RedirectWhitelist:  []string{"https://my-tenant.com"},
+			DefaultRedirectURI: "https://my-tenant.com",
+		},
+	}
+
+	// Mock an application link carrying a malicious backchannel destination hook
+	activeApps := []model.Application{
+		{
+			ID:                   uuid.New(),
+			ClientID:             "compromised-client",
+			IsEnabled:            true,
+			BackChannelLogoutURI: "https://malicious-attacker-site.com", // Dangerous unwhitelisted destination!
+			SigningAlgorithm:     model.AlgRS256,
+		},
+	}
+
+	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantUUID).Return(tenant, nil)
+	storage.RevokeSessionMock.Expect(minimock.AnyContext, tenantUUID, "user-uuid", "user-uuid:33").Return(nil)
+	storage.GetApplicationsLogoutContextBySessionMock.Expect(minimock.AnyContext, tenantUUID, "user-uuid:33").Return(activeApps, nil)
+
+	ssoUseCase.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
+		return &port.CookieIntentResponse{CookieName: "spz_session_default", MaxAge: -1}, nil
+	})
+
+	// CRITICAL MINIMOCK ASSERTION GATE:
+	// Because validation happens early inside ProcessLogoutRequest, the engine must drop the operation
+	// before calling the signer. Thus, SignLogoutToken must NEVER be invoked for an untrusted URI.
+	// Minimock assertion explicitly enforcing that SignLogoutToken
+	// must NEVER be invoked for an untrusted, unwhitelisted destination.
+	crypto.SignLogoutTokenMock.Set(func(ctx context.Context, claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (string, error) {
+		t.Fatalf("SECURITY FAULT: System attempted to cryptographically sign an OIDC logout token for an un-whitelisted endpoint!")
+		return "", nil
+	})
+	crypto.SignLogoutTokenMock.Optional()
+
+	cmd := port.LogoutRequestCommand{
+		TenantID:              tenantUUID,
+		ActiveSessionID:       "user-uuid:33",
+		PostLogoutRedirectURI: "https://my-tenant.com",
+		RequestHost:           "my-tenant.com",
+	}
+
+	_, err := svc.ProcessLogoutRequest(context.Background(), cmd)
+	if err != nil {
+		t.Fatalf("unexpected logout processing failure: %v", err)
 	}
 }
