@@ -27,6 +27,13 @@ type CryptoMock struct {
 	beforeCompareCredentialCounter uint64
 	CompareCredentialMock          mCryptoMockCompareCredential
 
+	funcFindPublicKeyInJWKS          func(jwks []map[string]any, kid string) (a1 any, err error)
+	funcFindPublicKeyInJWKSOrigin    string
+	inspectFuncFindPublicKeyInJWKS   func(jwks []map[string]any, kid string)
+	afterFindPublicKeyInJWKSCounter  uint64
+	beforeFindPublicKeyInJWKSCounter uint64
+	FindPublicKeyInJWKSMock          mCryptoMockFindPublicKeyInJWKS
+
 	funcGetMasterRegistrationPublicKey          func() (a1 any, err error)
 	funcGetMasterRegistrationPublicKeyOrigin    string
 	inspectFuncGetMasterRegistrationPublicKey   func()
@@ -115,6 +122,9 @@ func NewCryptoMock(t minimock.Tester) *CryptoMock {
 
 	m.CompareCredentialMock = mCryptoMockCompareCredential{mock: m}
 	m.CompareCredentialMock.callArgs = []*CryptoMockCompareCredentialParams{}
+
+	m.FindPublicKeyInJWKSMock = mCryptoMockFindPublicKeyInJWKS{mock: m}
+	m.FindPublicKeyInJWKSMock.callArgs = []*CryptoMockFindPublicKeyInJWKSParams{}
 
 	m.GetMasterRegistrationPublicKeyMock = mCryptoMockGetMasterRegistrationPublicKey{mock: m}
 
@@ -493,6 +503,349 @@ func (m *CryptoMock) MinimockCompareCredentialInspect() {
 	if !m.CompareCredentialMock.invocationsDone() && afterCompareCredentialCounter > 0 {
 		m.t.Errorf("Expected %d calls to CryptoMock.CompareCredential at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.CompareCredentialMock.expectedInvocations), m.CompareCredentialMock.expectedInvocationsOrigin, afterCompareCredentialCounter)
+	}
+}
+
+type mCryptoMockFindPublicKeyInJWKS struct {
+	optional           bool
+	mock               *CryptoMock
+	defaultExpectation *CryptoMockFindPublicKeyInJWKSExpectation
+	expectations       []*CryptoMockFindPublicKeyInJWKSExpectation
+
+	callArgs []*CryptoMockFindPublicKeyInJWKSParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// CryptoMockFindPublicKeyInJWKSExpectation specifies expectation struct of the Crypto.FindPublicKeyInJWKS
+type CryptoMockFindPublicKeyInJWKSExpectation struct {
+	mock               *CryptoMock
+	params             *CryptoMockFindPublicKeyInJWKSParams
+	paramPtrs          *CryptoMockFindPublicKeyInJWKSParamPtrs
+	expectationOrigins CryptoMockFindPublicKeyInJWKSExpectationOrigins
+	results            *CryptoMockFindPublicKeyInJWKSResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// CryptoMockFindPublicKeyInJWKSParams contains parameters of the Crypto.FindPublicKeyInJWKS
+type CryptoMockFindPublicKeyInJWKSParams struct {
+	jwks []map[string]any
+	kid  string
+}
+
+// CryptoMockFindPublicKeyInJWKSParamPtrs contains pointers to parameters of the Crypto.FindPublicKeyInJWKS
+type CryptoMockFindPublicKeyInJWKSParamPtrs struct {
+	jwks *[]map[string]any
+	kid  *string
+}
+
+// CryptoMockFindPublicKeyInJWKSResults contains results of the Crypto.FindPublicKeyInJWKS
+type CryptoMockFindPublicKeyInJWKSResults struct {
+	a1  any
+	err error
+}
+
+// CryptoMockFindPublicKeyInJWKSOrigins contains origins of expectations of the Crypto.FindPublicKeyInJWKS
+type CryptoMockFindPublicKeyInJWKSExpectationOrigins struct {
+	origin     string
+	originJwks string
+	originKid  string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmFindPublicKeyInJWKS *mCryptoMockFindPublicKeyInJWKS) Optional() *mCryptoMockFindPublicKeyInJWKS {
+	mmFindPublicKeyInJWKS.optional = true
+	return mmFindPublicKeyInJWKS
+}
+
+// Expect sets up expected params for Crypto.FindPublicKeyInJWKS
+func (mmFindPublicKeyInJWKS *mCryptoMockFindPublicKeyInJWKS) Expect(jwks []map[string]any, kid string) *mCryptoMockFindPublicKeyInJWKS {
+	if mmFindPublicKeyInJWKS.mock.funcFindPublicKeyInJWKS != nil {
+		mmFindPublicKeyInJWKS.mock.t.Fatalf("CryptoMock.FindPublicKeyInJWKS mock is already set by Set")
+	}
+
+	if mmFindPublicKeyInJWKS.defaultExpectation == nil {
+		mmFindPublicKeyInJWKS.defaultExpectation = &CryptoMockFindPublicKeyInJWKSExpectation{}
+	}
+
+	if mmFindPublicKeyInJWKS.defaultExpectation.paramPtrs != nil {
+		mmFindPublicKeyInJWKS.mock.t.Fatalf("CryptoMock.FindPublicKeyInJWKS mock is already set by ExpectParams functions")
+	}
+
+	mmFindPublicKeyInJWKS.defaultExpectation.params = &CryptoMockFindPublicKeyInJWKSParams{jwks, kid}
+	mmFindPublicKeyInJWKS.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmFindPublicKeyInJWKS.expectations {
+		if minimock.Equal(e.params, mmFindPublicKeyInJWKS.defaultExpectation.params) {
+			mmFindPublicKeyInJWKS.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmFindPublicKeyInJWKS.defaultExpectation.params)
+		}
+	}
+
+	return mmFindPublicKeyInJWKS
+}
+
+// ExpectJwksParam1 sets up expected param jwks for Crypto.FindPublicKeyInJWKS
+func (mmFindPublicKeyInJWKS *mCryptoMockFindPublicKeyInJWKS) ExpectJwksParam1(jwks []map[string]any) *mCryptoMockFindPublicKeyInJWKS {
+	if mmFindPublicKeyInJWKS.mock.funcFindPublicKeyInJWKS != nil {
+		mmFindPublicKeyInJWKS.mock.t.Fatalf("CryptoMock.FindPublicKeyInJWKS mock is already set by Set")
+	}
+
+	if mmFindPublicKeyInJWKS.defaultExpectation == nil {
+		mmFindPublicKeyInJWKS.defaultExpectation = &CryptoMockFindPublicKeyInJWKSExpectation{}
+	}
+
+	if mmFindPublicKeyInJWKS.defaultExpectation.params != nil {
+		mmFindPublicKeyInJWKS.mock.t.Fatalf("CryptoMock.FindPublicKeyInJWKS mock is already set by Expect")
+	}
+
+	if mmFindPublicKeyInJWKS.defaultExpectation.paramPtrs == nil {
+		mmFindPublicKeyInJWKS.defaultExpectation.paramPtrs = &CryptoMockFindPublicKeyInJWKSParamPtrs{}
+	}
+	mmFindPublicKeyInJWKS.defaultExpectation.paramPtrs.jwks = &jwks
+	mmFindPublicKeyInJWKS.defaultExpectation.expectationOrigins.originJwks = minimock.CallerInfo(1)
+
+	return mmFindPublicKeyInJWKS
+}
+
+// ExpectKidParam2 sets up expected param kid for Crypto.FindPublicKeyInJWKS
+func (mmFindPublicKeyInJWKS *mCryptoMockFindPublicKeyInJWKS) ExpectKidParam2(kid string) *mCryptoMockFindPublicKeyInJWKS {
+	if mmFindPublicKeyInJWKS.mock.funcFindPublicKeyInJWKS != nil {
+		mmFindPublicKeyInJWKS.mock.t.Fatalf("CryptoMock.FindPublicKeyInJWKS mock is already set by Set")
+	}
+
+	if mmFindPublicKeyInJWKS.defaultExpectation == nil {
+		mmFindPublicKeyInJWKS.defaultExpectation = &CryptoMockFindPublicKeyInJWKSExpectation{}
+	}
+
+	if mmFindPublicKeyInJWKS.defaultExpectation.params != nil {
+		mmFindPublicKeyInJWKS.mock.t.Fatalf("CryptoMock.FindPublicKeyInJWKS mock is already set by Expect")
+	}
+
+	if mmFindPublicKeyInJWKS.defaultExpectation.paramPtrs == nil {
+		mmFindPublicKeyInJWKS.defaultExpectation.paramPtrs = &CryptoMockFindPublicKeyInJWKSParamPtrs{}
+	}
+	mmFindPublicKeyInJWKS.defaultExpectation.paramPtrs.kid = &kid
+	mmFindPublicKeyInJWKS.defaultExpectation.expectationOrigins.originKid = minimock.CallerInfo(1)
+
+	return mmFindPublicKeyInJWKS
+}
+
+// Inspect accepts an inspector function that has same arguments as the Crypto.FindPublicKeyInJWKS
+func (mmFindPublicKeyInJWKS *mCryptoMockFindPublicKeyInJWKS) Inspect(f func(jwks []map[string]any, kid string)) *mCryptoMockFindPublicKeyInJWKS {
+	if mmFindPublicKeyInJWKS.mock.inspectFuncFindPublicKeyInJWKS != nil {
+		mmFindPublicKeyInJWKS.mock.t.Fatalf("Inspect function is already set for CryptoMock.FindPublicKeyInJWKS")
+	}
+
+	mmFindPublicKeyInJWKS.mock.inspectFuncFindPublicKeyInJWKS = f
+
+	return mmFindPublicKeyInJWKS
+}
+
+// Return sets up results that will be returned by Crypto.FindPublicKeyInJWKS
+func (mmFindPublicKeyInJWKS *mCryptoMockFindPublicKeyInJWKS) Return(a1 any, err error) *CryptoMock {
+	if mmFindPublicKeyInJWKS.mock.funcFindPublicKeyInJWKS != nil {
+		mmFindPublicKeyInJWKS.mock.t.Fatalf("CryptoMock.FindPublicKeyInJWKS mock is already set by Set")
+	}
+
+	if mmFindPublicKeyInJWKS.defaultExpectation == nil {
+		mmFindPublicKeyInJWKS.defaultExpectation = &CryptoMockFindPublicKeyInJWKSExpectation{mock: mmFindPublicKeyInJWKS.mock}
+	}
+	mmFindPublicKeyInJWKS.defaultExpectation.results = &CryptoMockFindPublicKeyInJWKSResults{a1, err}
+	mmFindPublicKeyInJWKS.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmFindPublicKeyInJWKS.mock
+}
+
+// Set uses given function f to mock the Crypto.FindPublicKeyInJWKS method
+func (mmFindPublicKeyInJWKS *mCryptoMockFindPublicKeyInJWKS) Set(f func(jwks []map[string]any, kid string) (a1 any, err error)) *CryptoMock {
+	if mmFindPublicKeyInJWKS.defaultExpectation != nil {
+		mmFindPublicKeyInJWKS.mock.t.Fatalf("Default expectation is already set for the Crypto.FindPublicKeyInJWKS method")
+	}
+
+	if len(mmFindPublicKeyInJWKS.expectations) > 0 {
+		mmFindPublicKeyInJWKS.mock.t.Fatalf("Some expectations are already set for the Crypto.FindPublicKeyInJWKS method")
+	}
+
+	mmFindPublicKeyInJWKS.mock.funcFindPublicKeyInJWKS = f
+	mmFindPublicKeyInJWKS.mock.funcFindPublicKeyInJWKSOrigin = minimock.CallerInfo(1)
+	return mmFindPublicKeyInJWKS.mock
+}
+
+// When sets expectation for the Crypto.FindPublicKeyInJWKS which will trigger the result defined by the following
+// Then helper
+func (mmFindPublicKeyInJWKS *mCryptoMockFindPublicKeyInJWKS) When(jwks []map[string]any, kid string) *CryptoMockFindPublicKeyInJWKSExpectation {
+	if mmFindPublicKeyInJWKS.mock.funcFindPublicKeyInJWKS != nil {
+		mmFindPublicKeyInJWKS.mock.t.Fatalf("CryptoMock.FindPublicKeyInJWKS mock is already set by Set")
+	}
+
+	expectation := &CryptoMockFindPublicKeyInJWKSExpectation{
+		mock:               mmFindPublicKeyInJWKS.mock,
+		params:             &CryptoMockFindPublicKeyInJWKSParams{jwks, kid},
+		expectationOrigins: CryptoMockFindPublicKeyInJWKSExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmFindPublicKeyInJWKS.expectations = append(mmFindPublicKeyInJWKS.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Crypto.FindPublicKeyInJWKS return parameters for the expectation previously defined by the When method
+func (e *CryptoMockFindPublicKeyInJWKSExpectation) Then(a1 any, err error) *CryptoMock {
+	e.results = &CryptoMockFindPublicKeyInJWKSResults{a1, err}
+	return e.mock
+}
+
+// Times sets number of times Crypto.FindPublicKeyInJWKS should be invoked
+func (mmFindPublicKeyInJWKS *mCryptoMockFindPublicKeyInJWKS) Times(n uint64) *mCryptoMockFindPublicKeyInJWKS {
+	if n == 0 {
+		mmFindPublicKeyInJWKS.mock.t.Fatalf("Times of CryptoMock.FindPublicKeyInJWKS mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmFindPublicKeyInJWKS.expectedInvocations, n)
+	mmFindPublicKeyInJWKS.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmFindPublicKeyInJWKS
+}
+
+func (mmFindPublicKeyInJWKS *mCryptoMockFindPublicKeyInJWKS) invocationsDone() bool {
+	if len(mmFindPublicKeyInJWKS.expectations) == 0 && mmFindPublicKeyInJWKS.defaultExpectation == nil && mmFindPublicKeyInJWKS.mock.funcFindPublicKeyInJWKS == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmFindPublicKeyInJWKS.mock.afterFindPublicKeyInJWKSCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmFindPublicKeyInJWKS.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// FindPublicKeyInJWKS implements mm_port.Crypto
+func (mmFindPublicKeyInJWKS *CryptoMock) FindPublicKeyInJWKS(jwks []map[string]any, kid string) (a1 any, err error) {
+	mm_atomic.AddUint64(&mmFindPublicKeyInJWKS.beforeFindPublicKeyInJWKSCounter, 1)
+	defer mm_atomic.AddUint64(&mmFindPublicKeyInJWKS.afterFindPublicKeyInJWKSCounter, 1)
+
+	mmFindPublicKeyInJWKS.t.Helper()
+
+	if mmFindPublicKeyInJWKS.inspectFuncFindPublicKeyInJWKS != nil {
+		mmFindPublicKeyInJWKS.inspectFuncFindPublicKeyInJWKS(jwks, kid)
+	}
+
+	mm_params := CryptoMockFindPublicKeyInJWKSParams{jwks, kid}
+
+	// Record call args
+	mmFindPublicKeyInJWKS.FindPublicKeyInJWKSMock.mutex.Lock()
+	mmFindPublicKeyInJWKS.FindPublicKeyInJWKSMock.callArgs = append(mmFindPublicKeyInJWKS.FindPublicKeyInJWKSMock.callArgs, &mm_params)
+	mmFindPublicKeyInJWKS.FindPublicKeyInJWKSMock.mutex.Unlock()
+
+	for _, e := range mmFindPublicKeyInJWKS.FindPublicKeyInJWKSMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.a1, e.results.err
+		}
+	}
+
+	if mmFindPublicKeyInJWKS.FindPublicKeyInJWKSMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmFindPublicKeyInJWKS.FindPublicKeyInJWKSMock.defaultExpectation.Counter, 1)
+		mm_want := mmFindPublicKeyInJWKS.FindPublicKeyInJWKSMock.defaultExpectation.params
+		mm_want_ptrs := mmFindPublicKeyInJWKS.FindPublicKeyInJWKSMock.defaultExpectation.paramPtrs
+
+		mm_got := CryptoMockFindPublicKeyInJWKSParams{jwks, kid}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.jwks != nil && !minimock.Equal(*mm_want_ptrs.jwks, mm_got.jwks) {
+				mmFindPublicKeyInJWKS.t.Errorf("CryptoMock.FindPublicKeyInJWKS got unexpected parameter jwks, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmFindPublicKeyInJWKS.FindPublicKeyInJWKSMock.defaultExpectation.expectationOrigins.originJwks, *mm_want_ptrs.jwks, mm_got.jwks, minimock.Diff(*mm_want_ptrs.jwks, mm_got.jwks))
+			}
+
+			if mm_want_ptrs.kid != nil && !minimock.Equal(*mm_want_ptrs.kid, mm_got.kid) {
+				mmFindPublicKeyInJWKS.t.Errorf("CryptoMock.FindPublicKeyInJWKS got unexpected parameter kid, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmFindPublicKeyInJWKS.FindPublicKeyInJWKSMock.defaultExpectation.expectationOrigins.originKid, *mm_want_ptrs.kid, mm_got.kid, minimock.Diff(*mm_want_ptrs.kid, mm_got.kid))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmFindPublicKeyInJWKS.t.Errorf("CryptoMock.FindPublicKeyInJWKS got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmFindPublicKeyInJWKS.FindPublicKeyInJWKSMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmFindPublicKeyInJWKS.FindPublicKeyInJWKSMock.defaultExpectation.results
+		if mm_results == nil {
+			mmFindPublicKeyInJWKS.t.Fatal("No results are set for the CryptoMock.FindPublicKeyInJWKS")
+		}
+		return (*mm_results).a1, (*mm_results).err
+	}
+	if mmFindPublicKeyInJWKS.funcFindPublicKeyInJWKS != nil {
+		return mmFindPublicKeyInJWKS.funcFindPublicKeyInJWKS(jwks, kid)
+	}
+	mmFindPublicKeyInJWKS.t.Fatalf("Unexpected call to CryptoMock.FindPublicKeyInJWKS. %v %v", jwks, kid)
+	return
+}
+
+// FindPublicKeyInJWKSAfterCounter returns a count of finished CryptoMock.FindPublicKeyInJWKS invocations
+func (mmFindPublicKeyInJWKS *CryptoMock) FindPublicKeyInJWKSAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmFindPublicKeyInJWKS.afterFindPublicKeyInJWKSCounter)
+}
+
+// FindPublicKeyInJWKSBeforeCounter returns a count of CryptoMock.FindPublicKeyInJWKS invocations
+func (mmFindPublicKeyInJWKS *CryptoMock) FindPublicKeyInJWKSBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmFindPublicKeyInJWKS.beforeFindPublicKeyInJWKSCounter)
+}
+
+// Calls returns a list of arguments used in each call to CryptoMock.FindPublicKeyInJWKS.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmFindPublicKeyInJWKS *mCryptoMockFindPublicKeyInJWKS) Calls() []*CryptoMockFindPublicKeyInJWKSParams {
+	mmFindPublicKeyInJWKS.mutex.RLock()
+
+	argCopy := make([]*CryptoMockFindPublicKeyInJWKSParams, len(mmFindPublicKeyInJWKS.callArgs))
+	copy(argCopy, mmFindPublicKeyInJWKS.callArgs)
+
+	mmFindPublicKeyInJWKS.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockFindPublicKeyInJWKSDone returns true if the count of the FindPublicKeyInJWKS invocations corresponds
+// the number of defined expectations
+func (m *CryptoMock) MinimockFindPublicKeyInJWKSDone() bool {
+	if m.FindPublicKeyInJWKSMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.FindPublicKeyInJWKSMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.FindPublicKeyInJWKSMock.invocationsDone()
+}
+
+// MinimockFindPublicKeyInJWKSInspect logs each unmet expectation
+func (m *CryptoMock) MinimockFindPublicKeyInJWKSInspect() {
+	for _, e := range m.FindPublicKeyInJWKSMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to CryptoMock.FindPublicKeyInJWKS at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterFindPublicKeyInJWKSCounter := mm_atomic.LoadUint64(&m.afterFindPublicKeyInJWKSCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.FindPublicKeyInJWKSMock.defaultExpectation != nil && afterFindPublicKeyInJWKSCounter < 1 {
+		if m.FindPublicKeyInJWKSMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to CryptoMock.FindPublicKeyInJWKS at\n%s", m.FindPublicKeyInJWKSMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to CryptoMock.FindPublicKeyInJWKS at\n%s with params: %#v", m.FindPublicKeyInJWKSMock.defaultExpectation.expectationOrigins.origin, *m.FindPublicKeyInJWKSMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcFindPublicKeyInJWKS != nil && afterFindPublicKeyInJWKSCounter < 1 {
+		m.t.Errorf("Expected call to CryptoMock.FindPublicKeyInJWKS at\n%s", m.funcFindPublicKeyInJWKSOrigin)
+	}
+
+	if !m.FindPublicKeyInJWKSMock.invocationsDone() && afterFindPublicKeyInJWKSCounter > 0 {
+		m.t.Errorf("Expected %d calls to CryptoMock.FindPublicKeyInJWKS at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.FindPublicKeyInJWKSMock.expectedInvocations), m.FindPublicKeyInJWKSMock.expectedInvocationsOrigin, afterFindPublicKeyInJWKSCounter)
 	}
 }
 
@@ -4428,6 +4781,8 @@ func (m *CryptoMock) MinimockFinish() {
 		if !m.minimockDone() {
 			m.MinimockCompareCredentialInspect()
 
+			m.MinimockFindPublicKeyInJWKSInspect()
+
 			m.MinimockGetMasterRegistrationPublicKeyInspect()
 
 			m.MinimockHashCredentialInspect()
@@ -4473,6 +4828,7 @@ func (m *CryptoMock) minimockDone() bool {
 	done := true
 	return done &&
 		m.MinimockCompareCredentialDone() &&
+		m.MinimockFindPublicKeyInJWKSDone() &&
 		m.MinimockGetMasterRegistrationPublicKeyDone() &&
 		m.MinimockHashCredentialDone() &&
 		m.MinimockJWKSForTenantDone() &&

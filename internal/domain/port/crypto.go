@@ -27,6 +27,9 @@ type Crypto interface {
 	MarshalJWKSet(ctx context.Context, domain string, scheme string) (string, error)
 	GetMasterRegistrationPublicKey() (any, error)
 	JWKSForTenant(ctx context.Context, domain string, scheme string) ([]map[string]any, error)
+	// FindPublicKeyInJWKS matches a specific 'kid' within a tenant's JWK set
+	// and reconstructs it into a compilable Go public key object.
+	FindPublicKeyInJWKS(jwks []map[string]any, kid string) (any, error)
 
 	// --- Argon2id Secure Password Invariant Helpers ---
 	HashCredential(secret string) (string, error)

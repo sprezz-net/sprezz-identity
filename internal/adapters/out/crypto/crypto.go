@@ -594,6 +594,78 @@ func (s *JWTSigner) JWKSForTenant(ctx context.Context, domain string, scheme str
 	return keyring.JWKS, nil
 }
 
+// FindPublicKeyInJWKS matches a specific key ID inside a raw JWK set slice mapping
+// and transforms its string coordinates back into a native compilable public key instance.
+func (s *JWTSigner) FindPublicKeyInJWKS(jwks []map[string]any, kid string) (any, error) {
+	var targetJWK map[string]any
+	for _, keyMap := range jwks {
+		if kidVal, ok := keyMap["kid"].(string); ok && kidVal == kid {
+			targetJWK = keyMap
+			break
+		}
+	}
+
+	if targetJWK == nil {
+		return nil, fmt.Errorf("crypto: key ID '%s' not found inside the provided JWK set context", kid)
+	}
+
+	kty, _ := targetJWK["kty"].(string)
+	switch kty {
+	case "RSA":
+		modulusStr, _ := targetJWK["n"].(string)
+		exponentStr, _ := targetJWK["e"].(string)
+
+		rawN, errN := base64.RawURLEncoding.DecodeString(modulusStr)
+		rawE, errE := base64.RawURLEncoding.DecodeString(exponentStr)
+		if errN != nil || errE != nil {
+			return nil, fmt.Errorf("crypto: corrupted RSA public key parameters inside target JWK")
+		}
+
+		var bigE int
+		for _, b := range rawE {
+			bigE = (bigE << 8) | int(b)
+		}
+
+		return &rsa.PublicKey{
+			// Reconstructs the mathematical modulus value safely
+			N: new(big.Int).SetBytes(rawN),
+			E: bigE,
+		}, nil
+
+	case "EC":
+		xStr, _ := targetJWK["x"].(string)
+		yStr, _ := targetJWK["y"].(string)
+		crv, _ := targetJWK["crv"].(string)
+
+		rawX, errX := base64.RawURLEncoding.DecodeString(xStr)
+		rawY, errY := base64.RawURLEncoding.DecodeString(yStr)
+		if errX != nil || errY != nil {
+			return nil, fmt.Errorf("crypto: corrupted elliptic curve public key coordinates inside target JWK")
+		}
+
+		var curve elliptic.Curve
+		if crv == "P-256" {
+			curve = elliptic.P256()
+		} else {
+			return nil, fmt.Errorf("crypto: unsupported elliptic curve profile family '%s'", crv)
+		}
+
+		publicKeyBytes := make([]byte, 1+32+32)
+		publicKeyBytes[0] = 0x04 // Uncompressed key format indicator byte
+		copy(publicKeyBytes[1+32-len(rawX):1+32], rawX)
+		copy(publicKeyBytes[1+32+32-len(rawY):1+32+32], rawY)
+
+		pubKey, err := ecdsa.ParseUncompressedPublicKey(curve, publicKeyBytes)
+		if err != nil {
+			return nil, fmt.Errorf("crypto: invalid elliptic curve public key matrix layout: %w", err)
+		}
+		return pubKey, nil
+
+	default:
+		return nil, fmt.Errorf("crypto: unsupported cryptographic key family format '%s'", kty)
+	}
+}
+
 func (s *JWTSigner) MarshalJWKSet(ctx context.Context, domain string, scheme string) (string, error) {
 	jwkSet, err := s.JWKSForTenant(ctx, domain, scheme)
 	if err != nil {
