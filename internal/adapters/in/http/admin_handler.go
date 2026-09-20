@@ -128,7 +128,7 @@ func (h *AdminHandler) HandleAdminLogoutRequest(w http.ResponseWriter, r *http.R
 func (h *AdminHandler) adminDashboardView(w http.ResponseWriter, r *http.Request) {
 	tenant, ok := TenantFromContext(r.Context())
 	if !ok {
-		h.renderError(w, r, http.StatusBadRequest, errTenantNotResolved)
+		h.renderError(w, r, http.StatusBadRequest, port.ErrTenantNotFound.Error())
 		return
 	}
 
@@ -212,7 +212,7 @@ func (h *HttpAdapter) initiateAdminOIDC(w http.ResponseWriter, r *http.Request) 
 	// 1. Resolve multi-tenant and layout boundaries safely
 	tenant, ok := TenantFromContext(r.Context())
 	if !ok {
-		h.renderError(w, r, http.StatusBadRequest, errTenantNotResolved)
+		h.renderError(w, r, http.StatusBadRequest, port.ErrTenantNotFound.Error())
 		return
 	}
 

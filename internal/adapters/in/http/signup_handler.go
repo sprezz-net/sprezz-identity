@@ -37,7 +37,7 @@ func (h *SignupHandler) Routes(r chi.Router) {
 func (h *SignupHandler) HandleSignUpForm(w http.ResponseWriter, r *http.Request) {
 	tenant, ok := TenantFromContext(r.Context())
 	if !ok {
-		http.Error(w, errTenantNotResolved, http.StatusBadRequest)
+		http.Error(w, port.ErrTenantNotFound.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -67,7 +67,7 @@ func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Reques
 	tenant, ok := TenantFromContext(r.Context())
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(errTenantNotResolved))
+		_, _ = w.Write([]byte(port.ErrTenantNotFound.Error()))
 		return
 	}
 

@@ -14,11 +14,6 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-)
-
-const (
-	errTenantNotResolved = "tenant not resolved"
 )
 
 type HttpAdapter struct {
@@ -39,62 +34,6 @@ type HttpAdapter struct {
 	router                  chi.Router
 	appEnv                  string
 	adminDomain             string
-}
-
-type ContextKey string
-
-const (
-	TenantContextKey   ContextKey = "spz_tenant_context"
-	TenantIDContextKey ContextKey = "spz_tenant_id_context"
-	AppContextKey      ContextKey = "spz_app_context"
-	ProfileContextKey  ContextKey = "spz_profile_context"
-	GroupContextKey    ContextKey = "spz_group_context"
-	ClientAuthFlagKey  ContextKey = "spz_client_authenticated"
-	ClientIDContextKey ContextKey = "spz_client_id"
-)
-
-// Helper functions to pull compiled layers out of the request context down-funnel
-// TenantIDFromContext extracts the pre-validated Tenant UUID from the request context thread.
-// It panics if the boundary is missing, as the perimeter middleware guarantees its presence.
-func TenantIDFromContext(ctx context.Context) uuid.UUID {
-	if val, ok := ctx.Value(TenantIDContextKey).(uuid.UUID); ok {
-		return val
-	}
-	return uuid.Nil
-}
-
-func TenantFromContext(ctx context.Context) (*model.Tenant, bool) {
-	tenant, ok := ctx.Value(TenantContextKey).(*model.Tenant)
-	return tenant, ok
-}
-
-// ClientIDFromContext recovers the authenticated Client ID string from the request context.
-func ClientIDFromContext(ctx context.Context) (string, bool) {
-	val, ok := ctx.Value(ClientIDContextKey).(string)
-	return val, ok
-}
-
-// IsClientAuthenticatedFromContext extracts the boolean credential verification status.
-func IsClientAuthenticatedFromContext(ctx context.Context) bool {
-	if val, ok := ctx.Value(ClientAuthFlagKey).(bool); ok {
-		return val
-	}
-	return false
-}
-
-func AppFromContext(ctx context.Context) (*model.Application, bool) {
-	val, ok := ctx.Value(AppContextKey).(*model.Application)
-	return val, ok
-}
-
-func ProfileFromContext(ctx context.Context) (*model.ApplicationProfile, bool) {
-	val, ok := ctx.Value(ProfileContextKey).(*model.ApplicationProfile)
-	return val, ok
-}
-
-func GroupFromContext(ctx context.Context) (*model.ApplicationGroup, bool) {
-	val, ok := ctx.Value(GroupContextKey).(*model.ApplicationGroup)
-	return val, ok
 }
 
 func NewHttpAdapter(

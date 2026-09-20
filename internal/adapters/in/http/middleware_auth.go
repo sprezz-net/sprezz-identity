@@ -12,6 +12,18 @@ import (
 	"github.com/google/uuid"
 )
 
+type ContextKey string
+
+const (
+	TenantContextKey   ContextKey = "spz_tenant_context"
+	TenantIDContextKey ContextKey = "spz_tenant_id_context"
+	AppContextKey      ContextKey = "spz_app_context"
+	ProfileContextKey  ContextKey = "spz_profile_context"
+	GroupContextKey    ContextKey = "spz_group_context"
+	ClientAuthFlagKey  ContextKey = "spz_client_authenticated"
+	ClientIDContextKey ContextKey = "spz_client_id"
+)
+
 type MiddlewareProvider struct {
 	storage port.Storage
 	crypto  port.Crypto
@@ -27,9 +39,7 @@ func (m *MiddlewareProvider) ClientAuthMiddleware(next http.Handler) http.Handle
 		tenantIDVal := r.Context().Value(TenantIDContextKey) // Uses your existing tenant key anchor
 		tenantUUID, ok := tenantIDVal.(uuid.UUID)
 		if !ok || tenantUUID == uuid.Nil {
-			w.Header().Set(model.HeaderContentType, model.ContentTypeJSON)
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte(`{"error":"invalid_request","error_description":"missing tenant execution boundary"}`))
+			m.writeJSONError(w, http.StatusBadRequest, "invalid_request", port.ErrTenantNotFound.Error())
 			return
 		}
 
@@ -67,26 +77,20 @@ func (m *MiddlewareProvider) ClientAuthMiddleware(next http.Handler) http.Handle
 		}
 
 		if clientID == "" {
-			w.Header().Set(model.HeaderContentType, model.ContentTypeJSON)
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte(`{"error":"invalid_request","error_description":"missing client identifier"}`))
+			m.writeJSONError(w, http.StatusBadRequest, "invalid_request", "missing client identifier")
 			return
 		}
 
 		// 2. Fetch target application metrics from relational storage CTE cache rows
 		app, profile, group, err := m.storage.GetApplicationByClientID(r.Context(), tenantUUID, clientID)
 		if err != nil {
-			w.Header().Set(model.HeaderContentType, model.ContentTypeJSON)
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = w.Write([]byte(`{"error":"invalid_client","error_description":"client authentication failed"}`))
+			m.writeJSONError(w, http.StatusUnauthorized, "invalid_client", "client authentication failed")
 			return
 		}
 
 		// 3. Watertight Spec Enforcement: Reject protocol method downgrades instantly
 		if profile.TokenEndpointAuthMethod != detectedMethod {
-			w.Header().Set(model.HeaderContentType, model.ContentTypeJSON)
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = w.Write([]byte(`{"error":"invalid_client","error_description":"client authentication method mismatch"}`))
+			m.writeJSONError(w, http.StatusUnauthorized, "invalid_client", "client authentication method mismatch")
 			return
 		}
 
@@ -98,17 +102,13 @@ func (m *MiddlewareProvider) ClientAuthMiddleware(next http.Handler) http.Handle
 		} else {
 			// Confidential clients require secure cryptographic verification
 			if app.ClientSecretHash == nil || clientSecret == "" {
-				w.Header().Set(model.HeaderContentType, model.ContentTypeJSON)
-				w.WriteHeader(http.StatusUnauthorized)
-				_, _ = w.Write([]byte(`{"error":"invalid_client","error_description":"client credentials missing"}`))
+				m.writeJSONError(w, http.StatusUnauthorized, "invalid_client", "client credentials missing")
 				return
 			}
 
 			authenticated, err := m.crypto.CompareCredential(*app.ClientSecretHash, clientSecret)
 			if err != nil || !authenticated {
-				w.Header().Set(model.HeaderContentType, model.ContentTypeJSON)
-				w.WriteHeader(http.StatusUnauthorized)
-				_, _ = w.Write([]byte(`{"error":"invalid_client","error_description":"client authentication failed"}`))
+				m.writeJSONError(w, http.StatusUnauthorized, "invalid_client", "client authentication failed")
 				return
 			}
 			isClientAuthenticated = true
@@ -124,4 +124,54 @@ func (m *MiddlewareProvider) ClientAuthMiddleware(next http.Handler) http.Handle
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func (m *MiddlewareProvider) writeJSONError(w http.ResponseWriter, statusCode int, errCode, description string) {
+	w.Header().Set(model.HeaderContentType, model.ContentTypeJSON)
+	w.WriteHeader(statusCode)
+	_, _ = w.Write([]byte(`{"error":"` + errCode + `","error_description":"` + description + `"}`))
+}
+
+// Helper functions to pull compiled layers out of the request context down-funnel
+// TenantIDFromContext extracts the pre-validated Tenant UUID from the request context thread.
+// It panics if the boundary is missing, as the perimeter middleware guarantees its presence.
+func TenantIDFromContext(ctx context.Context) uuid.UUID {
+	if val, ok := ctx.Value(TenantIDContextKey).(uuid.UUID); ok {
+		return val
+	}
+	return uuid.Nil
+}
+
+func TenantFromContext(ctx context.Context) (*model.Tenant, bool) {
+	tenant, ok := ctx.Value(TenantContextKey).(*model.Tenant)
+	return tenant, ok
+}
+
+// ClientIDFromContext recovers the authenticated Client ID string from the request context.
+func ClientIDFromContext(ctx context.Context) (string, bool) {
+	val, ok := ctx.Value(ClientIDContextKey).(string)
+	return val, ok
+}
+
+// IsClientAuthenticatedFromContext extracts the boolean credential verification status.
+func IsClientAuthenticatedFromContext(ctx context.Context) bool {
+	if val, ok := ctx.Value(ClientAuthFlagKey).(bool); ok {
+		return val
+	}
+	return false
+}
+
+func AppFromContext(ctx context.Context) (*model.Application, bool) {
+	val, ok := ctx.Value(AppContextKey).(*model.Application)
+	return val, ok
+}
+
+func ProfileFromContext(ctx context.Context) (*model.ApplicationProfile, bool) {
+	val, ok := ctx.Value(ProfileContextKey).(*model.ApplicationProfile)
+	return val, ok
+}
+
+func GroupFromContext(ctx context.Context) (*model.ApplicationGroup, bool) {
+	val, ok := ctx.Value(GroupContextKey).(*model.ApplicationGroup)
+	return val, ok
 }
