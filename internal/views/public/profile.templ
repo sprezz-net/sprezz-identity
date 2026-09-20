@@ -8,7 +8,7 @@ import (
 )
 
 // ProfileDashboard serves the full outer page shell context (GET requests only)
-templ ProfileDashboard(user model.UserProfile, identities []model.UserIdentity, providers []model.IdentityProvider, hasPasswordIdp bool, errorMsg, successMsg string) {
+templ ProfileDashboard(user model.UserProfile, identities []model.UserIdentity, providers []model.IdentityProvider, hasPasswordIdp bool, errorMsg, successMsg string, logoutURI string) {
 	<!doctype html>
 	<html lang="en" class="h-full bg-slate-50">
 	<head>
@@ -26,7 +26,7 @@ templ ProfileDashboard(user model.UserProfile, identities []model.UserIdentity, 
 					<h1 class="text-2xl font-bold tracking-wider">MY PROFILE</h1>
 					<p class="text-sm text-slate-400 mt-1">Manage your account details and connected identities</p>
 				</div>
-				<a href={ port.RouteWebLogout } class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-semibold transition">
+				<a href={ templ.SafeURL(logoutURI) } class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-semibold transition">
 					Sign Out
 				</a>
 			</div>

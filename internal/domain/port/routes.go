@@ -33,6 +33,7 @@ const (
 
 	// Administrative routes for the internal management console
 	RouteAdmin                     = "/admin"
+	RouteAdminLogout               = "/logout"
 	RouteAdminDashboard            = "/dashboard"
 	RouteAdminApplications         = "/applications"
 	RouteAdminApplicationsProfiles = "/profiles"

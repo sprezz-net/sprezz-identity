@@ -599,7 +599,7 @@ templ AdminLayout(props AdminLayoutProps) {
 
 							if (data.acr_values_supported) {
 								this.discoveredAcrValues = data.acr_values_supported;
-								
+
 								// Filter out any selected items that are no longer offered by the upstream IDP
 								this.selectedAcrValues = this.selectedAcrValues.filter(acr => {
 									const staysSelected = this.discoveredAcrValues.includes(acr);
@@ -797,7 +797,7 @@ templ AdminLayout(props AdminLayoutProps) {
 						My Profile
 					</a>
 					<a
-						href="/logout"
+						href="/admin/logout"
 						class="block px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors"
 					>
 						Sign Out

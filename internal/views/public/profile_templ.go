@@ -16,7 +16,7 @@ import (
 )
 
 // ProfileDashboard serves the full outer page shell context (GET requests only)
-func ProfileDashboard(user model.UserProfile, identities []model.UserIdentity, providers []model.IdentityProvider, hasPasswordIdp bool, errorMsg, successMsg string) templ.Component {
+func ProfileDashboard(user model.UserProfile, identities []model.UserIdentity, providers []model.IdentityProvider, hasPasswordIdp bool, errorMsg, successMsg string, logoutURI string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -68,9 +68,9 @@ func ProfileDashboard(user model.UserProfile, identities []model.UserIdentity, p
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 templ.SafeURL
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(port.RouteWebLogout)
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(logoutURI))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/public/profile.templ`, Line: 29, Col: 33}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/public/profile.templ`, Line: 29, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {

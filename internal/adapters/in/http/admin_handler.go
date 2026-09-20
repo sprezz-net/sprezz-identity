@@ -77,6 +77,7 @@ func NewAdminHandler(adapter *HttpAdapter) *AdminHandler {
 func (h *AdminHandler) Routes(r chi.Router) {
 	r.Route(port.RouteAdmin, func(r chi.Router) {
 		r.Get("/", h.adminDashboardView)
+		r.Get(port.RouteAdminLogout, h.HandleAdminLogoutRequest)
 		r.Get(port.RouteAdminDashboard, h.adminDashboardView)
 
 		h.tenantHandler.Routes(r)
@@ -84,6 +85,44 @@ func (h *AdminHandler) Routes(r chi.Router) {
 		h.idpHandler.Routes(r)
 		h.userHandler.Routes(r)
 	})
+}
+
+// HandleAdminLogoutRequest clears out the administrative partition session.
+// It detects and supports both OIDC front-channel iframe sweeps and manual user clicks.
+func (h *AdminHandler) HandleAdminLogoutRequest(w http.ResponseWriter, r *http.Request) {
+	// 1. Establish a secure baseline default matching max production profiles
+	isSecure := h.appEnv != "local"
+
+	// 2. READ CURRENT COOKIE: Attempt to load the active privileged token block
+	if adminCookie, err := r.Cookie("spz_session_sprezz_admin"); err == nil {
+		// TARGET FOUND: Dynamically mirror the exact secure flag from the live cookie instance
+		isSecure = adminCookie.Secure
+	}
+
+	// 3. EXECUTE EVICTION: Clear out the admin token cleanly using the verified secure flag state
+	http.SetCookie(w, &http.Cookie{
+		Name:     "spz_session_sprezz_admin",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1, // Forces immediate native browser-level erasure
+		HttpOnly: true,
+		Secure:   isSecure,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	// 2. ADAPTIVE RESPONSE PATHWAY:
+	// If the request contains an OIDC 'state' or 'id_token_hint' query parameter, or if the
+	// User-Agent/Headers indicate a background iframe fetch, satisfy the OIDC spec with a 200 OK.
+	if r.URL.Query().Get("state") != "" || r.Header.Get("Sec-Fetch-Dest") == "iframe" {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+		return
+	}
+
+	// 3. MANUAL CLICK FALLBACK:
+	// If an admin manually clicked "Sign Out" from within the admin dashboard,
+	// send them directly to the clean unauthenticated admin login wall route.
+	http.Redirect(w, r, port.RouteAdmin, http.StatusFound)
 }
 
 func (h *AdminHandler) adminDashboardView(w http.ResponseWriter, r *http.Request) {

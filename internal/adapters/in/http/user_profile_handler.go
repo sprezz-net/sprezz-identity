@@ -43,6 +43,8 @@ func (h *ProfileHandler) Routes(r chi.Router) {
 
 func (h *ProfileHandler) HandleViewDashboard(w http.ResponseWriter, r *http.Request) {
 	tenantUUID := TenantIDFromContext(r.Context())
+
+	// 1. Leverage your prioritized scanner loop to resolve the true active identity context
 	subjectID, partitionID, err := h.authenticateSessionUser(r, tenantUUID)
 	if err != nil {
 		http.Redirect(w, r, port.RouteRoot, http.StatusSeeOther)
@@ -65,10 +67,31 @@ func (h *ProfileHandler) HandleViewDashboard(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// 2. Contextual Sign Out URI Resolution
+	// We check for the presence of the administrative cookie. If found, we change the
+	// logout URI destination target explicitly to prevent multi-tab token persistence bugs.
+	logoutURI := port.RouteWebLogout
+	if _, adminErr := r.Cookie("spz_session_sprezz_admin"); adminErr == nil {
+		logoutURI = port.RouteAdmin + port.RouteAdminLogout
+	}
+
+	// Capture flash notifications cleanly
+	successMsg := r.URL.Query().Get("success")
+	errorMsg := r.URL.Query().Get("error")
+
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	w.WriteHeader(http.StatusOK)
 
-	component := public.ProfileDashboard(dashboardResp.UserProfile, dashboardResp.Identities, dashboardResp.Providers, dashboardResp.HasPasswordIDP, "", "")
+	// 3. Pass the computed logoutURI argument into the template constructor execution
+	component := public.ProfileDashboard(
+		dashboardResp.UserProfile,
+		dashboardResp.Identities,
+		dashboardResp.Providers,
+		dashboardResp.HasPasswordIDP,
+		errorMsg,
+		successMsg,
+		logoutURI,
+	)
 	_ = component.Render(r.Context(), w)
 }
 
@@ -137,6 +160,14 @@ func (h *ProfileHandler) HandleChangePasswordSubmit(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// 2. Contextual Sign Out URI Resolution
+	// We check for the presence of the administrative cookie. If found, we change the
+	// logout URI destination target explicitly to prevent multi-tab token persistence bugs.
+	logoutURI := port.RouteWebLogout
+	if _, adminErr := r.Cookie("spz_session_sprezz_admin"); adminErr == nil {
+		logoutURI = port.RouteAdmin + port.RouteAdminLogout
+	}
+
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 
 	// 2. Instruct HTMX to push the target dashboard URL straight into browser history
@@ -145,7 +176,7 @@ func (h *ProfileHandler) HandleChangePasswordSubmit(w http.ResponseWriter, r *ht
 
 	// 3. Stream the full refreshed dashboard, explicitly passing the text string down down-funnel
 	successConfirmation := "Password credentials successfully updated."
-	component := public.ProfileDashboard(dashboardResp.UserProfile, dashboardResp.Identities, dashboardResp.Providers, dashboardResp.HasPasswordIDP, "", successConfirmation)
+	component := public.ProfileDashboard(dashboardResp.UserProfile, dashboardResp.Identities, dashboardResp.Providers, dashboardResp.HasPasswordIDP, "", successConfirmation, logoutURI)
 	_ = component.Render(r.Context(), w)
 }
 
@@ -214,6 +245,14 @@ func (h *ProfileHandler) HandleChangeEmailSubmit(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// 2. Contextual Sign Out URI Resolution
+	// We check for the presence of the administrative cookie. If found, we change the
+	// logout URI destination target explicitly to prevent multi-tab token persistence bugs.
+	logoutURI := port.RouteWebLogout
+	if _, adminErr := r.Cookie("spz_session_sprezz_admin"); adminErr == nil {
+		logoutURI = port.RouteAdmin + port.RouteAdminLogout
+	}
+
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 
 	// 2. Instruct HTMX to push the target dashboard URL straight into browser history
@@ -222,7 +261,14 @@ func (h *ProfileHandler) HandleChangeEmailSubmit(w http.ResponseWriter, r *http.
 
 	// 3. Stream the full refreshed dashboard, explicitly passing the text string down down-funnel
 	successConfirmation := "Email address successfully updated."
-	component := public.ProfileDashboard(dashboardResp.UserProfile, dashboardResp.Identities, dashboardResp.Providers, dashboardResp.HasPasswordIDP, "", successConfirmation)
+	component := public.ProfileDashboard(
+		dashboardResp.UserProfile,
+		dashboardResp.Identities,
+		dashboardResp.Providers,
+		dashboardResp.HasPasswordIDP,
+		"",
+		successConfirmation,
+		logoutURI)
 	_ = component.Render(r.Context(), w)
 }
 
@@ -282,15 +328,30 @@ func (h *ProfileHandler) HandleChangeNameSubmit(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// 2. Contextual Sign Out URI Resolution
+	// We check for the presence of the administrative cookie. If found, we change the
+	// logout URI destination target explicitly to prevent multi-tab token persistence bugs.
+	logoutURI := port.RouteWebLogout
+	if _, adminErr := r.Cookie("spz_session_sprezz_admin"); adminErr == nil {
+		logoutURI = port.RouteAdmin + port.RouteAdminLogout
+	}
+
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 
-	// 2. Instruct HTMX to push the target dashboard URL straight into browser history
+	// 3. Instruct HTMX to push the target dashboard URL straight into browser history
 	w.Header().Set(model.HeaderHxPushUrl, port.RouteWebProfile)
 	w.WriteHeader(http.StatusOK)
 
-	// 3. Stream the full refreshed dashboard, explicitly passing the text string down down-funnel
+	// 4. Stream the full refreshed dashboard, explicitly passing the text string down down-funnel
 	successConfirmation := "Display name successfully updated."
-	component := public.ProfileDashboard(dashboardResp.UserProfile, dashboardResp.Identities, dashboardResp.Providers, dashboardResp.HasPasswordIDP, "", successConfirmation)
+	component := public.ProfileDashboard(
+		dashboardResp.UserProfile,
+		dashboardResp.Identities,
+		dashboardResp.Providers,
+		dashboardResp.HasPasswordIDP,
+		"",
+		successConfirmation,
+		logoutURI)
 	_ = component.Render(r.Context(), w)
 }
 

@@ -249,6 +249,7 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 		DefaultIDPID:           &adminSsoProviderUUID,
 		RedirectURIs:           []string{scheme + "://" + domain + port.RouteFederationCallback},
 		PostLogoutRedirectURIs: []string{scheme + "://" + domain + port.RouteAdmin},
+		FrontChannelLogoutURI:  scheme + "://" + domain + port.RouteAdmin + port.RouteAdminLogout,
 	}
 
 	// 4.5. Build the Local Application Authorization Group for direct Admin Portal login
@@ -264,6 +265,7 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 		DefaultIDPID:           &localProviderUUID,
 		RedirectURIs:           []string{scheme + "://" + domain + port.RouteFederationCallback},
 		PostLogoutRedirectURIs: []string{scheme + "://" + domain + port.RouteAdmin},
+		FrontChannelLogoutURI:  scheme + "://" + domain + port.RouteAdmin + port.RouteAdminLogout,
 	}
 
 	// 5. Build the core Application Instance referencing the federated OIDC group
