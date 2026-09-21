@@ -18,7 +18,6 @@ import (
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -804,29 +803,20 @@ func (s *OAuthService) ExchangeExternalToken(
 		return nil, fmt.Errorf("%s: unsupported subject token type profile", port.ErrInvalidGrant)
 	}
 
-	// 2. Destructive Read: Parse the incoming token unverified to extract its cryptographic issuer claim safely [5.7]
-	parser := jwt.NewParser()
-	unverifiedToken, _, err := parser.ParseUnverified(subjectToken, jwt.MapClaims{})
+	// 2. Extract routing parameters unverified securely via our decoupled port helper
+	rawIssuer, rawEmail, err := s.crypto.ExtractUnverifiedMetadata(subjectToken)
 	if err != nil {
-		slog.Error("ExchangeExternalToken: structural token decoding failed", "err", err)
-		return nil, fmt.Errorf("%s: structural token decoding failed: %w", port.ErrInvalidGrant, err)
+		slog.Error("ExchangeExternalToken: metadata extraction failed", "err", err)
+		return nil, fmt.Errorf("%s: metadata extraction failed: %w", port.ErrInvalidGrant, err)
 	}
 
-	unverifiedClaims, ok := unverifiedToken.Claims.(jwt.MapClaims)
-	if !ok {
-		slog.Error("ExchangeExternalToken: corrupt token claims container layout")
-		return nil, fmt.Errorf("%s: corrupt token claims container layout", port.ErrInvalidGrant)
-	}
-
-	rawIssuer, _ := unverifiedClaims["iss"].(string)
-	rawEmail, _ := unverifiedClaims["email"].(string)
 	slog.Debug("ExchangeExternalToken: unverified token claims extracted", "iss", rawIssuer, "email", rawEmail)
 	if rawIssuer == "" {
 		slog.Error("ExchangeExternalToken: token is missing mandatory issuer identity assertions")
 		return nil, fmt.Errorf("%s: token is missing mandatory issuer identity assertions", port.ErrInvalidGrant)
 	}
 
-	// 3. Resolve and verify the specific Identity Provider by its explicit issuer string [5.7]
+	// 3. Resolve and verify the specific Identity Provider by its explicit issuer string
 	activeProvider, err := s.matchIdentityProvider(ctx, tenantID, rawIssuer, rawEmail)
 	if err != nil {
 		slog.Error("ExchangeExternalToken: external token issuer unrecognized or unmapped", "iss", rawIssuer, "err", err)
@@ -836,28 +826,23 @@ func (s *OAuthService) ExchangeExternalToken(
 	slog.Debug("ExchangeExternalToken: matched identity provider", "id", activeProvider.ID, "alias", activeProvider.Alias, "partition_id", activeProvider.PartitionID)
 
 	if !activeProvider.Enabled {
-		slog.Error("ExchangeExternalToken: resolved federated identity provider is administratively deactivated", "id", activeProvider.ID)
 		return nil, fmt.Errorf("%s: resolved federated identity provider is administratively deactivated", port.ErrInvalidGrant)
 	}
 
-	// 4. Cryptographic Validation: Verify asymmetric signatures against the securely resolved provider parameters [5.7]
-	externalClaims, err := s.crypto.VerifyExternalTokenWithProvider(ctx, subjectToken, activeProvider.Config.JwksURI, activeProvider.Issuer)
+	// 4. Highly optimized unified delegation pass out to our decoupled crypto port perimeter!
+	externalClaims, err := s.crypto.ParseAndVerifyExternalToken(ctx, subjectToken, activeProvider.Config.JwksURI, activeProvider.Issuer)
 	if err != nil {
-		slog.Error("ExchangeExternalToken: cryptographic token signature verification failed", "jwks", activeProvider.Config.JwksURI, "issuer", activeProvider.Issuer, "err", err)
 		return nil, fmt.Errorf("%s: cryptographic token signature verification failed: %w", port.ErrInvalidGrant, err)
 	}
 
-	subject, _ := externalClaims["sub"].(string)
-	email, _ := externalClaims["email"].(string)
-	emailVerified, _ := externalClaims["email_verified"].(bool)
-	slog.Debug("ExchangeExternalToken: cryptographic signature verified successfully", "sub", subject, "email", email, "email_verified", emailVerified)
-
-	if subject == "" || email == "" {
+	// 5. Reference the pure domain values directly from our extracted claims data struct container
+	slog.Debug("ExchangeExternalToken: cryptographic signature verified successfully", "sub", externalClaims.Subject, "email", externalClaims.Email, "email_verified", externalClaims.EmailVerified)
+	if externalClaims.Subject == "" || externalClaims.Email == "" {
 		slog.Error("ExchangeExternalToken: external identity assertions missing mandatory subject or email mapping credentials")
-		return nil, fmt.Errorf("%s: external identity assertions missing mandatory subject mapping credentials", port.ErrInvalidGrant)
+		return nil, fmt.Errorf("%s: external identity assertions missing mandatory credentials", port.ErrInvalidGrant)
 	}
 
-	// 5. Fetch client metadata profiles to enforce lifecycle security gates and gather whitelists [5.7]
+	// 6. Fetch client metadata profiles to enforce lifecycle security gates and gather whitelists [5.7]
 	app, profile, group, err := s.storage.GetApplicationByClientID(ctx, tenantID, clientID)
 	if err != nil {
 		slog.Error("ExchangeExternalToken: target client application unresolvable", "client_id", clientID, "err", err)
@@ -869,7 +854,7 @@ func (s *OAuthService) ExchangeExternalToken(
 		return nil, fmt.Errorf("%s: target application architecture context is deactivated", port.ErrInvalidGrant)
 	}
 
-	// Enforce that the application group is strictly bound to this Identity Provider [5.7]
+	// 7. Enforce that the application group is strictly bound to this Identity Provider [5.7]
 	idpPermitted := false
 	slog.Debug("ExchangeExternalToken: verifying group allowed IDPs", "group_id", group.ID, "group_name", group.GroupName, "allowed_ids", group.AllowedIDPIDs, "provider_id", activeProvider.ID)
 	for _, allowedIDP := range group.AllowedIDPIDs {
@@ -883,40 +868,24 @@ func (s *OAuthService) ExchangeExternalToken(
 		return nil, fmt.Errorf("%w: identity provider is not authorized for use with this application client group", port.ErrInvalidGrant)
 	}
 
-	// 6. Namespace Translation: Resolve partition tracking models to pass string aliases forward to tokens [5.7]
+	// 8. Namespace Translation: Resolve partition tracking models to pass string aliases forward to tokens [5.7]
 	partition, err := s.storage.GetPartitionByID(ctx, tenantID, activeProvider.PartitionID)
 	if err != nil {
 		slog.Error("ExchangeExternalToken: failed to resolve partition tracking metadata", "partition_id", activeProvider.PartitionID, "err", err)
 		return nil, fmt.Errorf("oauth_service: failed to resolve partition tracking metadata: %w", err)
 	}
 
-	// 7. Search local records strictly within the matched provider's specific PartitionID [5.7]
-	userProfile, err := s.findUserProfile(ctx, tenantID, activeProvider, subject, email, emailVerified)
+	// 9. Search local records strictly within the matched provider's specific PartitionID [5.7]
+	userProfile, err := s.findUserProfile(ctx, tenantID, activeProvider, externalClaims.Subject, externalClaims.Email, externalClaims.EmailVerified)
 	if err != nil {
 		return nil, fmt.Errorf("%s: profile correlation or linkage registration rejected: %w", port.ErrInvalidGrant, err)
 	}
 
-	var upstreamACR string
-	if acrVal, ok := externalClaims["acr"].(string); ok {
-		upstreamACR = acrVal
-	}
-
-	var upstreamAMR []string
-	if amrInterface, ok := externalClaims["amr"]; ok {
-		if amrSlice, ok := amrInterface.([]any); ok {
-			for _, val := range amrSlice {
-				if str, ok := val.(string); ok {
-					upstreamAMR = append(upstreamAMR, str)
-				}
-			}
-		}
-	}
-
-	// Generate fresh session lineage anchors for token exchange branches
+	// 10. Generate fresh session lineage anchors for token exchange branches
 	sessionID := uuid.NewString()
 	now := s.clock.Now()
 
-	// 8. Session to client tracking [Section 5.7]
+	// 11. Session to client tracking [Section 5.7]
 	// Dynamically register that this federated identity entrance binds the app to single sign-out rules
 	if err := s.storage.RecordClientSessionLink(ctx, tenantID, sessionID, clientID, now); err != nil {
 		return nil, fmt.Errorf("oauth_service: failed to log client session association during exchange: %w", err)
@@ -927,20 +896,45 @@ func (s *OAuthService) ExchangeExternalToken(
 		return nil, fmt.Errorf("oauth_service: failed to resolve tenant boundaries: %w", err)
 	}
 
-	// 9. Mint native tokens, passing group whitelisted audiences forward statelessly [1.14, 5.7]
+	// 12. Calculate target scopes dynamically out of your group configurations
+	// instead of passing a hardcoded static string array.
+	targetScopes := group.DefaultScopes
+	if len(targetScopes) == 0 {
+		// Standard OIDC fallback boundary if no custom defaults are configured on the group
+		targetScopes = []string{"openid", "profile", "email"}
+	}
+
+	// Dynamic Tenant Intersection Pass: Ensure the final scopes list strictly respects
+	// the parent tenant predefined capability ceiling boundaries.
+	if len(tenant.Config.PredefinedScopes) > 0 {
+		var filteredScopes []string
+		for _, requestedScope := range targetScopes {
+			for _, predefinedScope := range tenant.Config.PredefinedScopes {
+				if requestedScope == predefinedScope {
+					filteredScopes = append(filteredScopes, requestedScope)
+					break
+				}
+			}
+		}
+		// If the intersection calculation filters down cleanly, promote the sandboxed array
+		if len(filteredScopes) > 0 {
+			targetScopes = filteredScopes
+		}
+	}
+
 	return s.mintTokensFromSession(ctx, tenant, mintTokensCommand{
 		PartitionAlias:        partition.AliasName,
 		ClientID:              clientID,
 		Subject:               userProfile.ID.String(),
 		SessionID:             sessionID,
-		Scopes:                []string{"openid", "profile", "email"},
+		Scopes:                targetScopes,
 		IdentityProviderID:    activeProvider.ID,
 		IdentityProviderAlias: activeProvider.Alias,
-		ACR:                   upstreamACR,
-		AMR:                   upstreamAMR,
+		ACR:                   externalClaims.ACR,
+		AMR:                   externalClaims.AMR,
 		Confirmation:          nil,
 		ExistingTokenFamilyID: "",
-		OverrideAudiences:     group.AllowedAudiences, // Inherit whitelisted microservice resource footprints statelessly
+		OverrideAudiences:     group.AllowedAudiences,
 		Application:           app,
 		ApplicationProfile:    profile,
 		ApplicationGroup:      group,
@@ -983,15 +977,39 @@ func (s *OAuthService) ExchangeClientCredentials(ctx context.Context, cmd port.E
 		tenant = tn
 	}
 
-	// 4. DELEGATE: Mint native machine tokens with completely zeroed out/nil IdP parameters and empty PartitionAlias.
+	// 4. Calculate target backend scopes configured on the group
+	targetScopes := group.DefaultScopes
+
+	// Dynamic Tenant Intersection Pass for M2M tokens.
+	// Prevents accidental or malicious scope inflation outside of permitted tenant boundaries.
+	if len(tenant.Config.PredefinedScopes) > 0 {
+		var filteredScopes []string
+		for _, requestedScope := range targetScopes {
+			for _, predefinedScope := range tenant.Config.PredefinedScopes {
+				if requestedScope == predefinedScope {
+					filteredScopes = append(filteredScopes, requestedScope)
+					break
+				}
+			}
+		}
+		if len(filteredScopes) > 0 {
+			targetScopes = filteredScopes
+		} else {
+			// Security Fallback: If no configured scopes intersect with the tenant whitelist,
+			// strip scopes entirely to prevent unauthorized system resource access.
+			targetScopes = []string{}
+		}
+	}
+
+	// 5. DELEGATE: Mint native machine tokens with completely zeroed out/nil IdP parameters and empty PartitionAlias.
 	// This forces the minting routine to omit the 'pid' claim while providing the authoritative 'tid' claim.
 	return s.mintTokensFromSession(ctx, tenant, mintTokensCommand{
 		PartitionAlias:        "", // No human actor involved
 		ClientID:              cmd.ClientID,
-		Subject:               cmd.ClientID,        // For machine tokens, the subject is the ClientID itself (RFC 6749)
-		SessionID:             uuid.NewString(),    // Allocate a fresh tracking anchor for the backend lineage
-		Scopes:                group.DefaultScopes, // Default to pre-whitelisted backend scopes configured on the group
-		IdentityProviderID:    uuid.Nil,            // No IDP involved
+		Subject:               cmd.ClientID,     // For machine tokens, the subject is the ClientID itself (RFC 6749)
+		SessionID:             uuid.NewString(), // Allocate a fresh tracking anchor for the backend lineage
+		Scopes:                targetScopes,     // Securely tracking the tenant-filtered scopes list
+		IdentityProviderID:    uuid.Nil,         // No IDP involved
 		IdentityProviderAlias: "",
 		ACR:                   "",  // ACR does not apply for M2M tokens
 		AMR:                   nil, // AMR does not apply for M2M tokens
@@ -1363,30 +1381,23 @@ func (s *OAuthService) ProcessTokenRevocation(ctx context.Context, cmd port.Revo
 		return fmt.Errorf("%w: missing mandatory token parameter", port.ErrInvalidRequest)
 	}
 
-	// 1. Parse the incoming token unverified to safely extract its inner client context mapping parameters
-	parser := jwt.NewParser()
-	unverifiedToken, _, err := parser.ParseUnverified(cmd.TokenString, jwt.MapClaims{})
+	// 1. Extract revocation parameter vectors securely via our decoupled port helper
+	tokenID, tokenClientID, err := s.crypto.ExtractUnverifiedRevocationMetadata(cmd.TokenString)
 	if err != nil {
-		return nil // Spec Compliance: Return success if the token structure is completely unparseable
+		return nil // Spec Compliance RFC 7009: Return success if the token structure is completely unparseable
 	}
 
-	unverifiedClaims, ok := unverifiedToken.Claims.(jwt.MapClaims)
-	if !ok {
+	if tokenID == "" {
 		return nil
 	}
 
 	// 2. Spec Compliance Section 2.1: Enforce client ownership boundaries
-	tokenClientID, _ := unverifiedClaims["client_id"].(string)
-	if tokenClientID == "" {
-		tokenClientID, _ = unverifiedClaims["azp"].(string) // Fallback check to authorized party claim
-	}
-
 	if tokenClientID != "" && tokenClientID != cmd.ClientID {
 		return fmt.Errorf("%w: client ownership validation mismatch", port.ErrInvalidClient)
 	}
 
-	// 3. Delegate directly down to the existing internal unexported revocation worker mechanics
-	return s.storage.RevokeToken(ctx, cmd.TokenString, s.clock.Now().Add(24*time.Hour))
+	// 3. Delegate directly down to the storage repository driver to blacklist the token ID
+	return s.storage.RevokeToken(ctx, tokenID, s.clock.Now().Add(24*time.Hour))
 }
 
 // ResolveClientRouting handles the identity provider evaluation within precise partition constraints
@@ -1753,30 +1764,13 @@ func (s *OAuthService) IntrospectToken(ctx context.Context, tenantID uuid.UUID, 
 
 // RevokeToken extracts tracking identifiers from a token string unverified and registers them in the revocation blacklist
 func (s *OAuthService) RevokeToken(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) error {
-	parser := jwt.NewParser()
-	token, _, err := parser.ParseUnverified(tokenStr, jwt.MapClaims{})
-	if err != nil {
-		return nil // Graceful exit on completely unparseable string inputs
+	// Routed unverified token metadata extraction across decoupled port interface specifications
+	tokenID, _, err := s.crypto.ExtractUnverifiedRevocationMetadata(tokenStr)
+	if err != nil || tokenID == "" {
+		return nil // Graceful exit on completely unparseable string inputs or missing JTIs
 	}
 
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return nil
-	}
-
-	tokenID, _ := claims["jti"].(string)
-	if tokenID == "" {
-		return nil
-	}
-
-	var expiresAt time.Time
-	if expVal, ok := claims["exp"].(float64); ok {
-		expiresAt = time.Unix(int64(expVal), 0)
-	} else {
-		expiresAt = s.clock.Now().Add(24 * time.Hour) // Safe fallback boundary ceiling
-	}
-
-	return s.storage.RevokeToken(ctx, tokenID, expiresAt)
+	return s.storage.RevokeToken(ctx, tokenID, s.clock.Now().Add(24*time.Hour))
 }
 
 // ============================================================================

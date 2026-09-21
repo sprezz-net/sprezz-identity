@@ -24,6 +24,15 @@ type Crypto interface {
 	// --- Inbound Token Verification & Validation Layers ---
 	VerifyToken(tokenStr string) (map[string]any, error)
 	VerifyExternalTokenWithProvider(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string) (map[string]any, error)
+	// ParseAndVerifyExternalToken abstracts unverified inspection, dynamic JWKS lookups,
+	// and full cryptographic validation of an inbound third-party assertion token string.
+	ParseAndVerifyExternalToken(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string) (*model.ExternalTokenClaims, error)
+	// ExtractUnverifiedMetadata reads the basic tracking fields from an incoming
+	// unverified third-party token string to assist with downstream provider routing.
+	ExtractUnverifiedMetadata(tokenStr string) (issuer string, email string, err error)
+	// ExtractUnverifiedRevocationMetadata reads the token identifier and bound client parameters
+	// out of an unverified token string to validate ownership properties safely during revocation sweeps.
+	ExtractUnverifiedRevocationMetadata(tokenStr string) (tokenID string, clientID string, err error)
 
 	// --- Platform Key Management Registers ---
 	RotateKeys(ctx context.Context, domain string) error

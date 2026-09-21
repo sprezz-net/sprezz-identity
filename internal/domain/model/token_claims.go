@@ -113,6 +113,17 @@ type IntrospectionResponse struct {
 	Confirmation          *Confirmation `json:"cnf,omitempty"`
 }
 
+// ExternalTokenClaims encapsulates the extracted unverified or verified properties
+// harvested out of an incoming foreign third-party identity token assertion.
+type ExternalTokenClaims struct {
+	Issuer        string
+	Subject       string
+	Email         string
+	EmailVerified bool
+	ACR           string
+	AMR           []string
+}
+
 // ============================================================================
 // DOMAIN BUSINESS VALIDATION LAYER (PURE GO)
 // ============================================================================

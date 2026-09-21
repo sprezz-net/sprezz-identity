@@ -479,6 +479,84 @@ func (s *JWTSigner) VerifyExternalTokenWithProvider(ctx context.Context, tokenSt
 	return mapClaims, nil
 }
 
+// ParseAndVerifyExternalToken processes inbound assertions by combining unverified metadata extraction with signature validation.
+func (s *JWTSigner) ParseAndVerifyExternalToken(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string) (*model.ExternalTokenClaims, error) {
+	// Call your pre-existing optimized validation path natively
+	mapClaims, err := s.VerifyExternalTokenWithProvider(ctx, tokenStr, jwksURI, expectedIssuer)
+	if err != nil {
+		return nil, err
+	}
+
+	// Safely map third-party payload maps onto pure un-annotated domain tracking structures
+	sub, _ := mapClaims["sub"].(string)
+	email, _ := mapClaims["email"].(string)
+	emailVerified, _ := mapClaims["email_verified"].(bool)
+	acr, _ := mapClaims["acr"].(string)
+
+	var amr []string
+	if amrRaw, exists := mapClaims["amr"]; exists {
+		if amrSlice, ok := amrRaw.([]any); ok {
+			for i := range amrSlice {
+				if str, ok := amrSlice[i].(string); ok {
+					amr = append(amr, str)
+				}
+			}
+		}
+	}
+
+	return &model.ExternalTokenClaims{
+		Issuer:        expectedIssuer,
+		Subject:       sub,
+		Email:         email,
+		EmailVerified: emailVerified,
+		ACR:           acr,
+		AMR:           amr,
+	}, nil
+}
+
+// ExtractUnverifiedMetadata inspects an inbound token string to extract its issuer and email claims safely.
+func (s *JWTSigner) ExtractUnverifiedMetadata(tokenStr string) (string, string, error) {
+	parser := jwt.NewParser()
+	unverifiedToken, _, err := parser.ParseUnverified(tokenStr, jwt.MapClaims{})
+	if err != nil {
+		return "", "", fmt.Errorf("crypto: structural unverified decoding failed: %w", err)
+	}
+
+	unverifiedClaims, ok := unverifiedToken.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", "", errors.New("crypto: corrupt unverified token claims container layout")
+	}
+
+	issuer, _ := unverifiedClaims["iss"].(string)
+	email, _ := unverifiedClaims["email"].(string)
+
+	return issuer, email, nil
+}
+
+// ExtractUnverifiedRevocationMetadata inspects an inbound unverified token string to extract its unique JTI and client identity bindings.
+func (s *JWTSigner) ExtractUnverifiedRevocationMetadata(tokenStr string) (string, string, error) {
+	parser := jwt.NewParser()
+	unverifiedToken, _, err := parser.ParseUnverified(tokenStr, jwt.MapClaims{})
+	if err != nil {
+		return "", "", fmt.Errorf("crypto: structural unverified decoding failed: %w", err)
+	}
+
+	unverifiedClaims, ok := unverifiedToken.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", "", errors.New("crypto: corrupt unverified token claims container layout")
+	}
+
+	tokenID, _ := unverifiedClaims["jti"].(string)
+
+	// Read standard OAuth2 client mapping handles natively
+	clientID, _ := unverifiedClaims["client_id"].(string)
+	if clientID == "" {
+		clientID, _ = unverifiedClaims["azp"].(string)
+	}
+
+	return tokenID, clientID, nil
+}
+
 // ============================================================================
 // SYSTEM KEYRINGS & RECOVERY HANDLERS
 // ============================================================================

@@ -34,6 +34,20 @@ type CryptoMock struct {
 	beforeDecodeAndVerifySoftwareStatementCounter uint64
 	DecodeAndVerifySoftwareStatementMock          mCryptoMockDecodeAndVerifySoftwareStatement
 
+	funcExtractUnverifiedMetadata          func(tokenStr string) (issuer string, email string, err error)
+	funcExtractUnverifiedMetadataOrigin    string
+	inspectFuncExtractUnverifiedMetadata   func(tokenStr string)
+	afterExtractUnverifiedMetadataCounter  uint64
+	beforeExtractUnverifiedMetadataCounter uint64
+	ExtractUnverifiedMetadataMock          mCryptoMockExtractUnverifiedMetadata
+
+	funcExtractUnverifiedRevocationMetadata          func(tokenStr string) (tokenID string, clientID string, err error)
+	funcExtractUnverifiedRevocationMetadataOrigin    string
+	inspectFuncExtractUnverifiedRevocationMetadata   func(tokenStr string)
+	afterExtractUnverifiedRevocationMetadataCounter  uint64
+	beforeExtractUnverifiedRevocationMetadataCounter uint64
+	ExtractUnverifiedRevocationMetadataMock          mCryptoMockExtractUnverifiedRevocationMetadata
+
 	funcFindPublicKeyInJWKS          func(jwks []map[string]any, kid string) (a1 any, err error)
 	funcFindPublicKeyInJWKSOrigin    string
 	inspectFuncFindPublicKeyInJWKS   func(jwks []map[string]any, kid string)
@@ -68,6 +82,13 @@ type CryptoMock struct {
 	afterMarshalJWKSetCounter  uint64
 	beforeMarshalJWKSetCounter uint64
 	MarshalJWKSetMock          mCryptoMockMarshalJWKSet
+
+	funcParseAndVerifyExternalToken          func(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string) (ep1 *model.ExternalTokenClaims, err error)
+	funcParseAndVerifyExternalTokenOrigin    string
+	inspectFuncParseAndVerifyExternalToken   func(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string)
+	afterParseAndVerifyExternalTokenCounter  uint64
+	beforeParseAndVerifyExternalTokenCounter uint64
+	ParseAndVerifyExternalTokenMock          mCryptoMockParseAndVerifyExternalToken
 
 	funcRotateKeys          func(ctx context.Context, domain string) (err error)
 	funcRotateKeysOrigin    string
@@ -133,6 +154,12 @@ func NewCryptoMock(t minimock.Tester) *CryptoMock {
 	m.DecodeAndVerifySoftwareStatementMock = mCryptoMockDecodeAndVerifySoftwareStatement{mock: m}
 	m.DecodeAndVerifySoftwareStatementMock.callArgs = []*CryptoMockDecodeAndVerifySoftwareStatementParams{}
 
+	m.ExtractUnverifiedMetadataMock = mCryptoMockExtractUnverifiedMetadata{mock: m}
+	m.ExtractUnverifiedMetadataMock.callArgs = []*CryptoMockExtractUnverifiedMetadataParams{}
+
+	m.ExtractUnverifiedRevocationMetadataMock = mCryptoMockExtractUnverifiedRevocationMetadata{mock: m}
+	m.ExtractUnverifiedRevocationMetadataMock.callArgs = []*CryptoMockExtractUnverifiedRevocationMetadataParams{}
+
 	m.FindPublicKeyInJWKSMock = mCryptoMockFindPublicKeyInJWKS{mock: m}
 	m.FindPublicKeyInJWKSMock.callArgs = []*CryptoMockFindPublicKeyInJWKSParams{}
 
@@ -146,6 +173,9 @@ func NewCryptoMock(t minimock.Tester) *CryptoMock {
 
 	m.MarshalJWKSetMock = mCryptoMockMarshalJWKSet{mock: m}
 	m.MarshalJWKSetMock.callArgs = []*CryptoMockMarshalJWKSetParams{}
+
+	m.ParseAndVerifyExternalTokenMock = mCryptoMockParseAndVerifyExternalToken{mock: m}
+	m.ParseAndVerifyExternalTokenMock.callArgs = []*CryptoMockParseAndVerifyExternalTokenParams{}
 
 	m.RotateKeysMock = mCryptoMockRotateKeys{mock: m}
 	m.RotateKeysMock.callArgs = []*CryptoMockRotateKeysParams{}
@@ -887,6 +917,632 @@ func (m *CryptoMock) MinimockDecodeAndVerifySoftwareStatementInspect() {
 	if !m.DecodeAndVerifySoftwareStatementMock.invocationsDone() && afterDecodeAndVerifySoftwareStatementCounter > 0 {
 		m.t.Errorf("Expected %d calls to CryptoMock.DecodeAndVerifySoftwareStatement at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.DecodeAndVerifySoftwareStatementMock.expectedInvocations), m.DecodeAndVerifySoftwareStatementMock.expectedInvocationsOrigin, afterDecodeAndVerifySoftwareStatementCounter)
+	}
+}
+
+type mCryptoMockExtractUnverifiedMetadata struct {
+	optional           bool
+	mock               *CryptoMock
+	defaultExpectation *CryptoMockExtractUnverifiedMetadataExpectation
+	expectations       []*CryptoMockExtractUnverifiedMetadataExpectation
+
+	callArgs []*CryptoMockExtractUnverifiedMetadataParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// CryptoMockExtractUnverifiedMetadataExpectation specifies expectation struct of the Crypto.ExtractUnverifiedMetadata
+type CryptoMockExtractUnverifiedMetadataExpectation struct {
+	mock               *CryptoMock
+	params             *CryptoMockExtractUnverifiedMetadataParams
+	paramPtrs          *CryptoMockExtractUnverifiedMetadataParamPtrs
+	expectationOrigins CryptoMockExtractUnverifiedMetadataExpectationOrigins
+	results            *CryptoMockExtractUnverifiedMetadataResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// CryptoMockExtractUnverifiedMetadataParams contains parameters of the Crypto.ExtractUnverifiedMetadata
+type CryptoMockExtractUnverifiedMetadataParams struct {
+	tokenStr string
+}
+
+// CryptoMockExtractUnverifiedMetadataParamPtrs contains pointers to parameters of the Crypto.ExtractUnverifiedMetadata
+type CryptoMockExtractUnverifiedMetadataParamPtrs struct {
+	tokenStr *string
+}
+
+// CryptoMockExtractUnverifiedMetadataResults contains results of the Crypto.ExtractUnverifiedMetadata
+type CryptoMockExtractUnverifiedMetadataResults struct {
+	issuer string
+	email  string
+	err    error
+}
+
+// CryptoMockExtractUnverifiedMetadataOrigins contains origins of expectations of the Crypto.ExtractUnverifiedMetadata
+type CryptoMockExtractUnverifiedMetadataExpectationOrigins struct {
+	origin         string
+	originTokenStr string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmExtractUnverifiedMetadata *mCryptoMockExtractUnverifiedMetadata) Optional() *mCryptoMockExtractUnverifiedMetadata {
+	mmExtractUnverifiedMetadata.optional = true
+	return mmExtractUnverifiedMetadata
+}
+
+// Expect sets up expected params for Crypto.ExtractUnverifiedMetadata
+func (mmExtractUnverifiedMetadata *mCryptoMockExtractUnverifiedMetadata) Expect(tokenStr string) *mCryptoMockExtractUnverifiedMetadata {
+	if mmExtractUnverifiedMetadata.mock.funcExtractUnverifiedMetadata != nil {
+		mmExtractUnverifiedMetadata.mock.t.Fatalf("CryptoMock.ExtractUnverifiedMetadata mock is already set by Set")
+	}
+
+	if mmExtractUnverifiedMetadata.defaultExpectation == nil {
+		mmExtractUnverifiedMetadata.defaultExpectation = &CryptoMockExtractUnverifiedMetadataExpectation{}
+	}
+
+	if mmExtractUnverifiedMetadata.defaultExpectation.paramPtrs != nil {
+		mmExtractUnverifiedMetadata.mock.t.Fatalf("CryptoMock.ExtractUnverifiedMetadata mock is already set by ExpectParams functions")
+	}
+
+	mmExtractUnverifiedMetadata.defaultExpectation.params = &CryptoMockExtractUnverifiedMetadataParams{tokenStr}
+	mmExtractUnverifiedMetadata.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmExtractUnverifiedMetadata.expectations {
+		if minimock.Equal(e.params, mmExtractUnverifiedMetadata.defaultExpectation.params) {
+			mmExtractUnverifiedMetadata.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmExtractUnverifiedMetadata.defaultExpectation.params)
+		}
+	}
+
+	return mmExtractUnverifiedMetadata
+}
+
+// ExpectTokenStrParam1 sets up expected param tokenStr for Crypto.ExtractUnverifiedMetadata
+func (mmExtractUnverifiedMetadata *mCryptoMockExtractUnverifiedMetadata) ExpectTokenStrParam1(tokenStr string) *mCryptoMockExtractUnverifiedMetadata {
+	if mmExtractUnverifiedMetadata.mock.funcExtractUnverifiedMetadata != nil {
+		mmExtractUnverifiedMetadata.mock.t.Fatalf("CryptoMock.ExtractUnverifiedMetadata mock is already set by Set")
+	}
+
+	if mmExtractUnverifiedMetadata.defaultExpectation == nil {
+		mmExtractUnverifiedMetadata.defaultExpectation = &CryptoMockExtractUnverifiedMetadataExpectation{}
+	}
+
+	if mmExtractUnverifiedMetadata.defaultExpectation.params != nil {
+		mmExtractUnverifiedMetadata.mock.t.Fatalf("CryptoMock.ExtractUnverifiedMetadata mock is already set by Expect")
+	}
+
+	if mmExtractUnverifiedMetadata.defaultExpectation.paramPtrs == nil {
+		mmExtractUnverifiedMetadata.defaultExpectation.paramPtrs = &CryptoMockExtractUnverifiedMetadataParamPtrs{}
+	}
+	mmExtractUnverifiedMetadata.defaultExpectation.paramPtrs.tokenStr = &tokenStr
+	mmExtractUnverifiedMetadata.defaultExpectation.expectationOrigins.originTokenStr = minimock.CallerInfo(1)
+
+	return mmExtractUnverifiedMetadata
+}
+
+// Inspect accepts an inspector function that has same arguments as the Crypto.ExtractUnverifiedMetadata
+func (mmExtractUnverifiedMetadata *mCryptoMockExtractUnverifiedMetadata) Inspect(f func(tokenStr string)) *mCryptoMockExtractUnverifiedMetadata {
+	if mmExtractUnverifiedMetadata.mock.inspectFuncExtractUnverifiedMetadata != nil {
+		mmExtractUnverifiedMetadata.mock.t.Fatalf("Inspect function is already set for CryptoMock.ExtractUnverifiedMetadata")
+	}
+
+	mmExtractUnverifiedMetadata.mock.inspectFuncExtractUnverifiedMetadata = f
+
+	return mmExtractUnverifiedMetadata
+}
+
+// Return sets up results that will be returned by Crypto.ExtractUnverifiedMetadata
+func (mmExtractUnverifiedMetadata *mCryptoMockExtractUnverifiedMetadata) Return(issuer string, email string, err error) *CryptoMock {
+	if mmExtractUnverifiedMetadata.mock.funcExtractUnverifiedMetadata != nil {
+		mmExtractUnverifiedMetadata.mock.t.Fatalf("CryptoMock.ExtractUnverifiedMetadata mock is already set by Set")
+	}
+
+	if mmExtractUnverifiedMetadata.defaultExpectation == nil {
+		mmExtractUnverifiedMetadata.defaultExpectation = &CryptoMockExtractUnverifiedMetadataExpectation{mock: mmExtractUnverifiedMetadata.mock}
+	}
+	mmExtractUnverifiedMetadata.defaultExpectation.results = &CryptoMockExtractUnverifiedMetadataResults{issuer, email, err}
+	mmExtractUnverifiedMetadata.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmExtractUnverifiedMetadata.mock
+}
+
+// Set uses given function f to mock the Crypto.ExtractUnverifiedMetadata method
+func (mmExtractUnverifiedMetadata *mCryptoMockExtractUnverifiedMetadata) Set(f func(tokenStr string) (issuer string, email string, err error)) *CryptoMock {
+	if mmExtractUnverifiedMetadata.defaultExpectation != nil {
+		mmExtractUnverifiedMetadata.mock.t.Fatalf("Default expectation is already set for the Crypto.ExtractUnverifiedMetadata method")
+	}
+
+	if len(mmExtractUnverifiedMetadata.expectations) > 0 {
+		mmExtractUnverifiedMetadata.mock.t.Fatalf("Some expectations are already set for the Crypto.ExtractUnverifiedMetadata method")
+	}
+
+	mmExtractUnverifiedMetadata.mock.funcExtractUnverifiedMetadata = f
+	mmExtractUnverifiedMetadata.mock.funcExtractUnverifiedMetadataOrigin = minimock.CallerInfo(1)
+	return mmExtractUnverifiedMetadata.mock
+}
+
+// When sets expectation for the Crypto.ExtractUnverifiedMetadata which will trigger the result defined by the following
+// Then helper
+func (mmExtractUnverifiedMetadata *mCryptoMockExtractUnverifiedMetadata) When(tokenStr string) *CryptoMockExtractUnverifiedMetadataExpectation {
+	if mmExtractUnverifiedMetadata.mock.funcExtractUnverifiedMetadata != nil {
+		mmExtractUnverifiedMetadata.mock.t.Fatalf("CryptoMock.ExtractUnverifiedMetadata mock is already set by Set")
+	}
+
+	expectation := &CryptoMockExtractUnverifiedMetadataExpectation{
+		mock:               mmExtractUnverifiedMetadata.mock,
+		params:             &CryptoMockExtractUnverifiedMetadataParams{tokenStr},
+		expectationOrigins: CryptoMockExtractUnverifiedMetadataExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmExtractUnverifiedMetadata.expectations = append(mmExtractUnverifiedMetadata.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Crypto.ExtractUnverifiedMetadata return parameters for the expectation previously defined by the When method
+func (e *CryptoMockExtractUnverifiedMetadataExpectation) Then(issuer string, email string, err error) *CryptoMock {
+	e.results = &CryptoMockExtractUnverifiedMetadataResults{issuer, email, err}
+	return e.mock
+}
+
+// Times sets number of times Crypto.ExtractUnverifiedMetadata should be invoked
+func (mmExtractUnverifiedMetadata *mCryptoMockExtractUnverifiedMetadata) Times(n uint64) *mCryptoMockExtractUnverifiedMetadata {
+	if n == 0 {
+		mmExtractUnverifiedMetadata.mock.t.Fatalf("Times of CryptoMock.ExtractUnverifiedMetadata mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmExtractUnverifiedMetadata.expectedInvocations, n)
+	mmExtractUnverifiedMetadata.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmExtractUnverifiedMetadata
+}
+
+func (mmExtractUnverifiedMetadata *mCryptoMockExtractUnverifiedMetadata) invocationsDone() bool {
+	if len(mmExtractUnverifiedMetadata.expectations) == 0 && mmExtractUnverifiedMetadata.defaultExpectation == nil && mmExtractUnverifiedMetadata.mock.funcExtractUnverifiedMetadata == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmExtractUnverifiedMetadata.mock.afterExtractUnverifiedMetadataCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmExtractUnverifiedMetadata.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// ExtractUnverifiedMetadata implements mm_port.Crypto
+func (mmExtractUnverifiedMetadata *CryptoMock) ExtractUnverifiedMetadata(tokenStr string) (issuer string, email string, err error) {
+	mm_atomic.AddUint64(&mmExtractUnverifiedMetadata.beforeExtractUnverifiedMetadataCounter, 1)
+	defer mm_atomic.AddUint64(&mmExtractUnverifiedMetadata.afterExtractUnverifiedMetadataCounter, 1)
+
+	mmExtractUnverifiedMetadata.t.Helper()
+
+	if mmExtractUnverifiedMetadata.inspectFuncExtractUnverifiedMetadata != nil {
+		mmExtractUnverifiedMetadata.inspectFuncExtractUnverifiedMetadata(tokenStr)
+	}
+
+	mm_params := CryptoMockExtractUnverifiedMetadataParams{tokenStr}
+
+	// Record call args
+	mmExtractUnverifiedMetadata.ExtractUnverifiedMetadataMock.mutex.Lock()
+	mmExtractUnverifiedMetadata.ExtractUnverifiedMetadataMock.callArgs = append(mmExtractUnverifiedMetadata.ExtractUnverifiedMetadataMock.callArgs, &mm_params)
+	mmExtractUnverifiedMetadata.ExtractUnverifiedMetadataMock.mutex.Unlock()
+
+	for _, e := range mmExtractUnverifiedMetadata.ExtractUnverifiedMetadataMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.issuer, e.results.email, e.results.err
+		}
+	}
+
+	if mmExtractUnverifiedMetadata.ExtractUnverifiedMetadataMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmExtractUnverifiedMetadata.ExtractUnverifiedMetadataMock.defaultExpectation.Counter, 1)
+		mm_want := mmExtractUnverifiedMetadata.ExtractUnverifiedMetadataMock.defaultExpectation.params
+		mm_want_ptrs := mmExtractUnverifiedMetadata.ExtractUnverifiedMetadataMock.defaultExpectation.paramPtrs
+
+		mm_got := CryptoMockExtractUnverifiedMetadataParams{tokenStr}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.tokenStr != nil && !minimock.Equal(*mm_want_ptrs.tokenStr, mm_got.tokenStr) {
+				mmExtractUnverifiedMetadata.t.Errorf("CryptoMock.ExtractUnverifiedMetadata got unexpected parameter tokenStr, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmExtractUnverifiedMetadata.ExtractUnverifiedMetadataMock.defaultExpectation.expectationOrigins.originTokenStr, *mm_want_ptrs.tokenStr, mm_got.tokenStr, minimock.Diff(*mm_want_ptrs.tokenStr, mm_got.tokenStr))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmExtractUnverifiedMetadata.t.Errorf("CryptoMock.ExtractUnverifiedMetadata got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmExtractUnverifiedMetadata.ExtractUnverifiedMetadataMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmExtractUnverifiedMetadata.ExtractUnverifiedMetadataMock.defaultExpectation.results
+		if mm_results == nil {
+			mmExtractUnverifiedMetadata.t.Fatal("No results are set for the CryptoMock.ExtractUnverifiedMetadata")
+		}
+		return (*mm_results).issuer, (*mm_results).email, (*mm_results).err
+	}
+	if mmExtractUnverifiedMetadata.funcExtractUnverifiedMetadata != nil {
+		return mmExtractUnverifiedMetadata.funcExtractUnverifiedMetadata(tokenStr)
+	}
+	mmExtractUnverifiedMetadata.t.Fatalf("Unexpected call to CryptoMock.ExtractUnverifiedMetadata. %v", tokenStr)
+	return
+}
+
+// ExtractUnverifiedMetadataAfterCounter returns a count of finished CryptoMock.ExtractUnverifiedMetadata invocations
+func (mmExtractUnverifiedMetadata *CryptoMock) ExtractUnverifiedMetadataAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmExtractUnverifiedMetadata.afterExtractUnverifiedMetadataCounter)
+}
+
+// ExtractUnverifiedMetadataBeforeCounter returns a count of CryptoMock.ExtractUnverifiedMetadata invocations
+func (mmExtractUnverifiedMetadata *CryptoMock) ExtractUnverifiedMetadataBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmExtractUnverifiedMetadata.beforeExtractUnverifiedMetadataCounter)
+}
+
+// Calls returns a list of arguments used in each call to CryptoMock.ExtractUnverifiedMetadata.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmExtractUnverifiedMetadata *mCryptoMockExtractUnverifiedMetadata) Calls() []*CryptoMockExtractUnverifiedMetadataParams {
+	mmExtractUnverifiedMetadata.mutex.RLock()
+
+	argCopy := make([]*CryptoMockExtractUnverifiedMetadataParams, len(mmExtractUnverifiedMetadata.callArgs))
+	copy(argCopy, mmExtractUnverifiedMetadata.callArgs)
+
+	mmExtractUnverifiedMetadata.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockExtractUnverifiedMetadataDone returns true if the count of the ExtractUnverifiedMetadata invocations corresponds
+// the number of defined expectations
+func (m *CryptoMock) MinimockExtractUnverifiedMetadataDone() bool {
+	if m.ExtractUnverifiedMetadataMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.ExtractUnverifiedMetadataMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.ExtractUnverifiedMetadataMock.invocationsDone()
+}
+
+// MinimockExtractUnverifiedMetadataInspect logs each unmet expectation
+func (m *CryptoMock) MinimockExtractUnverifiedMetadataInspect() {
+	for _, e := range m.ExtractUnverifiedMetadataMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to CryptoMock.ExtractUnverifiedMetadata at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterExtractUnverifiedMetadataCounter := mm_atomic.LoadUint64(&m.afterExtractUnverifiedMetadataCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.ExtractUnverifiedMetadataMock.defaultExpectation != nil && afterExtractUnverifiedMetadataCounter < 1 {
+		if m.ExtractUnverifiedMetadataMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to CryptoMock.ExtractUnverifiedMetadata at\n%s", m.ExtractUnverifiedMetadataMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to CryptoMock.ExtractUnverifiedMetadata at\n%s with params: %#v", m.ExtractUnverifiedMetadataMock.defaultExpectation.expectationOrigins.origin, *m.ExtractUnverifiedMetadataMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcExtractUnverifiedMetadata != nil && afterExtractUnverifiedMetadataCounter < 1 {
+		m.t.Errorf("Expected call to CryptoMock.ExtractUnverifiedMetadata at\n%s", m.funcExtractUnverifiedMetadataOrigin)
+	}
+
+	if !m.ExtractUnverifiedMetadataMock.invocationsDone() && afterExtractUnverifiedMetadataCounter > 0 {
+		m.t.Errorf("Expected %d calls to CryptoMock.ExtractUnverifiedMetadata at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.ExtractUnverifiedMetadataMock.expectedInvocations), m.ExtractUnverifiedMetadataMock.expectedInvocationsOrigin, afterExtractUnverifiedMetadataCounter)
+	}
+}
+
+type mCryptoMockExtractUnverifiedRevocationMetadata struct {
+	optional           bool
+	mock               *CryptoMock
+	defaultExpectation *CryptoMockExtractUnverifiedRevocationMetadataExpectation
+	expectations       []*CryptoMockExtractUnverifiedRevocationMetadataExpectation
+
+	callArgs []*CryptoMockExtractUnverifiedRevocationMetadataParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// CryptoMockExtractUnverifiedRevocationMetadataExpectation specifies expectation struct of the Crypto.ExtractUnverifiedRevocationMetadata
+type CryptoMockExtractUnverifiedRevocationMetadataExpectation struct {
+	mock               *CryptoMock
+	params             *CryptoMockExtractUnverifiedRevocationMetadataParams
+	paramPtrs          *CryptoMockExtractUnverifiedRevocationMetadataParamPtrs
+	expectationOrigins CryptoMockExtractUnverifiedRevocationMetadataExpectationOrigins
+	results            *CryptoMockExtractUnverifiedRevocationMetadataResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// CryptoMockExtractUnverifiedRevocationMetadataParams contains parameters of the Crypto.ExtractUnverifiedRevocationMetadata
+type CryptoMockExtractUnverifiedRevocationMetadataParams struct {
+	tokenStr string
+}
+
+// CryptoMockExtractUnverifiedRevocationMetadataParamPtrs contains pointers to parameters of the Crypto.ExtractUnverifiedRevocationMetadata
+type CryptoMockExtractUnverifiedRevocationMetadataParamPtrs struct {
+	tokenStr *string
+}
+
+// CryptoMockExtractUnverifiedRevocationMetadataResults contains results of the Crypto.ExtractUnverifiedRevocationMetadata
+type CryptoMockExtractUnverifiedRevocationMetadataResults struct {
+	tokenID  string
+	clientID string
+	err      error
+}
+
+// CryptoMockExtractUnverifiedRevocationMetadataOrigins contains origins of expectations of the Crypto.ExtractUnverifiedRevocationMetadata
+type CryptoMockExtractUnverifiedRevocationMetadataExpectationOrigins struct {
+	origin         string
+	originTokenStr string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmExtractUnverifiedRevocationMetadata *mCryptoMockExtractUnverifiedRevocationMetadata) Optional() *mCryptoMockExtractUnverifiedRevocationMetadata {
+	mmExtractUnverifiedRevocationMetadata.optional = true
+	return mmExtractUnverifiedRevocationMetadata
+}
+
+// Expect sets up expected params for Crypto.ExtractUnverifiedRevocationMetadata
+func (mmExtractUnverifiedRevocationMetadata *mCryptoMockExtractUnverifiedRevocationMetadata) Expect(tokenStr string) *mCryptoMockExtractUnverifiedRevocationMetadata {
+	if mmExtractUnverifiedRevocationMetadata.mock.funcExtractUnverifiedRevocationMetadata != nil {
+		mmExtractUnverifiedRevocationMetadata.mock.t.Fatalf("CryptoMock.ExtractUnverifiedRevocationMetadata mock is already set by Set")
+	}
+
+	if mmExtractUnverifiedRevocationMetadata.defaultExpectation == nil {
+		mmExtractUnverifiedRevocationMetadata.defaultExpectation = &CryptoMockExtractUnverifiedRevocationMetadataExpectation{}
+	}
+
+	if mmExtractUnverifiedRevocationMetadata.defaultExpectation.paramPtrs != nil {
+		mmExtractUnverifiedRevocationMetadata.mock.t.Fatalf("CryptoMock.ExtractUnverifiedRevocationMetadata mock is already set by ExpectParams functions")
+	}
+
+	mmExtractUnverifiedRevocationMetadata.defaultExpectation.params = &CryptoMockExtractUnverifiedRevocationMetadataParams{tokenStr}
+	mmExtractUnverifiedRevocationMetadata.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmExtractUnverifiedRevocationMetadata.expectations {
+		if minimock.Equal(e.params, mmExtractUnverifiedRevocationMetadata.defaultExpectation.params) {
+			mmExtractUnverifiedRevocationMetadata.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmExtractUnverifiedRevocationMetadata.defaultExpectation.params)
+		}
+	}
+
+	return mmExtractUnverifiedRevocationMetadata
+}
+
+// ExpectTokenStrParam1 sets up expected param tokenStr for Crypto.ExtractUnverifiedRevocationMetadata
+func (mmExtractUnverifiedRevocationMetadata *mCryptoMockExtractUnverifiedRevocationMetadata) ExpectTokenStrParam1(tokenStr string) *mCryptoMockExtractUnverifiedRevocationMetadata {
+	if mmExtractUnverifiedRevocationMetadata.mock.funcExtractUnverifiedRevocationMetadata != nil {
+		mmExtractUnverifiedRevocationMetadata.mock.t.Fatalf("CryptoMock.ExtractUnverifiedRevocationMetadata mock is already set by Set")
+	}
+
+	if mmExtractUnverifiedRevocationMetadata.defaultExpectation == nil {
+		mmExtractUnverifiedRevocationMetadata.defaultExpectation = &CryptoMockExtractUnverifiedRevocationMetadataExpectation{}
+	}
+
+	if mmExtractUnverifiedRevocationMetadata.defaultExpectation.params != nil {
+		mmExtractUnverifiedRevocationMetadata.mock.t.Fatalf("CryptoMock.ExtractUnverifiedRevocationMetadata mock is already set by Expect")
+	}
+
+	if mmExtractUnverifiedRevocationMetadata.defaultExpectation.paramPtrs == nil {
+		mmExtractUnverifiedRevocationMetadata.defaultExpectation.paramPtrs = &CryptoMockExtractUnverifiedRevocationMetadataParamPtrs{}
+	}
+	mmExtractUnverifiedRevocationMetadata.defaultExpectation.paramPtrs.tokenStr = &tokenStr
+	mmExtractUnverifiedRevocationMetadata.defaultExpectation.expectationOrigins.originTokenStr = minimock.CallerInfo(1)
+
+	return mmExtractUnverifiedRevocationMetadata
+}
+
+// Inspect accepts an inspector function that has same arguments as the Crypto.ExtractUnverifiedRevocationMetadata
+func (mmExtractUnverifiedRevocationMetadata *mCryptoMockExtractUnverifiedRevocationMetadata) Inspect(f func(tokenStr string)) *mCryptoMockExtractUnverifiedRevocationMetadata {
+	if mmExtractUnverifiedRevocationMetadata.mock.inspectFuncExtractUnverifiedRevocationMetadata != nil {
+		mmExtractUnverifiedRevocationMetadata.mock.t.Fatalf("Inspect function is already set for CryptoMock.ExtractUnverifiedRevocationMetadata")
+	}
+
+	mmExtractUnverifiedRevocationMetadata.mock.inspectFuncExtractUnverifiedRevocationMetadata = f
+
+	return mmExtractUnverifiedRevocationMetadata
+}
+
+// Return sets up results that will be returned by Crypto.ExtractUnverifiedRevocationMetadata
+func (mmExtractUnverifiedRevocationMetadata *mCryptoMockExtractUnverifiedRevocationMetadata) Return(tokenID string, clientID string, err error) *CryptoMock {
+	if mmExtractUnverifiedRevocationMetadata.mock.funcExtractUnverifiedRevocationMetadata != nil {
+		mmExtractUnverifiedRevocationMetadata.mock.t.Fatalf("CryptoMock.ExtractUnverifiedRevocationMetadata mock is already set by Set")
+	}
+
+	if mmExtractUnverifiedRevocationMetadata.defaultExpectation == nil {
+		mmExtractUnverifiedRevocationMetadata.defaultExpectation = &CryptoMockExtractUnverifiedRevocationMetadataExpectation{mock: mmExtractUnverifiedRevocationMetadata.mock}
+	}
+	mmExtractUnverifiedRevocationMetadata.defaultExpectation.results = &CryptoMockExtractUnverifiedRevocationMetadataResults{tokenID, clientID, err}
+	mmExtractUnverifiedRevocationMetadata.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmExtractUnverifiedRevocationMetadata.mock
+}
+
+// Set uses given function f to mock the Crypto.ExtractUnverifiedRevocationMetadata method
+func (mmExtractUnverifiedRevocationMetadata *mCryptoMockExtractUnverifiedRevocationMetadata) Set(f func(tokenStr string) (tokenID string, clientID string, err error)) *CryptoMock {
+	if mmExtractUnverifiedRevocationMetadata.defaultExpectation != nil {
+		mmExtractUnverifiedRevocationMetadata.mock.t.Fatalf("Default expectation is already set for the Crypto.ExtractUnverifiedRevocationMetadata method")
+	}
+
+	if len(mmExtractUnverifiedRevocationMetadata.expectations) > 0 {
+		mmExtractUnverifiedRevocationMetadata.mock.t.Fatalf("Some expectations are already set for the Crypto.ExtractUnverifiedRevocationMetadata method")
+	}
+
+	mmExtractUnverifiedRevocationMetadata.mock.funcExtractUnverifiedRevocationMetadata = f
+	mmExtractUnverifiedRevocationMetadata.mock.funcExtractUnverifiedRevocationMetadataOrigin = minimock.CallerInfo(1)
+	return mmExtractUnverifiedRevocationMetadata.mock
+}
+
+// When sets expectation for the Crypto.ExtractUnverifiedRevocationMetadata which will trigger the result defined by the following
+// Then helper
+func (mmExtractUnverifiedRevocationMetadata *mCryptoMockExtractUnverifiedRevocationMetadata) When(tokenStr string) *CryptoMockExtractUnverifiedRevocationMetadataExpectation {
+	if mmExtractUnverifiedRevocationMetadata.mock.funcExtractUnverifiedRevocationMetadata != nil {
+		mmExtractUnverifiedRevocationMetadata.mock.t.Fatalf("CryptoMock.ExtractUnverifiedRevocationMetadata mock is already set by Set")
+	}
+
+	expectation := &CryptoMockExtractUnverifiedRevocationMetadataExpectation{
+		mock:               mmExtractUnverifiedRevocationMetadata.mock,
+		params:             &CryptoMockExtractUnverifiedRevocationMetadataParams{tokenStr},
+		expectationOrigins: CryptoMockExtractUnverifiedRevocationMetadataExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmExtractUnverifiedRevocationMetadata.expectations = append(mmExtractUnverifiedRevocationMetadata.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Crypto.ExtractUnverifiedRevocationMetadata return parameters for the expectation previously defined by the When method
+func (e *CryptoMockExtractUnverifiedRevocationMetadataExpectation) Then(tokenID string, clientID string, err error) *CryptoMock {
+	e.results = &CryptoMockExtractUnverifiedRevocationMetadataResults{tokenID, clientID, err}
+	return e.mock
+}
+
+// Times sets number of times Crypto.ExtractUnverifiedRevocationMetadata should be invoked
+func (mmExtractUnverifiedRevocationMetadata *mCryptoMockExtractUnverifiedRevocationMetadata) Times(n uint64) *mCryptoMockExtractUnverifiedRevocationMetadata {
+	if n == 0 {
+		mmExtractUnverifiedRevocationMetadata.mock.t.Fatalf("Times of CryptoMock.ExtractUnverifiedRevocationMetadata mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmExtractUnverifiedRevocationMetadata.expectedInvocations, n)
+	mmExtractUnverifiedRevocationMetadata.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmExtractUnverifiedRevocationMetadata
+}
+
+func (mmExtractUnverifiedRevocationMetadata *mCryptoMockExtractUnverifiedRevocationMetadata) invocationsDone() bool {
+	if len(mmExtractUnverifiedRevocationMetadata.expectations) == 0 && mmExtractUnverifiedRevocationMetadata.defaultExpectation == nil && mmExtractUnverifiedRevocationMetadata.mock.funcExtractUnverifiedRevocationMetadata == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmExtractUnverifiedRevocationMetadata.mock.afterExtractUnverifiedRevocationMetadataCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmExtractUnverifiedRevocationMetadata.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// ExtractUnverifiedRevocationMetadata implements mm_port.Crypto
+func (mmExtractUnverifiedRevocationMetadata *CryptoMock) ExtractUnverifiedRevocationMetadata(tokenStr string) (tokenID string, clientID string, err error) {
+	mm_atomic.AddUint64(&mmExtractUnverifiedRevocationMetadata.beforeExtractUnverifiedRevocationMetadataCounter, 1)
+	defer mm_atomic.AddUint64(&mmExtractUnverifiedRevocationMetadata.afterExtractUnverifiedRevocationMetadataCounter, 1)
+
+	mmExtractUnverifiedRevocationMetadata.t.Helper()
+
+	if mmExtractUnverifiedRevocationMetadata.inspectFuncExtractUnverifiedRevocationMetadata != nil {
+		mmExtractUnverifiedRevocationMetadata.inspectFuncExtractUnverifiedRevocationMetadata(tokenStr)
+	}
+
+	mm_params := CryptoMockExtractUnverifiedRevocationMetadataParams{tokenStr}
+
+	// Record call args
+	mmExtractUnverifiedRevocationMetadata.ExtractUnverifiedRevocationMetadataMock.mutex.Lock()
+	mmExtractUnverifiedRevocationMetadata.ExtractUnverifiedRevocationMetadataMock.callArgs = append(mmExtractUnverifiedRevocationMetadata.ExtractUnverifiedRevocationMetadataMock.callArgs, &mm_params)
+	mmExtractUnverifiedRevocationMetadata.ExtractUnverifiedRevocationMetadataMock.mutex.Unlock()
+
+	for _, e := range mmExtractUnverifiedRevocationMetadata.ExtractUnverifiedRevocationMetadataMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.tokenID, e.results.clientID, e.results.err
+		}
+	}
+
+	if mmExtractUnverifiedRevocationMetadata.ExtractUnverifiedRevocationMetadataMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmExtractUnverifiedRevocationMetadata.ExtractUnverifiedRevocationMetadataMock.defaultExpectation.Counter, 1)
+		mm_want := mmExtractUnverifiedRevocationMetadata.ExtractUnverifiedRevocationMetadataMock.defaultExpectation.params
+		mm_want_ptrs := mmExtractUnverifiedRevocationMetadata.ExtractUnverifiedRevocationMetadataMock.defaultExpectation.paramPtrs
+
+		mm_got := CryptoMockExtractUnverifiedRevocationMetadataParams{tokenStr}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.tokenStr != nil && !minimock.Equal(*mm_want_ptrs.tokenStr, mm_got.tokenStr) {
+				mmExtractUnverifiedRevocationMetadata.t.Errorf("CryptoMock.ExtractUnverifiedRevocationMetadata got unexpected parameter tokenStr, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmExtractUnverifiedRevocationMetadata.ExtractUnverifiedRevocationMetadataMock.defaultExpectation.expectationOrigins.originTokenStr, *mm_want_ptrs.tokenStr, mm_got.tokenStr, minimock.Diff(*mm_want_ptrs.tokenStr, mm_got.tokenStr))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmExtractUnverifiedRevocationMetadata.t.Errorf("CryptoMock.ExtractUnverifiedRevocationMetadata got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmExtractUnverifiedRevocationMetadata.ExtractUnverifiedRevocationMetadataMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmExtractUnverifiedRevocationMetadata.ExtractUnverifiedRevocationMetadataMock.defaultExpectation.results
+		if mm_results == nil {
+			mmExtractUnverifiedRevocationMetadata.t.Fatal("No results are set for the CryptoMock.ExtractUnverifiedRevocationMetadata")
+		}
+		return (*mm_results).tokenID, (*mm_results).clientID, (*mm_results).err
+	}
+	if mmExtractUnverifiedRevocationMetadata.funcExtractUnverifiedRevocationMetadata != nil {
+		return mmExtractUnverifiedRevocationMetadata.funcExtractUnverifiedRevocationMetadata(tokenStr)
+	}
+	mmExtractUnverifiedRevocationMetadata.t.Fatalf("Unexpected call to CryptoMock.ExtractUnverifiedRevocationMetadata. %v", tokenStr)
+	return
+}
+
+// ExtractUnverifiedRevocationMetadataAfterCounter returns a count of finished CryptoMock.ExtractUnverifiedRevocationMetadata invocations
+func (mmExtractUnverifiedRevocationMetadata *CryptoMock) ExtractUnverifiedRevocationMetadataAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmExtractUnverifiedRevocationMetadata.afterExtractUnverifiedRevocationMetadataCounter)
+}
+
+// ExtractUnverifiedRevocationMetadataBeforeCounter returns a count of CryptoMock.ExtractUnverifiedRevocationMetadata invocations
+func (mmExtractUnverifiedRevocationMetadata *CryptoMock) ExtractUnverifiedRevocationMetadataBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmExtractUnverifiedRevocationMetadata.beforeExtractUnverifiedRevocationMetadataCounter)
+}
+
+// Calls returns a list of arguments used in each call to CryptoMock.ExtractUnverifiedRevocationMetadata.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmExtractUnverifiedRevocationMetadata *mCryptoMockExtractUnverifiedRevocationMetadata) Calls() []*CryptoMockExtractUnverifiedRevocationMetadataParams {
+	mmExtractUnverifiedRevocationMetadata.mutex.RLock()
+
+	argCopy := make([]*CryptoMockExtractUnverifiedRevocationMetadataParams, len(mmExtractUnverifiedRevocationMetadata.callArgs))
+	copy(argCopy, mmExtractUnverifiedRevocationMetadata.callArgs)
+
+	mmExtractUnverifiedRevocationMetadata.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockExtractUnverifiedRevocationMetadataDone returns true if the count of the ExtractUnverifiedRevocationMetadata invocations corresponds
+// the number of defined expectations
+func (m *CryptoMock) MinimockExtractUnverifiedRevocationMetadataDone() bool {
+	if m.ExtractUnverifiedRevocationMetadataMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.ExtractUnverifiedRevocationMetadataMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.ExtractUnverifiedRevocationMetadataMock.invocationsDone()
+}
+
+// MinimockExtractUnverifiedRevocationMetadataInspect logs each unmet expectation
+func (m *CryptoMock) MinimockExtractUnverifiedRevocationMetadataInspect() {
+	for _, e := range m.ExtractUnverifiedRevocationMetadataMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to CryptoMock.ExtractUnverifiedRevocationMetadata at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterExtractUnverifiedRevocationMetadataCounter := mm_atomic.LoadUint64(&m.afterExtractUnverifiedRevocationMetadataCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.ExtractUnverifiedRevocationMetadataMock.defaultExpectation != nil && afterExtractUnverifiedRevocationMetadataCounter < 1 {
+		if m.ExtractUnverifiedRevocationMetadataMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to CryptoMock.ExtractUnverifiedRevocationMetadata at\n%s", m.ExtractUnverifiedRevocationMetadataMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to CryptoMock.ExtractUnverifiedRevocationMetadata at\n%s with params: %#v", m.ExtractUnverifiedRevocationMetadataMock.defaultExpectation.expectationOrigins.origin, *m.ExtractUnverifiedRevocationMetadataMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcExtractUnverifiedRevocationMetadata != nil && afterExtractUnverifiedRevocationMetadataCounter < 1 {
+		m.t.Errorf("Expected call to CryptoMock.ExtractUnverifiedRevocationMetadata at\n%s", m.funcExtractUnverifiedRevocationMetadataOrigin)
+	}
+
+	if !m.ExtractUnverifiedRevocationMetadataMock.invocationsDone() && afterExtractUnverifiedRevocationMetadataCounter > 0 {
+		m.t.Errorf("Expected %d calls to CryptoMock.ExtractUnverifiedRevocationMetadata at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.ExtractUnverifiedRevocationMetadataMock.expectedInvocations), m.ExtractUnverifiedRevocationMetadataMock.expectedInvocationsOrigin, afterExtractUnverifiedRevocationMetadataCounter)
 	}
 }
 
@@ -2477,6 +3133,411 @@ func (m *CryptoMock) MinimockMarshalJWKSetInspect() {
 	if !m.MarshalJWKSetMock.invocationsDone() && afterMarshalJWKSetCounter > 0 {
 		m.t.Errorf("Expected %d calls to CryptoMock.MarshalJWKSet at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.MarshalJWKSetMock.expectedInvocations), m.MarshalJWKSetMock.expectedInvocationsOrigin, afterMarshalJWKSetCounter)
+	}
+}
+
+type mCryptoMockParseAndVerifyExternalToken struct {
+	optional           bool
+	mock               *CryptoMock
+	defaultExpectation *CryptoMockParseAndVerifyExternalTokenExpectation
+	expectations       []*CryptoMockParseAndVerifyExternalTokenExpectation
+
+	callArgs []*CryptoMockParseAndVerifyExternalTokenParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// CryptoMockParseAndVerifyExternalTokenExpectation specifies expectation struct of the Crypto.ParseAndVerifyExternalToken
+type CryptoMockParseAndVerifyExternalTokenExpectation struct {
+	mock               *CryptoMock
+	params             *CryptoMockParseAndVerifyExternalTokenParams
+	paramPtrs          *CryptoMockParseAndVerifyExternalTokenParamPtrs
+	expectationOrigins CryptoMockParseAndVerifyExternalTokenExpectationOrigins
+	results            *CryptoMockParseAndVerifyExternalTokenResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// CryptoMockParseAndVerifyExternalTokenParams contains parameters of the Crypto.ParseAndVerifyExternalToken
+type CryptoMockParseAndVerifyExternalTokenParams struct {
+	ctx            context.Context
+	tokenStr       string
+	jwksURI        string
+	expectedIssuer string
+}
+
+// CryptoMockParseAndVerifyExternalTokenParamPtrs contains pointers to parameters of the Crypto.ParseAndVerifyExternalToken
+type CryptoMockParseAndVerifyExternalTokenParamPtrs struct {
+	ctx            *context.Context
+	tokenStr       *string
+	jwksURI        *string
+	expectedIssuer *string
+}
+
+// CryptoMockParseAndVerifyExternalTokenResults contains results of the Crypto.ParseAndVerifyExternalToken
+type CryptoMockParseAndVerifyExternalTokenResults struct {
+	ep1 *model.ExternalTokenClaims
+	err error
+}
+
+// CryptoMockParseAndVerifyExternalTokenOrigins contains origins of expectations of the Crypto.ParseAndVerifyExternalToken
+type CryptoMockParseAndVerifyExternalTokenExpectationOrigins struct {
+	origin               string
+	originCtx            string
+	originTokenStr       string
+	originJwksURI        string
+	originExpectedIssuer string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmParseAndVerifyExternalToken *mCryptoMockParseAndVerifyExternalToken) Optional() *mCryptoMockParseAndVerifyExternalToken {
+	mmParseAndVerifyExternalToken.optional = true
+	return mmParseAndVerifyExternalToken
+}
+
+// Expect sets up expected params for Crypto.ParseAndVerifyExternalToken
+func (mmParseAndVerifyExternalToken *mCryptoMockParseAndVerifyExternalToken) Expect(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string) *mCryptoMockParseAndVerifyExternalToken {
+	if mmParseAndVerifyExternalToken.mock.funcParseAndVerifyExternalToken != nil {
+		mmParseAndVerifyExternalToken.mock.t.Fatalf("CryptoMock.ParseAndVerifyExternalToken mock is already set by Set")
+	}
+
+	if mmParseAndVerifyExternalToken.defaultExpectation == nil {
+		mmParseAndVerifyExternalToken.defaultExpectation = &CryptoMockParseAndVerifyExternalTokenExpectation{}
+	}
+
+	if mmParseAndVerifyExternalToken.defaultExpectation.paramPtrs != nil {
+		mmParseAndVerifyExternalToken.mock.t.Fatalf("CryptoMock.ParseAndVerifyExternalToken mock is already set by ExpectParams functions")
+	}
+
+	mmParseAndVerifyExternalToken.defaultExpectation.params = &CryptoMockParseAndVerifyExternalTokenParams{ctx, tokenStr, jwksURI, expectedIssuer}
+	mmParseAndVerifyExternalToken.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmParseAndVerifyExternalToken.expectations {
+		if minimock.Equal(e.params, mmParseAndVerifyExternalToken.defaultExpectation.params) {
+			mmParseAndVerifyExternalToken.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmParseAndVerifyExternalToken.defaultExpectation.params)
+		}
+	}
+
+	return mmParseAndVerifyExternalToken
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Crypto.ParseAndVerifyExternalToken
+func (mmParseAndVerifyExternalToken *mCryptoMockParseAndVerifyExternalToken) ExpectCtxParam1(ctx context.Context) *mCryptoMockParseAndVerifyExternalToken {
+	if mmParseAndVerifyExternalToken.mock.funcParseAndVerifyExternalToken != nil {
+		mmParseAndVerifyExternalToken.mock.t.Fatalf("CryptoMock.ParseAndVerifyExternalToken mock is already set by Set")
+	}
+
+	if mmParseAndVerifyExternalToken.defaultExpectation == nil {
+		mmParseAndVerifyExternalToken.defaultExpectation = &CryptoMockParseAndVerifyExternalTokenExpectation{}
+	}
+
+	if mmParseAndVerifyExternalToken.defaultExpectation.params != nil {
+		mmParseAndVerifyExternalToken.mock.t.Fatalf("CryptoMock.ParseAndVerifyExternalToken mock is already set by Expect")
+	}
+
+	if mmParseAndVerifyExternalToken.defaultExpectation.paramPtrs == nil {
+		mmParseAndVerifyExternalToken.defaultExpectation.paramPtrs = &CryptoMockParseAndVerifyExternalTokenParamPtrs{}
+	}
+	mmParseAndVerifyExternalToken.defaultExpectation.paramPtrs.ctx = &ctx
+	mmParseAndVerifyExternalToken.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmParseAndVerifyExternalToken
+}
+
+// ExpectTokenStrParam2 sets up expected param tokenStr for Crypto.ParseAndVerifyExternalToken
+func (mmParseAndVerifyExternalToken *mCryptoMockParseAndVerifyExternalToken) ExpectTokenStrParam2(tokenStr string) *mCryptoMockParseAndVerifyExternalToken {
+	if mmParseAndVerifyExternalToken.mock.funcParseAndVerifyExternalToken != nil {
+		mmParseAndVerifyExternalToken.mock.t.Fatalf("CryptoMock.ParseAndVerifyExternalToken mock is already set by Set")
+	}
+
+	if mmParseAndVerifyExternalToken.defaultExpectation == nil {
+		mmParseAndVerifyExternalToken.defaultExpectation = &CryptoMockParseAndVerifyExternalTokenExpectation{}
+	}
+
+	if mmParseAndVerifyExternalToken.defaultExpectation.params != nil {
+		mmParseAndVerifyExternalToken.mock.t.Fatalf("CryptoMock.ParseAndVerifyExternalToken mock is already set by Expect")
+	}
+
+	if mmParseAndVerifyExternalToken.defaultExpectation.paramPtrs == nil {
+		mmParseAndVerifyExternalToken.defaultExpectation.paramPtrs = &CryptoMockParseAndVerifyExternalTokenParamPtrs{}
+	}
+	mmParseAndVerifyExternalToken.defaultExpectation.paramPtrs.tokenStr = &tokenStr
+	mmParseAndVerifyExternalToken.defaultExpectation.expectationOrigins.originTokenStr = minimock.CallerInfo(1)
+
+	return mmParseAndVerifyExternalToken
+}
+
+// ExpectJwksURIParam3 sets up expected param jwksURI for Crypto.ParseAndVerifyExternalToken
+func (mmParseAndVerifyExternalToken *mCryptoMockParseAndVerifyExternalToken) ExpectJwksURIParam3(jwksURI string) *mCryptoMockParseAndVerifyExternalToken {
+	if mmParseAndVerifyExternalToken.mock.funcParseAndVerifyExternalToken != nil {
+		mmParseAndVerifyExternalToken.mock.t.Fatalf("CryptoMock.ParseAndVerifyExternalToken mock is already set by Set")
+	}
+
+	if mmParseAndVerifyExternalToken.defaultExpectation == nil {
+		mmParseAndVerifyExternalToken.defaultExpectation = &CryptoMockParseAndVerifyExternalTokenExpectation{}
+	}
+
+	if mmParseAndVerifyExternalToken.defaultExpectation.params != nil {
+		mmParseAndVerifyExternalToken.mock.t.Fatalf("CryptoMock.ParseAndVerifyExternalToken mock is already set by Expect")
+	}
+
+	if mmParseAndVerifyExternalToken.defaultExpectation.paramPtrs == nil {
+		mmParseAndVerifyExternalToken.defaultExpectation.paramPtrs = &CryptoMockParseAndVerifyExternalTokenParamPtrs{}
+	}
+	mmParseAndVerifyExternalToken.defaultExpectation.paramPtrs.jwksURI = &jwksURI
+	mmParseAndVerifyExternalToken.defaultExpectation.expectationOrigins.originJwksURI = minimock.CallerInfo(1)
+
+	return mmParseAndVerifyExternalToken
+}
+
+// ExpectExpectedIssuerParam4 sets up expected param expectedIssuer for Crypto.ParseAndVerifyExternalToken
+func (mmParseAndVerifyExternalToken *mCryptoMockParseAndVerifyExternalToken) ExpectExpectedIssuerParam4(expectedIssuer string) *mCryptoMockParseAndVerifyExternalToken {
+	if mmParseAndVerifyExternalToken.mock.funcParseAndVerifyExternalToken != nil {
+		mmParseAndVerifyExternalToken.mock.t.Fatalf("CryptoMock.ParseAndVerifyExternalToken mock is already set by Set")
+	}
+
+	if mmParseAndVerifyExternalToken.defaultExpectation == nil {
+		mmParseAndVerifyExternalToken.defaultExpectation = &CryptoMockParseAndVerifyExternalTokenExpectation{}
+	}
+
+	if mmParseAndVerifyExternalToken.defaultExpectation.params != nil {
+		mmParseAndVerifyExternalToken.mock.t.Fatalf("CryptoMock.ParseAndVerifyExternalToken mock is already set by Expect")
+	}
+
+	if mmParseAndVerifyExternalToken.defaultExpectation.paramPtrs == nil {
+		mmParseAndVerifyExternalToken.defaultExpectation.paramPtrs = &CryptoMockParseAndVerifyExternalTokenParamPtrs{}
+	}
+	mmParseAndVerifyExternalToken.defaultExpectation.paramPtrs.expectedIssuer = &expectedIssuer
+	mmParseAndVerifyExternalToken.defaultExpectation.expectationOrigins.originExpectedIssuer = minimock.CallerInfo(1)
+
+	return mmParseAndVerifyExternalToken
+}
+
+// Inspect accepts an inspector function that has same arguments as the Crypto.ParseAndVerifyExternalToken
+func (mmParseAndVerifyExternalToken *mCryptoMockParseAndVerifyExternalToken) Inspect(f func(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string)) *mCryptoMockParseAndVerifyExternalToken {
+	if mmParseAndVerifyExternalToken.mock.inspectFuncParseAndVerifyExternalToken != nil {
+		mmParseAndVerifyExternalToken.mock.t.Fatalf("Inspect function is already set for CryptoMock.ParseAndVerifyExternalToken")
+	}
+
+	mmParseAndVerifyExternalToken.mock.inspectFuncParseAndVerifyExternalToken = f
+
+	return mmParseAndVerifyExternalToken
+}
+
+// Return sets up results that will be returned by Crypto.ParseAndVerifyExternalToken
+func (mmParseAndVerifyExternalToken *mCryptoMockParseAndVerifyExternalToken) Return(ep1 *model.ExternalTokenClaims, err error) *CryptoMock {
+	if mmParseAndVerifyExternalToken.mock.funcParseAndVerifyExternalToken != nil {
+		mmParseAndVerifyExternalToken.mock.t.Fatalf("CryptoMock.ParseAndVerifyExternalToken mock is already set by Set")
+	}
+
+	if mmParseAndVerifyExternalToken.defaultExpectation == nil {
+		mmParseAndVerifyExternalToken.defaultExpectation = &CryptoMockParseAndVerifyExternalTokenExpectation{mock: mmParseAndVerifyExternalToken.mock}
+	}
+	mmParseAndVerifyExternalToken.defaultExpectation.results = &CryptoMockParseAndVerifyExternalTokenResults{ep1, err}
+	mmParseAndVerifyExternalToken.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmParseAndVerifyExternalToken.mock
+}
+
+// Set uses given function f to mock the Crypto.ParseAndVerifyExternalToken method
+func (mmParseAndVerifyExternalToken *mCryptoMockParseAndVerifyExternalToken) Set(f func(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string) (ep1 *model.ExternalTokenClaims, err error)) *CryptoMock {
+	if mmParseAndVerifyExternalToken.defaultExpectation != nil {
+		mmParseAndVerifyExternalToken.mock.t.Fatalf("Default expectation is already set for the Crypto.ParseAndVerifyExternalToken method")
+	}
+
+	if len(mmParseAndVerifyExternalToken.expectations) > 0 {
+		mmParseAndVerifyExternalToken.mock.t.Fatalf("Some expectations are already set for the Crypto.ParseAndVerifyExternalToken method")
+	}
+
+	mmParseAndVerifyExternalToken.mock.funcParseAndVerifyExternalToken = f
+	mmParseAndVerifyExternalToken.mock.funcParseAndVerifyExternalTokenOrigin = minimock.CallerInfo(1)
+	return mmParseAndVerifyExternalToken.mock
+}
+
+// When sets expectation for the Crypto.ParseAndVerifyExternalToken which will trigger the result defined by the following
+// Then helper
+func (mmParseAndVerifyExternalToken *mCryptoMockParseAndVerifyExternalToken) When(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string) *CryptoMockParseAndVerifyExternalTokenExpectation {
+	if mmParseAndVerifyExternalToken.mock.funcParseAndVerifyExternalToken != nil {
+		mmParseAndVerifyExternalToken.mock.t.Fatalf("CryptoMock.ParseAndVerifyExternalToken mock is already set by Set")
+	}
+
+	expectation := &CryptoMockParseAndVerifyExternalTokenExpectation{
+		mock:               mmParseAndVerifyExternalToken.mock,
+		params:             &CryptoMockParseAndVerifyExternalTokenParams{ctx, tokenStr, jwksURI, expectedIssuer},
+		expectationOrigins: CryptoMockParseAndVerifyExternalTokenExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmParseAndVerifyExternalToken.expectations = append(mmParseAndVerifyExternalToken.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Crypto.ParseAndVerifyExternalToken return parameters for the expectation previously defined by the When method
+func (e *CryptoMockParseAndVerifyExternalTokenExpectation) Then(ep1 *model.ExternalTokenClaims, err error) *CryptoMock {
+	e.results = &CryptoMockParseAndVerifyExternalTokenResults{ep1, err}
+	return e.mock
+}
+
+// Times sets number of times Crypto.ParseAndVerifyExternalToken should be invoked
+func (mmParseAndVerifyExternalToken *mCryptoMockParseAndVerifyExternalToken) Times(n uint64) *mCryptoMockParseAndVerifyExternalToken {
+	if n == 0 {
+		mmParseAndVerifyExternalToken.mock.t.Fatalf("Times of CryptoMock.ParseAndVerifyExternalToken mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmParseAndVerifyExternalToken.expectedInvocations, n)
+	mmParseAndVerifyExternalToken.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmParseAndVerifyExternalToken
+}
+
+func (mmParseAndVerifyExternalToken *mCryptoMockParseAndVerifyExternalToken) invocationsDone() bool {
+	if len(mmParseAndVerifyExternalToken.expectations) == 0 && mmParseAndVerifyExternalToken.defaultExpectation == nil && mmParseAndVerifyExternalToken.mock.funcParseAndVerifyExternalToken == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmParseAndVerifyExternalToken.mock.afterParseAndVerifyExternalTokenCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmParseAndVerifyExternalToken.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// ParseAndVerifyExternalToken implements mm_port.Crypto
+func (mmParseAndVerifyExternalToken *CryptoMock) ParseAndVerifyExternalToken(ctx context.Context, tokenStr string, jwksURI string, expectedIssuer string) (ep1 *model.ExternalTokenClaims, err error) {
+	mm_atomic.AddUint64(&mmParseAndVerifyExternalToken.beforeParseAndVerifyExternalTokenCounter, 1)
+	defer mm_atomic.AddUint64(&mmParseAndVerifyExternalToken.afterParseAndVerifyExternalTokenCounter, 1)
+
+	mmParseAndVerifyExternalToken.t.Helper()
+
+	if mmParseAndVerifyExternalToken.inspectFuncParseAndVerifyExternalToken != nil {
+		mmParseAndVerifyExternalToken.inspectFuncParseAndVerifyExternalToken(ctx, tokenStr, jwksURI, expectedIssuer)
+	}
+
+	mm_params := CryptoMockParseAndVerifyExternalTokenParams{ctx, tokenStr, jwksURI, expectedIssuer}
+
+	// Record call args
+	mmParseAndVerifyExternalToken.ParseAndVerifyExternalTokenMock.mutex.Lock()
+	mmParseAndVerifyExternalToken.ParseAndVerifyExternalTokenMock.callArgs = append(mmParseAndVerifyExternalToken.ParseAndVerifyExternalTokenMock.callArgs, &mm_params)
+	mmParseAndVerifyExternalToken.ParseAndVerifyExternalTokenMock.mutex.Unlock()
+
+	for _, e := range mmParseAndVerifyExternalToken.ParseAndVerifyExternalTokenMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.ep1, e.results.err
+		}
+	}
+
+	if mmParseAndVerifyExternalToken.ParseAndVerifyExternalTokenMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmParseAndVerifyExternalToken.ParseAndVerifyExternalTokenMock.defaultExpectation.Counter, 1)
+		mm_want := mmParseAndVerifyExternalToken.ParseAndVerifyExternalTokenMock.defaultExpectation.params
+		mm_want_ptrs := mmParseAndVerifyExternalToken.ParseAndVerifyExternalTokenMock.defaultExpectation.paramPtrs
+
+		mm_got := CryptoMockParseAndVerifyExternalTokenParams{ctx, tokenStr, jwksURI, expectedIssuer}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmParseAndVerifyExternalToken.t.Errorf("CryptoMock.ParseAndVerifyExternalToken got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmParseAndVerifyExternalToken.ParseAndVerifyExternalTokenMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tokenStr != nil && !minimock.Equal(*mm_want_ptrs.tokenStr, mm_got.tokenStr) {
+				mmParseAndVerifyExternalToken.t.Errorf("CryptoMock.ParseAndVerifyExternalToken got unexpected parameter tokenStr, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmParseAndVerifyExternalToken.ParseAndVerifyExternalTokenMock.defaultExpectation.expectationOrigins.originTokenStr, *mm_want_ptrs.tokenStr, mm_got.tokenStr, minimock.Diff(*mm_want_ptrs.tokenStr, mm_got.tokenStr))
+			}
+
+			if mm_want_ptrs.jwksURI != nil && !minimock.Equal(*mm_want_ptrs.jwksURI, mm_got.jwksURI) {
+				mmParseAndVerifyExternalToken.t.Errorf("CryptoMock.ParseAndVerifyExternalToken got unexpected parameter jwksURI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmParseAndVerifyExternalToken.ParseAndVerifyExternalTokenMock.defaultExpectation.expectationOrigins.originJwksURI, *mm_want_ptrs.jwksURI, mm_got.jwksURI, minimock.Diff(*mm_want_ptrs.jwksURI, mm_got.jwksURI))
+			}
+
+			if mm_want_ptrs.expectedIssuer != nil && !minimock.Equal(*mm_want_ptrs.expectedIssuer, mm_got.expectedIssuer) {
+				mmParseAndVerifyExternalToken.t.Errorf("CryptoMock.ParseAndVerifyExternalToken got unexpected parameter expectedIssuer, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmParseAndVerifyExternalToken.ParseAndVerifyExternalTokenMock.defaultExpectation.expectationOrigins.originExpectedIssuer, *mm_want_ptrs.expectedIssuer, mm_got.expectedIssuer, minimock.Diff(*mm_want_ptrs.expectedIssuer, mm_got.expectedIssuer))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmParseAndVerifyExternalToken.t.Errorf("CryptoMock.ParseAndVerifyExternalToken got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmParseAndVerifyExternalToken.ParseAndVerifyExternalTokenMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmParseAndVerifyExternalToken.ParseAndVerifyExternalTokenMock.defaultExpectation.results
+		if mm_results == nil {
+			mmParseAndVerifyExternalToken.t.Fatal("No results are set for the CryptoMock.ParseAndVerifyExternalToken")
+		}
+		return (*mm_results).ep1, (*mm_results).err
+	}
+	if mmParseAndVerifyExternalToken.funcParseAndVerifyExternalToken != nil {
+		return mmParseAndVerifyExternalToken.funcParseAndVerifyExternalToken(ctx, tokenStr, jwksURI, expectedIssuer)
+	}
+	mmParseAndVerifyExternalToken.t.Fatalf("Unexpected call to CryptoMock.ParseAndVerifyExternalToken. %v %v %v %v", ctx, tokenStr, jwksURI, expectedIssuer)
+	return
+}
+
+// ParseAndVerifyExternalTokenAfterCounter returns a count of finished CryptoMock.ParseAndVerifyExternalToken invocations
+func (mmParseAndVerifyExternalToken *CryptoMock) ParseAndVerifyExternalTokenAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmParseAndVerifyExternalToken.afterParseAndVerifyExternalTokenCounter)
+}
+
+// ParseAndVerifyExternalTokenBeforeCounter returns a count of CryptoMock.ParseAndVerifyExternalToken invocations
+func (mmParseAndVerifyExternalToken *CryptoMock) ParseAndVerifyExternalTokenBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmParseAndVerifyExternalToken.beforeParseAndVerifyExternalTokenCounter)
+}
+
+// Calls returns a list of arguments used in each call to CryptoMock.ParseAndVerifyExternalToken.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmParseAndVerifyExternalToken *mCryptoMockParseAndVerifyExternalToken) Calls() []*CryptoMockParseAndVerifyExternalTokenParams {
+	mmParseAndVerifyExternalToken.mutex.RLock()
+
+	argCopy := make([]*CryptoMockParseAndVerifyExternalTokenParams, len(mmParseAndVerifyExternalToken.callArgs))
+	copy(argCopy, mmParseAndVerifyExternalToken.callArgs)
+
+	mmParseAndVerifyExternalToken.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockParseAndVerifyExternalTokenDone returns true if the count of the ParseAndVerifyExternalToken invocations corresponds
+// the number of defined expectations
+func (m *CryptoMock) MinimockParseAndVerifyExternalTokenDone() bool {
+	if m.ParseAndVerifyExternalTokenMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.ParseAndVerifyExternalTokenMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.ParseAndVerifyExternalTokenMock.invocationsDone()
+}
+
+// MinimockParseAndVerifyExternalTokenInspect logs each unmet expectation
+func (m *CryptoMock) MinimockParseAndVerifyExternalTokenInspect() {
+	for _, e := range m.ParseAndVerifyExternalTokenMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to CryptoMock.ParseAndVerifyExternalToken at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterParseAndVerifyExternalTokenCounter := mm_atomic.LoadUint64(&m.afterParseAndVerifyExternalTokenCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.ParseAndVerifyExternalTokenMock.defaultExpectation != nil && afterParseAndVerifyExternalTokenCounter < 1 {
+		if m.ParseAndVerifyExternalTokenMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to CryptoMock.ParseAndVerifyExternalToken at\n%s", m.ParseAndVerifyExternalTokenMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to CryptoMock.ParseAndVerifyExternalToken at\n%s with params: %#v", m.ParseAndVerifyExternalTokenMock.defaultExpectation.expectationOrigins.origin, *m.ParseAndVerifyExternalTokenMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcParseAndVerifyExternalToken != nil && afterParseAndVerifyExternalTokenCounter < 1 {
+		m.t.Errorf("Expected call to CryptoMock.ParseAndVerifyExternalToken at\n%s", m.funcParseAndVerifyExternalTokenOrigin)
+	}
+
+	if !m.ParseAndVerifyExternalTokenMock.invocationsDone() && afterParseAndVerifyExternalTokenCounter > 0 {
+		m.t.Errorf("Expected %d calls to CryptoMock.ParseAndVerifyExternalToken at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.ParseAndVerifyExternalTokenMock.expectedInvocations), m.ParseAndVerifyExternalTokenMock.expectedInvocationsOrigin, afterParseAndVerifyExternalTokenCounter)
 	}
 }
 
@@ -5198,6 +6259,10 @@ func (m *CryptoMock) MinimockFinish() {
 
 			m.MinimockDecodeAndVerifySoftwareStatementInspect()
 
+			m.MinimockExtractUnverifiedMetadataInspect()
+
+			m.MinimockExtractUnverifiedRevocationMetadataInspect()
+
 			m.MinimockFindPublicKeyInJWKSInspect()
 
 			m.MinimockGetMasterRegistrationPublicKeyInspect()
@@ -5207,6 +6272,8 @@ func (m *CryptoMock) MinimockFinish() {
 			m.MinimockJWKSForTenantInspect()
 
 			m.MinimockMarshalJWKSetInspect()
+
+			m.MinimockParseAndVerifyExternalTokenInspect()
 
 			m.MinimockRotateKeysInspect()
 
@@ -5246,11 +6313,14 @@ func (m *CryptoMock) minimockDone() bool {
 	return done &&
 		m.MinimockCompareCredentialDone() &&
 		m.MinimockDecodeAndVerifySoftwareStatementDone() &&
+		m.MinimockExtractUnverifiedMetadataDone() &&
+		m.MinimockExtractUnverifiedRevocationMetadataDone() &&
 		m.MinimockFindPublicKeyInJWKSDone() &&
 		m.MinimockGetMasterRegistrationPublicKeyDone() &&
 		m.MinimockHashCredentialDone() &&
 		m.MinimockJWKSForTenantDone() &&
 		m.MinimockMarshalJWKSetDone() &&
+		m.MinimockParseAndVerifyExternalTokenDone() &&
 		m.MinimockRotateKeysDone() &&
 		m.MinimockSignAccessTokenDone() &&
 		m.MinimockSignIDTokenDone() &&
