@@ -52,7 +52,6 @@ sprezz-identity/
 │           ├── crypto/                 # Multi-Algorithm JWT Signers (RS256/EdDSA) & Argon2id Hashing Engines
 │           ├── logout/                 # Asynchronous Out-of-Band Single Logout HTTP Notification Dispatches
 │           ├── memory/                 # Transient Hot-Memory State Stores & Mock Repositories
-│           ├── state/                  # Shared Context Management & Internal Lifecycle Storage Structures
 │           └── postgres/               # Relational Database Persistence Frameworks
 │               ├── db/                 # Auto-Compiled SQLC Strongly Typed Database Structures
 │               ├── migrations/         # Transactional SQL Schema Evolution Control Scripts
