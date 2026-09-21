@@ -9,7 +9,7 @@ import (
 )
 
 func TestOAuthValidatorService_ValidateRedirect(t *testing.T) {
-	v := NewOAuthValidatorService(NewIdentityProviderService(nil, nil, nil))
+	v := NewOAuthValidatorService(NewIdentityProviderService(nil, nil, nil, nil))
 	ctx := context.Background()
 
 	tenant := &model.Tenant{
@@ -126,7 +126,7 @@ func TestOAuthValidatorService_ValidateRedirect(t *testing.T) {
 }
 
 func TestOAuthValidatorService_ValidateScopes(t *testing.T) {
-	v := NewOAuthValidatorService(NewIdentityProviderService(nil, nil, nil))
+	v := NewOAuthValidatorService(NewIdentityProviderService(nil, nil, nil, nil))
 	ctx := context.Background()
 
 	tenant := &model.Tenant{
@@ -186,7 +186,7 @@ func TestOAuthValidatorService_ValidateScopes(t *testing.T) {
 }
 
 func TestOAuthValidatorService_ValidateAudiences(t *testing.T) {
-	v := NewOAuthValidatorService(NewIdentityProviderService(nil, nil, nil))
+	v := NewOAuthValidatorService(NewIdentityProviderService(nil, nil, nil, nil))
 	ctx := context.Background()
 
 	tenant := &model.Tenant{
@@ -252,7 +252,7 @@ func TestOAuthValidatorService_ValidateAudiences(t *testing.T) {
 }
 
 func TestOAuthValidatorService_ValidateACR_Default(t *testing.T) {
-	v := NewOAuthValidatorService(NewIdentityProviderService(nil, nil, nil))
+	v := NewOAuthValidatorService(NewIdentityProviderService(nil, nil, nil, nil))
 	ctx := context.Background()
 
 	tenant := &model.Tenant{
@@ -283,7 +283,7 @@ func TestOAuthValidatorService_ValidateACR_Default(t *testing.T) {
 }
 
 func TestOAuthValidatorService_ValidateACR_Essential_OR(t *testing.T) {
-	v := NewOAuthValidatorService(NewIdentityProviderService(nil, nil, nil))
+	v := NewOAuthValidatorService(NewIdentityProviderService(nil, nil, nil, nil))
 	ctx := context.Background()
 
 	tenant := &model.Tenant{
@@ -325,7 +325,7 @@ func TestOAuthValidatorService_ValidateACR_Essential_OR(t *testing.T) {
 }
 
 func TestOAuthValidatorService_ValidateACR_Essential_AND(t *testing.T) {
-	v := NewOAuthValidatorService(NewIdentityProviderService(nil, nil, nil))
+	v := NewOAuthValidatorService(NewIdentityProviderService(nil, nil, nil, nil))
 	ctx := context.Background()
 
 	tenant := &model.Tenant{
@@ -367,7 +367,7 @@ func TestOAuthValidatorService_ValidateACR_Essential_AND(t *testing.T) {
 }
 
 func TestOAuthValidatorService_ValidateACR_ClaimsJSON(t *testing.T) {
-	v := NewOAuthValidatorService(NewIdentityProviderService(nil, nil, nil))
+	v := NewOAuthValidatorService(NewIdentityProviderService(nil, nil, nil, nil))
 	ctx := context.Background()
 
 	tenant := &model.Tenant{
@@ -411,7 +411,7 @@ func TestOAuthValidatorService_ValidateACR_ClaimsJSON(t *testing.T) {
 }
 
 func TestOAuthValidatorService_ValidateState(t *testing.T) {
-	v := NewOAuthValidatorService(NewIdentityProviderService(nil, nil, nil))
+	v := NewOAuthValidatorService(NewIdentityProviderService(nil, nil, nil, nil))
 	ctx := context.Background()
 
 	tests := []struct {

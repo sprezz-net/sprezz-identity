@@ -77,10 +77,12 @@ func TestOAuthService_ProcessAuthorizeRequest_StrictPartitionIsolation(t *testin
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
 	ssoUseCase := portmock.NewSSOSessionUseCaseMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idpService := NewIdentityProviderService(storage, nil, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock)
 	validator := NewOAuthValidatorService(idpService)
 
 	svc := NewOAuthService(storage, nil, nil, nil, clock, ssoUseCase, validator)
@@ -163,10 +165,12 @@ func TestOAuthService_ProcessAuthorizeRequest_MatchingPartitionAllowed(t *testin
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
 	ssoUseCase := portmock.NewSSOSessionUseCaseMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idpService := NewIdentityProviderService(storage, nil, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock)
 	validator := NewOAuthValidatorService(idpService)
 
 	svc := NewOAuthService(storage, nil, nil, nil, clock, ssoUseCase, validator)
@@ -240,10 +244,12 @@ func TestOAuthService_ProcessAuthorizeRequest_PersistsRequestedScopes(t *testing
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
 	ssoUseCase := portmock.NewSSOSessionUseCaseMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idpService := NewIdentityProviderService(storage, nil, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock)
 	validator := NewOAuthValidatorService(idpService)
 
 	svc := NewOAuthService(storage, nil, nil, nil, clock, ssoUseCase, validator)
@@ -313,12 +319,14 @@ func TestOAuthService_ProcessLogoutRequest_UnwhitelistedRedirectFallback(t *test
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
 	ssoUseCase := portmock.NewSSOSessionUseCaseMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
 
 	// Initialize standard internal dependency validation layer
-	idpService := NewIdentityProviderService(storage, nil, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock)
 	validator := NewOAuthValidatorService(idpService)
 
 	svc := NewOAuthService(storage, nil, nil, nil, clock, ssoUseCase, validator)
@@ -381,11 +389,13 @@ func TestOAuthService_ProcessLogoutRequest_JITFrontChannelValidation_DropsMalici
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
 	ssoUseCase := portmock.NewSSOSessionUseCaseMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
 
-	idpService := NewIdentityProviderService(storage, nil, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock)
 	validator := NewOAuthValidatorService(idpService)
 
 	svc := NewOAuthService(storage, nil, nil, nil, clock, ssoUseCase, validator)
@@ -443,12 +453,13 @@ func TestOAuthService_ProcessLogoutRequest_JITBackChannelValidation_DropsMalicio
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
-	crypto := portmock.NewCryptoMock(ctrl) // Track cryptographic signing assertions
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
 	ssoUseCase := portmock.NewSSOSessionUseCaseMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
 
-	idpService := NewIdentityProviderService(storage, nil, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock)
 	validator := NewOAuthValidatorService(idpService)
 
 	svc := NewOAuthService(storage, crypto, nil, nil, clock, ssoUseCase, validator)

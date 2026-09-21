@@ -8,7 +8,6 @@ import (
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port/portmock"
 
-	"github.com/alexedwards/argon2id"
 	"github.com/gojuno/minimock/v3"
 	"github.com/google/uuid"
 )
@@ -16,16 +15,18 @@ import (
 func TestVerifyPassword_Success(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now().Truncate(time.Second)
 	clock := portmock.NewMockClock(now)
-	service := NewIdentityProviderService(storage, nil, clock)
+	service := NewIdentityProviderService(storage, adminStorage, crypto, clock)
 
 	tenantID := uuid.New()
 	userID := uuid.New()
 	providerID := uuid.New()
 
 	password := "MySecretPassword1"
-	hash, _ := argon2id.CreateHash(password, argon2id.DefaultParams)
+	hash := "$argon2id$v=19$m=65536,t=1,p=4$fakehashsalt$dummy"
 
 	cred := &model.PasswordCredential{
 		UserProfileID:           userID,
@@ -33,6 +34,8 @@ func TestVerifyPassword_Success(t *testing.T) {
 		Argon2Hash:              hash,
 		FailedVerificationCount: 2,
 	}
+
+	crypto.CompareCredentialMock.Expect(hash, password).Return(true, nil)
 
 	storage.GetUserProfileByIDMock.Expect(context.Background(), tenantID, 0, userID).Return(&model.UserProfile{ID: userID, PartitionID: 1, LifecycleState: model.LifecycleActivated}, nil)
 	storage.GetIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{
@@ -63,16 +66,17 @@ func TestVerifyPassword_Success(t *testing.T) {
 func TestVerifyPassword_FailureAndBlocking(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now().Truncate(time.Second)
 	clock := portmock.NewMockClock(now)
-	service := NewIdentityProviderService(storage, nil, clock)
+	service := NewIdentityProviderService(storage, adminStorage, crypto, clock)
 
 	tenantID := uuid.New()
 	userID := uuid.New()
 	providerID := uuid.New()
 
-	password := "MySecretPassword1"
-	hash, _ := argon2id.CreateHash(password, argon2id.DefaultParams)
+	hash := "$argon2id$v=19$m=65536,t=1,p=4$fakehashsalt$dummy"
 
 	cred := &model.PasswordCredential{
 		UserProfileID:           userID,
@@ -80,6 +84,8 @@ func TestVerifyPassword_FailureAndBlocking(t *testing.T) {
 		Argon2Hash:              hash,
 		FailedVerificationCount: 2, // Next failure should block
 	}
+
+	crypto.CompareCredentialMock.Expect(hash, "WrongPassword").Return(false, nil)
 
 	storage.GetUserProfileByIDMock.Expect(context.Background(), tenantID, 0, userID).Return(&model.UserProfile{ID: userID, PartitionID: 1, LifecycleState: model.LifecycleActivated}, nil)
 	storage.GetIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{
@@ -112,9 +118,11 @@ func TestVerifyPassword_FailureAndBlocking(t *testing.T) {
 func TestVerifyPassword_Blocked_RejectsWithinBlockedTime(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now().Truncate(time.Second)
 	clock := portmock.NewMockClock(now)
-	service := NewIdentityProviderService(storage, nil, clock)
+	service := NewIdentityProviderService(storage, adminStorage, crypto, clock)
 
 	tenantID := uuid.New()
 	userID := uuid.New()
@@ -156,16 +164,18 @@ func TestVerifyPassword_Blocked_RejectsWithinBlockedTime(t *testing.T) {
 func TestVerifyPassword_Blocked_Expires_UnblocksWithCorrectPassword(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now().Truncate(time.Second)
 	clock := portmock.NewMockClock(now)
-	service := NewIdentityProviderService(storage, nil, clock)
+	service := NewIdentityProviderService(storage, adminStorage, crypto, clock)
 
 	tenantID := uuid.New()
 	userID := uuid.New()
 	providerID := uuid.New()
 
 	password := "MySecretPassword1"
-	hash, _ := argon2id.CreateHash(password, argon2id.DefaultParams)
+	hash := "$argon2id$v=19$m=65536,t=1,p=4$fakehashsalt$dummy"
 
 	blockedUntil := now.Add(-30 * time.Second) // expired 30s ago
 	cred := &model.PasswordCredential{
@@ -175,6 +185,8 @@ func TestVerifyPassword_Blocked_Expires_UnblocksWithCorrectPassword(t *testing.T
 		FailedVerificationCount: 3,
 		Argon2Hash:              hash,
 	}
+
+	crypto.CompareCredentialMock.Expect(hash, password).Return(true, nil)
 
 	storage.GetUserProfileByIDMock.Expect(context.Background(), tenantID, 0, userID).Return(&model.UserProfile{ID: userID, PartitionID: 1, LifecycleState: model.LifecycleActivated}, nil)
 	storage.GetIdentityProvidersMock.Expect(context.Background(), tenantID).Return([]model.IdentityProvider{

@@ -12,7 +12,7 @@ import (
 
 	httpadapter "sprezz-identity/internal/adapters/in/http"
 	"sprezz-identity/internal/adapters/out/clock"
-	jwtcrypto "sprezz-identity/internal/adapters/out/crypto"
+	"sprezz-identity/internal/adapters/out/crypto"
 	"sprezz-identity/internal/adapters/out/federation"
 	"sprezz-identity/internal/adapters/out/logout"
 	"sprezz-identity/internal/adapters/out/postgres"
@@ -27,7 +27,7 @@ type dependencies struct {
 	cfg                     *config.Config
 	storage                 port.Storage
 	adminStorage            port.AdminStorage
-	signer                  *jwtcrypto.JWTSigner
+	crypto                  port.Crypto
 	sysClock                port.Clock
 	tenantUseCase           port.TenantUseCase
 	oauthService            port.AuthUseCase
@@ -65,7 +65,7 @@ func main() {
 		deps.adminStorage,
 		deps.idpService,
 		deps.storage,
-		deps.signer,
+		deps.crypto,
 		deps.cfg.AppEnv,
 		deps.cfg.IdentityServer.AdminTenantDomain,
 	)
@@ -137,23 +137,12 @@ func initDependencies(ctx context.Context) *dependencies {
 
 	storage := postgres.NewPostgresStorage(db, cfg.AppEnv)
 
-	// Needed for resolution and cross-layered bootstrapping references
-	idpService := service.NewIdentityProviderService(storage, storage, sysClock)
-	tenantUseCase := service.NewTenantService(storage, storage, sysClock, idpService, cfg.AppEnv, cfg.IdentityServer.AdminTenantDomain)
-
-	// 5. Execute system master data bootstrapping scripts
-	bootstrap := service.NewTenantBootstrapService(storage, storage, tenantUseCase, sysClock, cfg.AppEnv)
-	_, err = bootstrap.BootstrapAdminTenant(ctx, cfg.IdentityServer.AdminTenantDomain)
-	if err != nil {
-		log.Fatalf("Admin tenant bootstrap failed: %v", err)
-	}
-
 	httpClient := &http.Client{
 		Timeout: 10 * time.Second,
 	}
 
-	// 6. Initialize cluster-resilient JWTSigner passing master encryption keys
-	signer, err := jwtcrypto.NewJWTSigner(
+	// 5. Initialize cluster-resilient JWTSigner passing master encryption keys
+	cryptoSigner, err := crypto.NewJWTSigner(
 		storage,
 		sysClock,
 		httpClient,
@@ -165,15 +154,26 @@ func initDependencies(ctx context.Context) *dependencies {
 		log.Fatalf("Failed to initialize cryptographic boundaries: %v", err)
 	}
 
+	// Needed for resolution and cross-layered bootstrapping references
+	idpService := service.NewIdentityProviderService(storage, storage, cryptoSigner, sysClock)
+	tenantUseCase := service.NewTenantService(storage, storage, sysClock, idpService, cfg.AppEnv, cfg.IdentityServer.AdminTenantDomain)
+
+	// 6. Execute system master data bootstrapping scripts
+	bootstrap := service.NewTenantBootstrapService(storage, storage, tenantUseCase, sysClock, cfg.AppEnv)
+	_, err = bootstrap.BootstrapAdminTenant(ctx, cfg.IdentityServer.AdminTenantDomain)
+	if err != nil {
+		log.Fatalf("Admin tenant bootstrap failed: %v", err)
+	}
+
 	// 7. Start the continuous asynchronous background loop worker instances
 	startTokenPruningWorker(ctx, storage, cfg.IdentityServer.TokenPruningInterval)
-	startKeyRotationWorker(ctx, signer, cfg.IdentityServer.AdminTenantDomain, cfg.IdentityServer.KeyRotationInterval)
+	startKeyRotationWorker(ctx, cryptoSigner, cfg.IdentityServer.AdminTenantDomain, cfg.IdentityServer.KeyRotationInterval)
 
 	notifier := logout.NewLogoutHttpClient(cfg.AppEnv)
 	validator := service.NewOAuthValidatorService(idpService)
 
 	// 8. Instantiate core domain use cases
-	userProfileUseCase := service.NewUserProfileService(storage, storage, signer, sysClock)
+	userProfileUseCase := service.NewUserProfileService(storage, storage, cryptoSigner, sysClock)
 	userRegistrationUseCase := service.NewUserRegistrationService(storage, userProfileUseCase, sysClock)
 
 	ssoService := service.NewSSOSessionService(storage, cfg.AppEnv)
@@ -182,7 +182,7 @@ func initDependencies(ctx context.Context) *dependencies {
 	federatedLoginService := service.NewFederationService(
 		storage,
 		fedClient,
-		signer,
+		cryptoSigner,
 		sysClock,
 		idpService,
 		validator,
@@ -190,7 +190,7 @@ func initDependencies(ctx context.Context) *dependencies {
 
 	oauthService := service.NewOAuthService(
 		storage,
-		signer,
+		cryptoSigner,
 		nil,
 		notifier,
 		sysClock,
@@ -198,14 +198,14 @@ func initDependencies(ctx context.Context) *dependencies {
 		validator,
 	)
 
-	localAuthService := service.NewLocalAuthService(storage, signer, sysClock)
-	appService := service.NewApplicationService(storage, storage, sysClock, signer)
+	localAuthService := service.NewLocalAuthService(storage, cryptoSigner, sysClock)
+	appService := service.NewApplicationService(storage, storage, sysClock, cryptoSigner)
 
 	adminLogonService := service.NewAdminLogonService(
 		storage,
 		storage,
 		oauthService,
-		signer,
+		cryptoSigner,
 		fedClient,
 		federatedLoginService,
 		sysClock,
@@ -217,7 +217,7 @@ func initDependencies(ctx context.Context) *dependencies {
 		cfg:                     cfg,
 		storage:                 storage,
 		adminStorage:            storage,
-		signer:                  signer,
+		crypto:                  cryptoSigner,
 		sysClock:                sysClock,
 		tenantUseCase:           tenantUseCase,
 		oauthService:            oauthService,

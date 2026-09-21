@@ -17,11 +17,12 @@ func TestFederationService_InitiateFederatedLogin_Success(t *testing.T) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
 	fedClient := portmock.NewFederationClientMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idp := NewIdentityProviderService(storage, nil, clock)
+	idp := NewIdentityProviderService(storage, adminStorage, crypto, clock)
 	validator := NewOAuthValidatorService(idp)
 
 	svc := NewFederationService(storage, fedClient, crypto, clock, idp, validator)
@@ -73,11 +74,12 @@ func TestFederationService_ExecuteFederatedCallback_JITProvisioning(t *testing.T
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
 	fedClient := portmock.NewFederationClientMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idp := NewIdentityProviderService(storage, nil, clock)
+	idp := NewIdentityProviderService(storage, adminStorage, crypto, clock)
 	validator := NewOAuthValidatorService(idp)
 
 	svc := NewFederationService(storage, fedClient, crypto, clock, idp, validator)
@@ -188,11 +190,12 @@ func TestFederationService_ExecuteFederatedCallback_FailsIfEmailUnverified(t *te
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
 	fedClient := portmock.NewFederationClientMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idp := NewIdentityProviderService(storage, nil, clock)
+	idp := NewIdentityProviderService(storage, adminStorage, crypto, clock)
 	validator := NewOAuthValidatorService(idp)
 
 	svc := NewFederationService(storage, fedClient, crypto, clock, idp, validator)

@@ -14,20 +14,21 @@ import (
 	"sprezz-identity/internal/domain/port"
 	"sprezz-identity/internal/pkg/httpclient"
 
-	"github.com/alexedwards/argon2id"
 	"github.com/google/uuid"
 )
 
 type IdentityProviderService struct {
 	storage      port.Storage
 	adminStorage port.AdminStorage
+	crypto       port.Crypto
 	clock        port.Clock
 }
 
-func NewIdentityProviderService(storage port.Storage, adminStorage port.AdminStorage, cl port.Clock) *IdentityProviderService {
+func NewIdentityProviderService(storage port.Storage, adminStorage port.AdminStorage, crypto port.Crypto, cl port.Clock) *IdentityProviderService {
 	return &IdentityProviderService{
 		storage:      storage,
 		adminStorage: adminStorage,
+		crypto:       crypto,
 		clock:        cl,
 	}
 }
@@ -109,11 +110,6 @@ func (s *IdentityProviderService) AuthenticateUsernamePassword(ctx context.Conte
 	return &model.LoginResult{UserProfile: profile, Identity: identity}, nil
 }
 
-func verifyArgon2idPassword(password string, hash string) bool {
-	match, err := argon2id.ComparePasswordAndHash(password, hash)
-	return err == nil && match
-}
-
 func (s *IdentityProviderService) GetIdentityProviders(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProvider, error) {
 	return s.storage.GetIdentityProviders(ctx, tenantID)
 }
@@ -166,7 +162,10 @@ func (s *IdentityProviderService) VerifyPassword(ctx context.Context, tenantID u
 		passwordCred.BlockedUntil = nil
 	}
 
-	correct := verifyArgon2idPassword(password, passwordCred.Argon2Hash)
+	correct, err := s.crypto.CompareCredential(passwordCred.Argon2Hash, password)
+	if err != nil {
+		return false, fmt.Errorf("crypto: verification exception: %w", err)
+	}
 
 	// Update lockout counters on password record
 	if correct {
@@ -206,7 +205,7 @@ func (s *IdentityProviderService) ChangePassword(ctx context.Context, tenantID u
 		return fmt.Errorf("lookup password credential: %w", err)
 	}
 
-	newHash, err := argon2id.CreateHash(newPassword, argon2id.DefaultParams)
+	newHash, err := s.crypto.HashCredential(newPassword)
 	if err != nil {
 		return fmt.Errorf("failed to hash new password: %w", err)
 	}
