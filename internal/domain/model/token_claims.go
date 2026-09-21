@@ -4,7 +4,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -16,14 +15,15 @@ type Confirmation struct {
 // BaseTokenClaims encapsulates core multi-tenant and session tracking routing properties
 // common across all native token lifecycle tracks.
 type BaseTokenClaims struct {
-	Issuer                string        `json:"iss"`
-	Subject               string        `json:"sub"`
-	ExpiresAt             int64         `json:"exp"`
-	IssuedAt              int64         `json:"iat"`
-	TokenID               string        `json:"jti"`
-	TenantID              uuid.UUID     `json:"tid"`
-	ClientID              string        `json:"azp"`
-	SessionID             string        `json:"sid"`
+	Issuer                string        `json:"iss,omitempty"`
+	Subject               string        `json:"sub,omitempty"`
+	ExpiresAt             int64         `json:"exp,omitempty"`
+	IssuedAt              int64         `json:"iat,omitempty"`
+	NotBefore             int64         `json:"nbf,omitempty"`
+	TokenID               string        `json:"jti,omitempty"`
+	TenantID              uuid.UUID     `json:"tid,omitempty"`
+	ClientID              string        `json:"azp,omitempty"`
+	SessionID             string        `json:"sid,omitempty"`
 	IdentityProviderID    uuid.UUID     `json:"idp_id,omitempty"`
 	IdentityProviderAlias string        `json:"idp_alias,omitempty"`
 	ACR                   string        `json:"acr,omitempty"`
@@ -36,9 +36,9 @@ type BaseTokenClaims struct {
 // It implicitly fulfills the jwt.Claims interface without importing external packages.
 type TokenClaims struct {
 	BaseTokenClaims
-	Audiences      []string `json:"aud"`
+	Audiences      []string `json:"aud,omitempty"`
 	PartitionAlias string   `json:"pid,omitempty"`
-	Scopes         []string `json:"scp"`
+	Scopes         []string `json:"scp,omitempty"`
 	Roles          []string `json:"roles,omitempty"`
 }
 
@@ -46,8 +46,8 @@ type TokenClaims struct {
 // It includes full human identity assertions alongside session contexts.
 type OIDCTokenClaims struct {
 	BaseTokenClaims
-	Audience string `json:"aud"`
-	AuthTime int64  `json:"auth_time"`
+	Audience string `json:"aud,omitempty"`
+	AuthTime int64  `json:"auth_time,omitempty"`
 	Nonce    string `json:"nonce,omitempty"`
 
 	// Raw Human Identity Claims (Spec-Compliant OIDC Profile Fields)
@@ -57,31 +57,6 @@ type OIDCTokenClaims struct {
 	PreferredUsername string `json:"preferred_username,omitempty"` // Populated via UserProfile.PreferredUsername
 	Email             string `json:"email,omitempty"`              // Populated via UserProfile.Email
 	EmailVerified     bool   `json:"email_verified,omitempty"`     // Populated via UserProfile.EmailVerified
-}
-
-// FilterByScope copies OIDCTokenClaims and drops unauthorized keys dynamically.
-func (c OIDCTokenClaims) FilterByScope(grantedScopes []string) OIDCTokenClaims {
-	hasScope := func(target string) bool {
-		for _, s := range grantedScopes {
-			if s == target {
-				return true
-			}
-		}
-		return false
-	}
-
-	filtered := c
-	if !hasScope("profile") {
-		filtered.Name = ""
-		filtered.GivenName = ""
-		filtered.FamilyName = ""
-		filtered.PreferredUsername = ""
-	}
-	if !hasScope("email") {
-		filtered.Email = ""
-		filtered.EmailVerified = false
-	}
-	return filtered
 }
 
 // LogoutTokenClaims represents back-channel logout assertion containers.
@@ -138,81 +113,78 @@ type IntrospectionResponse struct {
 	Confirmation          *Confirmation `json:"cnf,omitempty"`
 }
 
-// --- implicit golang-jwt/jwt/v5 validation interface satisfaction ---
+// ============================================================================
+// DOMAIN BUSINESS VALIDATION LAYER (PURE GO)
+// ============================================================================
 
-func (b BaseTokenClaims) Validate() error {
+// Validate checks standard temporal lifecycles and tenant containment constraints.
+func (b BaseTokenClaims) Validate(now time.Time) error {
 	if b.Issuer == "" {
 		return errors.New("token_validation: issuer cannot be empty")
 	}
 	if b.TenantID == uuid.Nil {
 		return errors.New("token_validation: tenant identity missing")
 	}
+	if b.IssuedAt == 0 {
+		return errors.New("token_validation: token issue time missing (iat constraint violation)")
+	}
+	// Enforce strict lifecycle expiration auditing (Expires At)
+	if b.ExpiresAt > 0 && now.Unix() > b.ExpiresAt {
+		return errors.New("token_validation: token has expired (exp constraint violation)")
+	}
+	// Enforce strict cryptographic activation clock auditing (Not Before)
+	if b.NotBefore > 0 && now.Unix() < b.NotBefore {
+		return errors.New("token_validation: token is not active yet (nbf constraint violation)")
+	}
 	return nil
 }
 
-// --- TokenClaims (Access Token) Interface Satisfaction ---
-func (c TokenClaims) GetExpirationTime() (*jwt.NumericDate, error) {
-	if c.ExpiresAt == 0 {
-		return nil, nil
-	}
-	t := jwt.NewNumericDate(time.Unix(c.ExpiresAt, 0))
-	return t, nil
-}
-func (c TokenClaims) GetIssuedAt() (*jwt.NumericDate, error) {
-	if c.IssuedAt == 0 {
-		return nil, nil
-	}
-	t := jwt.NewNumericDate(time.Unix(c.IssuedAt, 0))
-	return t, nil
-}
-func (c TokenClaims) GetNotBefore() (*jwt.NumericDate, error) { return nil, nil }
-func (c TokenClaims) GetIssuer() (string, error)              { return c.Issuer, nil }
-func (c TokenClaims) GetSubject() (string, error)             { return c.Subject, nil }
-func (c TokenClaims) GetAudience() (jwt.ClaimStrings, error) {
-	return jwt.ClaimStrings(c.Audiences), nil
-}
-
 // Extra business rule validation wrapper extending BaseTokenClaims functionality
-func (c TokenClaims) Validate() error {
-	if err := c.BaseTokenClaims.Validate(); err != nil {
+func (c TokenClaims) Validate(now time.Time) error {
+	// Cascade validation down to core base properties first
+	if err := c.BaseTokenClaims.Validate(now); err != nil {
 		return err
 	}
 	// Only enforce partition alias if it's a user token (Sub != ClientID)
 	if c.Subject != c.ClientID && c.PartitionAlias == "" {
-		return errors.New("token_validation: partition alias cannot be empty")
+		return errors.New("token_validation: partition alias cannot be empty for user tokens")
 	}
 	return nil
-}
-
-// --- OIDCTokenClaims (ID Token) Interface Satisfaction ---
-func (c OIDCTokenClaims) GetExpirationTime() (*jwt.NumericDate, error) {
-	if c.ExpiresAt == 0 {
-		return nil, nil
-	}
-	t := jwt.NewNumericDate(time.Unix(c.ExpiresAt, 0))
-	return t, nil
-}
-func (c OIDCTokenClaims) GetIssuedAt() (*jwt.NumericDate, error) {
-	if c.IssuedAt == 0 {
-		return nil, nil
-	}
-	t := jwt.NewNumericDate(time.Unix(c.IssuedAt, 0))
-	return t, nil
-}
-func (c OIDCTokenClaims) GetNotBefore() (*jwt.NumericDate, error) { return nil, nil }
-func (c OIDCTokenClaims) GetIssuer() (string, error)              { return c.Issuer, nil }
-func (c OIDCTokenClaims) GetSubject() (string, error)             { return c.Subject, nil }
-func (c OIDCTokenClaims) GetAudience() (jwt.ClaimStrings, error) {
-	return jwt.ClaimStrings([]string{c.Audience}), nil
 }
 
 // Extra OIDC validation rule wrapper extending BaseTokenClaims functionality
-func (c OIDCTokenClaims) Validate() error {
-	if err := c.BaseTokenClaims.Validate(); err != nil {
+func (c OIDCTokenClaims) Validate(now time.Time) error {
+	// Cascade validation down to core base properties first
+	if err := c.BaseTokenClaims.Validate(now); err != nil {
 		return err
 	}
 	if c.Audience == "" {
-		return errors.New("oidc_validation: audience footprint cannot be empty")
+		return errors.New("oidc_validation: audience cannot be empty")
 	}
 	return nil
+}
+
+// FilterByScope copies OIDCTokenClaims and drops unauthorized keys dynamically.
+func (c OIDCTokenClaims) FilterByScope(grantedScopes []string) OIDCTokenClaims {
+	hasScope := func(target string) bool {
+		for _, s := range grantedScopes {
+			if s == target {
+				return true
+			}
+		}
+		return false
+	}
+
+	filtered := c
+	if !hasScope("profile") {
+		filtered.Name = ""
+		filtered.GivenName = ""
+		filtered.FamilyName = ""
+		filtered.PreferredUsername = ""
+	}
+	if !hasScope("email") {
+		filtered.Email = ""
+		filtered.EmailVerified = false
+	}
+	return filtered
 }

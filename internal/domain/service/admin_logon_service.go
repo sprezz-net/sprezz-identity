@@ -195,7 +195,7 @@ func (s *AdminLogonService) provisionViaSoftwareStatement(ctx context.Context, l
 		Scopes:       []string{"openid", "profile", "email"},
 	}
 
-	signedStatementToken, err := s.crypto.SignSoftwareStatement(ctx, s.adminDomain, centralAdminIssuer, statementClaims, now, now.Add(5*time.Minute))
+	signedStatementToken, err := s.crypto.SignSoftwareStatement(ctx, s.adminDomain, centralAdminIssuer, statementClaims, now, now.Add(5*time.Minute), now)
 	if err != nil {
 		return fmt.Errorf("failed minting software statement assertion via crypto port: %w", err)
 	}

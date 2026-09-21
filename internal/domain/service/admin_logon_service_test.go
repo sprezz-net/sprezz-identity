@@ -98,7 +98,7 @@ func TestAdminLogonService_InitiateAdminLogon_OnDemandDCR_Success(t *testing.T) 
 		Domain: "admin.com",
 	}, nil)
 
-	crypto.SignSoftwareStatementMock.Set(func(ctx context.Context, issuer string, audience string, claims model.SoftwareStatementClaims, issuedAt time.Time, expiresAt time.Time) (string, error) {
+	crypto.SignSoftwareStatementMock.Set(func(ctx context.Context, issuer string, audience string, claims model.SoftwareStatementClaims, issuedAt time.Time, expiresAt time.Time, notBefore time.Time) (string, error) {
 		expectedSoftwareID := model.AdminUIProfileName + ";" + model.LocalAdminUIGroupName
 		if claims.SoftwareID != expectedSoftwareID {
 			t.Errorf("expected software ID '%s', got '%s'", expectedSoftwareID, claims.SoftwareID)

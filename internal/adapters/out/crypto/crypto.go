@@ -215,7 +215,7 @@ func (s *JWTSigner) SignAccessToken(ctx context.Context, claims model.TokenClaim
 
 	// The library natively marshals your structured type fields using Go's JSON metadata tags
 	// Natively leverages your existing internal s.mapAlgorithm(alg) helper method safely
-	token := jwt.NewWithClaims(s.mapAlgorithm(alg), claims)
+	token := jwt.NewWithClaims(s.mapAlgorithm(alg), &accessTokenClaimsWrapper{TokenClaims: claims})
 	token.Header["kid"] = kid
 	token.Header["typ"] = "at+jwt" // RFC 9068 spec-compliant explicit access token indicator profile
 
@@ -250,7 +250,7 @@ func (s *JWTSigner) SignIDToken(ctx context.Context, claims model.OIDCTokenClaim
 	filteredClaims := claims.FilterByScope(grantedScopes)
 
 	// Passes the structured domain object directly into the library claims pipeline
-	token := jwt.NewWithClaims(s.mapAlgorithm(alg), filteredClaims)
+	token := jwt.NewWithClaims(s.mapAlgorithm(alg), &oidcTokenClaimsWrapper{OIDCTokenClaims: filteredClaims})
 	token.Header["kid"] = kid
 	token.Header["typ"] = "JWT"
 
@@ -483,7 +483,7 @@ func (s *JWTSigner) VerifyExternalTokenWithProvider(ctx context.Context, tokenSt
 // SYSTEM KEYRINGS & RECOVERY HANDLERS
 // ============================================================================
 
-func (s *JWTSigner) SignSoftwareStatement(ctx context.Context, issuer, audience string, claims model.SoftwareStatementClaims, issuedAt, expiresAt time.Time) (string, error) {
+func (s *JWTSigner) SignSoftwareStatement(ctx context.Context, issuer, audience string, claims model.SoftwareStatementClaims, issuedAt, expiresAt, notBefore time.Time) (string, error) {
 	// 1. Resolve the tenant metadata model straight from storage using the configured domain
 	tenantModel, err := s.storage.ResolveTenantByDomain(ctx, issuer)
 	if err != nil {
@@ -504,20 +504,110 @@ func (s *JWTSigner) SignSoftwareStatement(ctx context.Context, issuer, audience 
 	s.mu.RUnlock()
 
 	// 3. Hydrate standard OIDC temporal metadata parameters natively into the domain claims frame
-	claims.Issuer = issuer
-	claims.Audience = []string{audience}
-	claims.IssuedAt = jwt.NewNumericDate(issuedAt)
-	claims.ExpiresAt = jwt.NewNumericDate(expiresAt)
+	claimsMap := jwt.MapClaims{
+		"iss":              issuer,
+		"aud":              []string{audience},
+		"iat":              jwt.NewNumericDate(issuedAt),
+		"exp":              jwt.NewNumericDate(expiresAt),
+		"software_id":      claims.SoftwareID,
+		"software_version": claims.SoftwareVersion,
+		"jti":              uuid.New().String(),
+	}
 
-	// 4. Flatten the structural domain object into library-compliant map layers natively
-	mapClaims := claims.ToMapClaims()
+	// Conditionally inject optional claims to prevent "null" or empty string mutations
+	if !notBefore.IsZero() {
+		claimsMap["nbf"] = jwt.NewNumericDate(notBefore)
+	}
+	if claims.ClientName != "" {
+		claimsMap["client_name"] = claims.ClientName
+	}
+	if claims.Subject != "" {
+		claimsMap["sub"] = claims.Subject
+	}
+	if len(claims.RedirectURIs) > 0 {
+		claimsMap["redirect_uris"] = claims.RedirectURIs
+	}
+	if len(claims.PostLogoutRedirectURIs) > 0 {
+		claimsMap["post_logout_redirect_uris"] = claims.PostLogoutRedirectURIs
+	}
+	if len(claims.Scopes) > 0 {
+		claimsMap["scopes"] = claims.Scopes
+	}
 
-	// 5. Build and sign the finalized cryptographic token envelope
-	token := jwt.NewWithClaims(s.mapAlgorithm(model.AlgES256), mapClaims)
+	// 4. Build and sign the finalized cryptographic token envelope
+	token := jwt.NewWithClaims(s.mapAlgorithm(model.AlgES256), claimsMap)
 	token.Header["kid"] = kid
 	token.Header["typ"] = "JWT"
 
 	return token.SignedString(privateKey)
+}
+
+// DecodeAndVerifySoftwareStatement processes incoming dynamic tokens using a unified, multi-tenant JWKS pipeline.
+// Fully satisfies structural jwt.Claims interface requirements using our adapter wrapper isolation boundaries.
+func (s *JWTSigner) DecodeAndVerifySoftwareStatement(ctx context.Context, currentTenant *model.Tenant, ssa string) (*model.SoftwareStatementClaims, error) {
+	if ssa == "" {
+		return nil, errors.New("software_statement: raw token string parameter is missing")
+	}
+
+	// 1. Unpack token unverified first to read the header 'kid' and the claims container
+	parser := jwt.NewParser()
+	var wrapper softwareStatementClaimsWrapper
+	unverifiedToken, _, err := parser.ParseUnverified(ssa, &wrapper)
+	if err != nil {
+		return nil, fmt.Errorf("software_statement: structural token decoding failed: %w", err)
+	}
+
+	tokenKID, _ := unverifiedToken.Header["kid"].(string)
+	if tokenKID == "" {
+		return nil, errors.New("software_statement: missing mandatory 'kid' header parameter")
+	}
+
+	audiences, err := wrapper.GetAudience()
+	if err != nil || len(audiences) == 0 {
+		return nil, errors.New("software_statement: missing mandatory 'aud' claim parameter")
+	}
+
+	// 2. STRICT AUDIENCE ISOLATION CHECK
+	currentTenantBaseURI := currentTenant.GetBaseURI()
+	hasValidAudience := false
+	for _, audStr := range audiences {
+		if audStr == currentTenantBaseURI {
+			hasValidAudience = true
+			break
+		}
+	}
+
+	if !hasValidAudience {
+		return nil, fmt.Errorf("software statement is not targeted for this tenant context (mismatched audience)")
+	}
+
+	// 3. CRYPTOGRAPHIC KEY RESOLUTION
+	jwkSet, err := s.JWKSForTenant(ctx, currentTenant.Domain, currentTenant.Scheme)
+	if err != nil {
+		return nil, fmt.Errorf("software_statement: failed resolving tenant keyset footprint: %w", err)
+	}
+
+	targetPublicKey, err := s.FindPublicKeyInJWKS(jwkSet, tokenKID)
+	if err != nil {
+		return nil, fmt.Errorf("software_statement: unable to locate key ID '%s' inside tenant JWKS: %w", tokenKID, err)
+	}
+
+	// 4. SECURE SIGNATURE VERIFICATION PASS
+	var verifiedWrapper softwareStatementClaimsWrapper
+	_, err = jwt.ParseWithClaims(ssa, &verifiedWrapper, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodECDSA); !ok {
+			if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
+				return nil, fmt.Errorf("unexpected dynamic registration signature method: %v", t.Header["alg"])
+			}
+		}
+		return targetPublicKey, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("software statement validation failed: %w", err)
+	}
+
+	// Return the pure un-annotated domain model struct stripped of all library bindings
+	return &verifiedWrapper.SoftwareStatementClaims, nil
 }
 
 // resolveRemoteJWKSWithCache fetches remote public keys while enforcing a strict 1MB response limit

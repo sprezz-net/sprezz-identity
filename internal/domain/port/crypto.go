@@ -16,7 +16,10 @@ type Crypto interface {
 	SignLogoutToken(ctx context.Context, claims model.LogoutTokenClaims, alg model.SignatureAlgorithm) (string, error)
 
 	// Hashes and signs on-demand administrative dynamic registration assertions
-	SignSoftwareStatement(ctx context.Context, issuer string, audience string, claims model.SoftwareStatementClaims, issuedAt time.Time, expiresAt time.Time) (string, error)
+	SignSoftwareStatement(ctx context.Context, issuer, audience string, claims model.SoftwareStatementClaims, issuedAt, expiresAt, notBefore time.Time) (string, error)
+	// DecodeAndVerifySoftwareStatement parses and validates an incoming software statement token string
+	// against the live cryptographically isolated keyset parameters of the active tenant.
+	DecodeAndVerifySoftwareStatement(ctx context.Context, tenant *model.Tenant, ssa string) (*model.SoftwareStatementClaims, error)
 
 	// --- Inbound Token Verification & Validation Layers ---
 	VerifyToken(tokenStr string) (map[string]any, error)

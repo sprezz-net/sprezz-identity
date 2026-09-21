@@ -1806,77 +1806,22 @@ func (s *OAuthService) SanitizeDynamicRegistrationPayload(payload *model.Dynamic
 }
 
 // ValidateSoftwareStatement processes incoming dynamic tokens using a unified, multi-tenant JWKS pipeline.
-// Fully addresses multi-tenant audience overlap by matching the header 'kid' against candidate tenant keysets.
+// Fully purged of all external jwt library couplings, it delegates signature verification
+// to the crypto adapter port and runs native business rule audits on the returned domain entity.
 func (s *OAuthService) ValidateSoftwareStatement(ctx context.Context, currentTenant *model.Tenant, ssa string) (*model.SoftwareStatementClaims, error) {
-	if ssa == "" {
-		return nil, errors.New("software_statement: raw token string parameter is missing")
-	}
-
-	// 1. Unpack token unverified first to read the header 'kid' and the claims container
-	parser := jwt.NewParser()
-	unverifiedToken, _, err := parser.ParseUnverified(ssa, &model.SoftwareStatementClaims{})
+	// 1. Delegate cryptographic verification and library type unpacking down to the crypto port adapter ring
+	claims, err := s.crypto.DecodeAndVerifySoftwareStatement(ctx, currentTenant, ssa)
 	if err != nil {
-		return nil, fmt.Errorf("software_statement: structural token decoding failed: %w", err)
+		return nil, err
 	}
 
-	unverifiedClaims, ok := unverifiedToken.Claims.(*model.SoftwareStatementClaims)
-	if !ok {
-		return nil, errors.New("software_statement: corrupt token claims container layout")
+	// 2. Execute pure, uncoupled domain business rule validation parameters natively on the detached model entity
+	now := s.clock.Now()
+	if err := claims.Validate(now); err != nil {
+		return nil, fmt.Errorf("%w: software statement business validation exception: %w", port.ErrInvalidRequest, err)
 	}
 
-	tokenKID, _ := unverifiedToken.Header["kid"].(string)
-	if tokenKID == "" {
-		return nil, errors.New("software_statement: missing mandatory 'kid' header parameter")
-	}
-
-	if len(unverifiedClaims.Audience) == 0 {
-		return nil, errors.New("software_statement: missing mandatory 'aud' claim parameter")
-	}
-
-	// 2. STRICT AUDIENCE ISOLATION CHECK
-	// Loop through the token's audience list. There MUST be an exact match with the base URI
-	// of the current tenant, otherwise the statement is rejected immediately to block cross-tenant replay exploits.
-	currentTenantBaseURI := currentTenant.GetBaseURI()
-	hasValidAudience := false
-	for _, audStr := range unverifiedClaims.Audience {
-		if audStr == currentTenantBaseURI {
-			hasValidAudience = true
-			break
-		}
-	}
-
-	if !hasValidAudience {
-		return nil, fmt.Errorf("%w: software statement is not targeted for this tenant context (mismatched audience)", port.ErrInvalidRequest)
-	}
-
-	// 3. CRYPTOGRAPHIC KEY RESOLUTION
-	// Pull the live cryptographic keyset slice map row strictly matching the CURRENT tenant environment
-	jwkSet, err := s.crypto.JWKSForTenant(ctx, currentTenant.Domain, currentTenant.Scheme)
-	if err != nil {
-		return nil, fmt.Errorf("software_statement: failed resolving tenant keyset footprint: %w", err)
-	}
-
-	// Delegate to your core crypto adapter port to find and reconstruct the public key component
-	targetPublicKey, err := s.crypto.FindPublicKeyInJWKS(jwkSet, tokenKID)
-	if err != nil {
-		return nil, fmt.Errorf("software_statement: unable to locate key ID '%s' inside tenant JWKS: %w", tokenKID, err)
-	}
-
-	// 4. SECURE SIGNATURE VERIFICATION PASS
-	var claims model.SoftwareStatementClaims
-	_, err = jwt.ParseWithClaims(ssa, &claims, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodECDSA); !ok {
-			if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
-				return nil, fmt.Errorf("unexpected dynamic registration signature method: %v", t.Header["alg"])
-			}
-		}
-		return targetPublicKey, nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("software statement validation failed: %w", err)
-	}
-
-	return &claims, nil
+	return claims, nil
 }
 
 func (s *OAuthService) RegisterDynamicApplication(
