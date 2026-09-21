@@ -724,8 +724,8 @@ Public-facing unauthenticated endpoints—specifically the self-service user reg
 
 Unlike public lanes, the administrative management console (`/admin/*`) processes highly sensitive workspace mutations (dynamic client enrollment, tenant configuration adjustments, profile security policy shifts) that require strict edge monitoring and forensic trackability.
 
-* **Semantic Error Diagnostics Tracking**: Administrative input verification failures or schema constraint violations processing backend updates must issue an HTTP Status Code of **`422 Unprocessable Entity`**. This allows edge gateways, reverse proxies, and cloud firewalls to immediately flag, log, and rate-limit anomalous administrative behavior or fuzzing attempts based on automated non-200 transaction metrics.
-* **Master Admin Shell Interceptor Integration**: Because the front-end hypermedia engine naturally discards non-200 responses, the central administrative layout wrapper framework must incorporate a localized, cryptographically `nonce`-stamped listener to allow the `422` error stream to finalize:
+- **Semantic Error Diagnostics Tracking**: Administrative input verification failures or schema constraint violations processing backend updates must issue an HTTP Status Code of **`422 Unprocessable Entity`**. This allows edge gateways, reverse proxies, and cloud firewalls to immediately flag, log, and rate-limit anomalous administrative behavior or fuzzing attempts based on automated non-200 transaction metrics.
+- **Master Admin Shell Interceptor Integration**: Because the front-end hypermedia engine naturally discards non-200 responses, the central administrative layout wrapper framework must incorporate a localized, cryptographically `nonce`-stamped listener to allow the `422` error stream to finalize:
 
   ```javascript
   document.body.addEventListener('htmx:beforeSwap', function (evt) {
