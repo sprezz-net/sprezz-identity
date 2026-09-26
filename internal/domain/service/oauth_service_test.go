@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -517,3 +518,466 @@ func TestOAuthService_ProcessLogoutRequest_JITBackChannelValidation_DropsMalicio
 		t.Fatalf("unexpected logout processing failure: %v", err)
 	}
 }
+func TestOAuthService_ProcessJWKSetRetrieval(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		ctrl := minimock.NewController(t)
+		storage := portmock.NewStorageMock(ctrl)
+		crypto := portmock.NewCryptoMock(ctrl)
+		svc := NewOAuthService(storage, nil, nil, nil, nil, nil, nil)
+		svc.crypto = crypto
+
+		tenantUUID := uuid.New()
+		storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantUUID).Return(&model.Tenant{ID: tenantUUID}, nil)
+
+		expectedJWKS := []map[string]any{
+			{"kty": "RSA", "kid": "key-1"},
+		}
+		crypto.JWKSForTenantMock.Expect(minimock.AnyContext, "example.com", "https").Return(expectedJWKS, nil)
+
+		res, err := svc.ProcessJWKSetRetrieval(context.Background(), tenantUUID, "example.com", "https")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		keys, ok := res["keys"].([]map[string]any)
+		if !ok || len(keys) != 1 || keys[0]["kid"] != "key-1" {
+			t.Fatalf("unexpected jwks result: %v", res)
+		}
+	})
+
+	t.Run("TenantNotFound", func(t *testing.T) {
+		ctrl := minimock.NewController(t)
+		storage := portmock.NewStorageMock(ctrl)
+		svc := NewOAuthService(storage, nil, nil, nil, nil, nil, nil)
+
+		tenantUUID := uuid.New()
+		storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantUUID).Return(nil, port.ErrTenantNotFound)
+
+		_, err := svc.ProcessJWKSetRetrieval(context.Background(), tenantUUID, "example.com", "https")
+		if err == nil {
+			t.Fatal("expected error for non-existent tenant")
+		}
+	})
+}
+
+func TestOAuthService_TokenRevocation(t *testing.T) {
+	t.Run("ProcessTokenRevocation_MissingToken", func(t *testing.T) {
+		svc := NewOAuthService(nil, nil, nil, nil, nil, nil, nil)
+		err := svc.ProcessTokenRevocation(context.Background(), port.RevokeTokenCommand{
+			TenantID:    uuid.New(),
+			ClientID:    "client-1",
+			TokenString: "",
+		})
+		if err == nil {
+			t.Fatal("expected error on empty token")
+		}
+	})
+
+	t.Run("ProcessTokenRevocation_UnparseableToken_RFC7009Compliance", func(t *testing.T) {
+		ctrl := minimock.NewController(t)
+		crypto := portmock.NewCryptoMock(ctrl)
+		svc := NewOAuthService(nil, nil, nil, nil, nil, nil, nil)
+		svc.crypto = crypto
+
+		crypto.ExtractUnverifiedRevocationMetadataMock.Expect("corrupted-token").Return("", "", errors.New("unparseable"))
+
+		err := svc.ProcessTokenRevocation(context.Background(), port.RevokeTokenCommand{
+			TenantID:    uuid.New(),
+			ClientID:    "client-1",
+			TokenString: "corrupted-token",
+		})
+		if err != nil {
+			t.Fatalf("expected nil per RFC 7009 on unparseable token, got %v", err)
+		}
+	})
+
+	t.Run("ProcessTokenRevocation_ClientMismatch", func(t *testing.T) {
+		ctrl := minimock.NewController(t)
+		crypto := portmock.NewCryptoMock(ctrl)
+		svc := NewOAuthService(nil, nil, nil, nil, nil, nil, nil)
+		svc.crypto = crypto
+
+		crypto.ExtractUnverifiedRevocationMetadataMock.Expect("valid-token").Return("token-jti", "other-client", nil)
+
+		err := svc.ProcessTokenRevocation(context.Background(), port.RevokeTokenCommand{
+			TenantID:    uuid.New(),
+			ClientID:    "client-1",
+			TokenString: "valid-token",
+		})
+		if err == nil {
+			t.Fatal("expected error on client mismatch")
+		}
+	})
+
+	t.Run("ProcessTokenRevocation_Success", func(t *testing.T) {
+		ctrl := minimock.NewController(t)
+		storage := portmock.NewStorageMock(ctrl)
+		crypto := portmock.NewCryptoMock(ctrl)
+		now := time.Now().Truncate(time.Second)
+		clock := portmock.NewMockClock(now)
+		svc := NewOAuthService(storage, nil, nil, nil, clock, nil, nil)
+		svc.crypto = crypto
+
+		crypto.ExtractUnverifiedRevocationMetadataMock.Expect("valid-token").Return("token-jti", "client-1", nil)
+		storage.RevokeTokenMock.Expect(minimock.AnyContext, "token-jti", now.Add(24*time.Hour)).Return(nil)
+
+		err := svc.ProcessTokenRevocation(context.Background(), port.RevokeTokenCommand{
+			TenantID:    uuid.New(),
+			ClientID:    "client-1",
+			TokenString: "valid-token",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("RevokeTokenDirect", func(t *testing.T) {
+		ctrl := minimock.NewController(t)
+		storage := portmock.NewStorageMock(ctrl)
+		crypto := portmock.NewCryptoMock(ctrl)
+		now := time.Now().Truncate(time.Second)
+		clock := portmock.NewMockClock(now)
+		svc := NewOAuthService(storage, nil, nil, nil, clock, nil, nil)
+		svc.crypto = crypto
+
+		tenantUUID := uuid.New()
+		crypto.ExtractUnverifiedRevocationMetadataMock.Expect("my-token").Return("jti-123", "any-client", nil)
+		storage.RevokeTokenMock.Expect(minimock.AnyContext, "jti-123", now.Add(24*time.Hour)).Return(nil)
+
+		err := svc.RevokeToken(context.Background(), tenantUUID, "any-client", "my-token")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestOAuthService_TokenIntrospection(t *testing.T) {
+	tenantID := uuid.New()
+
+	t.Run("UnauthenticatedClient", func(t *testing.T) {
+		svc := NewOAuthService(nil, nil, nil, nil, nil, nil, nil)
+		_, err := svc.ProcessTokenIntrospection(context.Background(), port.IntrospectTokenCommand{
+			TenantID:               tenantID,
+			IsClientAuthenticated:  false,
+			TargetTokenString:      "some-token",
+		})
+		if err == nil {
+			t.Fatal("expected error when client is unauthenticated")
+		}
+	})
+
+	t.Run("EmptyToken", func(t *testing.T) {
+		svc := NewOAuthService(nil, nil, nil, nil, nil, nil, nil)
+		_, err := svc.ProcessTokenIntrospection(context.Background(), port.IntrospectTokenCommand{
+			TenantID:               tenantID,
+			IsClientAuthenticated:  true,
+			TargetTokenString:      "",
+		})
+		if err == nil {
+			t.Fatal("expected error on empty token")
+		}
+	})
+
+	t.Run("InvalidSignature_ActiveFalse", func(t *testing.T) {
+		ctrl := minimock.NewController(t)
+		crypto := portmock.NewCryptoMock(ctrl)
+		svc := NewOAuthService(nil, nil, nil, nil, nil, nil, nil)
+		svc.crypto = crypto
+
+		crypto.VerifyTokenMock.Expect("invalid-token").Return(nil, errors.New("bad sig"))
+
+		resp, err := svc.ProcessTokenIntrospection(context.Background(), port.IntrospectTokenCommand{
+			TenantID:               tenantID,
+			IsClientAuthenticated:  true,
+			TargetTokenString:      "invalid-token",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.Active {
+			t.Error("expected active=false for invalid token")
+		}
+	})
+
+	t.Run("CrossTenantAttempt_ActiveFalse", func(t *testing.T) {
+		ctrl := minimock.NewController(t)
+		crypto := portmock.NewCryptoMock(ctrl)
+		svc := NewOAuthService(nil, nil, nil, nil, nil, nil, nil)
+		svc.crypto = crypto
+
+		otherTenantID := uuid.New()
+		crypto.VerifyTokenMock.Expect("cross-tenant-token").Return(map[string]any{
+			"tid": otherTenantID.String(),
+		}, nil)
+
+		resp, err := svc.ProcessTokenIntrospection(context.Background(), port.IntrospectTokenCommand{
+			TenantID:               tenantID,
+			IsClientAuthenticated:  true,
+			TargetTokenString:      "cross-tenant-token",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.Active {
+			t.Error("expected active=false for cross-tenant token")
+		}
+	})
+
+	t.Run("RevokedToken_ActiveFalse", func(t *testing.T) {
+		ctrl := minimock.NewController(t)
+		storage := portmock.NewStorageMock(ctrl)
+		crypto := portmock.NewCryptoMock(ctrl)
+		svc := NewOAuthService(storage, nil, nil, nil, nil, nil, nil)
+		svc.crypto = crypto
+
+		crypto.VerifyTokenMock.Expect("revoked-token").Return(map[string]any{
+			"tid": tenantID.String(),
+			"jti": "revoked-jti",
+		}, nil)
+		storage.IsTokenRevokedMock.Expect(minimock.AnyContext, "revoked-jti").Return(true, nil)
+
+		resp, err := svc.ProcessTokenIntrospection(context.Background(), port.IntrospectTokenCommand{
+			TenantID:               tenantID,
+			IsClientAuthenticated:  true,
+			TargetTokenString:      "revoked-token",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.Active {
+			t.Error("expected active=false for revoked token")
+		}
+	})
+
+	t.Run("ValidBearerToken_Success", func(t *testing.T) {
+		ctrl := minimock.NewController(t)
+		storage := portmock.NewStorageMock(ctrl)
+		crypto := portmock.NewCryptoMock(ctrl)
+		svc := NewOAuthService(storage, nil, nil, nil, nil, nil, nil)
+		svc.crypto = crypto
+
+		crypto.VerifyTokenMock.Expect("valid-bearer-token").Return(map[string]any{
+			"tid":       tenantID.String(),
+			"jti":       "valid-jti",
+			"sub":       "user-123",
+			"client_id": "client-abc",
+			"scope":     "openid profile",
+			"iss":       "https://tenant.example.com",
+			"pid":       "default",
+			"exp":       int64(1700000000),
+			"iat":       int64(1699999000),
+		}, nil)
+		storage.IsTokenRevokedMock.Expect(minimock.AnyContext, "valid-jti").Return(false, nil)
+
+		resp, err := svc.IntrospectToken(context.Background(), tenantID, "client-abc", "valid-bearer-token")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !resp.Active {
+			t.Error("expected active=true")
+		}
+		if resp.TokenType != "Bearer" {
+			t.Errorf("expected TokenType Bearer, got %s", resp.TokenType)
+		}
+		if resp.Subject != "user-123" || resp.ClientID != "client-abc" {
+			t.Errorf("unexpected subject or client: %v", resp)
+		}
+	})
+
+	t.Run("ValidDPoPToken_Success", func(t *testing.T) {
+		ctrl := minimock.NewController(t)
+		storage := portmock.NewStorageMock(ctrl)
+		crypto := portmock.NewCryptoMock(ctrl)
+		svc := NewOAuthService(storage, nil, nil, nil, nil, nil, nil)
+		svc.crypto = crypto
+
+		crypto.VerifyTokenMock.Expect("valid-dpop-token").Return(map[string]any{
+			"tid": tenantID.String(),
+			"jti": "dpop-jti",
+			"sub": "user-dpop",
+			"azp": "client-dpop",
+			"cnf": map[string]any{
+				"jkt": "thumbprint-xyz",
+			},
+		}, nil)
+		storage.IsTokenRevokedMock.Expect(minimock.AnyContext, "dpop-jti").Return(false, nil)
+
+		resp, err := svc.IntrospectToken(context.Background(), tenantID, "client-dpop", "valid-dpop-token")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !resp.Active {
+			t.Error("expected active=true")
+		}
+		if resp.TokenType != "DPoP" {
+			t.Errorf("expected TokenType DPoP, got %s", resp.TokenType)
+		}
+		if resp.Confirmation == nil || resp.Confirmation.JKT != "thumbprint-xyz" {
+			t.Errorf("unexpected confirmation: %v", resp.Confirmation)
+		}
+	})
+}
+
+func TestOAuthService_RotateRefreshToken(t *testing.T) {
+	tenantID := uuid.New()
+	clientID := "client-test"
+	now := time.Now().Truncate(time.Second)
+
+	t.Run("InvalidRefreshTokenSignature", func(t *testing.T) {
+		ctrl := minimock.NewController(t)
+		crypto := portmock.NewCryptoMock(ctrl)
+		svc := NewOAuthService(nil, nil, nil, nil, nil, nil, nil)
+		svc.crypto = crypto
+
+		crypto.VerifyTokenMock.Expect("invalid-rt").Return(nil, errors.New("bad sig"))
+
+		_, err := svc.RotateRefreshToken(context.Background(), port.RotateRefreshTokenCommand{
+			TenantID:     tenantID,
+			ClientID:     clientID,
+			RefreshToken: "invalid-rt",
+		})
+		if !errors.Is(err, port.ErrInvalidGrant) {
+			t.Fatalf("expected ErrInvalidGrant, got %v", err)
+		}
+	})
+
+	t.Run("MissingJTIOFid", func(t *testing.T) {
+		ctrl := minimock.NewController(t)
+		crypto := portmock.NewCryptoMock(ctrl)
+		svc := NewOAuthService(nil, nil, nil, nil, nil, nil, nil)
+		svc.crypto = crypto
+
+		crypto.VerifyTokenMock.Expect("missing-fields-rt").Return(map[string]any{
+			"sub": "user-1",
+		}, nil)
+
+		_, err := svc.RotateRefreshToken(context.Background(), port.RotateRefreshTokenCommand{
+			TenantID:     tenantID,
+			ClientID:     clientID,
+			RefreshToken: "missing-fields-rt",
+		})
+		if !errors.Is(err, port.ErrInvalidGrant) {
+			t.Fatalf("expected ErrInvalidGrant, got %v", err)
+		}
+	})
+
+	t.Run("ReuseDetection_FamilyRevocation", func(t *testing.T) {
+		ctrl := minimock.NewController(t)
+		storage := portmock.NewStorageMock(ctrl)
+		crypto := portmock.NewCryptoMock(ctrl)
+		clock := portmock.NewMockClock(now)
+		svc := NewOAuthService(storage, nil, nil, nil, clock, nil, nil)
+		svc.crypto = crypto
+
+		crypto.VerifyTokenMock.Expect("used-rt").Return(map[string]any{
+			"jti": "rt-jti",
+			"fid": "family-123",
+			"sid": "session-456",
+			"sub": "user-789",
+		}, nil)
+
+		storage.GetRefreshTokenMock.Expect(minimock.AnyContext, "used-rt").Return(&model.RefreshToken{
+			TokenID:       "rt-jti",
+			TokenFamilyID: "family-123",
+			TenantID:      tenantID,
+			ClientID:      clientID,
+			SessionID:     "session-456",
+			Subject:       "user-789",
+			IsUsed:        true, // Already used token!
+			ExpiresAt:     now.Add(time.Hour),
+		}, nil)
+
+		storage.RevokeRefreshTokenFamilyMock.Expect(minimock.AnyContext, "family-123").Return(nil)
+		storage.RevokeSessionMock.Expect(minimock.AnyContext, tenantID, "user-789", clientID).Return(nil)
+
+		_, err := svc.RotateRefreshToken(context.Background(), port.RotateRefreshTokenCommand{
+			TenantID:     tenantID,
+			ClientID:     clientID,
+			RefreshToken: "used-rt",
+		})
+		if err == nil {
+			t.Fatal("expected error on token reuse")
+		}
+	})
+
+	t.Run("Success", func(t *testing.T) {
+		ctrl := minimock.NewController(t)
+		storage := portmock.NewStorageMock(ctrl)
+		crypto := portmock.NewCryptoMock(ctrl)
+		clock := portmock.NewMockClock(now)
+		svc := NewOAuthService(storage, nil, nil, nil, clock, nil, nil)
+		svc.crypto = crypto
+
+		crypto.VerifyTokenMock.Expect("valid-rt").Return(map[string]any{
+			"jti": "rt-jti",
+			"fid": "family-123",
+			"sid": "session-456",
+			"sub": "user-789",
+			"pid": "default",
+		}, nil)
+
+		storage.GetRefreshTokenMock.Expect(minimock.AnyContext, "valid-rt").Return(&model.RefreshToken{
+			TokenID:       "rt-jti",
+			TokenFamilyID: "family-123",
+			TenantID:      tenantID,
+			ClientID:      clientID,
+			SessionID:     "session-456",
+			Subject:       "user-789",
+			IsUsed:        false,
+			ExpiresAt:     now.Add(time.Hour),
+			Scopes:        []string{"read"},
+		}, nil)
+
+		storage.MarkRefreshTokenUsedMock.Expect(minimock.AnyContext, "valid-rt").Return(nil)
+
+		app := &model.Application{
+			ClientID:  clientID,
+			IsEnabled: true,
+		}
+		profile := &model.ApplicationProfile{
+			IsEnabled:            true,
+			AccessTokenLifetime:  time.Minute * 15,
+			RefreshTokenLifetime: time.Hour * 24,
+			SigningAlgorithm:     model.AlgRS256,
+		}
+		group := &model.ApplicationGroup{
+			IsEnabled: true,
+		}
+
+		storage.GetApplicationByClientIDMock.Expect(minimock.AnyContext, tenantID, clientID).Return(app, profile, group, nil)
+		storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantID).Return(&model.Tenant{
+			ID:     tenantID,
+			Domain: "example.com",
+			Scheme: "https",
+		}, nil)
+
+		crypto.SignAccessTokenMock.Set(func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {
+			if claims.Subject != "user-789" {
+				t.Errorf("expected subject user-789, got %s", claims.Subject)
+			}
+			return "signed-access-token", nil
+		})
+
+		storage.SaveRefreshTokenMock.Set(func(ctx context.Context, token model.RefreshToken) error {
+			if token.TokenFamilyID != "family-123" {
+				t.Errorf("expected inherited family ID family-123, got %s", token.TokenFamilyID)
+			}
+			return nil
+		})
+
+		res, err := svc.RotateRefreshToken(context.Background(), port.RotateRefreshTokenCommand{
+			TenantID:     tenantID,
+			ClientID:     clientID,
+			RefreshToken: "valid-rt",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error rotating refresh token: %v", err)
+		}
+		if res.AccessToken != "signed-access-token" {
+			t.Errorf("expected signed access token, got %s", res.AccessToken)
+		}
+		if res.RefreshToken == "" {
+			t.Error("expected non-empty rotated refresh token")
+		}
+	})
+}
+
