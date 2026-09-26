@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -107,70 +106,6 @@ func (s *AdminLogonService) InitiateAdminLogon(ctx context.Context, localTenantI
 		LocalCallbackURI:   callbackURI,
 		FinalTargetURI:     targetAdminUI,
 	})
-}
-
-// CompleteAdminLogon consumes transient transaction handshakes and completes cross-tenant profile exchanges.
-func (s *AdminLogonService) CompleteAdminLogon(ctx context.Context, localTenantID uuid.UUID, incomingState string, incomingCode string) (*model.TokenSetResponse, string, error) {
-	// Fetch and consume short-lived handshake states to block cross-site replays.
-	handshake, err := s.storage.GetAndConsumeOutboundHandshake(ctx, localTenantID, incomingState)
-	if err != nil {
-		return nil, "", fmt.Errorf("admin_logon: stateless handshake lookup verification denied: %w", err)
-	}
-	if handshake == nil {
-		return nil, "", errors.New("admin_logon: active tracking transaction state has expired or is invalid")
-	}
-
-	providers, err := s.storage.GetIdentityProviders(ctx, localTenantID)
-	if err != nil {
-		return nil, "", fmt.Errorf("admin_logon: failed loading provider mapping catalog: %w", err)
-	}
-
-	var matchedProvider *model.IdentityProvider
-	for _, p := range providers {
-		if p.ID == handshake.IdentityProviderID {
-			matchedProvider = &p
-			break
-		}
-	}
-
-	if matchedProvider == nil || matchedProvider.Config.TokenEndpoint == "" {
-		return nil, "", errors.New("admin_logon: matching administrative upstream provider not active in this space")
-	}
-
-	// Pass localTenantID to accurately look up the local callback transaction parameters [5.7]
-	upstreamTokens, err := s.oauthService.ExchangeCodeForTokens(ctx, port.ExchangeCodeForTokensCommand{
-		TenantID:     localTenantID,
-		ClientID:     matchedProvider.Config.ClientID,
-		Code:         incomingCode,
-		CodeVerifier: handshake.CodeVerifier,
-	})
-	if err != nil {
-		return nil, "", fmt.Errorf("admin_logon: back-channel token trade rejected by upstream idp: %w", err)
-	}
-
-	// Invokes the native ExchangeExternalToken method cleanly exactly as intended by your blueprint [source: 21, 5.7]
-	localTokens, err := s.oauthService.ExchangeExternalToken(
-		ctx,
-		localTenantID,
-		handshake.ClientID,
-		upstreamTokens.IDToken,
-		model.TokenTypeIDToken,
-	)
-	if err != nil {
-		return nil, "", fmt.Errorf("admin_logon: profile mapping and federation link denied: %w", err)
-	}
-
-	redirectURL := handshake.TargetURI
-	if redirectURL == "" {
-		tenant, err := s.storage.ResolveTenantByUUID(ctx, localTenantID)
-		if err == nil && tenant.Config.DefaultRedirectURI != "" {
-			redirectURL = tenant.Config.DefaultRedirectURI
-		} else {
-			redirectURL = port.RouteAdmin
-		}
-	}
-
-	return localTokens, redirectURL, nil
 }
 
 // provisionViaSoftwareStatement generates short-lived platform tokens and executes direct DCR on-demand registrations.

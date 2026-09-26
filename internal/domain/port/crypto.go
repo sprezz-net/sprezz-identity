@@ -37,7 +37,6 @@ type Crypto interface {
 	// --- Platform Key Management Registers ---
 	RotateKeys(ctx context.Context, domain string) error
 	MarshalJWKSet(ctx context.Context, domain string, scheme string) (string, error)
-	GetMasterRegistrationPublicKey() (any, error)
 	JWKSForTenant(ctx context.Context, domain string, scheme string) ([]map[string]any, error)
 	// FindPublicKeyInJWKS matches a specific 'kid' within a tenant's JWK set
 	// and reconstructs it into a compilable Go public key object.

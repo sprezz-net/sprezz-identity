@@ -55,13 +55,6 @@ type CryptoMock struct {
 	beforeFindPublicKeyInJWKSCounter uint64
 	FindPublicKeyInJWKSMock          mCryptoMockFindPublicKeyInJWKS
 
-	funcGetMasterRegistrationPublicKey          func() (a1 any, err error)
-	funcGetMasterRegistrationPublicKeyOrigin    string
-	inspectFuncGetMasterRegistrationPublicKey   func()
-	afterGetMasterRegistrationPublicKeyCounter  uint64
-	beforeGetMasterRegistrationPublicKeyCounter uint64
-	GetMasterRegistrationPublicKeyMock          mCryptoMockGetMasterRegistrationPublicKey
-
 	funcHashCredential          func(secret string) (s1 string, err error)
 	funcHashCredentialOrigin    string
 	inspectFuncHashCredential   func(secret string)
@@ -162,8 +155,6 @@ func NewCryptoMock(t minimock.Tester) *CryptoMock {
 
 	m.FindPublicKeyInJWKSMock = mCryptoMockFindPublicKeyInJWKS{mock: m}
 	m.FindPublicKeyInJWKSMock.callArgs = []*CryptoMockFindPublicKeyInJWKSParams{}
-
-	m.GetMasterRegistrationPublicKeyMock = mCryptoMockGetMasterRegistrationPublicKey{mock: m}
 
 	m.HashCredentialMock = mCryptoMockHashCredential{mock: m}
 	m.HashCredentialMock.callArgs = []*CryptoMockHashCredentialParams{}
@@ -1886,193 +1877,6 @@ func (m *CryptoMock) MinimockFindPublicKeyInJWKSInspect() {
 	if !m.FindPublicKeyInJWKSMock.invocationsDone() && afterFindPublicKeyInJWKSCounter > 0 {
 		m.t.Errorf("Expected %d calls to CryptoMock.FindPublicKeyInJWKS at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.FindPublicKeyInJWKSMock.expectedInvocations), m.FindPublicKeyInJWKSMock.expectedInvocationsOrigin, afterFindPublicKeyInJWKSCounter)
-	}
-}
-
-type mCryptoMockGetMasterRegistrationPublicKey struct {
-	optional           bool
-	mock               *CryptoMock
-	defaultExpectation *CryptoMockGetMasterRegistrationPublicKeyExpectation
-	expectations       []*CryptoMockGetMasterRegistrationPublicKeyExpectation
-
-	expectedInvocations       uint64
-	expectedInvocationsOrigin string
-}
-
-// CryptoMockGetMasterRegistrationPublicKeyExpectation specifies expectation struct of the Crypto.GetMasterRegistrationPublicKey
-type CryptoMockGetMasterRegistrationPublicKeyExpectation struct {
-	mock *CryptoMock
-
-	results      *CryptoMockGetMasterRegistrationPublicKeyResults
-	returnOrigin string
-	Counter      uint64
-}
-
-// CryptoMockGetMasterRegistrationPublicKeyResults contains results of the Crypto.GetMasterRegistrationPublicKey
-type CryptoMockGetMasterRegistrationPublicKeyResults struct {
-	a1  any
-	err error
-}
-
-// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
-// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
-// Optional() makes method check to work in '0 or more' mode.
-// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
-// catch the problems when the expected method call is totally skipped during test run.
-func (mmGetMasterRegistrationPublicKey *mCryptoMockGetMasterRegistrationPublicKey) Optional() *mCryptoMockGetMasterRegistrationPublicKey {
-	mmGetMasterRegistrationPublicKey.optional = true
-	return mmGetMasterRegistrationPublicKey
-}
-
-// Expect sets up expected params for Crypto.GetMasterRegistrationPublicKey
-func (mmGetMasterRegistrationPublicKey *mCryptoMockGetMasterRegistrationPublicKey) Expect() *mCryptoMockGetMasterRegistrationPublicKey {
-	if mmGetMasterRegistrationPublicKey.mock.funcGetMasterRegistrationPublicKey != nil {
-		mmGetMasterRegistrationPublicKey.mock.t.Fatalf("CryptoMock.GetMasterRegistrationPublicKey mock is already set by Set")
-	}
-
-	if mmGetMasterRegistrationPublicKey.defaultExpectation == nil {
-		mmGetMasterRegistrationPublicKey.defaultExpectation = &CryptoMockGetMasterRegistrationPublicKeyExpectation{}
-	}
-
-	return mmGetMasterRegistrationPublicKey
-}
-
-// Inspect accepts an inspector function that has same arguments as the Crypto.GetMasterRegistrationPublicKey
-func (mmGetMasterRegistrationPublicKey *mCryptoMockGetMasterRegistrationPublicKey) Inspect(f func()) *mCryptoMockGetMasterRegistrationPublicKey {
-	if mmGetMasterRegistrationPublicKey.mock.inspectFuncGetMasterRegistrationPublicKey != nil {
-		mmGetMasterRegistrationPublicKey.mock.t.Fatalf("Inspect function is already set for CryptoMock.GetMasterRegistrationPublicKey")
-	}
-
-	mmGetMasterRegistrationPublicKey.mock.inspectFuncGetMasterRegistrationPublicKey = f
-
-	return mmGetMasterRegistrationPublicKey
-}
-
-// Return sets up results that will be returned by Crypto.GetMasterRegistrationPublicKey
-func (mmGetMasterRegistrationPublicKey *mCryptoMockGetMasterRegistrationPublicKey) Return(a1 any, err error) *CryptoMock {
-	if mmGetMasterRegistrationPublicKey.mock.funcGetMasterRegistrationPublicKey != nil {
-		mmGetMasterRegistrationPublicKey.mock.t.Fatalf("CryptoMock.GetMasterRegistrationPublicKey mock is already set by Set")
-	}
-
-	if mmGetMasterRegistrationPublicKey.defaultExpectation == nil {
-		mmGetMasterRegistrationPublicKey.defaultExpectation = &CryptoMockGetMasterRegistrationPublicKeyExpectation{mock: mmGetMasterRegistrationPublicKey.mock}
-	}
-	mmGetMasterRegistrationPublicKey.defaultExpectation.results = &CryptoMockGetMasterRegistrationPublicKeyResults{a1, err}
-	mmGetMasterRegistrationPublicKey.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
-	return mmGetMasterRegistrationPublicKey.mock
-}
-
-// Set uses given function f to mock the Crypto.GetMasterRegistrationPublicKey method
-func (mmGetMasterRegistrationPublicKey *mCryptoMockGetMasterRegistrationPublicKey) Set(f func() (a1 any, err error)) *CryptoMock {
-	if mmGetMasterRegistrationPublicKey.defaultExpectation != nil {
-		mmGetMasterRegistrationPublicKey.mock.t.Fatalf("Default expectation is already set for the Crypto.GetMasterRegistrationPublicKey method")
-	}
-
-	if len(mmGetMasterRegistrationPublicKey.expectations) > 0 {
-		mmGetMasterRegistrationPublicKey.mock.t.Fatalf("Some expectations are already set for the Crypto.GetMasterRegistrationPublicKey method")
-	}
-
-	mmGetMasterRegistrationPublicKey.mock.funcGetMasterRegistrationPublicKey = f
-	mmGetMasterRegistrationPublicKey.mock.funcGetMasterRegistrationPublicKeyOrigin = minimock.CallerInfo(1)
-	return mmGetMasterRegistrationPublicKey.mock
-}
-
-// Times sets number of times Crypto.GetMasterRegistrationPublicKey should be invoked
-func (mmGetMasterRegistrationPublicKey *mCryptoMockGetMasterRegistrationPublicKey) Times(n uint64) *mCryptoMockGetMasterRegistrationPublicKey {
-	if n == 0 {
-		mmGetMasterRegistrationPublicKey.mock.t.Fatalf("Times of CryptoMock.GetMasterRegistrationPublicKey mock can not be zero")
-	}
-	mm_atomic.StoreUint64(&mmGetMasterRegistrationPublicKey.expectedInvocations, n)
-	mmGetMasterRegistrationPublicKey.expectedInvocationsOrigin = minimock.CallerInfo(1)
-	return mmGetMasterRegistrationPublicKey
-}
-
-func (mmGetMasterRegistrationPublicKey *mCryptoMockGetMasterRegistrationPublicKey) invocationsDone() bool {
-	if len(mmGetMasterRegistrationPublicKey.expectations) == 0 && mmGetMasterRegistrationPublicKey.defaultExpectation == nil && mmGetMasterRegistrationPublicKey.mock.funcGetMasterRegistrationPublicKey == nil {
-		return true
-	}
-
-	totalInvocations := mm_atomic.LoadUint64(&mmGetMasterRegistrationPublicKey.mock.afterGetMasterRegistrationPublicKeyCounter)
-	expectedInvocations := mm_atomic.LoadUint64(&mmGetMasterRegistrationPublicKey.expectedInvocations)
-
-	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
-}
-
-// GetMasterRegistrationPublicKey implements mm_port.Crypto
-func (mmGetMasterRegistrationPublicKey *CryptoMock) GetMasterRegistrationPublicKey() (a1 any, err error) {
-	mm_atomic.AddUint64(&mmGetMasterRegistrationPublicKey.beforeGetMasterRegistrationPublicKeyCounter, 1)
-	defer mm_atomic.AddUint64(&mmGetMasterRegistrationPublicKey.afterGetMasterRegistrationPublicKeyCounter, 1)
-
-	mmGetMasterRegistrationPublicKey.t.Helper()
-
-	if mmGetMasterRegistrationPublicKey.inspectFuncGetMasterRegistrationPublicKey != nil {
-		mmGetMasterRegistrationPublicKey.inspectFuncGetMasterRegistrationPublicKey()
-	}
-
-	if mmGetMasterRegistrationPublicKey.GetMasterRegistrationPublicKeyMock.defaultExpectation != nil {
-		mm_atomic.AddUint64(&mmGetMasterRegistrationPublicKey.GetMasterRegistrationPublicKeyMock.defaultExpectation.Counter, 1)
-
-		mm_results := mmGetMasterRegistrationPublicKey.GetMasterRegistrationPublicKeyMock.defaultExpectation.results
-		if mm_results == nil {
-			mmGetMasterRegistrationPublicKey.t.Fatal("No results are set for the CryptoMock.GetMasterRegistrationPublicKey")
-		}
-		return (*mm_results).a1, (*mm_results).err
-	}
-	if mmGetMasterRegistrationPublicKey.funcGetMasterRegistrationPublicKey != nil {
-		return mmGetMasterRegistrationPublicKey.funcGetMasterRegistrationPublicKey()
-	}
-	mmGetMasterRegistrationPublicKey.t.Fatalf("Unexpected call to CryptoMock.GetMasterRegistrationPublicKey.")
-	return
-}
-
-// GetMasterRegistrationPublicKeyAfterCounter returns a count of finished CryptoMock.GetMasterRegistrationPublicKey invocations
-func (mmGetMasterRegistrationPublicKey *CryptoMock) GetMasterRegistrationPublicKeyAfterCounter() uint64 {
-	return mm_atomic.LoadUint64(&mmGetMasterRegistrationPublicKey.afterGetMasterRegistrationPublicKeyCounter)
-}
-
-// GetMasterRegistrationPublicKeyBeforeCounter returns a count of CryptoMock.GetMasterRegistrationPublicKey invocations
-func (mmGetMasterRegistrationPublicKey *CryptoMock) GetMasterRegistrationPublicKeyBeforeCounter() uint64 {
-	return mm_atomic.LoadUint64(&mmGetMasterRegistrationPublicKey.beforeGetMasterRegistrationPublicKeyCounter)
-}
-
-// MinimockGetMasterRegistrationPublicKeyDone returns true if the count of the GetMasterRegistrationPublicKey invocations corresponds
-// the number of defined expectations
-func (m *CryptoMock) MinimockGetMasterRegistrationPublicKeyDone() bool {
-	if m.GetMasterRegistrationPublicKeyMock.optional {
-		// Optional methods provide '0 or more' call count restriction.
-		return true
-	}
-
-	for _, e := range m.GetMasterRegistrationPublicKeyMock.expectations {
-		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			return false
-		}
-	}
-
-	return m.GetMasterRegistrationPublicKeyMock.invocationsDone()
-}
-
-// MinimockGetMasterRegistrationPublicKeyInspect logs each unmet expectation
-func (m *CryptoMock) MinimockGetMasterRegistrationPublicKeyInspect() {
-	for _, e := range m.GetMasterRegistrationPublicKeyMock.expectations {
-		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Error("Expected call to CryptoMock.GetMasterRegistrationPublicKey")
-		}
-	}
-
-	afterGetMasterRegistrationPublicKeyCounter := mm_atomic.LoadUint64(&m.afterGetMasterRegistrationPublicKeyCounter)
-	// if default expectation was set then invocations count should be greater than zero
-	if m.GetMasterRegistrationPublicKeyMock.defaultExpectation != nil && afterGetMasterRegistrationPublicKeyCounter < 1 {
-		m.t.Errorf("Expected call to CryptoMock.GetMasterRegistrationPublicKey at\n%s", m.GetMasterRegistrationPublicKeyMock.defaultExpectation.returnOrigin)
-	}
-	// if func was set then invocations count should be greater than zero
-	if m.funcGetMasterRegistrationPublicKey != nil && afterGetMasterRegistrationPublicKeyCounter < 1 {
-		m.t.Errorf("Expected call to CryptoMock.GetMasterRegistrationPublicKey at\n%s", m.funcGetMasterRegistrationPublicKeyOrigin)
-	}
-
-	if !m.GetMasterRegistrationPublicKeyMock.invocationsDone() && afterGetMasterRegistrationPublicKeyCounter > 0 {
-		m.t.Errorf("Expected %d calls to CryptoMock.GetMasterRegistrationPublicKey at\n%s but found %d calls",
-			mm_atomic.LoadUint64(&m.GetMasterRegistrationPublicKeyMock.expectedInvocations), m.GetMasterRegistrationPublicKeyMock.expectedInvocationsOrigin, afterGetMasterRegistrationPublicKeyCounter)
 	}
 }
 
@@ -6265,8 +6069,6 @@ func (m *CryptoMock) MinimockFinish() {
 
 			m.MinimockFindPublicKeyInJWKSInspect()
 
-			m.MinimockGetMasterRegistrationPublicKeyInspect()
-
 			m.MinimockHashCredentialInspect()
 
 			m.MinimockJWKSForTenantInspect()
@@ -6316,7 +6118,6 @@ func (m *CryptoMock) minimockDone() bool {
 		m.MinimockExtractUnverifiedMetadataDone() &&
 		m.MinimockExtractUnverifiedRevocationMetadataDone() &&
 		m.MinimockFindPublicKeyInJWKSDone() &&
-		m.MinimockGetMasterRegistrationPublicKeyDone() &&
 		m.MinimockHashCredentialDone() &&
 		m.MinimockJWKSForTenantDone() &&
 		m.MinimockMarshalJWKSetDone() &&
