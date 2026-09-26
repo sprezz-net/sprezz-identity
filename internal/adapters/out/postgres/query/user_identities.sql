@@ -99,21 +99,34 @@ WHERE i.tenant_id = tenant.id
   AND i.external_identity_id = @external_identity_id
 LIMIT 1;
 
--- name: IncrementUserIdentityLoginTracker :exec
-WITH tenant AS (
-    SELECT id
-    FROM tenants
-    WHERE tenant_uuid = @tenant_uuid::uuid
-    LIMIT 1
+-- name: TrackUserLogin :exec
+INSERT INTO user_identities (
+    id,
+    tenant_id,
+    partition_id,
+    user_profile_id,
+    identity_provider_id,
+    external_identity_id,
+    login_count,
+    last_login_at,
+    coupled_at
 )
-UPDATE user_identities i
-SET
-    login_count = i.login_count + 1,
-    last_login_at = @last_login_at::timestamptz
-FROM tenant
-WHERE i.tenant_id = tenant.id
-  AND i.partition_id = @partition_id::bigint
-  AND i.id = @identity_id::uuid;
+VALUES (
+    gen_random_uuid(), -- Or your standard platform UUID generator function
+    (SELECT id FROM tenants WHERE tenant_uuid = @tenant_uuid::uuid LIMIT 1),
+    @partition_id,
+    @user_profile_id::uuid,
+    @identity_provider_id::uuid,
+    @external_identity_id,
+    1, -- First time coupling starts authoritatively at 1
+    @login_time::timestamptz,
+    @login_time::timestamptz
+)
+ON CONFLICT (user_profile_id, identity_provider_id)
+DO UPDATE SET
+    external_identity_id = EXCLUDED.external_identity_id,
+    last_login_at = EXCLUDED.last_login_at,
+    login_count = user_identities.login_count + 1; -- Subsequent logins execute clear column arithmetic
 
 -- name: GetUserIdentityByIdentifier :one
 WITH tenant AS (

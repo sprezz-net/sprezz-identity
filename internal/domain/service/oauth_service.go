@@ -641,7 +641,27 @@ func (s *OAuthService) ExchangeCodeForTokens(
 		}
 	}
 
-	// 7. Invoke our consolidated token emission routine using the type-safe command structure [1.14]
+	// 7. Ensure returning interactive browser handshakes accurately increment the counter
+	// on the exact data shard index corresponding to the active login context partition.
+	parsedSubjectUUID, err := uuid.Parse(authSession.Subject)
+	if err == nil && authSession.IdentityProviderID != uuid.Nil {
+		if authSession.IdentityProviderType != model.UsernamePasswordIDPType {
+			errTrack := s.storage.TrackUserLogin(
+				ctx,
+				cmd.TenantID,
+				authSession.PartitionID,
+				parsedSubjectUUID,
+				authSession.IdentityProviderID,
+				authSession.Subject,
+				now,
+			)
+			if errTrack != nil {
+				slog.Error("ExchangeCodeForTokens: failed to increment login metrics", "err", errTrack)
+			}
+		}
+	}
+
+	// 8. Invoke our consolidated token emission routine using the type-safe command structure [1.14]
 	// Sourced flatly out of your temporary database storage row object, carrying forward both ACR and AMR footprints.
 	return s.mintTokensFromSession(ctx, tenant, mintTokensCommand{
 		PartitionAlias:        partition.AliasName,
@@ -881,11 +901,16 @@ func (s *OAuthService) ExchangeExternalToken(
 		return nil, fmt.Errorf("%s: profile correlation or linkage registration rejected: %w", port.ErrInvalidGrant, err)
 	}
 
-	// 10. Generate fresh session lineage anchors for token exchange branches
-	sessionID := uuid.NewString()
+	// 10. Increment the login counter on the coupled identity.
 	now := s.clock.Now()
+	err = s.storage.TrackUserLogin(ctx, tenantID, userProfile.PartitionID, userProfile.ID, activeProvider.ID, externalClaims.Subject, now)
+	if err != nil {
+		slog.Error("ExchangeExternalToken: failed to execute unified federated login tracking", "err", err)
+	}
 
 	// 11. Session to client tracking [Section 5.7]
+	// Generate fresh session lineage anchors for token exchange branches
+	sessionID := uuid.NewString()
 	// Dynamically register that this federated identity entrance binds the app to single sign-out rules
 	if err := s.storage.RecordClientSessionLink(ctx, tenantID, sessionID, clientID, now); err != nil {
 		return nil, fmt.Errorf("oauth_service: failed to log client session association during exchange: %w", err)
@@ -1527,7 +1552,7 @@ func fallbackNonPasswordProvider(providers []model.IdentityProvider) *model.Iden
 func (s *OAuthService) findUserProfile(ctx context.Context, tenantID uuid.UUID, provider *model.IdentityProvider, externalSub, email string, emailVerified bool) (*model.UserProfile, error) {
 	slog.Debug("findUserProfile: starting profile search", "tenant_id", tenantID, "provider_partition_id", provider.PartitionID, "provider_id", provider.ID, "external_sub", externalSub, "email", email, "email_verified", emailVerified)
 
-	// 1. DIRECT ONE-TRIP IDENTITY LOOKUP: Query row matching provider ID and foreign subject index
+	// Pass 1: Direct lookup using the unique provider pair linkage: Query row matching provider ID and foreign subject index
 	identity, err := s.storage.GetUserIdentityByProviderAndExternalID(ctx, tenantID, provider.PartitionID, provider.ID, externalSub)
 	if err == nil && identity != nil {
 		slog.Debug("findUserProfile: coupled identity found, resolving user profile", "user_profile_id", identity.UserProfileID)
@@ -1542,16 +1567,16 @@ func (s *OAuthService) findUserProfile(ctx context.Context, tenantID uuid.UUID, 
 		slog.Debug("findUserProfile: direct identity coupling not found, falling back to email", "err", err)
 	}
 
-	// 2. VERIFIED EMAIL AUTOLINK FALLBACK
+	// VERIFIED EMAIL AUTOLINK FALLBACK
 	if !emailVerified {
 		slog.Warn("findUserProfile: email is unverified, blocking autolink and JIT provisioning")
 		return nil, port.ErrExternalEmailNotVerified
 	}
 
 	if email != "" {
-		// Query the clean, single-index partitioned profile tracker
+		// Pass 2: Fall back to checking existing profiles via verified email matching
 		slog.Debug("findUserProfile: looking up profile by email", "partition_id", provider.PartitionID, "email", email)
-		profile, err := s.storage.FindProfileByEmail(ctx, provider.PartitionID, email)
+		_, err := s.storage.FindProfileByEmail(ctx, tenantID, provider.PartitionID, email)
 		if err != nil {
 			slog.Debug("findUserProfile: profile not found by email", "partition_id", provider.PartitionID, "email", email, "err", err)
 			if provider.Config.AutoProvisionUser {
@@ -1559,7 +1584,7 @@ func (s *OAuthService) findUserProfile(ctx context.Context, tenantID uuid.UUID, 
 				isEmailVerified := provider.Config.AutoVerifyEmail && emailVerified
 
 				// Create a generic JIT user profile
-				profile = &model.UserProfile{
+				profile := &model.UserProfile{
 					ID:                uuid.New(),
 					TenantID:          tenantID,
 					PartitionID:       provider.PartitionID,
@@ -1577,63 +1602,15 @@ func (s *OAuthService) findUserProfile(ctx context.Context, tenantID uuid.UUID, 
 					slog.Error("findUserProfile: failed to JIT provision user profile", "err", errSave)
 					return nil, fmt.Errorf("failed to JIT provision user profile in oauth_service: %w", errSave)
 				}
-				err = nil
 			} else {
 				slog.Warn("findUserProfile: JIT auto-provisioning is disabled for this provider")
+				return nil, errors.New("user profile not found and auto-provisioning is disabled")
 			}
-		}
-
-		if err == nil && profile != nil {
-			// Multi-Tenant Guard: Confirm data containment properties hold true
-			if profile.TenantID != tenantID {
-				slog.Error("findUserProfile: multi-tenant guard breach detected", "profile_tenant_id", profile.TenantID, "request_tenant_id", tenantID)
-				return nil, errors.New("federation error: target user identity belongs to an isolated external tenant boundary")
-			}
-
-			// Link generation: Initialize an identity mapping slot under strict multi-tenant context
-			newIdentity := model.UserIdentity{
-				ID:                 uuid.New(),
-				UserProfileID:      profile.ID,
-				IdentityProviderID: provider.ID,
-				ExternalIdentityID: externalSub,
-				CoupledAt:          s.clock.Now(),
-			}
-
-			slog.Debug("findUserProfile: auto-linking external sub to user profile", "user_id", profile.ID, "external_sub", externalSub)
-			// Commit link safely into database indexes
-			if err := s.storage.UpsertUserIdentity(ctx, tenantID, provider.PartitionID, newIdentity); err != nil {
-				slog.Error("findUserProfile: failed auto-linking identity record", "err", err)
-				return nil, fmt.Errorf("failed auto-linking identity record: %w", err)
-			}
-			return profile, nil
 		}
 	}
 
 	slog.Warn("findUserProfile: user profile resolution failed entirely")
 	return nil, errors.New("user profile not found")
-}
-
-//nolint:unused
-func (s *OAuthService) coupleUserIdentity(ctx context.Context, tenantID uuid.UUID, partitionID int64, profileID uuid.UUID, providerID uuid.UUID, externalSub string, now time.Time) error {
-	// Query current link status safely passing complete partition keys
-	identity, err := s.storage.GetUserIdentityByProviderAndExternalID(ctx, tenantID, partitionID, providerID, externalSub)
-	if err != nil {
-		// Link trace doesn't exist yet; build it fresh
-		newIdentity := model.UserIdentity{
-			ID:                 uuid.New(),
-			UserProfileID:      profileID,
-			IdentityProviderID: providerID,
-			ExternalIdentityID: externalSub,
-			CoupledAt:          now,
-			LoginCount:         1,
-			LastLoginAt:        &now,
-		}
-		return s.storage.UpsertUserIdentity(ctx, tenantID, partitionID, newIdentity)
-	}
-
-	// Increment access metric track parameters under strict isolation constraints
-	_ = s.storage.IncrementUserIdentityLoginTracker(ctx, tenantID, partitionID, identity.ID, now)
-	return nil
 }
 
 // ============================================================================
@@ -1643,7 +1620,7 @@ func (s *OAuthService) coupleUserIdentity(ctx context.Context, tenantID uuid.UUI
 // ProcessTokenIntrospection completely encapsulates the RFC 7662 token analysis pipeline,
 // enforcing strict client profile verification, validating signatures, and checking active blacklist tables.
 func (s *OAuthService) ProcessTokenIntrospection(ctx context.Context, cmd port.IntrospectTokenCommand) (*model.IntrospectionResponse, error) {
-	// 1. Enforce strict confidential client authentication gating per RFC 7662 Section 2
+	// Enforce strict confidential client authentication gating per RFC 7662 Section 2
 	if !cmd.IsClientAuthenticated {
 		return nil, fmt.Errorf("%w: introspection requests mandate client authentication", port.ErrInvalidClient)
 	}
@@ -1652,72 +1629,39 @@ func (s *OAuthService) ProcessTokenIntrospection(ctx context.Context, cmd port.I
 		return nil, fmt.Errorf("%w: missing mandatory token parameter", port.ErrInvalidRequest)
 	}
 
-	// 2. Cryptographically verify signature parameters against the shared engine key cache
-	claims, err := s.crypto.VerifyToken(cmd.TargetTokenString)
-	if err != nil {
-		return &model.IntrospectionResponse{Active: false}, nil
-	}
-
-	tokenID, _ := claims["jti"].(string)
-	expVal, _ := claims["exp"].(float64)
-
-	// 3. Check Real-time Blacklists: Verify if the unique token ID has been revoked
-	if tokenID != "" {
-		revoked, err := s.storage.IsTokenRevoked(ctx, tokenID)
-		if err == nil && revoked {
-			return &model.IntrospectionResponse{Active: false}, nil
-		}
-	}
-
-	// 4. Verify structural temporal validation boundaries
-	exp := time.Unix(int64(expVal), 0)
-	if s.clock.Now().After(exp) {
-		return &model.IntrospectionResponse{Active: false}, nil
-	}
-
-	scope, _ := claims["scope"].(string)
-	tokenClientID, _ := claims["client_id"].(string)
-	sub, _ := claims["sub"].(string)
-	iss, _ := claims["iss"].(string)
-	tid, _ := claims["tid"].(string)
-	iatVal, _ := claims["iat"].(float64)
-
-	var cnf *model.Confirmation
-	var tokenType = "Bearer"
-	if cnfVal, ok := claims["cnf"].(map[string]any); ok {
-		if jktVal, ok := cnfVal["jkt"].(string); ok {
-			cnf = &model.Confirmation{JKT: jktVal}
-			tokenType = "DPoP"
-		}
-	}
-
-	return &model.IntrospectionResponse{
-		Active:       true,
-		Scope:        scope,
-		ClientID:     tokenClientID,
-		Subject:      sub,
-		ExpiresAt:    int64(expVal),
-		IssuedAt:     int64(iatVal),
-		Issuer:       iss,
-		TokenType:    tokenType,
-		TenantID:     tid,
-		Confirmation: cnf,
-	}, nil
+	return s.executeTokenIntrospection(ctx, cmd.TenantID, cmd.TargetTokenString)
 }
 
 // Introspection: Verifies token validity and extracts authorization properties for downstream resource servers
 func (s *OAuthService) IntrospectToken(ctx context.Context, tenantID uuid.UUID, clientID string, tokenStr string) (*model.IntrospectionResponse, error) {
-	// 1. Cryptographically verify signature parameters against the shared engine key cache
+	return s.executeTokenIntrospection(ctx, tenantID, tokenStr)
+}
+
+// executeTokenIntrospection centralizes token validation and formats spec-compliant responses.
+func (s *OAuthService) executeTokenIntrospection(ctx context.Context, expectedTenantID uuid.UUID, tokenStr string) (*model.IntrospectionResponse, error) {
+	// 1. Cryptographically verify signatures and temporal bounds via the crypto adapter port
 	claims, err := s.crypto.VerifyToken(tokenStr)
 	if err != nil {
+		// Signature is broken or token is expired -> cleanly return active: false per RFC 7662
 		return &model.IntrospectionResponse{Active: false}, nil
 	}
 
-	// 2. Extract standard token tracking claims
-	tokenID, _ := claims["jti"].(string)
-	expVal, _ := claims["exp"].(float64)
+	// 2. STRICT CROSS-TENANT ISOLATION CHECK (§8.1)
+	// Extract the tenant UUID string embedded inside the stateless token payload
+	tidStr, _ := claims["tid"].(string)
+	tokenTenantUUID, err := uuid.Parse(tidStr)
 
-	// 3. Check Real-time Blacklists: Verify if the unique token ID has been revoked
+	// If the token contains a mismatched tenant ID, treat it as completely inactive
+	if err != nil || tokenTenantUUID != expectedTenantID {
+		slog.Error("Security Alert: Cross-tenant token introspection attempt blocked",
+			"expected_tenant", expectedTenantID,
+			"token_tenant", tidStr)
+		return &model.IntrospectionResponse{Active: false}, nil
+	}
+
+	tokenID, _ := claims["jti"].(string)
+
+	// 3. FIXED-WINDOW BLACKLIST LOOKUP: Interrogate the repository to verify if the token was revoked
 	if tokenID != "" {
 		revoked, err := s.storage.IsTokenRevoked(ctx, tokenID)
 		if err == nil && revoked {
@@ -1725,20 +1669,20 @@ func (s *OAuthService) IntrospectToken(ctx context.Context, tenantID uuid.UUID, 
 		}
 	}
 
-	// 4. Verify structural temporal validation boundaries
-	exp := time.Unix(int64(expVal), 0)
-	if s.clock.Now().After(exp) {
-		return &model.IntrospectionResponse{Active: false}, nil
-	}
-
+	// 4. Extract and map parameters type-safely onto pure domain primitives
 	scope, _ := claims["scope"].(string)
 	tokenClientID, _ := claims["client_id"].(string)
+	if tokenClientID == "" {
+		tokenClientID, _ = claims["azp"].(string)
+	}
 	sub, _ := claims["sub"].(string)
 	iss, _ := claims["iss"].(string)
 	tid, _ := claims["tid"].(string)
-	iatVal, _ := claims["iat"].(float64)
+	pid, _ := claims["pid"].(string)
+	expVal, _ := claims["exp"].(int64)
+	iatVal, _ := claims["iat"].(int64)
 
-	// 5. Populate DPoP cryptographic proof binding parameters if present under the "cnf" thumbprint key
+	// 5. Handle standard RFC 8705 Proof-of-Possession thumbprint mappings
 	var cnf *model.Confirmation
 	var tokenType = "Bearer"
 	if cnfVal, ok := claims["cnf"].(map[string]any); ok {
@@ -1749,16 +1693,17 @@ func (s *OAuthService) IntrospectToken(ctx context.Context, tenantID uuid.UUID, 
 	}
 
 	return &model.IntrospectionResponse{
-		Active:       true,
-		Scope:        scope,
-		ClientID:     tokenClientID,
-		Subject:      sub,
-		ExpiresAt:    int64(expVal),
-		IssuedAt:     int64(iatVal),
-		Issuer:       iss,
-		TokenType:    tokenType,
-		TenantID:     tid,
-		Confirmation: cnf,
+		Active:         true,
+		Scope:          scope,
+		ClientID:       tokenClientID,
+		Subject:        sub,
+		ExpiresAt:      expVal,
+		IssuedAt:       iatVal,
+		Issuer:         iss,
+		TokenType:      tokenType,
+		TenantID:       tid,
+		PartitionAlias: pid,
+		Confirmation:   cnf,
 	}, nil
 }
 

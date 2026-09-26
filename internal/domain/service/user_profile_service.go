@@ -200,7 +200,7 @@ func (s *UserProfileService) ChangeUserEmail(ctx context.Context, cmd port.Chang
 	}
 
 	// 6. Partition-Isolated Uniqueness Fence: Target the 'new_email' field element directly on index collision
-	existing, err := s.storage.FindProfileByEmail(ctx, cmd.PartitionID, cleanedEmail)
+	existing, err := s.storage.FindProfileByEmail(ctx, cmd.TenantID, cmd.PartitionID, cleanedEmail)
 	if err == nil && existing != nil && existing.ID != cmd.UserProfileID {
 		valErr.Add("new_email", "This email address is already bound to another profile in this partition")
 		return valErr

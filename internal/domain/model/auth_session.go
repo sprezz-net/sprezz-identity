@@ -27,6 +27,7 @@ type AuthorizationCodeSession struct {
 	AMRValues             []string  `json:"amr_values"`
 	IdentityProviderID    uuid.UUID `json:"identity_provider_id"`
 	IdentityProviderAlias string    `json:"identity_provider_alias"`
+	IdentityProviderType  string    `json:"identity_provider_type"`
 }
 
 // InteractionSession handles short-lived parameters across localized login interface renders.

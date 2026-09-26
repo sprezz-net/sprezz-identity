@@ -64,7 +64,7 @@ sprezz-identity/
 
 ### 1.4 Pure Domain Model Strategy (`internal/domain/model/`)
 
-All domain entities use native Go primitives. They remain entirely un-annotated by framework database tags, validation micro-framework anchors, or JSON serialization metadata to safeguard domain core purity.
+All domain entities use native Go primitives (with `github.com/google/uuid` as the only permitted external dependency). They are entirely independent of third-party libraries (e.g., zero imports of JWT libraries, password hashers, or database drivers). Cryptographic token encoding, claims wrapping, and decoding are strictly isolated behind port contracts and handled inside adapter rings (`internal/adapters/out/crypto/`). Domain models also remain un-annotated by framework database tags, validation micro-framework anchors, or JSON serialization metadata to safeguard domain core purity.
 
 - **`tenant` Component**: Holds internal high-entropy tracking keys, human-readable organization identifiers, and structural canonical tracking domains.
 - **`crypto_types` Component**: Maintains definitions for asymmetric algorithms (`RS256` / `EdDSA`) and structure maps for signing key registries.
@@ -232,9 +232,9 @@ sequenceDiagram
     critical When ClientID is unprovisioned
         LocalCore->>LocalCore: Mint Software Statement JWT (aud = Tenant A Central URL)
         Note over LocalCore: SoftwareID = sprezz_admin_ui_profile | sprezz_local_admin_group
-        LocalCore->>LocalCore: Sign JWT with Platform Master Private Key
+        LocalCore->>LocalCore: Sign JWT with Tenant Keys via Crypto Port
         LocalCore->>CentralIDP: POST /oauth/register (Dynamic Payload + Software Statement)
-        Note over CentralIDP: Validates cryptographic signature & audience
+        Note over CentralIDP: Validates cryptographic signature & audience against Tenant Keys
         Note over CentralIDP: Maps client to 'sprezz_local_admin_group' (allows username-password)
         CentralIDP-->>LocalCore: Return unique ClientID (dyn_...) & ClientSecret
         LocalCore->>LocalCore: Persist client metadata to local identity_provider configs
@@ -402,51 +402,44 @@ Sprezz Identity implements standard RFC 9126 Pushed Authorization Requests (PAR)
 
 Enables native apps (like mobile clients or single-page applications) to register themselves dynamically over an unauthenticated boundary.
 
-- **Rule 1 (Public Client Stripping)**: If the registration payload specifies a native mobile or browser client application type, the engine **must not** generate or return a `client_secret`. The application profile is saved with a null secret and locked out of standard client-credential grant executions.
-- **Rule 2 (Scope Filtering)**: The registration engine matches requested scopes against the tenant's predefined list of allowed scopes (`PredefinedScopes`) before committing the client application registration.
+- **Rule 1 (Public Client Stripping)**: If the registration payload specifies a native mobile or browser client application type (or `TokenEndpointAuthMethod == "none"`), the engine **must not** generate or return a `client_secret`. The application instance is persisted with a null secret hash and locked out of confidential client executions.
+- **Rule 2 (Policy-Driven Group Scope Boundary)**: Under the Three-Tier Client Architecture (§5.5), applications do not hold ad-hoc scope grants. Inbound dynamic client registrations are bound directly to a target `ApplicationGroup` resolved via the Software Statement or tenant anchor. Permitted scope limits and audience boundaries are governed by the bound group (`group.AllowedScopes`), and runtime authorization and token issuance strictly enforce that all granted scopes fall within both `group.AllowedScopes` and the tenant's predefined scopes (`tenant.Config.PredefinedScopes`).
 
-### 5.4.1 Dual-Track Software Statement Trust Paradigms
+### 5.4.1 Unified Multi-Tenant Software Statement Trust
 
-The Dynamic Client Registration (DCR) engine (`/oauth/register`) operates as a shared infrastructure plane across all tenants. To support both platform infrastructure onboarding (e.g., the cross-tenant Admin UI loop) and standard business integrations, the validation engine evaluates inbound `software_statement` JSON Web Tokens (JWTs) using two decoupled routing paths based on the unverified Issuer (`iss`) and Key ID (`kid`) fields:
+The Dynamic Client Registration (DCR) engine (`/oauth/register`) operates as a shared infrastructure plane across all tenants. Rather than relying on a separate hardcoded platform master key, **the central admin tenant is treated as a regular tenant** with its own asymmetric keyrings and standard discovery metadata. Software statements can be cryptographically signed by any authorized tenant and submitted for DCR against any tenant that permits statement-driven registration (`DCRModeSoftwareStatement` or configured statement anchors).
 
-#### 1. Central Platform Administration Track
+The validation engine processes inbound `software_statement` JSON Web Tokens (JWTs) using a unified tenant-anchored verification pipeline:
 
-- **Issuer (`iss`):** The canonical domain identifier of the root Central Admin Tenant.
-- **Cryptographic Verification:** Validated exclusively against the platform's Master Public Key.
-- **Audience Requirement (`aud`):** Must strictly match the Token Endpoint or Issuer URI of the Central Admin Tenant.
-- **Target Context:** Registers an application instance bound to the `sprezz_admin` partition, authorizing cross-tenant operations via the root administration directory.
+#### 1. Dynamic Key Resolution & Signature Verification
 
-#### 2. Autonomous Business Tenant Track
-
-- **Issuer (`iss`):** The specific domain of the requesting business tenant.
-- **Cryptographic Verification:** Validated dynamically by resolving the active public JSON Web Key Set (JWKS) belonging to that specific tenant (reusing existing token issuance keys).
-- **Audience Requirement (`aud`):** Must match the base vanity URL or domain of that specific local tenant space.
-- **Target Context:** Registers a standard client application securely jailed inside that single tenant's business partition boundary, completely preventing cross-tenant data exfiltration or impersonation.
+- **Issuer (`iss`):** The canonical base URL or domain identifier of the signing tenant authority.
+- **Cryptographic Verification:** Validated dynamically by fetching the live, active public JSON Web Key Set (JWKS) belonging to the target tenant using the key ID (`kid`) in the statement header (supporting `ES256`, `RS256`, and `EdDSA`).
+- **Administrative Cross-Tenant Loops:** When a local tenant initiates administrative logon, it mints a software statement targeting the admin tenant (`centralAdminIssuer`) with `software_id = "sprezz_admin_ui_profile;sprezz_local_admin_group"`. The admin tenant validates this assertion against its own standard JWKS keyset and provisions the local admin client instance into the administrative control context.
+- **Standard Integration Loops:** Any tenant can configure public or authenticated software statement anchors (`profile_name;group_name`), allowing clients to dynamically onboard jailed within that specific tenant's security boundary.
 
 ```mermaid
 graph TD
-    A[Inbound DCR Request at /oauth/register] --> B{Inspect Software Statement JWT Header & 'iss'}
-
-    B -->|iss == Central Admin Platform| C[Route to Platform Master Track]
-    B -->|iss == Autonomous Business Tenant| D[Route to Tenant-Key Track]
-
-    C --> C1{Verified via Platform Master Key?}
-    C1 -->|No| X[400 Bad Request / Validation Failure]
-    C1 -->|Yes| C2{Audience 'aud' == Central Admin URL?}
-    C2 -->|No| X
-    C2 -->|Yes| C3[Provision App Instance in 'sprezz_admin' Partition]
-
-    D --> D1[Fetch Active JWKS of Requesting Tenant]
-    D1 --> D2{Verified via Tenant Public Key?}
-    D2 -->|No| X
-    D2 -->|Yes| D3{Audience 'aud' == Tenant Base URL?}
-    D3 -->|No| X
-    D3 -->|Yes| D4[Provision App Instance Jailed inside Tenant Boundary]
+    A[Inbound DCR Request at /oauth/register] --> B[Inspect Software Statement Header 'kid' & Claims]
+    B --> C[Fetch Live JWKS of Target Tenant Context]
+    C --> D{Locate 'kid' & Verify Signature?}
+    D -->|No| X[400 Bad Request / Validation Failure]
+    D -->|Yes| E{Validate Audience 'aud' == Target Tenant Base URI?}
+    E -->|No| X
+    E -->|Yes| F{Validate Temporal Claims: exp, iat, nbf?}
+    F -->|Invalid| X
+    F -->|Valid| G[Resolve SoftwareID: 'profile;group']
+    G --> H{Profile & Group Active & Compatible?}
+    H -->|No| X
+    H -->|Yes| I[Persist Application Instance Bound to Group & Profile]
 ```
 
 #### 5.4.2 Cryptographic Replay and Audience Enforcement
 
-To protect the centralized registration plane from token replay vectors, the `aud` claim validation is non-negotiable. If a valid, signed software statement is intercepted on the network, the central validator will immediately reject the DCR transaction if the statement's targeted audience does not match the URI of the executing registration endpoint.
+To protect the centralized registration plane from cross-tenant token replay attacks, audience validation is non-negotiable:
+- The token's `aud` array must contain an exact match for the base URI (`tenant.GetBaseURI()`) of the tenant handling the registration request.
+- If a valid, signed software statement is intercepted on the network, any attempt to replay it against another tenant endpoint will be rejected immediately due to mismatched audience.
+- Standard temporal lifecycle bounds (`iat`, `exp`, `nbf`) and the presence of `software_id` are strictly validated prior to provisioning.
 
 ### 5.5 Policy-Driven Client Architecture (Applications, Profiles & Groups)
 

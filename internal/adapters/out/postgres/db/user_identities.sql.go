@@ -79,6 +79,7 @@ func (q *Queries) GetUserIdentitiesByProfileID(ctx context.Context, arg GetUserI
 }
 
 const getUserIdentityByIdentifier = `-- name: GetUserIdentityByIdentifier :one
+
 WITH tenant AS (
     SELECT id
     FROM tenants
@@ -119,6 +120,7 @@ type GetUserIdentityByIdentifierRow struct {
 	CoupledAt          pgtype.Timestamptz `json:"coupled_at"`
 }
 
+// Subsequent logins execute clear column arithmetic
 func (q *Queries) GetUserIdentityByIdentifier(ctx context.Context, arg GetUserIdentityByIdentifierParams) (GetUserIdentityByIdentifierRow, error) {
 	row := q.db.QueryRow(ctx, getUserIdentityByIdentifier,
 		arg.PartitionID,
@@ -259,36 +261,53 @@ func (q *Queries) GetUserIdentityByProviderAndExternalID(ctx context.Context, ar
 	return i, err
 }
 
-const incrementUserIdentityLoginTracker = `-- name: IncrementUserIdentityLoginTracker :exec
-WITH tenant AS (
-    SELECT id
-    FROM tenants
-    WHERE tenant_uuid = $4::uuid
-    LIMIT 1
+const trackUserLogin = `-- name: TrackUserLogin :exec
+INSERT INTO user_identities (
+    id,
+    tenant_id,
+    partition_id,
+    user_profile_id,
+    identity_provider_id,
+    external_identity_id,
+    login_count,
+    last_login_at,
+    coupled_at
 )
-UPDATE user_identities i
-SET
-    login_count = i.login_count + 1,
-    last_login_at = $1::timestamptz
-FROM tenant
-WHERE i.tenant_id = tenant.id
-  AND i.partition_id = $2::bigint
-  AND i.id = $3::uuid
+VALUES (
+    gen_random_uuid(), -- Or your standard platform UUID generator function
+    (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid LIMIT 1),
+    $2,
+    $3::uuid,
+    $4::uuid,
+    $5,
+    1, -- First time coupling starts authoritatively at 1
+    $6::timestamptz,
+    $6::timestamptz
+)
+ON CONFLICT (user_profile_id, identity_provider_id)
+DO UPDATE SET
+    external_identity_id = EXCLUDED.external_identity_id,
+    last_login_at = EXCLUDED.last_login_at,
+    login_count = user_identities.login_count + 1
 `
 
-type IncrementUserIdentityLoginTrackerParams struct {
-	LastLoginAt pgtype.Timestamptz `json:"last_login_at"`
-	PartitionID int64              `json:"partition_id"`
-	IdentityID  pgtype.UUID        `json:"identity_id"`
-	TenantUuid  pgtype.UUID        `json:"tenant_uuid"`
+type TrackUserLoginParams struct {
+	TenantUuid         pgtype.UUID        `json:"tenant_uuid"`
+	PartitionID        int64              `json:"partition_id"`
+	UserProfileID      pgtype.UUID        `json:"user_profile_id"`
+	IdentityProviderID pgtype.UUID        `json:"identity_provider_id"`
+	ExternalIdentityID string             `json:"external_identity_id"`
+	LoginTime          pgtype.Timestamptz `json:"login_time"`
 }
 
-func (q *Queries) IncrementUserIdentityLoginTracker(ctx context.Context, arg IncrementUserIdentityLoginTrackerParams) error {
-	_, err := q.db.Exec(ctx, incrementUserIdentityLoginTracker,
-		arg.LastLoginAt,
-		arg.PartitionID,
-		arg.IdentityID,
+func (q *Queries) TrackUserLogin(ctx context.Context, arg TrackUserLoginParams) error {
+	_, err := q.db.Exec(ctx, trackUserLogin,
 		arg.TenantUuid,
+		arg.PartitionID,
+		arg.UserProfileID,
+		arg.IdentityProviderID,
+		arg.ExternalIdentityID,
+		arg.LoginTime,
 	)
 	return err
 }

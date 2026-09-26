@@ -36,9 +36,9 @@ type StorageMock struct {
 	beforeFindFederatedSessionByUpstreamSubjectCounter uint64
 	FindFederatedSessionByUpstreamSubjectMock          mStorageMockFindFederatedSessionByUpstreamSubject
 
-	funcFindProfileByEmail          func(ctx context.Context, partitionID int64, email string) (up1 *model.UserProfile, err error)
+	funcFindProfileByEmail          func(ctx context.Context, tenantID uuid.UUID, partitionID int64, email string) (up1 *model.UserProfile, err error)
 	funcFindProfileByEmailOrigin    string
-	inspectFuncFindProfileByEmail   func(ctx context.Context, partitionID int64, email string)
+	inspectFuncFindProfileByEmail   func(ctx context.Context, tenantID uuid.UUID, partitionID int64, email string)
 	afterFindProfileByEmailCounter  uint64
 	beforeFindProfileByEmailCounter uint64
 	FindProfileByEmailMock          mStorageMockFindProfileByEmail
@@ -253,13 +253,6 @@ type StorageMock struct {
 	beforeInTransactionCounter uint64
 	InTransactionMock          mStorageMockInTransaction
 
-	funcIncrementUserIdentityLoginTracker          func(ctx context.Context, tenantID uuid.UUID, partitionID int64, identityID uuid.UUID, loginTime time.Time) (err error)
-	funcIncrementUserIdentityLoginTrackerOrigin    string
-	inspectFuncIncrementUserIdentityLoginTracker   func(ctx context.Context, tenantID uuid.UUID, partitionID int64, identityID uuid.UUID, loginTime time.Time)
-	afterIncrementUserIdentityLoginTrackerCounter  uint64
-	beforeIncrementUserIdentityLoginTrackerCounter uint64
-	IncrementUserIdentityLoginTrackerMock          mStorageMockIncrementUserIdentityLoginTracker
-
 	funcIsDPoPProofUsed          func(ctx context.Context, jti string) (b1 bool, err error)
 	funcIsDPoPProofUsedOrigin    string
 	inspectFuncIsDPoPProofUsed   func(ctx context.Context, jti string)
@@ -421,6 +414,13 @@ type StorageMock struct {
 	beforeSaveUserProfileCounter uint64
 	SaveUserProfileMock          mStorageMockSaveUserProfile
 
+	funcTrackUserLogin          func(ctx context.Context, tenantID uuid.UUID, partitionID int64, profileID uuid.UUID, providerID uuid.UUID, externalSub string, loginTime time.Time) (err error)
+	funcTrackUserLoginOrigin    string
+	inspectFuncTrackUserLogin   func(ctx context.Context, tenantID uuid.UUID, partitionID int64, profileID uuid.UUID, providerID uuid.UUID, externalSub string, loginTime time.Time)
+	afterTrackUserLoginCounter  uint64
+	beforeTrackUserLoginCounter uint64
+	TrackUserLoginMock          mStorageMockTrackUserLogin
+
 	funcUpdatePasswordLockoutState          func(ctx context.Context, tenantID uuid.UUID, partitionID int64, userProfileID uuid.UUID, providerID uuid.UUID, failedCount int, lastAttempt *time.Time, blockedUntil *time.Time) (err error)
 	funcUpdatePasswordLockoutStateOrigin    string
 	inspectFuncUpdatePasswordLockoutState   func(ctx context.Context, tenantID uuid.UUID, partitionID int64, userProfileID uuid.UUID, providerID uuid.UUID, failedCount int, lastAttempt *time.Time, blockedUntil *time.Time)
@@ -543,9 +543,6 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 	m.InTransactionMock = mStorageMockInTransaction{mock: m}
 	m.InTransactionMock.callArgs = []*StorageMockInTransactionParams{}
 
-	m.IncrementUserIdentityLoginTrackerMock = mStorageMockIncrementUserIdentityLoginTracker{mock: m}
-	m.IncrementUserIdentityLoginTrackerMock.callArgs = []*StorageMockIncrementUserIdentityLoginTrackerParams{}
-
 	m.IsDPoPProofUsedMock = mStorageMockIsDPoPProofUsed{mock: m}
 	m.IsDPoPProofUsedMock.callArgs = []*StorageMockIsDPoPProofUsedParams{}
 
@@ -614,6 +611,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 
 	m.SaveUserProfileMock = mStorageMockSaveUserProfile{mock: m}
 	m.SaveUserProfileMock.callArgs = []*StorageMockSaveUserProfileParams{}
+
+	m.TrackUserLoginMock = mStorageMockTrackUserLogin{mock: m}
+	m.TrackUserLoginMock.callArgs = []*StorageMockTrackUserLoginParams{}
 
 	m.UpdatePasswordLockoutStateMock = mStorageMockUpdatePasswordLockoutState{mock: m}
 	m.UpdatePasswordLockoutStateMock.callArgs = []*StorageMockUpdatePasswordLockoutStateParams{}
@@ -1462,6 +1462,7 @@ type StorageMockFindProfileByEmailExpectation struct {
 // StorageMockFindProfileByEmailParams contains parameters of the Storage.FindProfileByEmail
 type StorageMockFindProfileByEmailParams struct {
 	ctx         context.Context
+	tenantID    uuid.UUID
 	partitionID int64
 	email       string
 }
@@ -1469,6 +1470,7 @@ type StorageMockFindProfileByEmailParams struct {
 // StorageMockFindProfileByEmailParamPtrs contains pointers to parameters of the Storage.FindProfileByEmail
 type StorageMockFindProfileByEmailParamPtrs struct {
 	ctx         *context.Context
+	tenantID    *uuid.UUID
 	partitionID *int64
 	email       *string
 }
@@ -1483,6 +1485,7 @@ type StorageMockFindProfileByEmailResults struct {
 type StorageMockFindProfileByEmailExpectationOrigins struct {
 	origin            string
 	originCtx         string
+	originTenantID    string
 	originPartitionID string
 	originEmail       string
 }
@@ -1498,7 +1501,7 @@ func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) Optional() *mStorage
 }
 
 // Expect sets up expected params for Storage.FindProfileByEmail
-func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) Expect(ctx context.Context, partitionID int64, email string) *mStorageMockFindProfileByEmail {
+func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) Expect(ctx context.Context, tenantID uuid.UUID, partitionID int64, email string) *mStorageMockFindProfileByEmail {
 	if mmFindProfileByEmail.mock.funcFindProfileByEmail != nil {
 		mmFindProfileByEmail.mock.t.Fatalf("StorageMock.FindProfileByEmail mock is already set by Set")
 	}
@@ -1511,7 +1514,7 @@ func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) Expect(ctx context.C
 		mmFindProfileByEmail.mock.t.Fatalf("StorageMock.FindProfileByEmail mock is already set by ExpectParams functions")
 	}
 
-	mmFindProfileByEmail.defaultExpectation.params = &StorageMockFindProfileByEmailParams{ctx, partitionID, email}
+	mmFindProfileByEmail.defaultExpectation.params = &StorageMockFindProfileByEmailParams{ctx, tenantID, partitionID, email}
 	mmFindProfileByEmail.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmFindProfileByEmail.expectations {
 		if minimock.Equal(e.params, mmFindProfileByEmail.defaultExpectation.params) {
@@ -1545,8 +1548,31 @@ func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) ExpectCtxParam1(ctx 
 	return mmFindProfileByEmail
 }
 
-// ExpectPartitionIDParam2 sets up expected param partitionID for Storage.FindProfileByEmail
-func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) ExpectPartitionIDParam2(partitionID int64) *mStorageMockFindProfileByEmail {
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.FindProfileByEmail
+func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockFindProfileByEmail {
+	if mmFindProfileByEmail.mock.funcFindProfileByEmail != nil {
+		mmFindProfileByEmail.mock.t.Fatalf("StorageMock.FindProfileByEmail mock is already set by Set")
+	}
+
+	if mmFindProfileByEmail.defaultExpectation == nil {
+		mmFindProfileByEmail.defaultExpectation = &StorageMockFindProfileByEmailExpectation{}
+	}
+
+	if mmFindProfileByEmail.defaultExpectation.params != nil {
+		mmFindProfileByEmail.mock.t.Fatalf("StorageMock.FindProfileByEmail mock is already set by Expect")
+	}
+
+	if mmFindProfileByEmail.defaultExpectation.paramPtrs == nil {
+		mmFindProfileByEmail.defaultExpectation.paramPtrs = &StorageMockFindProfileByEmailParamPtrs{}
+	}
+	mmFindProfileByEmail.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmFindProfileByEmail.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmFindProfileByEmail
+}
+
+// ExpectPartitionIDParam3 sets up expected param partitionID for Storage.FindProfileByEmail
+func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) ExpectPartitionIDParam3(partitionID int64) *mStorageMockFindProfileByEmail {
 	if mmFindProfileByEmail.mock.funcFindProfileByEmail != nil {
 		mmFindProfileByEmail.mock.t.Fatalf("StorageMock.FindProfileByEmail mock is already set by Set")
 	}
@@ -1568,8 +1594,8 @@ func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) ExpectPartitionIDPar
 	return mmFindProfileByEmail
 }
 
-// ExpectEmailParam3 sets up expected param email for Storage.FindProfileByEmail
-func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) ExpectEmailParam3(email string) *mStorageMockFindProfileByEmail {
+// ExpectEmailParam4 sets up expected param email for Storage.FindProfileByEmail
+func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) ExpectEmailParam4(email string) *mStorageMockFindProfileByEmail {
 	if mmFindProfileByEmail.mock.funcFindProfileByEmail != nil {
 		mmFindProfileByEmail.mock.t.Fatalf("StorageMock.FindProfileByEmail mock is already set by Set")
 	}
@@ -1592,7 +1618,7 @@ func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) ExpectEmailParam3(em
 }
 
 // Inspect accepts an inspector function that has same arguments as the Storage.FindProfileByEmail
-func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) Inspect(f func(ctx context.Context, partitionID int64, email string)) *mStorageMockFindProfileByEmail {
+func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) Inspect(f func(ctx context.Context, tenantID uuid.UUID, partitionID int64, email string)) *mStorageMockFindProfileByEmail {
 	if mmFindProfileByEmail.mock.inspectFuncFindProfileByEmail != nil {
 		mmFindProfileByEmail.mock.t.Fatalf("Inspect function is already set for StorageMock.FindProfileByEmail")
 	}
@@ -1617,7 +1643,7 @@ func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) Return(up1 *model.Us
 }
 
 // Set uses given function f to mock the Storage.FindProfileByEmail method
-func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) Set(f func(ctx context.Context, partitionID int64, email string) (up1 *model.UserProfile, err error)) *StorageMock {
+func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) Set(f func(ctx context.Context, tenantID uuid.UUID, partitionID int64, email string) (up1 *model.UserProfile, err error)) *StorageMock {
 	if mmFindProfileByEmail.defaultExpectation != nil {
 		mmFindProfileByEmail.mock.t.Fatalf("Default expectation is already set for the Storage.FindProfileByEmail method")
 	}
@@ -1633,14 +1659,14 @@ func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) Set(f func(ctx conte
 
 // When sets expectation for the Storage.FindProfileByEmail which will trigger the result defined by the following
 // Then helper
-func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) When(ctx context.Context, partitionID int64, email string) *StorageMockFindProfileByEmailExpectation {
+func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) When(ctx context.Context, tenantID uuid.UUID, partitionID int64, email string) *StorageMockFindProfileByEmailExpectation {
 	if mmFindProfileByEmail.mock.funcFindProfileByEmail != nil {
 		mmFindProfileByEmail.mock.t.Fatalf("StorageMock.FindProfileByEmail mock is already set by Set")
 	}
 
 	expectation := &StorageMockFindProfileByEmailExpectation{
 		mock:               mmFindProfileByEmail.mock,
-		params:             &StorageMockFindProfileByEmailParams{ctx, partitionID, email},
+		params:             &StorageMockFindProfileByEmailParams{ctx, tenantID, partitionID, email},
 		expectationOrigins: StorageMockFindProfileByEmailExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmFindProfileByEmail.expectations = append(mmFindProfileByEmail.expectations, expectation)
@@ -1675,17 +1701,17 @@ func (mmFindProfileByEmail *mStorageMockFindProfileByEmail) invocationsDone() bo
 }
 
 // FindProfileByEmail implements mm_port.Storage
-func (mmFindProfileByEmail *StorageMock) FindProfileByEmail(ctx context.Context, partitionID int64, email string) (up1 *model.UserProfile, err error) {
+func (mmFindProfileByEmail *StorageMock) FindProfileByEmail(ctx context.Context, tenantID uuid.UUID, partitionID int64, email string) (up1 *model.UserProfile, err error) {
 	mm_atomic.AddUint64(&mmFindProfileByEmail.beforeFindProfileByEmailCounter, 1)
 	defer mm_atomic.AddUint64(&mmFindProfileByEmail.afterFindProfileByEmailCounter, 1)
 
 	mmFindProfileByEmail.t.Helper()
 
 	if mmFindProfileByEmail.inspectFuncFindProfileByEmail != nil {
-		mmFindProfileByEmail.inspectFuncFindProfileByEmail(ctx, partitionID, email)
+		mmFindProfileByEmail.inspectFuncFindProfileByEmail(ctx, tenantID, partitionID, email)
 	}
 
-	mm_params := StorageMockFindProfileByEmailParams{ctx, partitionID, email}
+	mm_params := StorageMockFindProfileByEmailParams{ctx, tenantID, partitionID, email}
 
 	// Record call args
 	mmFindProfileByEmail.FindProfileByEmailMock.mutex.Lock()
@@ -1704,13 +1730,18 @@ func (mmFindProfileByEmail *StorageMock) FindProfileByEmail(ctx context.Context,
 		mm_want := mmFindProfileByEmail.FindProfileByEmailMock.defaultExpectation.params
 		mm_want_ptrs := mmFindProfileByEmail.FindProfileByEmailMock.defaultExpectation.paramPtrs
 
-		mm_got := StorageMockFindProfileByEmailParams{ctx, partitionID, email}
+		mm_got := StorageMockFindProfileByEmailParams{ctx, tenantID, partitionID, email}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
 				mmFindProfileByEmail.t.Errorf("StorageMock.FindProfileByEmail got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmFindProfileByEmail.FindProfileByEmailMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmFindProfileByEmail.t.Errorf("StorageMock.FindProfileByEmail got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmFindProfileByEmail.FindProfileByEmailMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
 			}
 
 			if mm_want_ptrs.partitionID != nil && !minimock.Equal(*mm_want_ptrs.partitionID, mm_got.partitionID) {
@@ -1735,9 +1766,9 @@ func (mmFindProfileByEmail *StorageMock) FindProfileByEmail(ctx context.Context,
 		return (*mm_results).up1, (*mm_results).err
 	}
 	if mmFindProfileByEmail.funcFindProfileByEmail != nil {
-		return mmFindProfileByEmail.funcFindProfileByEmail(ctx, partitionID, email)
+		return mmFindProfileByEmail.funcFindProfileByEmail(ctx, tenantID, partitionID, email)
 	}
-	mmFindProfileByEmail.t.Fatalf("Unexpected call to StorageMock.FindProfileByEmail. %v %v %v", ctx, partitionID, email)
+	mmFindProfileByEmail.t.Fatalf("Unexpected call to StorageMock.FindProfileByEmail. %v %v %v %v", ctx, tenantID, partitionID, email)
 	return
 }
 
@@ -13278,441 +13309,6 @@ func (m *StorageMock) MinimockInTransactionInspect() {
 	}
 }
 
-type mStorageMockIncrementUserIdentityLoginTracker struct {
-	optional           bool
-	mock               *StorageMock
-	defaultExpectation *StorageMockIncrementUserIdentityLoginTrackerExpectation
-	expectations       []*StorageMockIncrementUserIdentityLoginTrackerExpectation
-
-	callArgs []*StorageMockIncrementUserIdentityLoginTrackerParams
-	mutex    sync.RWMutex
-
-	expectedInvocations       uint64
-	expectedInvocationsOrigin string
-}
-
-// StorageMockIncrementUserIdentityLoginTrackerExpectation specifies expectation struct of the Storage.IncrementUserIdentityLoginTracker
-type StorageMockIncrementUserIdentityLoginTrackerExpectation struct {
-	mock               *StorageMock
-	params             *StorageMockIncrementUserIdentityLoginTrackerParams
-	paramPtrs          *StorageMockIncrementUserIdentityLoginTrackerParamPtrs
-	expectationOrigins StorageMockIncrementUserIdentityLoginTrackerExpectationOrigins
-	results            *StorageMockIncrementUserIdentityLoginTrackerResults
-	returnOrigin       string
-	Counter            uint64
-}
-
-// StorageMockIncrementUserIdentityLoginTrackerParams contains parameters of the Storage.IncrementUserIdentityLoginTracker
-type StorageMockIncrementUserIdentityLoginTrackerParams struct {
-	ctx         context.Context
-	tenantID    uuid.UUID
-	partitionID int64
-	identityID  uuid.UUID
-	loginTime   time.Time
-}
-
-// StorageMockIncrementUserIdentityLoginTrackerParamPtrs contains pointers to parameters of the Storage.IncrementUserIdentityLoginTracker
-type StorageMockIncrementUserIdentityLoginTrackerParamPtrs struct {
-	ctx         *context.Context
-	tenantID    *uuid.UUID
-	partitionID *int64
-	identityID  *uuid.UUID
-	loginTime   *time.Time
-}
-
-// StorageMockIncrementUserIdentityLoginTrackerResults contains results of the Storage.IncrementUserIdentityLoginTracker
-type StorageMockIncrementUserIdentityLoginTrackerResults struct {
-	err error
-}
-
-// StorageMockIncrementUserIdentityLoginTrackerOrigins contains origins of expectations of the Storage.IncrementUserIdentityLoginTracker
-type StorageMockIncrementUserIdentityLoginTrackerExpectationOrigins struct {
-	origin            string
-	originCtx         string
-	originTenantID    string
-	originPartitionID string
-	originIdentityID  string
-	originLoginTime   string
-}
-
-// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
-// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
-// Optional() makes method check to work in '0 or more' mode.
-// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
-// catch the problems when the expected method call is totally skipped during test run.
-func (mmIncrementUserIdentityLoginTracker *mStorageMockIncrementUserIdentityLoginTracker) Optional() *mStorageMockIncrementUserIdentityLoginTracker {
-	mmIncrementUserIdentityLoginTracker.optional = true
-	return mmIncrementUserIdentityLoginTracker
-}
-
-// Expect sets up expected params for Storage.IncrementUserIdentityLoginTracker
-func (mmIncrementUserIdentityLoginTracker *mStorageMockIncrementUserIdentityLoginTracker) Expect(ctx context.Context, tenantID uuid.UUID, partitionID int64, identityID uuid.UUID, loginTime time.Time) *mStorageMockIncrementUserIdentityLoginTracker {
-	if mmIncrementUserIdentityLoginTracker.mock.funcIncrementUserIdentityLoginTracker != nil {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("StorageMock.IncrementUserIdentityLoginTracker mock is already set by Set")
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation == nil {
-		mmIncrementUserIdentityLoginTracker.defaultExpectation = &StorageMockIncrementUserIdentityLoginTrackerExpectation{}
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation.paramPtrs != nil {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("StorageMock.IncrementUserIdentityLoginTracker mock is already set by ExpectParams functions")
-	}
-
-	mmIncrementUserIdentityLoginTracker.defaultExpectation.params = &StorageMockIncrementUserIdentityLoginTrackerParams{ctx, tenantID, partitionID, identityID, loginTime}
-	mmIncrementUserIdentityLoginTracker.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
-	for _, e := range mmIncrementUserIdentityLoginTracker.expectations {
-		if minimock.Equal(e.params, mmIncrementUserIdentityLoginTracker.defaultExpectation.params) {
-			mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmIncrementUserIdentityLoginTracker.defaultExpectation.params)
-		}
-	}
-
-	return mmIncrementUserIdentityLoginTracker
-}
-
-// ExpectCtxParam1 sets up expected param ctx for Storage.IncrementUserIdentityLoginTracker
-func (mmIncrementUserIdentityLoginTracker *mStorageMockIncrementUserIdentityLoginTracker) ExpectCtxParam1(ctx context.Context) *mStorageMockIncrementUserIdentityLoginTracker {
-	if mmIncrementUserIdentityLoginTracker.mock.funcIncrementUserIdentityLoginTracker != nil {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("StorageMock.IncrementUserIdentityLoginTracker mock is already set by Set")
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation == nil {
-		mmIncrementUserIdentityLoginTracker.defaultExpectation = &StorageMockIncrementUserIdentityLoginTrackerExpectation{}
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation.params != nil {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("StorageMock.IncrementUserIdentityLoginTracker mock is already set by Expect")
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation.paramPtrs == nil {
-		mmIncrementUserIdentityLoginTracker.defaultExpectation.paramPtrs = &StorageMockIncrementUserIdentityLoginTrackerParamPtrs{}
-	}
-	mmIncrementUserIdentityLoginTracker.defaultExpectation.paramPtrs.ctx = &ctx
-	mmIncrementUserIdentityLoginTracker.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
-
-	return mmIncrementUserIdentityLoginTracker
-}
-
-// ExpectTenantIDParam2 sets up expected param tenantID for Storage.IncrementUserIdentityLoginTracker
-func (mmIncrementUserIdentityLoginTracker *mStorageMockIncrementUserIdentityLoginTracker) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockIncrementUserIdentityLoginTracker {
-	if mmIncrementUserIdentityLoginTracker.mock.funcIncrementUserIdentityLoginTracker != nil {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("StorageMock.IncrementUserIdentityLoginTracker mock is already set by Set")
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation == nil {
-		mmIncrementUserIdentityLoginTracker.defaultExpectation = &StorageMockIncrementUserIdentityLoginTrackerExpectation{}
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation.params != nil {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("StorageMock.IncrementUserIdentityLoginTracker mock is already set by Expect")
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation.paramPtrs == nil {
-		mmIncrementUserIdentityLoginTracker.defaultExpectation.paramPtrs = &StorageMockIncrementUserIdentityLoginTrackerParamPtrs{}
-	}
-	mmIncrementUserIdentityLoginTracker.defaultExpectation.paramPtrs.tenantID = &tenantID
-	mmIncrementUserIdentityLoginTracker.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
-
-	return mmIncrementUserIdentityLoginTracker
-}
-
-// ExpectPartitionIDParam3 sets up expected param partitionID for Storage.IncrementUserIdentityLoginTracker
-func (mmIncrementUserIdentityLoginTracker *mStorageMockIncrementUserIdentityLoginTracker) ExpectPartitionIDParam3(partitionID int64) *mStorageMockIncrementUserIdentityLoginTracker {
-	if mmIncrementUserIdentityLoginTracker.mock.funcIncrementUserIdentityLoginTracker != nil {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("StorageMock.IncrementUserIdentityLoginTracker mock is already set by Set")
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation == nil {
-		mmIncrementUserIdentityLoginTracker.defaultExpectation = &StorageMockIncrementUserIdentityLoginTrackerExpectation{}
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation.params != nil {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("StorageMock.IncrementUserIdentityLoginTracker mock is already set by Expect")
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation.paramPtrs == nil {
-		mmIncrementUserIdentityLoginTracker.defaultExpectation.paramPtrs = &StorageMockIncrementUserIdentityLoginTrackerParamPtrs{}
-	}
-	mmIncrementUserIdentityLoginTracker.defaultExpectation.paramPtrs.partitionID = &partitionID
-	mmIncrementUserIdentityLoginTracker.defaultExpectation.expectationOrigins.originPartitionID = minimock.CallerInfo(1)
-
-	return mmIncrementUserIdentityLoginTracker
-}
-
-// ExpectIdentityIDParam4 sets up expected param identityID for Storage.IncrementUserIdentityLoginTracker
-func (mmIncrementUserIdentityLoginTracker *mStorageMockIncrementUserIdentityLoginTracker) ExpectIdentityIDParam4(identityID uuid.UUID) *mStorageMockIncrementUserIdentityLoginTracker {
-	if mmIncrementUserIdentityLoginTracker.mock.funcIncrementUserIdentityLoginTracker != nil {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("StorageMock.IncrementUserIdentityLoginTracker mock is already set by Set")
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation == nil {
-		mmIncrementUserIdentityLoginTracker.defaultExpectation = &StorageMockIncrementUserIdentityLoginTrackerExpectation{}
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation.params != nil {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("StorageMock.IncrementUserIdentityLoginTracker mock is already set by Expect")
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation.paramPtrs == nil {
-		mmIncrementUserIdentityLoginTracker.defaultExpectation.paramPtrs = &StorageMockIncrementUserIdentityLoginTrackerParamPtrs{}
-	}
-	mmIncrementUserIdentityLoginTracker.defaultExpectation.paramPtrs.identityID = &identityID
-	mmIncrementUserIdentityLoginTracker.defaultExpectation.expectationOrigins.originIdentityID = minimock.CallerInfo(1)
-
-	return mmIncrementUserIdentityLoginTracker
-}
-
-// ExpectLoginTimeParam5 sets up expected param loginTime for Storage.IncrementUserIdentityLoginTracker
-func (mmIncrementUserIdentityLoginTracker *mStorageMockIncrementUserIdentityLoginTracker) ExpectLoginTimeParam5(loginTime time.Time) *mStorageMockIncrementUserIdentityLoginTracker {
-	if mmIncrementUserIdentityLoginTracker.mock.funcIncrementUserIdentityLoginTracker != nil {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("StorageMock.IncrementUserIdentityLoginTracker mock is already set by Set")
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation == nil {
-		mmIncrementUserIdentityLoginTracker.defaultExpectation = &StorageMockIncrementUserIdentityLoginTrackerExpectation{}
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation.params != nil {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("StorageMock.IncrementUserIdentityLoginTracker mock is already set by Expect")
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation.paramPtrs == nil {
-		mmIncrementUserIdentityLoginTracker.defaultExpectation.paramPtrs = &StorageMockIncrementUserIdentityLoginTrackerParamPtrs{}
-	}
-	mmIncrementUserIdentityLoginTracker.defaultExpectation.paramPtrs.loginTime = &loginTime
-	mmIncrementUserIdentityLoginTracker.defaultExpectation.expectationOrigins.originLoginTime = minimock.CallerInfo(1)
-
-	return mmIncrementUserIdentityLoginTracker
-}
-
-// Inspect accepts an inspector function that has same arguments as the Storage.IncrementUserIdentityLoginTracker
-func (mmIncrementUserIdentityLoginTracker *mStorageMockIncrementUserIdentityLoginTracker) Inspect(f func(ctx context.Context, tenantID uuid.UUID, partitionID int64, identityID uuid.UUID, loginTime time.Time)) *mStorageMockIncrementUserIdentityLoginTracker {
-	if mmIncrementUserIdentityLoginTracker.mock.inspectFuncIncrementUserIdentityLoginTracker != nil {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("Inspect function is already set for StorageMock.IncrementUserIdentityLoginTracker")
-	}
-
-	mmIncrementUserIdentityLoginTracker.mock.inspectFuncIncrementUserIdentityLoginTracker = f
-
-	return mmIncrementUserIdentityLoginTracker
-}
-
-// Return sets up results that will be returned by Storage.IncrementUserIdentityLoginTracker
-func (mmIncrementUserIdentityLoginTracker *mStorageMockIncrementUserIdentityLoginTracker) Return(err error) *StorageMock {
-	if mmIncrementUserIdentityLoginTracker.mock.funcIncrementUserIdentityLoginTracker != nil {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("StorageMock.IncrementUserIdentityLoginTracker mock is already set by Set")
-	}
-
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation == nil {
-		mmIncrementUserIdentityLoginTracker.defaultExpectation = &StorageMockIncrementUserIdentityLoginTrackerExpectation{mock: mmIncrementUserIdentityLoginTracker.mock}
-	}
-	mmIncrementUserIdentityLoginTracker.defaultExpectation.results = &StorageMockIncrementUserIdentityLoginTrackerResults{err}
-	mmIncrementUserIdentityLoginTracker.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
-	return mmIncrementUserIdentityLoginTracker.mock
-}
-
-// Set uses given function f to mock the Storage.IncrementUserIdentityLoginTracker method
-func (mmIncrementUserIdentityLoginTracker *mStorageMockIncrementUserIdentityLoginTracker) Set(f func(ctx context.Context, tenantID uuid.UUID, partitionID int64, identityID uuid.UUID, loginTime time.Time) (err error)) *StorageMock {
-	if mmIncrementUserIdentityLoginTracker.defaultExpectation != nil {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("Default expectation is already set for the Storage.IncrementUserIdentityLoginTracker method")
-	}
-
-	if len(mmIncrementUserIdentityLoginTracker.expectations) > 0 {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("Some expectations are already set for the Storage.IncrementUserIdentityLoginTracker method")
-	}
-
-	mmIncrementUserIdentityLoginTracker.mock.funcIncrementUserIdentityLoginTracker = f
-	mmIncrementUserIdentityLoginTracker.mock.funcIncrementUserIdentityLoginTrackerOrigin = minimock.CallerInfo(1)
-	return mmIncrementUserIdentityLoginTracker.mock
-}
-
-// When sets expectation for the Storage.IncrementUserIdentityLoginTracker which will trigger the result defined by the following
-// Then helper
-func (mmIncrementUserIdentityLoginTracker *mStorageMockIncrementUserIdentityLoginTracker) When(ctx context.Context, tenantID uuid.UUID, partitionID int64, identityID uuid.UUID, loginTime time.Time) *StorageMockIncrementUserIdentityLoginTrackerExpectation {
-	if mmIncrementUserIdentityLoginTracker.mock.funcIncrementUserIdentityLoginTracker != nil {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("StorageMock.IncrementUserIdentityLoginTracker mock is already set by Set")
-	}
-
-	expectation := &StorageMockIncrementUserIdentityLoginTrackerExpectation{
-		mock:               mmIncrementUserIdentityLoginTracker.mock,
-		params:             &StorageMockIncrementUserIdentityLoginTrackerParams{ctx, tenantID, partitionID, identityID, loginTime},
-		expectationOrigins: StorageMockIncrementUserIdentityLoginTrackerExpectationOrigins{origin: minimock.CallerInfo(1)},
-	}
-	mmIncrementUserIdentityLoginTracker.expectations = append(mmIncrementUserIdentityLoginTracker.expectations, expectation)
-	return expectation
-}
-
-// Then sets up Storage.IncrementUserIdentityLoginTracker return parameters for the expectation previously defined by the When method
-func (e *StorageMockIncrementUserIdentityLoginTrackerExpectation) Then(err error) *StorageMock {
-	e.results = &StorageMockIncrementUserIdentityLoginTrackerResults{err}
-	return e.mock
-}
-
-// Times sets number of times Storage.IncrementUserIdentityLoginTracker should be invoked
-func (mmIncrementUserIdentityLoginTracker *mStorageMockIncrementUserIdentityLoginTracker) Times(n uint64) *mStorageMockIncrementUserIdentityLoginTracker {
-	if n == 0 {
-		mmIncrementUserIdentityLoginTracker.mock.t.Fatalf("Times of StorageMock.IncrementUserIdentityLoginTracker mock can not be zero")
-	}
-	mm_atomic.StoreUint64(&mmIncrementUserIdentityLoginTracker.expectedInvocations, n)
-	mmIncrementUserIdentityLoginTracker.expectedInvocationsOrigin = minimock.CallerInfo(1)
-	return mmIncrementUserIdentityLoginTracker
-}
-
-func (mmIncrementUserIdentityLoginTracker *mStorageMockIncrementUserIdentityLoginTracker) invocationsDone() bool {
-	if len(mmIncrementUserIdentityLoginTracker.expectations) == 0 && mmIncrementUserIdentityLoginTracker.defaultExpectation == nil && mmIncrementUserIdentityLoginTracker.mock.funcIncrementUserIdentityLoginTracker == nil {
-		return true
-	}
-
-	totalInvocations := mm_atomic.LoadUint64(&mmIncrementUserIdentityLoginTracker.mock.afterIncrementUserIdentityLoginTrackerCounter)
-	expectedInvocations := mm_atomic.LoadUint64(&mmIncrementUserIdentityLoginTracker.expectedInvocations)
-
-	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
-}
-
-// IncrementUserIdentityLoginTracker implements mm_port.Storage
-func (mmIncrementUserIdentityLoginTracker *StorageMock) IncrementUserIdentityLoginTracker(ctx context.Context, tenantID uuid.UUID, partitionID int64, identityID uuid.UUID, loginTime time.Time) (err error) {
-	mm_atomic.AddUint64(&mmIncrementUserIdentityLoginTracker.beforeIncrementUserIdentityLoginTrackerCounter, 1)
-	defer mm_atomic.AddUint64(&mmIncrementUserIdentityLoginTracker.afterIncrementUserIdentityLoginTrackerCounter, 1)
-
-	mmIncrementUserIdentityLoginTracker.t.Helper()
-
-	if mmIncrementUserIdentityLoginTracker.inspectFuncIncrementUserIdentityLoginTracker != nil {
-		mmIncrementUserIdentityLoginTracker.inspectFuncIncrementUserIdentityLoginTracker(ctx, tenantID, partitionID, identityID, loginTime)
-	}
-
-	mm_params := StorageMockIncrementUserIdentityLoginTrackerParams{ctx, tenantID, partitionID, identityID, loginTime}
-
-	// Record call args
-	mmIncrementUserIdentityLoginTracker.IncrementUserIdentityLoginTrackerMock.mutex.Lock()
-	mmIncrementUserIdentityLoginTracker.IncrementUserIdentityLoginTrackerMock.callArgs = append(mmIncrementUserIdentityLoginTracker.IncrementUserIdentityLoginTrackerMock.callArgs, &mm_params)
-	mmIncrementUserIdentityLoginTracker.IncrementUserIdentityLoginTrackerMock.mutex.Unlock()
-
-	for _, e := range mmIncrementUserIdentityLoginTracker.IncrementUserIdentityLoginTrackerMock.expectations {
-		if minimock.Equal(*e.params, mm_params) {
-			mm_atomic.AddUint64(&e.Counter, 1)
-			return e.results.err
-		}
-	}
-
-	if mmIncrementUserIdentityLoginTracker.IncrementUserIdentityLoginTrackerMock.defaultExpectation != nil {
-		mm_atomic.AddUint64(&mmIncrementUserIdentityLoginTracker.IncrementUserIdentityLoginTrackerMock.defaultExpectation.Counter, 1)
-		mm_want := mmIncrementUserIdentityLoginTracker.IncrementUserIdentityLoginTrackerMock.defaultExpectation.params
-		mm_want_ptrs := mmIncrementUserIdentityLoginTracker.IncrementUserIdentityLoginTrackerMock.defaultExpectation.paramPtrs
-
-		mm_got := StorageMockIncrementUserIdentityLoginTrackerParams{ctx, tenantID, partitionID, identityID, loginTime}
-
-		if mm_want_ptrs != nil {
-
-			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmIncrementUserIdentityLoginTracker.t.Errorf("StorageMock.IncrementUserIdentityLoginTracker got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmIncrementUserIdentityLoginTracker.IncrementUserIdentityLoginTrackerMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
-			}
-
-			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
-				mmIncrementUserIdentityLoginTracker.t.Errorf("StorageMock.IncrementUserIdentityLoginTracker got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmIncrementUserIdentityLoginTracker.IncrementUserIdentityLoginTrackerMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
-			}
-
-			if mm_want_ptrs.partitionID != nil && !minimock.Equal(*mm_want_ptrs.partitionID, mm_got.partitionID) {
-				mmIncrementUserIdentityLoginTracker.t.Errorf("StorageMock.IncrementUserIdentityLoginTracker got unexpected parameter partitionID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmIncrementUserIdentityLoginTracker.IncrementUserIdentityLoginTrackerMock.defaultExpectation.expectationOrigins.originPartitionID, *mm_want_ptrs.partitionID, mm_got.partitionID, minimock.Diff(*mm_want_ptrs.partitionID, mm_got.partitionID))
-			}
-
-			if mm_want_ptrs.identityID != nil && !minimock.Equal(*mm_want_ptrs.identityID, mm_got.identityID) {
-				mmIncrementUserIdentityLoginTracker.t.Errorf("StorageMock.IncrementUserIdentityLoginTracker got unexpected parameter identityID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmIncrementUserIdentityLoginTracker.IncrementUserIdentityLoginTrackerMock.defaultExpectation.expectationOrigins.originIdentityID, *mm_want_ptrs.identityID, mm_got.identityID, minimock.Diff(*mm_want_ptrs.identityID, mm_got.identityID))
-			}
-
-			if mm_want_ptrs.loginTime != nil && !minimock.Equal(*mm_want_ptrs.loginTime, mm_got.loginTime) {
-				mmIncrementUserIdentityLoginTracker.t.Errorf("StorageMock.IncrementUserIdentityLoginTracker got unexpected parameter loginTime, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmIncrementUserIdentityLoginTracker.IncrementUserIdentityLoginTrackerMock.defaultExpectation.expectationOrigins.originLoginTime, *mm_want_ptrs.loginTime, mm_got.loginTime, minimock.Diff(*mm_want_ptrs.loginTime, mm_got.loginTime))
-			}
-
-		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmIncrementUserIdentityLoginTracker.t.Errorf("StorageMock.IncrementUserIdentityLoginTracker got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-				mmIncrementUserIdentityLoginTracker.IncrementUserIdentityLoginTrackerMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
-		}
-
-		mm_results := mmIncrementUserIdentityLoginTracker.IncrementUserIdentityLoginTrackerMock.defaultExpectation.results
-		if mm_results == nil {
-			mmIncrementUserIdentityLoginTracker.t.Fatal("No results are set for the StorageMock.IncrementUserIdentityLoginTracker")
-		}
-		return (*mm_results).err
-	}
-	if mmIncrementUserIdentityLoginTracker.funcIncrementUserIdentityLoginTracker != nil {
-		return mmIncrementUserIdentityLoginTracker.funcIncrementUserIdentityLoginTracker(ctx, tenantID, partitionID, identityID, loginTime)
-	}
-	mmIncrementUserIdentityLoginTracker.t.Fatalf("Unexpected call to StorageMock.IncrementUserIdentityLoginTracker. %v %v %v %v %v", ctx, tenantID, partitionID, identityID, loginTime)
-	return
-}
-
-// IncrementUserIdentityLoginTrackerAfterCounter returns a count of finished StorageMock.IncrementUserIdentityLoginTracker invocations
-func (mmIncrementUserIdentityLoginTracker *StorageMock) IncrementUserIdentityLoginTrackerAfterCounter() uint64 {
-	return mm_atomic.LoadUint64(&mmIncrementUserIdentityLoginTracker.afterIncrementUserIdentityLoginTrackerCounter)
-}
-
-// IncrementUserIdentityLoginTrackerBeforeCounter returns a count of StorageMock.IncrementUserIdentityLoginTracker invocations
-func (mmIncrementUserIdentityLoginTracker *StorageMock) IncrementUserIdentityLoginTrackerBeforeCounter() uint64 {
-	return mm_atomic.LoadUint64(&mmIncrementUserIdentityLoginTracker.beforeIncrementUserIdentityLoginTrackerCounter)
-}
-
-// Calls returns a list of arguments used in each call to StorageMock.IncrementUserIdentityLoginTracker.
-// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmIncrementUserIdentityLoginTracker *mStorageMockIncrementUserIdentityLoginTracker) Calls() []*StorageMockIncrementUserIdentityLoginTrackerParams {
-	mmIncrementUserIdentityLoginTracker.mutex.RLock()
-
-	argCopy := make([]*StorageMockIncrementUserIdentityLoginTrackerParams, len(mmIncrementUserIdentityLoginTracker.callArgs))
-	copy(argCopy, mmIncrementUserIdentityLoginTracker.callArgs)
-
-	mmIncrementUserIdentityLoginTracker.mutex.RUnlock()
-
-	return argCopy
-}
-
-// MinimockIncrementUserIdentityLoginTrackerDone returns true if the count of the IncrementUserIdentityLoginTracker invocations corresponds
-// the number of defined expectations
-func (m *StorageMock) MinimockIncrementUserIdentityLoginTrackerDone() bool {
-	if m.IncrementUserIdentityLoginTrackerMock.optional {
-		// Optional methods provide '0 or more' call count restriction.
-		return true
-	}
-
-	for _, e := range m.IncrementUserIdentityLoginTrackerMock.expectations {
-		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			return false
-		}
-	}
-
-	return m.IncrementUserIdentityLoginTrackerMock.invocationsDone()
-}
-
-// MinimockIncrementUserIdentityLoginTrackerInspect logs each unmet expectation
-func (m *StorageMock) MinimockIncrementUserIdentityLoginTrackerInspect() {
-	for _, e := range m.IncrementUserIdentityLoginTrackerMock.expectations {
-		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to StorageMock.IncrementUserIdentityLoginTracker at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
-		}
-	}
-
-	afterIncrementUserIdentityLoginTrackerCounter := mm_atomic.LoadUint64(&m.afterIncrementUserIdentityLoginTrackerCounter)
-	// if default expectation was set then invocations count should be greater than zero
-	if m.IncrementUserIdentityLoginTrackerMock.defaultExpectation != nil && afterIncrementUserIdentityLoginTrackerCounter < 1 {
-		if m.IncrementUserIdentityLoginTrackerMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to StorageMock.IncrementUserIdentityLoginTracker at\n%s", m.IncrementUserIdentityLoginTrackerMock.defaultExpectation.returnOrigin)
-		} else {
-			m.t.Errorf("Expected call to StorageMock.IncrementUserIdentityLoginTracker at\n%s with params: %#v", m.IncrementUserIdentityLoginTrackerMock.defaultExpectation.expectationOrigins.origin, *m.IncrementUserIdentityLoginTrackerMock.defaultExpectation.params)
-		}
-	}
-	// if func was set then invocations count should be greater than zero
-	if m.funcIncrementUserIdentityLoginTracker != nil && afterIncrementUserIdentityLoginTrackerCounter < 1 {
-		m.t.Errorf("Expected call to StorageMock.IncrementUserIdentityLoginTracker at\n%s", m.funcIncrementUserIdentityLoginTrackerOrigin)
-	}
-
-	if !m.IncrementUserIdentityLoginTrackerMock.invocationsDone() && afterIncrementUserIdentityLoginTrackerCounter > 0 {
-		m.t.Errorf("Expected %d calls to StorageMock.IncrementUserIdentityLoginTracker at\n%s but found %d calls",
-			mm_atomic.LoadUint64(&m.IncrementUserIdentityLoginTrackerMock.expectedInvocations), m.IncrementUserIdentityLoginTrackerMock.expectedInvocationsOrigin, afterIncrementUserIdentityLoginTrackerCounter)
-	}
-}
-
 type mStorageMockIsDPoPProofUsed struct {
 	optional           bool
 	mock               *StorageMock
@@ -21925,6 +21521,503 @@ func (m *StorageMock) MinimockSaveUserProfileInspect() {
 	}
 }
 
+type mStorageMockTrackUserLogin struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockTrackUserLoginExpectation
+	expectations       []*StorageMockTrackUserLoginExpectation
+
+	callArgs []*StorageMockTrackUserLoginParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockTrackUserLoginExpectation specifies expectation struct of the Storage.TrackUserLogin
+type StorageMockTrackUserLoginExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockTrackUserLoginParams
+	paramPtrs          *StorageMockTrackUserLoginParamPtrs
+	expectationOrigins StorageMockTrackUserLoginExpectationOrigins
+	results            *StorageMockTrackUserLoginResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockTrackUserLoginParams contains parameters of the Storage.TrackUserLogin
+type StorageMockTrackUserLoginParams struct {
+	ctx         context.Context
+	tenantID    uuid.UUID
+	partitionID int64
+	profileID   uuid.UUID
+	providerID  uuid.UUID
+	externalSub string
+	loginTime   time.Time
+}
+
+// StorageMockTrackUserLoginParamPtrs contains pointers to parameters of the Storage.TrackUserLogin
+type StorageMockTrackUserLoginParamPtrs struct {
+	ctx         *context.Context
+	tenantID    *uuid.UUID
+	partitionID *int64
+	profileID   *uuid.UUID
+	providerID  *uuid.UUID
+	externalSub *string
+	loginTime   *time.Time
+}
+
+// StorageMockTrackUserLoginResults contains results of the Storage.TrackUserLogin
+type StorageMockTrackUserLoginResults struct {
+	err error
+}
+
+// StorageMockTrackUserLoginOrigins contains origins of expectations of the Storage.TrackUserLogin
+type StorageMockTrackUserLoginExpectationOrigins struct {
+	origin            string
+	originCtx         string
+	originTenantID    string
+	originPartitionID string
+	originProfileID   string
+	originProviderID  string
+	originExternalSub string
+	originLoginTime   string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmTrackUserLogin *mStorageMockTrackUserLogin) Optional() *mStorageMockTrackUserLogin {
+	mmTrackUserLogin.optional = true
+	return mmTrackUserLogin
+}
+
+// Expect sets up expected params for Storage.TrackUserLogin
+func (mmTrackUserLogin *mStorageMockTrackUserLogin) Expect(ctx context.Context, tenantID uuid.UUID, partitionID int64, profileID uuid.UUID, providerID uuid.UUID, externalSub string, loginTime time.Time) *mStorageMockTrackUserLogin {
+	if mmTrackUserLogin.mock.funcTrackUserLogin != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Set")
+	}
+
+	if mmTrackUserLogin.defaultExpectation == nil {
+		mmTrackUserLogin.defaultExpectation = &StorageMockTrackUserLoginExpectation{}
+	}
+
+	if mmTrackUserLogin.defaultExpectation.paramPtrs != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by ExpectParams functions")
+	}
+
+	mmTrackUserLogin.defaultExpectation.params = &StorageMockTrackUserLoginParams{ctx, tenantID, partitionID, profileID, providerID, externalSub, loginTime}
+	mmTrackUserLogin.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmTrackUserLogin.expectations {
+		if minimock.Equal(e.params, mmTrackUserLogin.defaultExpectation.params) {
+			mmTrackUserLogin.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmTrackUserLogin.defaultExpectation.params)
+		}
+	}
+
+	return mmTrackUserLogin
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.TrackUserLogin
+func (mmTrackUserLogin *mStorageMockTrackUserLogin) ExpectCtxParam1(ctx context.Context) *mStorageMockTrackUserLogin {
+	if mmTrackUserLogin.mock.funcTrackUserLogin != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Set")
+	}
+
+	if mmTrackUserLogin.defaultExpectation == nil {
+		mmTrackUserLogin.defaultExpectation = &StorageMockTrackUserLoginExpectation{}
+	}
+
+	if mmTrackUserLogin.defaultExpectation.params != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Expect")
+	}
+
+	if mmTrackUserLogin.defaultExpectation.paramPtrs == nil {
+		mmTrackUserLogin.defaultExpectation.paramPtrs = &StorageMockTrackUserLoginParamPtrs{}
+	}
+	mmTrackUserLogin.defaultExpectation.paramPtrs.ctx = &ctx
+	mmTrackUserLogin.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmTrackUserLogin
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.TrackUserLogin
+func (mmTrackUserLogin *mStorageMockTrackUserLogin) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockTrackUserLogin {
+	if mmTrackUserLogin.mock.funcTrackUserLogin != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Set")
+	}
+
+	if mmTrackUserLogin.defaultExpectation == nil {
+		mmTrackUserLogin.defaultExpectation = &StorageMockTrackUserLoginExpectation{}
+	}
+
+	if mmTrackUserLogin.defaultExpectation.params != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Expect")
+	}
+
+	if mmTrackUserLogin.defaultExpectation.paramPtrs == nil {
+		mmTrackUserLogin.defaultExpectation.paramPtrs = &StorageMockTrackUserLoginParamPtrs{}
+	}
+	mmTrackUserLogin.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmTrackUserLogin.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmTrackUserLogin
+}
+
+// ExpectPartitionIDParam3 sets up expected param partitionID for Storage.TrackUserLogin
+func (mmTrackUserLogin *mStorageMockTrackUserLogin) ExpectPartitionIDParam3(partitionID int64) *mStorageMockTrackUserLogin {
+	if mmTrackUserLogin.mock.funcTrackUserLogin != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Set")
+	}
+
+	if mmTrackUserLogin.defaultExpectation == nil {
+		mmTrackUserLogin.defaultExpectation = &StorageMockTrackUserLoginExpectation{}
+	}
+
+	if mmTrackUserLogin.defaultExpectation.params != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Expect")
+	}
+
+	if mmTrackUserLogin.defaultExpectation.paramPtrs == nil {
+		mmTrackUserLogin.defaultExpectation.paramPtrs = &StorageMockTrackUserLoginParamPtrs{}
+	}
+	mmTrackUserLogin.defaultExpectation.paramPtrs.partitionID = &partitionID
+	mmTrackUserLogin.defaultExpectation.expectationOrigins.originPartitionID = minimock.CallerInfo(1)
+
+	return mmTrackUserLogin
+}
+
+// ExpectProfileIDParam4 sets up expected param profileID for Storage.TrackUserLogin
+func (mmTrackUserLogin *mStorageMockTrackUserLogin) ExpectProfileIDParam4(profileID uuid.UUID) *mStorageMockTrackUserLogin {
+	if mmTrackUserLogin.mock.funcTrackUserLogin != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Set")
+	}
+
+	if mmTrackUserLogin.defaultExpectation == nil {
+		mmTrackUserLogin.defaultExpectation = &StorageMockTrackUserLoginExpectation{}
+	}
+
+	if mmTrackUserLogin.defaultExpectation.params != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Expect")
+	}
+
+	if mmTrackUserLogin.defaultExpectation.paramPtrs == nil {
+		mmTrackUserLogin.defaultExpectation.paramPtrs = &StorageMockTrackUserLoginParamPtrs{}
+	}
+	mmTrackUserLogin.defaultExpectation.paramPtrs.profileID = &profileID
+	mmTrackUserLogin.defaultExpectation.expectationOrigins.originProfileID = minimock.CallerInfo(1)
+
+	return mmTrackUserLogin
+}
+
+// ExpectProviderIDParam5 sets up expected param providerID for Storage.TrackUserLogin
+func (mmTrackUserLogin *mStorageMockTrackUserLogin) ExpectProviderIDParam5(providerID uuid.UUID) *mStorageMockTrackUserLogin {
+	if mmTrackUserLogin.mock.funcTrackUserLogin != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Set")
+	}
+
+	if mmTrackUserLogin.defaultExpectation == nil {
+		mmTrackUserLogin.defaultExpectation = &StorageMockTrackUserLoginExpectation{}
+	}
+
+	if mmTrackUserLogin.defaultExpectation.params != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Expect")
+	}
+
+	if mmTrackUserLogin.defaultExpectation.paramPtrs == nil {
+		mmTrackUserLogin.defaultExpectation.paramPtrs = &StorageMockTrackUserLoginParamPtrs{}
+	}
+	mmTrackUserLogin.defaultExpectation.paramPtrs.providerID = &providerID
+	mmTrackUserLogin.defaultExpectation.expectationOrigins.originProviderID = minimock.CallerInfo(1)
+
+	return mmTrackUserLogin
+}
+
+// ExpectExternalSubParam6 sets up expected param externalSub for Storage.TrackUserLogin
+func (mmTrackUserLogin *mStorageMockTrackUserLogin) ExpectExternalSubParam6(externalSub string) *mStorageMockTrackUserLogin {
+	if mmTrackUserLogin.mock.funcTrackUserLogin != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Set")
+	}
+
+	if mmTrackUserLogin.defaultExpectation == nil {
+		mmTrackUserLogin.defaultExpectation = &StorageMockTrackUserLoginExpectation{}
+	}
+
+	if mmTrackUserLogin.defaultExpectation.params != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Expect")
+	}
+
+	if mmTrackUserLogin.defaultExpectation.paramPtrs == nil {
+		mmTrackUserLogin.defaultExpectation.paramPtrs = &StorageMockTrackUserLoginParamPtrs{}
+	}
+	mmTrackUserLogin.defaultExpectation.paramPtrs.externalSub = &externalSub
+	mmTrackUserLogin.defaultExpectation.expectationOrigins.originExternalSub = minimock.CallerInfo(1)
+
+	return mmTrackUserLogin
+}
+
+// ExpectLoginTimeParam7 sets up expected param loginTime for Storage.TrackUserLogin
+func (mmTrackUserLogin *mStorageMockTrackUserLogin) ExpectLoginTimeParam7(loginTime time.Time) *mStorageMockTrackUserLogin {
+	if mmTrackUserLogin.mock.funcTrackUserLogin != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Set")
+	}
+
+	if mmTrackUserLogin.defaultExpectation == nil {
+		mmTrackUserLogin.defaultExpectation = &StorageMockTrackUserLoginExpectation{}
+	}
+
+	if mmTrackUserLogin.defaultExpectation.params != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Expect")
+	}
+
+	if mmTrackUserLogin.defaultExpectation.paramPtrs == nil {
+		mmTrackUserLogin.defaultExpectation.paramPtrs = &StorageMockTrackUserLoginParamPtrs{}
+	}
+	mmTrackUserLogin.defaultExpectation.paramPtrs.loginTime = &loginTime
+	mmTrackUserLogin.defaultExpectation.expectationOrigins.originLoginTime = minimock.CallerInfo(1)
+
+	return mmTrackUserLogin
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.TrackUserLogin
+func (mmTrackUserLogin *mStorageMockTrackUserLogin) Inspect(f func(ctx context.Context, tenantID uuid.UUID, partitionID int64, profileID uuid.UUID, providerID uuid.UUID, externalSub string, loginTime time.Time)) *mStorageMockTrackUserLogin {
+	if mmTrackUserLogin.mock.inspectFuncTrackUserLogin != nil {
+		mmTrackUserLogin.mock.t.Fatalf("Inspect function is already set for StorageMock.TrackUserLogin")
+	}
+
+	mmTrackUserLogin.mock.inspectFuncTrackUserLogin = f
+
+	return mmTrackUserLogin
+}
+
+// Return sets up results that will be returned by Storage.TrackUserLogin
+func (mmTrackUserLogin *mStorageMockTrackUserLogin) Return(err error) *StorageMock {
+	if mmTrackUserLogin.mock.funcTrackUserLogin != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Set")
+	}
+
+	if mmTrackUserLogin.defaultExpectation == nil {
+		mmTrackUserLogin.defaultExpectation = &StorageMockTrackUserLoginExpectation{mock: mmTrackUserLogin.mock}
+	}
+	mmTrackUserLogin.defaultExpectation.results = &StorageMockTrackUserLoginResults{err}
+	mmTrackUserLogin.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmTrackUserLogin.mock
+}
+
+// Set uses given function f to mock the Storage.TrackUserLogin method
+func (mmTrackUserLogin *mStorageMockTrackUserLogin) Set(f func(ctx context.Context, tenantID uuid.UUID, partitionID int64, profileID uuid.UUID, providerID uuid.UUID, externalSub string, loginTime time.Time) (err error)) *StorageMock {
+	if mmTrackUserLogin.defaultExpectation != nil {
+		mmTrackUserLogin.mock.t.Fatalf("Default expectation is already set for the Storage.TrackUserLogin method")
+	}
+
+	if len(mmTrackUserLogin.expectations) > 0 {
+		mmTrackUserLogin.mock.t.Fatalf("Some expectations are already set for the Storage.TrackUserLogin method")
+	}
+
+	mmTrackUserLogin.mock.funcTrackUserLogin = f
+	mmTrackUserLogin.mock.funcTrackUserLoginOrigin = minimock.CallerInfo(1)
+	return mmTrackUserLogin.mock
+}
+
+// When sets expectation for the Storage.TrackUserLogin which will trigger the result defined by the following
+// Then helper
+func (mmTrackUserLogin *mStorageMockTrackUserLogin) When(ctx context.Context, tenantID uuid.UUID, partitionID int64, profileID uuid.UUID, providerID uuid.UUID, externalSub string, loginTime time.Time) *StorageMockTrackUserLoginExpectation {
+	if mmTrackUserLogin.mock.funcTrackUserLogin != nil {
+		mmTrackUserLogin.mock.t.Fatalf("StorageMock.TrackUserLogin mock is already set by Set")
+	}
+
+	expectation := &StorageMockTrackUserLoginExpectation{
+		mock:               mmTrackUserLogin.mock,
+		params:             &StorageMockTrackUserLoginParams{ctx, tenantID, partitionID, profileID, providerID, externalSub, loginTime},
+		expectationOrigins: StorageMockTrackUserLoginExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmTrackUserLogin.expectations = append(mmTrackUserLogin.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.TrackUserLogin return parameters for the expectation previously defined by the When method
+func (e *StorageMockTrackUserLoginExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockTrackUserLoginResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.TrackUserLogin should be invoked
+func (mmTrackUserLogin *mStorageMockTrackUserLogin) Times(n uint64) *mStorageMockTrackUserLogin {
+	if n == 0 {
+		mmTrackUserLogin.mock.t.Fatalf("Times of StorageMock.TrackUserLogin mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmTrackUserLogin.expectedInvocations, n)
+	mmTrackUserLogin.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmTrackUserLogin
+}
+
+func (mmTrackUserLogin *mStorageMockTrackUserLogin) invocationsDone() bool {
+	if len(mmTrackUserLogin.expectations) == 0 && mmTrackUserLogin.defaultExpectation == nil && mmTrackUserLogin.mock.funcTrackUserLogin == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmTrackUserLogin.mock.afterTrackUserLoginCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmTrackUserLogin.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// TrackUserLogin implements mm_port.Storage
+func (mmTrackUserLogin *StorageMock) TrackUserLogin(ctx context.Context, tenantID uuid.UUID, partitionID int64, profileID uuid.UUID, providerID uuid.UUID, externalSub string, loginTime time.Time) (err error) {
+	mm_atomic.AddUint64(&mmTrackUserLogin.beforeTrackUserLoginCounter, 1)
+	defer mm_atomic.AddUint64(&mmTrackUserLogin.afterTrackUserLoginCounter, 1)
+
+	mmTrackUserLogin.t.Helper()
+
+	if mmTrackUserLogin.inspectFuncTrackUserLogin != nil {
+		mmTrackUserLogin.inspectFuncTrackUserLogin(ctx, tenantID, partitionID, profileID, providerID, externalSub, loginTime)
+	}
+
+	mm_params := StorageMockTrackUserLoginParams{ctx, tenantID, partitionID, profileID, providerID, externalSub, loginTime}
+
+	// Record call args
+	mmTrackUserLogin.TrackUserLoginMock.mutex.Lock()
+	mmTrackUserLogin.TrackUserLoginMock.callArgs = append(mmTrackUserLogin.TrackUserLoginMock.callArgs, &mm_params)
+	mmTrackUserLogin.TrackUserLoginMock.mutex.Unlock()
+
+	for _, e := range mmTrackUserLogin.TrackUserLoginMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmTrackUserLogin.TrackUserLoginMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmTrackUserLogin.TrackUserLoginMock.defaultExpectation.Counter, 1)
+		mm_want := mmTrackUserLogin.TrackUserLoginMock.defaultExpectation.params
+		mm_want_ptrs := mmTrackUserLogin.TrackUserLoginMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockTrackUserLoginParams{ctx, tenantID, partitionID, profileID, providerID, externalSub, loginTime}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmTrackUserLogin.t.Errorf("StorageMock.TrackUserLogin got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmTrackUserLogin.TrackUserLoginMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmTrackUserLogin.t.Errorf("StorageMock.TrackUserLogin got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmTrackUserLogin.TrackUserLoginMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.partitionID != nil && !minimock.Equal(*mm_want_ptrs.partitionID, mm_got.partitionID) {
+				mmTrackUserLogin.t.Errorf("StorageMock.TrackUserLogin got unexpected parameter partitionID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmTrackUserLogin.TrackUserLoginMock.defaultExpectation.expectationOrigins.originPartitionID, *mm_want_ptrs.partitionID, mm_got.partitionID, minimock.Diff(*mm_want_ptrs.partitionID, mm_got.partitionID))
+			}
+
+			if mm_want_ptrs.profileID != nil && !minimock.Equal(*mm_want_ptrs.profileID, mm_got.profileID) {
+				mmTrackUserLogin.t.Errorf("StorageMock.TrackUserLogin got unexpected parameter profileID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmTrackUserLogin.TrackUserLoginMock.defaultExpectation.expectationOrigins.originProfileID, *mm_want_ptrs.profileID, mm_got.profileID, minimock.Diff(*mm_want_ptrs.profileID, mm_got.profileID))
+			}
+
+			if mm_want_ptrs.providerID != nil && !minimock.Equal(*mm_want_ptrs.providerID, mm_got.providerID) {
+				mmTrackUserLogin.t.Errorf("StorageMock.TrackUserLogin got unexpected parameter providerID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmTrackUserLogin.TrackUserLoginMock.defaultExpectation.expectationOrigins.originProviderID, *mm_want_ptrs.providerID, mm_got.providerID, minimock.Diff(*mm_want_ptrs.providerID, mm_got.providerID))
+			}
+
+			if mm_want_ptrs.externalSub != nil && !minimock.Equal(*mm_want_ptrs.externalSub, mm_got.externalSub) {
+				mmTrackUserLogin.t.Errorf("StorageMock.TrackUserLogin got unexpected parameter externalSub, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmTrackUserLogin.TrackUserLoginMock.defaultExpectation.expectationOrigins.originExternalSub, *mm_want_ptrs.externalSub, mm_got.externalSub, minimock.Diff(*mm_want_ptrs.externalSub, mm_got.externalSub))
+			}
+
+			if mm_want_ptrs.loginTime != nil && !minimock.Equal(*mm_want_ptrs.loginTime, mm_got.loginTime) {
+				mmTrackUserLogin.t.Errorf("StorageMock.TrackUserLogin got unexpected parameter loginTime, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmTrackUserLogin.TrackUserLoginMock.defaultExpectation.expectationOrigins.originLoginTime, *mm_want_ptrs.loginTime, mm_got.loginTime, minimock.Diff(*mm_want_ptrs.loginTime, mm_got.loginTime))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmTrackUserLogin.t.Errorf("StorageMock.TrackUserLogin got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmTrackUserLogin.TrackUserLoginMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmTrackUserLogin.TrackUserLoginMock.defaultExpectation.results
+		if mm_results == nil {
+			mmTrackUserLogin.t.Fatal("No results are set for the StorageMock.TrackUserLogin")
+		}
+		return (*mm_results).err
+	}
+	if mmTrackUserLogin.funcTrackUserLogin != nil {
+		return mmTrackUserLogin.funcTrackUserLogin(ctx, tenantID, partitionID, profileID, providerID, externalSub, loginTime)
+	}
+	mmTrackUserLogin.t.Fatalf("Unexpected call to StorageMock.TrackUserLogin. %v %v %v %v %v %v %v", ctx, tenantID, partitionID, profileID, providerID, externalSub, loginTime)
+	return
+}
+
+// TrackUserLoginAfterCounter returns a count of finished StorageMock.TrackUserLogin invocations
+func (mmTrackUserLogin *StorageMock) TrackUserLoginAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmTrackUserLogin.afterTrackUserLoginCounter)
+}
+
+// TrackUserLoginBeforeCounter returns a count of StorageMock.TrackUserLogin invocations
+func (mmTrackUserLogin *StorageMock) TrackUserLoginBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmTrackUserLogin.beforeTrackUserLoginCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.TrackUserLogin.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmTrackUserLogin *mStorageMockTrackUserLogin) Calls() []*StorageMockTrackUserLoginParams {
+	mmTrackUserLogin.mutex.RLock()
+
+	argCopy := make([]*StorageMockTrackUserLoginParams, len(mmTrackUserLogin.callArgs))
+	copy(argCopy, mmTrackUserLogin.callArgs)
+
+	mmTrackUserLogin.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockTrackUserLoginDone returns true if the count of the TrackUserLogin invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockTrackUserLoginDone() bool {
+	if m.TrackUserLoginMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.TrackUserLoginMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.TrackUserLoginMock.invocationsDone()
+}
+
+// MinimockTrackUserLoginInspect logs each unmet expectation
+func (m *StorageMock) MinimockTrackUserLoginInspect() {
+	for _, e := range m.TrackUserLoginMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.TrackUserLogin at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterTrackUserLoginCounter := mm_atomic.LoadUint64(&m.afterTrackUserLoginCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.TrackUserLoginMock.defaultExpectation != nil && afterTrackUserLoginCounter < 1 {
+		if m.TrackUserLoginMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.TrackUserLogin at\n%s", m.TrackUserLoginMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.TrackUserLogin at\n%s with params: %#v", m.TrackUserLoginMock.defaultExpectation.expectationOrigins.origin, *m.TrackUserLoginMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcTrackUserLogin != nil && afterTrackUserLoginCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.TrackUserLogin at\n%s", m.funcTrackUserLoginOrigin)
+	}
+
+	if !m.TrackUserLoginMock.invocationsDone() && afterTrackUserLoginCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.TrackUserLogin at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.TrackUserLoginMock.expectedInvocations), m.TrackUserLoginMock.expectedInvocationsOrigin, afterTrackUserLoginCounter)
+	}
+}
+
 type mStorageMockUpdatePasswordLockoutState struct {
 	optional           bool
 	mock               *StorageMock
@@ -22927,8 +23020,6 @@ func (m *StorageMock) MinimockFinish() {
 
 			m.MinimockInTransactionInspect()
 
-			m.MinimockIncrementUserIdentityLoginTrackerInspect()
-
 			m.MinimockIsDPoPProofUsedInspect()
 
 			m.MinimockIsTokenRevokedInspect()
@@ -22974,6 +23065,8 @@ func (m *StorageMock) MinimockFinish() {
 			m.MinimockSaveRefreshTokenInspect()
 
 			m.MinimockSaveUserProfileInspect()
+
+			m.MinimockTrackUserLoginInspect()
 
 			m.MinimockUpdatePasswordLockoutStateInspect()
 
@@ -23034,7 +23127,6 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockGetUserProfileByIDAndPartitionAliasDone() &&
 		m.MinimockGetUserProfileByIdentifierDone() &&
 		m.MinimockInTransactionDone() &&
-		m.MinimockIncrementUserIdentityLoginTrackerDone() &&
 		m.MinimockIsDPoPProofUsedDone() &&
 		m.MinimockIsTokenRevokedDone() &&
 		m.MinimockMarkRefreshTokenUsedDone() &&
@@ -23058,6 +23150,7 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockSavePasswordCredentialDone() &&
 		m.MinimockSaveRefreshTokenDone() &&
 		m.MinimockSaveUserProfileDone() &&
+		m.MinimockTrackUserLoginDone() &&
 		m.MinimockUpdatePasswordLockoutStateDone() &&
 		m.MinimockUpsertUserIdentityDone()
 }

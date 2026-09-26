@@ -52,7 +52,7 @@ func TestLocalAuthService_AuthenticateLocalCredentials_Success(t *testing.T) {
 		LifecycleState: model.LifecycleActivated,
 	}, nil)
 
-	storage.IncrementUserIdentityLoginTrackerMock.Set(func(ctx context.Context, tenantID uuid.UUID, partitionID int64, identityID uuid.UUID, loginTime time.Time) error {
+	storage.TrackUserLoginMock.Set(func(ctx context.Context, tenantID uuid.UUID, partitionID int64, profileID uuid.UUID, providerID uuid.UUID, externalSub string, loginTime time.Time) error {
 		return nil
 	})
 
@@ -166,7 +166,7 @@ func TestLocalAuthService_AuthenticateLocalCredentials_SelfResolve_Success(t *te
 		LifecycleState: model.LifecycleActivated,
 	}, nil)
 
-	storage.IncrementUserIdentityLoginTrackerMock.Set(func(ctx context.Context, tenantID uuid.UUID, partitionID int64, identityID uuid.UUID, loginTime time.Time) error {
+	storage.TrackUserLoginMock.Set(func(ctx context.Context, tenantID uuid.UUID, partitionID int64, profileID uuid.UUID, providerID uuid.UUID, externalSub string, loginTime time.Time) error {
 		return nil
 	})
 

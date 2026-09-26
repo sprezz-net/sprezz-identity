@@ -37,7 +37,7 @@ type Storage interface {
 	GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.UUID, partitionID int64, providerID uuid.UUID, identifier string) (*model.UserProfile, error)
 	GetUserProfileByID(ctx context.Context, tenantID uuid.UUID, partitionID int64, id uuid.UUID) (*model.UserProfile, error)
 	GetUserProfileByIDAndPartitionAlias(ctx context.Context, tenantID uuid.UUID, partitionAlias string, id uuid.UUID) (*model.UserProfile, error)
-	FindProfileByEmail(ctx context.Context, partitionID int64, email string) (*model.UserProfile, error)
+	FindProfileByEmail(ctx context.Context, tenantID uuid.UUID, partitionID int64, email string) (*model.UserProfile, error)
 	SaveUserProfile(ctx context.Context, tenantID uuid.UUID, partitionID int64, profile model.UserProfile) error
 
 	// Identity Handling and Security Brute-Force lockout ports
@@ -49,7 +49,10 @@ type Storage interface {
 	UpsertUserIdentity(ctx context.Context, tenantID uuid.UUID, partitionID int64, identity model.UserIdentity) error
 	UpdatePasswordLockoutState(ctx context.Context, tenantID uuid.UUID, partitionID int64, userProfileID uuid.UUID, providerID uuid.UUID, failedCount int, lastAttempt *time.Time, blockedUntil *time.Time) error
 	ResetPasswordCounters(ctx context.Context, tenantID uuid.UUID, partitionID int64, userProfileID uuid.UUID, providerID uuid.UUID) error
-	IncrementUserIdentityLoginTracker(ctx context.Context, tenantID uuid.UUID, partitionID int64, identityID uuid.UUID, loginTime time.Time) error
+	// TrackUserLogin records a successful authentication event atomically.
+	// If the identity link doesn't exist (First-Time Coupling), it provisions it with a count of 1.
+	// If it does exist (Subsequent Logins), it increments the count (Count++) and updates the timestamp.
+	TrackUserLogin(ctx context.Context, tenantID uuid.UUID, partitionID int64, profileID uuid.UUID, providerID uuid.UUID, externalSub string, loginTime time.Time) error
 
 	// Password Credential Verification Gating Methods
 	GetPasswordCredentialByProfileID(ctx context.Context, tenantID uuid.UUID, partitionID int64, userProfileID uuid.UUID, providerID uuid.UUID) (*model.PasswordCredential, error)

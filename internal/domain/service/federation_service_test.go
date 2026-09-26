@@ -140,7 +140,7 @@ func TestFederationService_ExecuteFederatedCallback_JITProvisioning(t *testing.T
 	storage.GetUserIdentityByProviderAndExternalIDMock.Expect(minimock.AnyContext, tenantUUID, int64(2), providerUUID, "upstream-sub-123").Return(nil, port.ErrSessionNotFound)
 
 	// 7. Mock FindProfileByEmail -> return user profile not found to trigger JIT creation
-	storage.FindProfileByEmailMock.Expect(minimock.AnyContext, int64(2), "jit-admin@example.com").Return(nil, port.ErrUserProfileNotFound)
+	storage.FindProfileByEmailMock.Expect(minimock.AnyContext, tenantUUID, int64(2), "jit-admin@example.com").Return(nil, port.ErrUserProfileNotFound)
 
 	// 8. Mock SaveUserProfile -> expect newly JIT created profile
 	storage.SaveUserProfileMock.Set(func(ctx context.Context, tenantID uuid.UUID, partitionID int64, profile model.UserProfile) error {
@@ -156,10 +156,16 @@ func TestFederationService_ExecuteFederatedCallback_JITProvisioning(t *testing.T
 		return nil
 	})
 
-	// 9. Mock UpsertUserIdentity
-	storage.UpsertUserIdentityMock.Set(func(ctx context.Context, tenantID uuid.UUID, partitionID int64, identity model.UserIdentity) error {
-		if identity.ExternalIdentityID != "upstream-sub-123" {
-			t.Errorf("expected identity external ID 'upstream-sub-123', got '%s'", identity.ExternalIdentityID)
+	// 9. Mock TrackUserLogin
+	storage.TrackUserLoginMock.Set(func(ctx context.Context, tenantID uuid.UUID, partitionID int64, profileID uuid.UUID, providerID uuid.UUID, externalSub string, loginTime time.Time) error {
+		if tenantID != tenantUUID {
+			t.Errorf("expected TrackUserLogin tenantID '%s', got '%s'", tenantUUID, tenantID)
+		}
+		if partitionID != 2 {
+			t.Errorf("expected TrackUserLogin partitionID '2', got '%d'", partitionID)
+		}
+		if externalSub != "upstream-sub-123" {
+			t.Errorf("expected TrackUserLogin external identity subject 'upstream-sub-123', got '%s'", externalSub)
 		}
 		return nil
 	})

@@ -121,7 +121,10 @@ func (s *LocalAuthService) AuthenticateLocalCredentials(ctx context.Context, cmd
 	}
 
 	// Increment overall usage parameters
-	_ = s.storage.IncrementUserIdentityLoginTracker(ctx, cmd.TenantID, cmd.PartitionID, identity.ID, s.clock.Now())
+	err = s.storage.TrackUserLogin(ctx, cmd.TenantID, cmd.PartitionID, identity.UserProfileID, cmd.ProviderID, cmd.Identifier, s.clock.Now())
+	if err != nil {
+		slog.Error("LocalAuthService: failed to execute unified login metrics tracking", "err", err)
+	}
 
 	sessionID := uuid.New().String()
 

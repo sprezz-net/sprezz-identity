@@ -610,6 +610,7 @@ func (s *PostgresStorage) GetAndConsumeAuthSession(ctx context.Context, tenantID
 		ACRValues:             row.AcrValues,
 		IdentityProviderID:    localIDPUUID,
 		IdentityProviderAlias: valueOrEmpty(row.IdentityProviderAlias),
+		IdentityProviderType:  row.IdentityProviderType,
 	}, nil
 }
 
@@ -2561,8 +2562,9 @@ func (s *PostgresStorage) GetUserIdentityByIdentifier(
 }
 
 // FindProfileByEmail queries across global partitions via compiled cross-tenant indexes.
-func (s *PostgresStorage) FindProfileByEmail(ctx context.Context, partitionID int64, email string) (*model.UserProfile, error) {
+func (s *PostgresStorage) FindProfileByEmail(ctx context.Context, tenantUUID uuid.UUID, partitionID int64, email string) (*model.UserProfile, error) {
 	row, err := s.queries.FindProfileByEmail(ctx, sqlcdb.FindProfileByEmailParams{
+		TenantUuid:  toPGUUID(tenantUUID),
 		PartitionID: partitionID,
 		Email:       email,
 	})
@@ -2614,18 +2616,16 @@ func (s *PostgresStorage) UpsertUserIdentity(ctx context.Context, tenantID uuid.
 	return nil
 }
 
-// IncrementUserIdentityLoginTracker logs metrics securely and registers usage metrics.
-func (s *PostgresStorage) IncrementUserIdentityLoginTracker(ctx context.Context, tenantID uuid.UUID, partitionID int64, identityID uuid.UUID, loginTime time.Time) error {
-	err := s.queries.IncrementUserIdentityLoginTracker(ctx, sqlcdb.IncrementUserIdentityLoginTrackerParams{
-		LastLoginAt: toPGTimestamptz(loginTime),
-		PartitionID: partitionID,
-		IdentityID:  toPGUUID(identityID),
-		TenantUuid:  toPGUUID(tenantID),
+// Increments login metrics and couples user
+func (s *PostgresStorage) TrackUserLogin(ctx context.Context, tenantID uuid.UUID, partitionID int64, profileID uuid.UUID, providerID uuid.UUID, externalSub string, loginTime time.Time) error {
+	return s.queries.TrackUserLogin(ctx, sqlcdb.TrackUserLoginParams{
+		TenantUuid:         toPGUUID(tenantID),
+		PartitionID:        partitionID,
+		UserProfileID:      toPGUUID(profileID),
+		IdentityProviderID: toPGUUID(providerID),
+		ExternalIdentityID: externalSub,
+		LoginTime:          toPGTimestamptz(loginTime),
 	})
-	if err != nil {
-		return fmt.Errorf("increment user identity login track: %w", err)
-	}
-	return nil
 }
 
 // RevokeSession terminates active authorization code and refresh token sessions

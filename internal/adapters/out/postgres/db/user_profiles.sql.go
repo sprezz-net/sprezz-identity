@@ -97,9 +97,14 @@ func (q *Queries) DeleteUserProfile(ctx context.Context, arg DeleteUserProfilePa
 }
 
 const findProfileByEmail = `-- name: FindProfileByEmail :one
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $1::uuid
+    LIMIT 1
+)
 SELECT
     up.id,
-    t.tenant_uuid,
     up.preferred_username,
     up.name,
     up.first_name,
@@ -110,22 +115,23 @@ SELECT
     up.lifecycle_state,
     up.blocked,
     up.created_at,
-    up.updated_at
-FROM user_profiles up
-JOIN tenants t ON t.id = up.tenant_id
-WHERE up.partition_id = $1
-  AND up.email = $2
+    up.updated_at,
+    $1::uuid AS tenant_uuid
+FROM user_profiles up, tenant
+WHERE up.tenant_id = tenant.id
+  AND up.partition_id = $2
+  AND up.email = $3
 LIMIT 1
 `
 
 type FindProfileByEmailParams struct {
-	PartitionID int64  `json:"partition_id"`
-	Email       string `json:"email"`
+	TenantUuid  pgtype.UUID `json:"tenant_uuid"`
+	PartitionID int64       `json:"partition_id"`
+	Email       string      `json:"email"`
 }
 
 type FindProfileByEmailRow struct {
 	ID                pgtype.UUID           `json:"id"`
-	TenantUuid        pgtype.UUID           `json:"tenant_uuid"`
 	PreferredUsername string                `json:"preferred_username"`
 	Name              string                `json:"name"`
 	FirstName         string                `json:"first_name"`
@@ -137,14 +143,14 @@ type FindProfileByEmailRow struct {
 	Blocked           bool                  `json:"blocked"`
 	CreatedAt         pgtype.Timestamptz    `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz    `json:"updated_at"`
+	TenantUuid        pgtype.UUID           `json:"tenant_uuid"`
 }
 
 func (q *Queries) FindProfileByEmail(ctx context.Context, arg FindProfileByEmailParams) (FindProfileByEmailRow, error) {
-	row := q.db.QueryRow(ctx, findProfileByEmail, arg.PartitionID, arg.Email)
+	row := q.db.QueryRow(ctx, findProfileByEmail, arg.TenantUuid, arg.PartitionID, arg.Email)
 	var i FindProfileByEmailRow
 	err := row.Scan(
 		&i.ID,
-		&i.TenantUuid,
 		&i.PreferredUsername,
 		&i.Name,
 		&i.FirstName,
@@ -156,6 +162,7 @@ func (q *Queries) FindProfileByEmail(ctx context.Context, arg FindProfileByEmail
 		&i.Blocked,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TenantUuid,
 	)
 	return i, err
 }
@@ -384,7 +391,7 @@ INNER JOIN tenant t ON up.tenant_id = t.id
 INNER JOIN user_identities ui ON ui.user_profile_id = up.id AND ui.partition_id = up.partition_id
 WHERE up.partition_id = $1::bigint
   AND ui.identity_provider_id = $2::uuid
-  AND (LOWER(up.preferred_username) = LOWER($3::varchar) OR LOWER(up.email) = LOWER($3::varchar))
+  AND (up.preferred_username = $3::varchar OR up.email = $3::varchar)
 LIMIT 1
 `
 

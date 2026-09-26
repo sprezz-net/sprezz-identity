@@ -84,9 +84,14 @@ WHERE up.tenant_id = tenant.id
 LIMIT 1;
 
 -- name: FindProfileByEmail :one
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = @tenant_uuid::uuid
+    LIMIT 1
+)
 SELECT
     up.id,
-    t.tenant_uuid,
     up.preferred_username,
     up.name,
     up.first_name,
@@ -97,10 +102,11 @@ SELECT
     up.lifecycle_state,
     up.blocked,
     up.created_at,
-    up.updated_at
-FROM user_profiles up
-JOIN tenants t ON t.id = up.tenant_id
-WHERE up.partition_id = @partition_id
+    up.updated_at,
+    @tenant_uuid::uuid AS tenant_uuid
+FROM user_profiles up, tenant
+WHERE up.tenant_id = tenant.id
+  AND up.partition_id = @partition_id
   AND up.email = @email
 LIMIT 1;
 
@@ -218,5 +224,5 @@ INNER JOIN tenant t ON up.tenant_id = t.id
 INNER JOIN user_identities ui ON ui.user_profile_id = up.id AND ui.partition_id = up.partition_id
 WHERE up.partition_id = @partition_id::bigint
   AND ui.identity_provider_id = @identity_provider_id::uuid
-  AND (LOWER(up.preferred_username) = LOWER(@identifier::varchar) OR LOWER(up.email) = LOWER(@identifier::varchar))
+  AND (up.preferred_username = @identifier::varchar OR up.email = @identifier::varchar)
 LIMIT 1;

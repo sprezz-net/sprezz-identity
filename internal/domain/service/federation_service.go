@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strings"
 	"time"
@@ -340,7 +341,7 @@ func (s *FederationService) ExecuteFederatedCallback(
 		}
 
 		// Look up account matching the verified email explicitly locked inside the handshake's target Partition [3.1]
-		targetUser, err = s.storage.FindProfileByEmail(ctx, handshake.PartitionID, email)
+		targetUser, err = s.storage.FindProfileByEmail(ctx, cmd.TenantID, handshake.PartitionID, email)
 		if err != nil {
 			if idp.Config.AutoProvisionUser {
 				// JIT Provision User Profile
@@ -376,19 +377,14 @@ func (s *FederationService) ExecuteFederatedCallback(
 				return nil, fmt.Errorf("federation_service: no matching system profile found to stitch account link against: %w", port.ErrUserProfileNotFound)
 			}
 		}
+	}
 
-		// Strategy C: Structural Account stitching registration
-		newLink := model.UserIdentity{
-			ID:                 uuid.New(),
-			UserProfileID:      targetUser.ID,
-			IdentityProviderID: idp.ID,
-			ExternalIdentityID: subject,
-			CoupledAt:          now,
-		}
-
-		if err := s.storage.UpsertUserIdentity(ctx, cmd.TenantID, handshake.PartitionID, newLink); err != nil {
-			return nil, fmt.Errorf("federation_service: failed to commit structural profile identity link context: %w", err)
-		}
+	// Delegate both first-time account stitching and all subsequent returning federated login
+	// tracker counters atomically down to our smart database port wrapper.
+	err = s.storage.TrackUserLogin(ctx, cmd.TenantID, handshake.PartitionID, targetUser.ID, idp.ID, subject, now)
+	if err != nil {
+		slog.Error("FederationService: failed to execute unified login metrics tracking", "err", err)
+		// We don't drop the active browser single-sign-on execution loop on a simple log query slip
 	}
 
 	// Verify profile account state transitions before authorizing entrance permissions
@@ -435,45 +431,4 @@ func (s *FederationService) ExecuteFederatedCallback(
 		ReachedAAL:           assurance.AAL,
 		ReachedIAL:           assurance.IAL,
 	}, nil
-}
-
-// Private helper to prevent cross-service dependencies while retaining decoupling purity
-//
-//nolint:unused
-func (s *FederationService) resolveFederatedLevels(config model.IdentityProviderConfig, externalAcr string, externalAmrs []string) (int, int) {
-	resolvedAAL := config.AAL
-	if resolvedAAL < 1 {
-		resolvedAAL = 1
-	}
-
-	resolvedIAL := config.IAL
-	if resolvedIAL < 1 {
-		resolvedIAL = 1
-	}
-
-	if externalAcr != "" && config.AcrToTuple != nil {
-		if tuple, exists := config.AcrToTuple[externalAcr]; exists {
-			if tuple.AAL >= 1 && tuple.AAL <= 3 {
-				resolvedAAL = tuple.AAL
-			}
-			if tuple.IAL >= 1 && tuple.IAL <= 3 {
-				resolvedIAL = tuple.IAL
-			}
-		}
-	}
-
-	if config.AmrToAAL != nil {
-		highestAMRMapped := 0
-		for _, amr := range externalAmrs {
-			cleanAmr := strings.ToLower(strings.TrimSpace(amr))
-			if level, exists := config.AmrToAAL[cleanAmr]; exists && level > highestAMRMapped {
-				highestAMRMapped = level
-			}
-		}
-		if highestAMRMapped >= 1 && highestAMRMapped <= 3 && highestAMRMapped > resolvedAAL {
-			resolvedAAL = highestAMRMapped
-		}
-	}
-
-	return resolvedAAL, resolvedIAL
 }

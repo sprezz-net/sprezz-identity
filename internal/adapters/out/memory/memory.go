@@ -386,6 +386,13 @@ func (s *Storage) GetAndConsumeAuthSession(ctx context.Context, tenantID uuid.UU
 	if session.TenantID != tenantID {
 		return nil, fmt.Errorf("session tenant mismatch: %w", port.ErrSessionNotFound)
 	}
+	// Resolve the parent provider type dynamically out of the nested tenant matrix maps
+	if tenantProviders, exists := s.providers[tenantID.String()]; exists {
+		if idp, idpExists := tenantProviders[session.IdentityProviderID]; idpExists {
+			// Populate the field transparently mirroring your postgres LEFT JOIN query
+			session.IdentityProviderType = idp.IDPType
+		}
+	}
 	delete(s.sessions, code)
 	return &session, nil
 }
@@ -1161,16 +1168,17 @@ func (s *Storage) GetUserIdentityByProviderAndExternalID(ctx context.Context, te
 	return nil, port.ErrIdentityNotFound
 }
 
-func (s *Storage) FindProfileByEmail(ctx context.Context, partitionID int64, email string) (*model.UserProfile, error) {
+func (s *Storage) FindProfileByEmail(ctx context.Context, tenantID uuid.UUID, partitionID int64, email string) (*model.UserProfile, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	for _, profile := range s.userProfiles {
-		if profile.PartitionID == partitionID && profile.Email == email {
+		if profile.TenantID == tenantID && profile.PartitionID == partitionID && profile.Email == email {
 			clone := *profile
 			return &clone, nil
 		}
 	}
+
 	return nil, port.ErrUserProfileNotFound
 }
 
@@ -1460,18 +1468,38 @@ func (s *Storage) GetUserProfileByIDAndPartitionAlias(ctx context.Context, tenan
 	return &clone, nil
 }
 
-func (s *Storage) IncrementUserIdentityLoginTracker(ctx context.Context, tenantID uuid.UUID, partitionID int64, identityID uuid.UUID, loginTime time.Time) error {
+// TrackUserLogin records a successful authentication event atomically in-memory.
+// It exactly mimics our atomic SQL upsert by evaluating if a coupling link exists,
+// initializing a fresh one if missing, or incrementing the counters on subsequent hits.
+func (s *Storage) TrackUserLogin(ctx context.Context, tenantID uuid.UUID, partitionID int64, profileID uuid.UUID, providerID uuid.UUID, externalSub string, loginTime time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for _, ident := range s.identities {
-		if ident.ID == identityID {
-			ident.LoginCount++
-			ident.LastLoginAt = &loginTime
-			return nil
+	// 1. Generate the standard map lookup indexing key pattern
+	key := fmt.Sprintf("%s|%s", profileID.String(), providerID.String())
+
+	identity, exists := s.identities[key]
+	if !exists || identity == nil {
+		// Track A: First-Time Coupling -> Instantiate a brand new relation row entry starting at 1
+		newIdentity := &model.UserIdentity{
+			ID:                 uuid.New(),
+			UserProfileID:      profileID,
+			IdentityProviderID: providerID,
+			ExternalIdentityID: externalSub,
+			CoupledAt:          loginTime,
+			LoginCount:         1, // Baseline starts at 1
+			LastLoginAt:        &loginTime,
 		}
+		s.identities[key] = newIdentity
+		return nil
 	}
-	return port.ErrIdentityNotFound
+
+	// Track B: Subsequent Logins -> Perform clean in-memory property arithmetic updates
+	identity.ExternalIdentityID = externalSub
+	identity.LoginCount++
+	identity.LastLoginAt = &loginTime
+
+	return nil
 }
 
 func (s *Storage) RecordClientSessionLink(ctx context.Context, tenantID uuid.UUID, sessionID string, clientID string, associatedAt time.Time) error {

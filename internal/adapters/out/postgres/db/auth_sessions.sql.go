@@ -12,9 +12,9 @@ import (
 )
 
 const consumeAuthSession = `-- name: ConsumeAuthSession :one
-WITH deleted AS (
+WITH deleted_session AS (
     DELETE FROM auth_sessions
-    WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
+    WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid LIMIT 1)
       AND code = $2
     RETURNING
         code,
@@ -33,22 +33,23 @@ WITH deleted AS (
         identity_provider_alias
 )
 SELECT
-    code,
-    client_id,
-    subject,
-    code_challenge,
-    challenge_method,
-    redirect_uri,
-    scopes,
-    expires_at,
-    session_id,
-    state,
-    nonce,
-    acr_values,
-    identity_provider_id,
-    identity_provider_alias
-FROM deleted
-LIMIT 1
+    ds.code,
+    ds.client_id,
+    ds.subject,
+    ds.code_challenge,
+    ds.challenge_method,
+    ds.redirect_uri,
+    ds.scopes,
+    ds.expires_at,
+    ds.session_id,
+    ds.state,
+    ds.nonce,
+    ds.acr_values,
+    ds.identity_provider_id,
+    ds.identity_provider_alias,
+    COALESCE(idp.idp_type, '')::varchar AS identity_provider_type
+FROM deleted_session ds
+LEFT JOIN identity_providers idp ON ds.identity_provider_id = idp.id
 `
 
 type ConsumeAuthSessionParams struct {
@@ -71,6 +72,7 @@ type ConsumeAuthSessionRow struct {
 	AcrValues             string             `json:"acr_values"`
 	IdentityProviderID    pgtype.UUID        `json:"identity_provider_id"`
 	IdentityProviderAlias *string            `json:"identity_provider_alias"`
+	IdentityProviderType  string             `json:"identity_provider_type"`
 }
 
 func (q *Queries) ConsumeAuthSession(ctx context.Context, arg ConsumeAuthSessionParams) (ConsumeAuthSessionRow, error) {
@@ -91,6 +93,7 @@ func (q *Queries) ConsumeAuthSession(ctx context.Context, arg ConsumeAuthSession
 		&i.AcrValues,
 		&i.IdentityProviderID,
 		&i.IdentityProviderAlias,
+		&i.IdentityProviderType,
 	)
 	return i, err
 }
