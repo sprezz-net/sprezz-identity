@@ -656,9 +656,9 @@ func TestOAuthService_TokenIntrospection(t *testing.T) {
 	t.Run("UnauthenticatedClient", func(t *testing.T) {
 		svc := NewOAuthService(nil, nil, nil, nil, nil, nil, nil)
 		_, err := svc.ProcessTokenIntrospection(context.Background(), port.IntrospectTokenCommand{
-			TenantID:               tenantID,
-			IsClientAuthenticated:  false,
-			TargetTokenString:      "some-token",
+			TenantID:              tenantID,
+			IsClientAuthenticated: false,
+			TargetTokenString:     "some-token",
 		})
 		if err == nil {
 			t.Fatal("expected error when client is unauthenticated")
@@ -668,9 +668,9 @@ func TestOAuthService_TokenIntrospection(t *testing.T) {
 	t.Run("EmptyToken", func(t *testing.T) {
 		svc := NewOAuthService(nil, nil, nil, nil, nil, nil, nil)
 		_, err := svc.ProcessTokenIntrospection(context.Background(), port.IntrospectTokenCommand{
-			TenantID:               tenantID,
-			IsClientAuthenticated:  true,
-			TargetTokenString:      "",
+			TenantID:              tenantID,
+			IsClientAuthenticated: true,
+			TargetTokenString:     "",
 		})
 		if err == nil {
 			t.Fatal("expected error on empty token")
@@ -686,9 +686,9 @@ func TestOAuthService_TokenIntrospection(t *testing.T) {
 		crypto.VerifyTokenMock.Expect("invalid-token").Return(nil, errors.New("bad sig"))
 
 		resp, err := svc.ProcessTokenIntrospection(context.Background(), port.IntrospectTokenCommand{
-			TenantID:               tenantID,
-			IsClientAuthenticated:  true,
-			TargetTokenString:      "invalid-token",
+			TenantID:              tenantID,
+			IsClientAuthenticated: true,
+			TargetTokenString:     "invalid-token",
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -710,9 +710,9 @@ func TestOAuthService_TokenIntrospection(t *testing.T) {
 		}, nil)
 
 		resp, err := svc.ProcessTokenIntrospection(context.Background(), port.IntrospectTokenCommand{
-			TenantID:               tenantID,
-			IsClientAuthenticated:  true,
-			TargetTokenString:      "cross-tenant-token",
+			TenantID:              tenantID,
+			IsClientAuthenticated: true,
+			TargetTokenString:     "cross-tenant-token",
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -736,9 +736,9 @@ func TestOAuthService_TokenIntrospection(t *testing.T) {
 		storage.IsTokenRevokedMock.Expect(minimock.AnyContext, "revoked-jti").Return(true, nil)
 
 		resp, err := svc.ProcessTokenIntrospection(context.Background(), port.IntrospectTokenCommand{
-			TenantID:               tenantID,
-			IsClientAuthenticated:  true,
-			TargetTokenString:      "revoked-token",
+			TenantID:              tenantID,
+			IsClientAuthenticated: true,
+			TargetTokenString:     "revoked-token",
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -980,4 +980,3 @@ func TestOAuthService_RotateRefreshToken(t *testing.T) {
 		}
 	})
 }
-
