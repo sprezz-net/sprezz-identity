@@ -106,8 +106,10 @@ func (s *UserProfileService) ChangeUserPassword(ctx context.Context, cmd port.Ch
 	if strings.TrimSpace(cmd.NewPassword) == "" {
 		valErr.Add("new_password", "New password cannot be empty")
 	} else if len(cmd.NewPassword) > 64 {
-		valErr := port.NewValidationError()
 		valErr.Add("new_password", "New password exceeds maximum permitted length of 64 characters")
+	}
+
+	if valErr.HasErrors() {
 		return valErr
 	}
 
