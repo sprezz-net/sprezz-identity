@@ -15,6 +15,7 @@ SELECT
     name,
     partition_id,
     issuer,
+    is_system,
     config,
     created_at,
     updated_at
@@ -39,6 +40,7 @@ SELECT
     name,
     partition_id,
     issuer,
+    is_system,
     config,
     created_at,
     updated_at
@@ -92,6 +94,7 @@ SELECT
     ip.name,
     ip.partition_id,
     ip.issuer,
+    ip.is_system,
     ip.config,
     ip.created_at,
     ip.updated_at
@@ -117,6 +120,7 @@ SELECT
     name,
     partition_id,
     issuer,
+    is_system,
     config,
     created_at,
     updated_at
@@ -142,6 +146,7 @@ SELECT
     name,
     partition_id,
     issuer,
+    is_system,
     config,
     created_at,
     updated_at
@@ -167,6 +172,7 @@ SELECT
     name,
     partition_id,
     issuer,
+    is_system,
     config,
     created_at,
     updated_at
@@ -192,7 +198,8 @@ INSERT INTO identity_providers (
     config,
     name,
     partition_id,
-    issuer
+    issuer,
+    is_system
 )
 SELECT
     @id::uuid,
@@ -203,10 +210,45 @@ SELECT
     @config::jsonb,
     @name,
     @partition_id::bigint,
-    NULLIF(@issuer::varchar, '')
+    NULLIF(@issuer::varchar, ''),
+    @is_system::boolean
 FROM tenant t
 ON CONFLICT (tenant_id, partition_id, idp_type, alias_name) DO UPDATE SET
     enabled = EXCLUDED.enabled,
     config = EXCLUDED.config,
     name = EXCLUDED.name,
-    issuer = EXCLUDED.issuer;
+    issuer = EXCLUDED.issuer,
+    -- One-way ratchet: an upsert can flag a provider as system-managed but never clear the flag.
+    is_system = identity_providers.is_system OR EXCLUDED.is_system;
+
+-- name: GetIdentityProviderUsage :many
+-- GetIdentityProviderUsage reports, for every provider of a tenant, how many user identities are linked to it, which
+-- application groups allow it, and when a user last signed in through it.
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = @tenant_uuid::uuid
+    LIMIT 1
+)
+SELECT
+    ip.id AS provider_id,
+    COALESCE((
+        SELECT COUNT(*) FROM user_identities ui WHERE ui.identity_provider_id = ip.id
+    ), 0)::bigint AS linked_users,
+    (
+        SELECT MAX(ui.last_login_at) FROM user_identities ui WHERE ui.identity_provider_id = ip.id
+    )::timestamptz AS last_login_at,
+    COALESCE((
+        SELECT ARRAY_AGG(ag.id ORDER BY ag.group_name)
+        FROM application_group_idps agi
+        JOIN application_groups ag ON ag.id = agi.group_id
+        WHERE agi.idp_id = ip.id
+    ), '{}'::uuid[])::uuid[] AS group_ids,
+    COALESCE((
+        SELECT ARRAY_AGG(ag.group_name ORDER BY ag.group_name)
+        FROM application_group_idps agi
+        JOIN application_groups ag ON ag.id = agi.group_id
+        WHERE agi.idp_id = ip.id
+    ), '{}'::text[])::text[] AS group_names
+FROM identity_providers ip
+WHERE ip.tenant_id = (SELECT id FROM tenant);

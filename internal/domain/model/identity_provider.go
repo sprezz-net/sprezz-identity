@@ -36,9 +36,19 @@ type IdentityProvider struct {
 	Name        string
 	PartitionID int64
 	Issuer      string
+	IsSystem    bool
 	Config      IdentityProviderConfig
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+// IdentityProviderUsage summarizes how much a provider is used, for lists and delete guards.
+type IdentityProviderUsage struct {
+	ProviderID  uuid.UUID
+	LinkedUsers int
+	GroupIDs    []uuid.UUID
+	GroupNames  []string
+	LastLoginAt *time.Time
 }
 
 // AcrTuple represents the multi-dimensional security assurance capabilities for a given claim

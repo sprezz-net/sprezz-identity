@@ -1,10 +1,10 @@
 package http
 
 import (
-	"fmt"
-	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// AdminIDPHandler serves the identity provider pages under /admin/idps.
 type AdminIDPHandler struct {
 	*HttpAdapter
 }
@@ -22,255 +23,134 @@ func NewAdminIDPHandler(adapter *HttpAdapter) *AdminIDPHandler {
 	return &AdminIDPHandler{HttpAdapter: adapter}
 }
 
+// Routes mounts the provider routes. The static "new" route is registered before the {id} routes.
 func (h *AdminIDPHandler) Routes(r chi.Router) {
 	r.Route(port.RouteAdminIdentityProviders, func(r chi.Router) {
-		r.Get("/", h.adminIDPsPage)
-		r.Get("/discover", h.adminDiscoverIDP)
-		r.Get("/new", h.adminNewIDPForm)
-		r.Get("/edit", h.adminEditIDPForm)
-		r.Post("/", h.adminSaveIDP)
-		r.Delete("/{id}", h.adminDeleteIDP)
+		r.Get("/", h.list)
+		r.Get("/new", h.newForm)
+		r.Post("/", h.create)
+		r.Get("/{id}", h.detail)
+		r.Delete("/{id}", h.delete)
+		r.Put("/{id}/{section}", h.saveSection)
 	})
 }
 
-func (h *AdminIDPHandler) adminIDPsPage(w http.ResponseWriter, r *http.Request) {
-	tenant, _ := TenantFromContext(r.Context())
-	idps, err := h.idpService.GetIdentityProviders(r.Context(), tenant.ID)
+func (h *AdminIDPHandler) idpID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
-		return
+		h.renderError(w, r, http.StatusNotFound, port.ErrIdentityProviderNotFound.Error())
+		return uuid.Nil, false
 	}
-
-	var filterPartitionID int64
-	if pStr := r.URL.Query().Get("partition_id"); pStr != "" {
-		filterPartitionID, _ = strconv.ParseInt(pStr, 10, 64)
-	}
-
-	partitions, err := h.storagePort.GetPartitions(r.Context(), tenant.ID)
-	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	if filterPartitionID > 0 {
-		var filtered []model.IdentityProvider
-		for _, idp := range idps {
-			if idp.PartitionID == filterPartitionID {
-				filtered = append(filtered, idp)
-			}
-		}
-		idps = filtered
-	}
-
-	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	msg := r.URL.Query().Get("msg")
-	props := admin.IDPsPageProps{
-		ActiveTenant:      *tenant,
-		Providers:         idps,
-		Partitions:        partitions,
-		FilterPartitionID: filterPartitionID,
-		Msg:               msg,
-	}
-	if r.Header.Get(model.HeaderHxRequest) == "true" {
-		_ = admin.IDPsContent(props).Render(r.Context(), w)
-	} else {
-		_ = admin.IDPsPage(props).Render(r.Context(), w)
-	}
+	return id, true
 }
 
-func (h *AdminIDPHandler) adminNewIDPForm(w http.ResponseWriter, r *http.Request) {
+// list shows the providers with their usage. Search and filters run on the server.
+func (h *AdminIDPHandler) list(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
-	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	if r.URL.Query().Get("modal") == "true" {
-		component := admin.Modal("Add Identity Provider", port.RouteAdmin+port.RouteAdminIdentityProviders+"/new")
-		_ = component.Render(r.Context(), w)
+	providers, err := h.idpService.GetIdentityProviders(r.Context(), tenant.ID)
+	if err != nil {
+		h.renderDomainError(w, r, err)
+		return
+	}
+	usage, err := h.idpService.GetIdentityProviderUsage(r.Context(), tenant.ID)
+	if err != nil {
+		h.renderDomainError(w, r, err)
 		return
 	}
 	partitions, err := h.storagePort.GetPartitions(r.Context(), tenant.ID)
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		h.renderDomainError(w, r, err)
 		return
 	}
-	component := admin.IDPForm(admin.IDPFormProps{
-		Partitions: partitions,
-		IsEdit:     false,
-	})
-	_ = component.Render(r.Context(), w)
+
+	q := r.URL.Query()
+	props := admin.IDPListProps{
+		ActiveTenant: *tenant, Partitions: partitions, Msg: q.Get("msg"),
+		Query: strings.TrimSpace(q.Get("q")), Type: q.Get("type"), Status: q.Get("status"),
+	}
+	props.PartitionID, _ = strconv.ParseInt(q.Get("partition_id"), 10, 64)
+	props.Rows = filterIDPRows(providers, usage, partitions, props)
+	h.renderAdminPage(w, r, admin.IDPsContent(props), admin.IDPsPage(props))
 }
 
-func (h *AdminIDPHandler) adminEditIDPForm(w http.ResponseWriter, r *http.Request) {
-	tenant, _ := TenantFromContext(r.Context())
-	idpIDStr := r.URL.Query().Get("id")
-	idpUUID, err := uuid.Parse(idpIDStr)
-	if err != nil {
-		h.renderError(w, r, http.StatusBadRequest, ErrInvalidIDPUUID)
-		return
+func filterIDPRows(providers []model.IdentityProvider, usage map[uuid.UUID]model.IdentityProviderUsage, partitions []model.Partition, f admin.IDPListProps) []admin.IDPRow {
+	names := map[int64]string{}
+	for _, p := range partitions {
+		names[p.ID] = partitionName(p)
 	}
-
-	idp, err := h.storagePort.GetIdentityProviderByUUID(r.Context(), tenant.ID, idpUUID)
-	if err != nil {
-		h.renderError(w, r, http.StatusNotFound, "identity provider not found")
-		return
+	rows := make([]admin.IDPRow, 0, len(providers))
+	for _, p := range providers {
+		if !matchesIDPFilter(p, f) {
+			continue
+		}
+		rows = append(rows, admin.IDPRow{Provider: p, Usage: usage[p.ID], PartitionName: names[p.PartitionID]})
 	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		return strings.ToLower(rows[i].Provider.Name) < strings.ToLower(rows[j].Provider.Name)
+	})
+	return rows
+}
 
+func matchesIDPFilter(p model.IdentityProvider, f admin.IDPListProps) bool {
+	if f.PartitionID > 0 && p.PartitionID != f.PartitionID {
+		return false
+	}
+	if f.Type != "" && p.IDPType != f.Type {
+		return false
+	}
+	if (f.Status == "active" && !p.Enabled) || (f.Status == "disabled" && p.Enabled) {
+		return false
+	}
+	if f.Query != "" {
+		needle := strings.ToLower(f.Query)
+		return strings.Contains(strings.ToLower(p.Name), needle) || strings.Contains(strings.ToLower(p.Alias), needle)
+	}
+	return true
+}
+
+func partitionName(p model.Partition) string {
+	if p.AliasName != "" {
+		return p.AliasName
+	}
+	return p.Name
+}
+
+// loadPage reads everything the detail page needs.
+func (h *AdminIDPHandler) loadPage(r *http.Request, tenant *model.Tenant, id uuid.UUID) (admin.IDPPageProps, error) {
+	provider, err := h.idpService.GetIdentityProvider(r.Context(), tenant.ID, id)
+	if err != nil {
+		return admin.IDPPageProps{}, err
+	}
+	usage, err := h.idpService.GetIdentityProviderUsage(r.Context(), tenant.ID)
+	if err != nil {
+		return admin.IDPPageProps{}, err
+	}
 	partitions, err := h.storagePort.GetPartitions(r.Context(), tenant.ID)
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
-		return
+		return admin.IDPPageProps{}, err
 	}
-
-	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	if r.URL.Query().Get("modal") == "true" {
-		component := admin.Modal("Edit Identity Provider", fmt.Sprintf(port.RouteAdmin+port.RouteAdminIdentityProviders+"/edit?id=%s", idpIDStr))
-		_ = component.Render(r.Context(), w)
-		return
+	props := admin.IDPPageProps{
+		ActiveTenant: *tenant, Provider: provider, Usage: usage[id],
+		Msg: r.URL.Query().Get("msg"), Sections: map[string]admin.SectionResult{},
 	}
-	component := admin.IDPForm(admin.IDPFormProps{
-		Provider:   *idp,
-		Partitions: partitions,
-		IsEdit:     true,
-	})
-	_ = component.Render(r.Context(), w)
+	for _, p := range partitions {
+		if p.ID == provider.PartitionID {
+			props.PartitionName = partitionName(p)
+		}
+	}
+	return props, nil
 }
 
-func (h *AdminIDPHandler) adminDiscoverIDP(w http.ResponseWriter, r *http.Request) {
-	urlStr := r.URL.Query().Get("url")
-	if urlStr == "" {
-		h.renderError(w, r, http.StatusBadRequest, ErrOIDCDiscoveryURL)
-		return
-	}
-
-	meta, err := h.idpService.DiscoverOIDC(r.Context(), urlStr)
-	if err != nil {
-		// Discovery failures (unreachable host, blocked address, bad scheme) are caused by the submitted URL.
-		slog.Warn("oidc discovery failed", "url", urlStr, "err", err)
-		h.renderError(w, r, http.StatusBadGateway, "unable to retrieve discovery metadata from the provided endpoint")
-		return
-	}
-
-	h.respondJSON(w, http.StatusOK, meta)
-}
-
-func (h *AdminIDPHandler) adminSaveIDP(w http.ResponseWriter, r *http.Request) {
+func (h *AdminIDPHandler) detail(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
-	id := r.FormValue("id")
-	alias := r.FormValue("alias")
-	name := r.FormValue("name")
-	idpType := r.FormValue("idp_type")
-	issuer := r.FormValue("issuer")
-	enabled := r.FormValue("enabled") == "true"
-	partitionIDStr := r.FormValue("partition_id")
-	partitionID, _ := strconv.ParseInt(partitionIDStr, 10, 64)
-
-	var errs = make(map[string]string)
-	if alias == "" {
-		errs["alias"] = "provider alias is required"
-	}
-	if name == "" {
-		errs["name"] = "provider display name is required"
-	}
-	if idpType == "" {
-		errs["idp_type"] = "identity provider type is required"
-	}
-
-	var parsedUUID uuid.UUID
-	var isUpdate bool
-	if id != "" {
-		parsedUUID, _ = uuid.Parse(id)
-		isUpdate = true
-	} else {
-		parsedUUID = uuid.New()
-	}
-
-	idpConfig := model.IdentityProviderConfig{}
-	if idpType == "oidc" {
-		idpConfig.DiscoveryEndpoint = r.FormValue("discovery_endpoint")
-		idpConfig.ClientID = r.FormValue("client_id")
-		idpConfig.ClientSecret = r.FormValue("client_secret")
-		idpConfig.DCRMode = model.DCRMode(r.FormValue("dcr_mode"))
-		idpConfig.Scopes = r.Form["scopes"]
-		if idpConfig.Scopes == nil {
-			idpConfig.Scopes = []string{}
-		}
-
-		if idpConfig.DiscoveryEndpoint == "" {
-			errs["discovery_endpoint"] = "Discovery Endpoint is required for OIDC providers"
-		}
-		if idpConfig.ClientID == "" {
-			errs["client_id"] = "Client ID is required for OIDC providers"
-		}
-		if issuer == "" {
-			errs["issuer"] = "Issuer is required for OIDC providers"
-		}
-	} else {
-		idpConfig.UsernameField = r.FormValue("username_field")
-		if idpConfig.UsernameField == "" {
-			idpConfig.UsernameField = "preferredUsername"
-		}
-	}
-
-	if len(errs) > 0 {
-		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		partitions, _ := h.storagePort.GetPartitions(r.Context(), tenant.ID)
-		var formIdp model.IdentityProvider
-		if isUpdate {
-			if existing, err := h.storagePort.GetIdentityProviderByUUID(r.Context(), tenant.ID, parsedUUID); err == nil && existing != nil {
-				formIdp = *existing
-			}
-		}
-		component := admin.IDPForm(admin.IDPFormProps{
-			Provider:   formIdp,
-			Partitions: partitions,
-			Errors:     errs,
-			IsEdit:     isUpdate,
-		})
-		_ = component.Render(r.Context(), w)
+	id, ok := h.idpID(w, r)
+	if !ok {
 		return
 	}
-
-	idp := model.IdentityProvider{
-		ID:          parsedUUID,
-		TenantID:    tenant.ID,
-		IDPType:     idpType,
-		Enabled:     enabled,
-		Alias:       alias,
-		Name:        name,
-		PartitionID: partitionID,
-		Issuer:      issuer,
-		Config:      idpConfig,
-	}
-
-	var err error
-	if isUpdate {
-		_, err = h.idpService.UpdateIdentityProvider(r.Context(), tenant.ID, idp)
-	} else {
-		_, err = h.idpService.CreateIdentityProvider(r.Context(), tenant.ID, idp)
-	}
-
+	props, err := h.loadPage(r, tenant, id)
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		h.renderDomainError(w, r, err)
 		return
 	}
-
-	w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+port.RouteAdminIdentityProviders+"?msg=Identity+provider+saved+successfully")
-	w.WriteHeader(http.StatusOK)
-}
-
-func (h *AdminIDPHandler) adminDeleteIDP(w http.ResponseWriter, r *http.Request) {
-	tenant, _ := TenantFromContext(r.Context())
-	idpIDStr := chi.URLParam(r, "id")
-	idpUUID, err := uuid.Parse(idpIDStr)
-	if err != nil {
-		h.renderError(w, r, http.StatusBadRequest, ErrInvalidIDPUUID)
-		return
-	}
-
-	if err := h.idpService.DeleteIdentityProvider(r.Context(), tenant.ID, idpUUID); err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+port.RouteAdminIdentityProviders+"?msg=Identity+provider+deleted+successfully")
-	w.WriteHeader(http.StatusOK)
+	h.renderAdminPage(w, r, admin.IDPContent(props), admin.IDPPage(props))
 }

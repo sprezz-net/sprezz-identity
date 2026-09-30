@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -849,6 +850,10 @@ func (s *Storage) CreateIdentityProvider(ctx context.Context, tenantID uuid.UUID
 		s.providers[tenantID.String()] = make(map[uuid.UUID]model.IdentityProvider)
 	}
 	provider.Issuer = provider.Config.DiscoveryEndpoint
+	// One-way ratchet, like the SQL upsert: a provider can be flagged as system-managed but never unflagged.
+	if existing, ok := s.providers[tenantID.String()][provider.ID]; ok && existing.IsSystem {
+		provider.IsSystem = true
+	}
 	s.providers[tenantID.String()][provider.ID] = provider
 	return nil
 }
@@ -863,12 +868,47 @@ func (s *Storage) DeleteIdentityProvider(ctx context.Context, tenantID uuid.UUID
 		return port.ErrTenantNotFound
 	}
 
-	if _, exists := providers[idpID]; !exists {
+	existing, exists := providers[idpID]
+	if !exists || existing.IsSystem {
 		return port.ErrIdentityProviderNotFound
+	}
+	for _, g := range s.groups {
+		if g.TenantID == tenantID && slices.Contains(g.AllowedIDPIDs, idpID) {
+			return port.ErrInUse
+		}
 	}
 
 	delete(providers, idpID)
 	return nil
+}
+
+// GetIdentityProviderUsage reports linked users, allowing groups and the last sign-in for every provider.
+func (s *Storage) GetIdentityProviderUsage(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProviderUsage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	usage := []model.IdentityProviderUsage{}
+	for id := range s.providers[tenantID.String()] {
+		entry := model.IdentityProviderUsage{ProviderID: id, GroupIDs: []uuid.UUID{}, GroupNames: []string{}}
+		for _, ident := range s.identities {
+			if ident.IdentityProviderID != id {
+				continue
+			}
+			entry.LinkedUsers++
+			if ident.LastLoginAt != nil && (entry.LastLoginAt == nil || ident.LastLoginAt.After(*entry.LastLoginAt)) {
+				last := *ident.LastLoginAt
+				entry.LastLoginAt = &last
+			}
+		}
+		for _, g := range s.groups {
+			if g.TenantID == tenantID && slices.Contains(g.AllowedIDPIDs, id) {
+				entry.GroupIDs = append(entry.GroupIDs, g.ID)
+				entry.GroupNames = append(entry.GroupNames, g.GroupName)
+			}
+		}
+		usage = append(usage, entry)
+	}
+	return usage, nil
 }
 
 func (s *Storage) GetIdentityProviderByType(ctx context.Context, tenantID uuid.UUID, idpType string) (*model.IdentityProvider, error) {

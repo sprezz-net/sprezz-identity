@@ -7,6 +7,7 @@ package portmock
 import (
 	"context"
 	"sprezz-identity/internal/domain/model"
+	mm_port "sprezz-identity/internal/domain/port"
 	"sync"
 	mm_atomic "sync/atomic"
 	mm_time "time"
@@ -41,6 +42,20 @@ type IdentityProviderUseCaseMock struct {
 	beforeDiscoverOIDCCounter uint64
 	DiscoverOIDCMock          mIdentityProviderUseCaseMockDiscoverOIDC
 
+	funcGetIdentityProvider          func(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) (ip1 *model.IdentityProvider, err error)
+	funcGetIdentityProviderOrigin    string
+	inspectFuncGetIdentityProvider   func(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID)
+	afterGetIdentityProviderCounter  uint64
+	beforeGetIdentityProviderCounter uint64
+	GetIdentityProviderMock          mIdentityProviderUseCaseMockGetIdentityProvider
+
+	funcGetIdentityProviderUsage          func(ctx context.Context, tenantID uuid.UUID) (m1 map[uuid.UUID]model.IdentityProviderUsage, err error)
+	funcGetIdentityProviderUsageOrigin    string
+	inspectFuncGetIdentityProviderUsage   func(ctx context.Context, tenantID uuid.UUID)
+	afterGetIdentityProviderUsageCounter  uint64
+	beforeGetIdentityProviderUsageCounter uint64
+	GetIdentityProviderUsageMock          mIdentityProviderUseCaseMockGetIdentityProviderUsage
+
 	funcGetIdentityProviders          func(ctx context.Context, tenantID uuid.UUID) (ia1 []model.IdentityProvider, err error)
 	funcGetIdentityProvidersOrigin    string
 	inspectFuncGetIdentityProviders   func(ctx context.Context, tenantID uuid.UUID)
@@ -54,6 +69,13 @@ type IdentityProviderUseCaseMock struct {
 	afterGetPartitionsWithProvidersCounter  uint64
 	beforeGetPartitionsWithProvidersCounter uint64
 	GetPartitionsWithProvidersMock          mIdentityProviderUseCaseMockGetPartitionsWithProviders
+
+	funcPatchIdentityProvider          func(ctx context.Context, cmd mm_port.PatchIdentityProviderCommand) (err error)
+	funcPatchIdentityProviderOrigin    string
+	inspectFuncPatchIdentityProvider   func(ctx context.Context, cmd mm_port.PatchIdentityProviderCommand)
+	afterPatchIdentityProviderCounter  uint64
+	beforePatchIdentityProviderCounter uint64
+	PatchIdentityProviderMock          mIdentityProviderUseCaseMockPatchIdentityProvider
 
 	funcUpdateIdentityProvider          func(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) (ip1 *model.IdentityProvider, err error)
 	funcUpdateIdentityProviderOrigin    string
@@ -80,11 +102,20 @@ func NewIdentityProviderUseCaseMock(t minimock.Tester) *IdentityProviderUseCaseM
 	m.DiscoverOIDCMock = mIdentityProviderUseCaseMockDiscoverOIDC{mock: m}
 	m.DiscoverOIDCMock.callArgs = []*IdentityProviderUseCaseMockDiscoverOIDCParams{}
 
+	m.GetIdentityProviderMock = mIdentityProviderUseCaseMockGetIdentityProvider{mock: m}
+	m.GetIdentityProviderMock.callArgs = []*IdentityProviderUseCaseMockGetIdentityProviderParams{}
+
+	m.GetIdentityProviderUsageMock = mIdentityProviderUseCaseMockGetIdentityProviderUsage{mock: m}
+	m.GetIdentityProviderUsageMock.callArgs = []*IdentityProviderUseCaseMockGetIdentityProviderUsageParams{}
+
 	m.GetIdentityProvidersMock = mIdentityProviderUseCaseMockGetIdentityProviders{mock: m}
 	m.GetIdentityProvidersMock.callArgs = []*IdentityProviderUseCaseMockGetIdentityProvidersParams{}
 
 	m.GetPartitionsWithProvidersMock = mIdentityProviderUseCaseMockGetPartitionsWithProviders{mock: m}
 	m.GetPartitionsWithProvidersMock.callArgs = []*IdentityProviderUseCaseMockGetPartitionsWithProvidersParams{}
+
+	m.PatchIdentityProviderMock = mIdentityProviderUseCaseMockPatchIdentityProvider{mock: m}
+	m.PatchIdentityProviderMock.callArgs = []*IdentityProviderUseCaseMockPatchIdentityProviderParams{}
 
 	m.UpdateIdentityProviderMock = mIdentityProviderUseCaseMockUpdateIdentityProvider{mock: m}
 	m.UpdateIdentityProviderMock.callArgs = []*IdentityProviderUseCaseMockUpdateIdentityProviderParams{}
@@ -1184,6 +1215,723 @@ func (m *IdentityProviderUseCaseMock) MinimockDiscoverOIDCInspect() {
 	}
 }
 
+type mIdentityProviderUseCaseMockGetIdentityProvider struct {
+	optional           bool
+	mock               *IdentityProviderUseCaseMock
+	defaultExpectation *IdentityProviderUseCaseMockGetIdentityProviderExpectation
+	expectations       []*IdentityProviderUseCaseMockGetIdentityProviderExpectation
+
+	callArgs []*IdentityProviderUseCaseMockGetIdentityProviderParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// IdentityProviderUseCaseMockGetIdentityProviderExpectation specifies expectation struct of the IdentityProviderUseCase.GetIdentityProvider
+type IdentityProviderUseCaseMockGetIdentityProviderExpectation struct {
+	mock               *IdentityProviderUseCaseMock
+	params             *IdentityProviderUseCaseMockGetIdentityProviderParams
+	paramPtrs          *IdentityProviderUseCaseMockGetIdentityProviderParamPtrs
+	expectationOrigins IdentityProviderUseCaseMockGetIdentityProviderExpectationOrigins
+	results            *IdentityProviderUseCaseMockGetIdentityProviderResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// IdentityProviderUseCaseMockGetIdentityProviderParams contains parameters of the IdentityProviderUseCase.GetIdentityProvider
+type IdentityProviderUseCaseMockGetIdentityProviderParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+	idpID    uuid.UUID
+}
+
+// IdentityProviderUseCaseMockGetIdentityProviderParamPtrs contains pointers to parameters of the IdentityProviderUseCase.GetIdentityProvider
+type IdentityProviderUseCaseMockGetIdentityProviderParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+	idpID    *uuid.UUID
+}
+
+// IdentityProviderUseCaseMockGetIdentityProviderResults contains results of the IdentityProviderUseCase.GetIdentityProvider
+type IdentityProviderUseCaseMockGetIdentityProviderResults struct {
+	ip1 *model.IdentityProvider
+	err error
+}
+
+// IdentityProviderUseCaseMockGetIdentityProviderOrigins contains origins of expectations of the IdentityProviderUseCase.GetIdentityProvider
+type IdentityProviderUseCaseMockGetIdentityProviderExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+	originIdpID    string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetIdentityProvider *mIdentityProviderUseCaseMockGetIdentityProvider) Optional() *mIdentityProviderUseCaseMockGetIdentityProvider {
+	mmGetIdentityProvider.optional = true
+	return mmGetIdentityProvider
+}
+
+// Expect sets up expected params for IdentityProviderUseCase.GetIdentityProvider
+func (mmGetIdentityProvider *mIdentityProviderUseCaseMockGetIdentityProvider) Expect(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) *mIdentityProviderUseCaseMockGetIdentityProvider {
+	if mmGetIdentityProvider.mock.funcGetIdentityProvider != nil {
+		mmGetIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProvider mock is already set by Set")
+	}
+
+	if mmGetIdentityProvider.defaultExpectation == nil {
+		mmGetIdentityProvider.defaultExpectation = &IdentityProviderUseCaseMockGetIdentityProviderExpectation{}
+	}
+
+	if mmGetIdentityProvider.defaultExpectation.paramPtrs != nil {
+		mmGetIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProvider mock is already set by ExpectParams functions")
+	}
+
+	mmGetIdentityProvider.defaultExpectation.params = &IdentityProviderUseCaseMockGetIdentityProviderParams{ctx, tenantID, idpID}
+	mmGetIdentityProvider.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetIdentityProvider.expectations {
+		if minimock.Equal(e.params, mmGetIdentityProvider.defaultExpectation.params) {
+			mmGetIdentityProvider.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetIdentityProvider.defaultExpectation.params)
+		}
+	}
+
+	return mmGetIdentityProvider
+}
+
+// ExpectCtxParam1 sets up expected param ctx for IdentityProviderUseCase.GetIdentityProvider
+func (mmGetIdentityProvider *mIdentityProviderUseCaseMockGetIdentityProvider) ExpectCtxParam1(ctx context.Context) *mIdentityProviderUseCaseMockGetIdentityProvider {
+	if mmGetIdentityProvider.mock.funcGetIdentityProvider != nil {
+		mmGetIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProvider mock is already set by Set")
+	}
+
+	if mmGetIdentityProvider.defaultExpectation == nil {
+		mmGetIdentityProvider.defaultExpectation = &IdentityProviderUseCaseMockGetIdentityProviderExpectation{}
+	}
+
+	if mmGetIdentityProvider.defaultExpectation.params != nil {
+		mmGetIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProvider mock is already set by Expect")
+	}
+
+	if mmGetIdentityProvider.defaultExpectation.paramPtrs == nil {
+		mmGetIdentityProvider.defaultExpectation.paramPtrs = &IdentityProviderUseCaseMockGetIdentityProviderParamPtrs{}
+	}
+	mmGetIdentityProvider.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetIdentityProvider.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetIdentityProvider
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for IdentityProviderUseCase.GetIdentityProvider
+func (mmGetIdentityProvider *mIdentityProviderUseCaseMockGetIdentityProvider) ExpectTenantIDParam2(tenantID uuid.UUID) *mIdentityProviderUseCaseMockGetIdentityProvider {
+	if mmGetIdentityProvider.mock.funcGetIdentityProvider != nil {
+		mmGetIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProvider mock is already set by Set")
+	}
+
+	if mmGetIdentityProvider.defaultExpectation == nil {
+		mmGetIdentityProvider.defaultExpectation = &IdentityProviderUseCaseMockGetIdentityProviderExpectation{}
+	}
+
+	if mmGetIdentityProvider.defaultExpectation.params != nil {
+		mmGetIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProvider mock is already set by Expect")
+	}
+
+	if mmGetIdentityProvider.defaultExpectation.paramPtrs == nil {
+		mmGetIdentityProvider.defaultExpectation.paramPtrs = &IdentityProviderUseCaseMockGetIdentityProviderParamPtrs{}
+	}
+	mmGetIdentityProvider.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetIdentityProvider.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetIdentityProvider
+}
+
+// ExpectIdpIDParam3 sets up expected param idpID for IdentityProviderUseCase.GetIdentityProvider
+func (mmGetIdentityProvider *mIdentityProviderUseCaseMockGetIdentityProvider) ExpectIdpIDParam3(idpID uuid.UUID) *mIdentityProviderUseCaseMockGetIdentityProvider {
+	if mmGetIdentityProvider.mock.funcGetIdentityProvider != nil {
+		mmGetIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProvider mock is already set by Set")
+	}
+
+	if mmGetIdentityProvider.defaultExpectation == nil {
+		mmGetIdentityProvider.defaultExpectation = &IdentityProviderUseCaseMockGetIdentityProviderExpectation{}
+	}
+
+	if mmGetIdentityProvider.defaultExpectation.params != nil {
+		mmGetIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProvider mock is already set by Expect")
+	}
+
+	if mmGetIdentityProvider.defaultExpectation.paramPtrs == nil {
+		mmGetIdentityProvider.defaultExpectation.paramPtrs = &IdentityProviderUseCaseMockGetIdentityProviderParamPtrs{}
+	}
+	mmGetIdentityProvider.defaultExpectation.paramPtrs.idpID = &idpID
+	mmGetIdentityProvider.defaultExpectation.expectationOrigins.originIdpID = minimock.CallerInfo(1)
+
+	return mmGetIdentityProvider
+}
+
+// Inspect accepts an inspector function that has same arguments as the IdentityProviderUseCase.GetIdentityProvider
+func (mmGetIdentityProvider *mIdentityProviderUseCaseMockGetIdentityProvider) Inspect(f func(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID)) *mIdentityProviderUseCaseMockGetIdentityProvider {
+	if mmGetIdentityProvider.mock.inspectFuncGetIdentityProvider != nil {
+		mmGetIdentityProvider.mock.t.Fatalf("Inspect function is already set for IdentityProviderUseCaseMock.GetIdentityProvider")
+	}
+
+	mmGetIdentityProvider.mock.inspectFuncGetIdentityProvider = f
+
+	return mmGetIdentityProvider
+}
+
+// Return sets up results that will be returned by IdentityProviderUseCase.GetIdentityProvider
+func (mmGetIdentityProvider *mIdentityProviderUseCaseMockGetIdentityProvider) Return(ip1 *model.IdentityProvider, err error) *IdentityProviderUseCaseMock {
+	if mmGetIdentityProvider.mock.funcGetIdentityProvider != nil {
+		mmGetIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProvider mock is already set by Set")
+	}
+
+	if mmGetIdentityProvider.defaultExpectation == nil {
+		mmGetIdentityProvider.defaultExpectation = &IdentityProviderUseCaseMockGetIdentityProviderExpectation{mock: mmGetIdentityProvider.mock}
+	}
+	mmGetIdentityProvider.defaultExpectation.results = &IdentityProviderUseCaseMockGetIdentityProviderResults{ip1, err}
+	mmGetIdentityProvider.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetIdentityProvider.mock
+}
+
+// Set uses given function f to mock the IdentityProviderUseCase.GetIdentityProvider method
+func (mmGetIdentityProvider *mIdentityProviderUseCaseMockGetIdentityProvider) Set(f func(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) (ip1 *model.IdentityProvider, err error)) *IdentityProviderUseCaseMock {
+	if mmGetIdentityProvider.defaultExpectation != nil {
+		mmGetIdentityProvider.mock.t.Fatalf("Default expectation is already set for the IdentityProviderUseCase.GetIdentityProvider method")
+	}
+
+	if len(mmGetIdentityProvider.expectations) > 0 {
+		mmGetIdentityProvider.mock.t.Fatalf("Some expectations are already set for the IdentityProviderUseCase.GetIdentityProvider method")
+	}
+
+	mmGetIdentityProvider.mock.funcGetIdentityProvider = f
+	mmGetIdentityProvider.mock.funcGetIdentityProviderOrigin = minimock.CallerInfo(1)
+	return mmGetIdentityProvider.mock
+}
+
+// When sets expectation for the IdentityProviderUseCase.GetIdentityProvider which will trigger the result defined by the following
+// Then helper
+func (mmGetIdentityProvider *mIdentityProviderUseCaseMockGetIdentityProvider) When(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) *IdentityProviderUseCaseMockGetIdentityProviderExpectation {
+	if mmGetIdentityProvider.mock.funcGetIdentityProvider != nil {
+		mmGetIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProvider mock is already set by Set")
+	}
+
+	expectation := &IdentityProviderUseCaseMockGetIdentityProviderExpectation{
+		mock:               mmGetIdentityProvider.mock,
+		params:             &IdentityProviderUseCaseMockGetIdentityProviderParams{ctx, tenantID, idpID},
+		expectationOrigins: IdentityProviderUseCaseMockGetIdentityProviderExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetIdentityProvider.expectations = append(mmGetIdentityProvider.expectations, expectation)
+	return expectation
+}
+
+// Then sets up IdentityProviderUseCase.GetIdentityProvider return parameters for the expectation previously defined by the When method
+func (e *IdentityProviderUseCaseMockGetIdentityProviderExpectation) Then(ip1 *model.IdentityProvider, err error) *IdentityProviderUseCaseMock {
+	e.results = &IdentityProviderUseCaseMockGetIdentityProviderResults{ip1, err}
+	return e.mock
+}
+
+// Times sets number of times IdentityProviderUseCase.GetIdentityProvider should be invoked
+func (mmGetIdentityProvider *mIdentityProviderUseCaseMockGetIdentityProvider) Times(n uint64) *mIdentityProviderUseCaseMockGetIdentityProvider {
+	if n == 0 {
+		mmGetIdentityProvider.mock.t.Fatalf("Times of IdentityProviderUseCaseMock.GetIdentityProvider mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetIdentityProvider.expectedInvocations, n)
+	mmGetIdentityProvider.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetIdentityProvider
+}
+
+func (mmGetIdentityProvider *mIdentityProviderUseCaseMockGetIdentityProvider) invocationsDone() bool {
+	if len(mmGetIdentityProvider.expectations) == 0 && mmGetIdentityProvider.defaultExpectation == nil && mmGetIdentityProvider.mock.funcGetIdentityProvider == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetIdentityProvider.mock.afterGetIdentityProviderCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetIdentityProvider.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetIdentityProvider implements mm_port.IdentityProviderUseCase
+func (mmGetIdentityProvider *IdentityProviderUseCaseMock) GetIdentityProvider(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) (ip1 *model.IdentityProvider, err error) {
+	mm_atomic.AddUint64(&mmGetIdentityProvider.beforeGetIdentityProviderCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetIdentityProvider.afterGetIdentityProviderCounter, 1)
+
+	mmGetIdentityProvider.t.Helper()
+
+	if mmGetIdentityProvider.inspectFuncGetIdentityProvider != nil {
+		mmGetIdentityProvider.inspectFuncGetIdentityProvider(ctx, tenantID, idpID)
+	}
+
+	mm_params := IdentityProviderUseCaseMockGetIdentityProviderParams{ctx, tenantID, idpID}
+
+	// Record call args
+	mmGetIdentityProvider.GetIdentityProviderMock.mutex.Lock()
+	mmGetIdentityProvider.GetIdentityProviderMock.callArgs = append(mmGetIdentityProvider.GetIdentityProviderMock.callArgs, &mm_params)
+	mmGetIdentityProvider.GetIdentityProviderMock.mutex.Unlock()
+
+	for _, e := range mmGetIdentityProvider.GetIdentityProviderMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.ip1, e.results.err
+		}
+	}
+
+	if mmGetIdentityProvider.GetIdentityProviderMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetIdentityProvider.GetIdentityProviderMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetIdentityProvider.GetIdentityProviderMock.defaultExpectation.params
+		mm_want_ptrs := mmGetIdentityProvider.GetIdentityProviderMock.defaultExpectation.paramPtrs
+
+		mm_got := IdentityProviderUseCaseMockGetIdentityProviderParams{ctx, tenantID, idpID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetIdentityProvider.t.Errorf("IdentityProviderUseCaseMock.GetIdentityProvider got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetIdentityProvider.GetIdentityProviderMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetIdentityProvider.t.Errorf("IdentityProviderUseCaseMock.GetIdentityProvider got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetIdentityProvider.GetIdentityProviderMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.idpID != nil && !minimock.Equal(*mm_want_ptrs.idpID, mm_got.idpID) {
+				mmGetIdentityProvider.t.Errorf("IdentityProviderUseCaseMock.GetIdentityProvider got unexpected parameter idpID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetIdentityProvider.GetIdentityProviderMock.defaultExpectation.expectationOrigins.originIdpID, *mm_want_ptrs.idpID, mm_got.idpID, minimock.Diff(*mm_want_ptrs.idpID, mm_got.idpID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetIdentityProvider.t.Errorf("IdentityProviderUseCaseMock.GetIdentityProvider got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetIdentityProvider.GetIdentityProviderMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetIdentityProvider.GetIdentityProviderMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetIdentityProvider.t.Fatal("No results are set for the IdentityProviderUseCaseMock.GetIdentityProvider")
+		}
+		return (*mm_results).ip1, (*mm_results).err
+	}
+	if mmGetIdentityProvider.funcGetIdentityProvider != nil {
+		return mmGetIdentityProvider.funcGetIdentityProvider(ctx, tenantID, idpID)
+	}
+	mmGetIdentityProvider.t.Fatalf("Unexpected call to IdentityProviderUseCaseMock.GetIdentityProvider. %v %v %v", ctx, tenantID, idpID)
+	return
+}
+
+// GetIdentityProviderAfterCounter returns a count of finished IdentityProviderUseCaseMock.GetIdentityProvider invocations
+func (mmGetIdentityProvider *IdentityProviderUseCaseMock) GetIdentityProviderAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetIdentityProvider.afterGetIdentityProviderCounter)
+}
+
+// GetIdentityProviderBeforeCounter returns a count of IdentityProviderUseCaseMock.GetIdentityProvider invocations
+func (mmGetIdentityProvider *IdentityProviderUseCaseMock) GetIdentityProviderBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetIdentityProvider.beforeGetIdentityProviderCounter)
+}
+
+// Calls returns a list of arguments used in each call to IdentityProviderUseCaseMock.GetIdentityProvider.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetIdentityProvider *mIdentityProviderUseCaseMockGetIdentityProvider) Calls() []*IdentityProviderUseCaseMockGetIdentityProviderParams {
+	mmGetIdentityProvider.mutex.RLock()
+
+	argCopy := make([]*IdentityProviderUseCaseMockGetIdentityProviderParams, len(mmGetIdentityProvider.callArgs))
+	copy(argCopy, mmGetIdentityProvider.callArgs)
+
+	mmGetIdentityProvider.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetIdentityProviderDone returns true if the count of the GetIdentityProvider invocations corresponds
+// the number of defined expectations
+func (m *IdentityProviderUseCaseMock) MinimockGetIdentityProviderDone() bool {
+	if m.GetIdentityProviderMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetIdentityProviderMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetIdentityProviderMock.invocationsDone()
+}
+
+// MinimockGetIdentityProviderInspect logs each unmet expectation
+func (m *IdentityProviderUseCaseMock) MinimockGetIdentityProviderInspect() {
+	for _, e := range m.GetIdentityProviderMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to IdentityProviderUseCaseMock.GetIdentityProvider at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetIdentityProviderCounter := mm_atomic.LoadUint64(&m.afterGetIdentityProviderCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetIdentityProviderMock.defaultExpectation != nil && afterGetIdentityProviderCounter < 1 {
+		if m.GetIdentityProviderMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to IdentityProviderUseCaseMock.GetIdentityProvider at\n%s", m.GetIdentityProviderMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to IdentityProviderUseCaseMock.GetIdentityProvider at\n%s with params: %#v", m.GetIdentityProviderMock.defaultExpectation.expectationOrigins.origin, *m.GetIdentityProviderMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetIdentityProvider != nil && afterGetIdentityProviderCounter < 1 {
+		m.t.Errorf("Expected call to IdentityProviderUseCaseMock.GetIdentityProvider at\n%s", m.funcGetIdentityProviderOrigin)
+	}
+
+	if !m.GetIdentityProviderMock.invocationsDone() && afterGetIdentityProviderCounter > 0 {
+		m.t.Errorf("Expected %d calls to IdentityProviderUseCaseMock.GetIdentityProvider at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetIdentityProviderMock.expectedInvocations), m.GetIdentityProviderMock.expectedInvocationsOrigin, afterGetIdentityProviderCounter)
+	}
+}
+
+type mIdentityProviderUseCaseMockGetIdentityProviderUsage struct {
+	optional           bool
+	mock               *IdentityProviderUseCaseMock
+	defaultExpectation *IdentityProviderUseCaseMockGetIdentityProviderUsageExpectation
+	expectations       []*IdentityProviderUseCaseMockGetIdentityProviderUsageExpectation
+
+	callArgs []*IdentityProviderUseCaseMockGetIdentityProviderUsageParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// IdentityProviderUseCaseMockGetIdentityProviderUsageExpectation specifies expectation struct of the IdentityProviderUseCase.GetIdentityProviderUsage
+type IdentityProviderUseCaseMockGetIdentityProviderUsageExpectation struct {
+	mock               *IdentityProviderUseCaseMock
+	params             *IdentityProviderUseCaseMockGetIdentityProviderUsageParams
+	paramPtrs          *IdentityProviderUseCaseMockGetIdentityProviderUsageParamPtrs
+	expectationOrigins IdentityProviderUseCaseMockGetIdentityProviderUsageExpectationOrigins
+	results            *IdentityProviderUseCaseMockGetIdentityProviderUsageResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// IdentityProviderUseCaseMockGetIdentityProviderUsageParams contains parameters of the IdentityProviderUseCase.GetIdentityProviderUsage
+type IdentityProviderUseCaseMockGetIdentityProviderUsageParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+}
+
+// IdentityProviderUseCaseMockGetIdentityProviderUsageParamPtrs contains pointers to parameters of the IdentityProviderUseCase.GetIdentityProviderUsage
+type IdentityProviderUseCaseMockGetIdentityProviderUsageParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+}
+
+// IdentityProviderUseCaseMockGetIdentityProviderUsageResults contains results of the IdentityProviderUseCase.GetIdentityProviderUsage
+type IdentityProviderUseCaseMockGetIdentityProviderUsageResults struct {
+	m1  map[uuid.UUID]model.IdentityProviderUsage
+	err error
+}
+
+// IdentityProviderUseCaseMockGetIdentityProviderUsageOrigins contains origins of expectations of the IdentityProviderUseCase.GetIdentityProviderUsage
+type IdentityProviderUseCaseMockGetIdentityProviderUsageExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetIdentityProviderUsage *mIdentityProviderUseCaseMockGetIdentityProviderUsage) Optional() *mIdentityProviderUseCaseMockGetIdentityProviderUsage {
+	mmGetIdentityProviderUsage.optional = true
+	return mmGetIdentityProviderUsage
+}
+
+// Expect sets up expected params for IdentityProviderUseCase.GetIdentityProviderUsage
+func (mmGetIdentityProviderUsage *mIdentityProviderUseCaseMockGetIdentityProviderUsage) Expect(ctx context.Context, tenantID uuid.UUID) *mIdentityProviderUseCaseMockGetIdentityProviderUsage {
+	if mmGetIdentityProviderUsage.mock.funcGetIdentityProviderUsage != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProviderUsage mock is already set by Set")
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation == nil {
+		mmGetIdentityProviderUsage.defaultExpectation = &IdentityProviderUseCaseMockGetIdentityProviderUsageExpectation{}
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation.paramPtrs != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProviderUsage mock is already set by ExpectParams functions")
+	}
+
+	mmGetIdentityProviderUsage.defaultExpectation.params = &IdentityProviderUseCaseMockGetIdentityProviderUsageParams{ctx, tenantID}
+	mmGetIdentityProviderUsage.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetIdentityProviderUsage.expectations {
+		if minimock.Equal(e.params, mmGetIdentityProviderUsage.defaultExpectation.params) {
+			mmGetIdentityProviderUsage.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetIdentityProviderUsage.defaultExpectation.params)
+		}
+	}
+
+	return mmGetIdentityProviderUsage
+}
+
+// ExpectCtxParam1 sets up expected param ctx for IdentityProviderUseCase.GetIdentityProviderUsage
+func (mmGetIdentityProviderUsage *mIdentityProviderUseCaseMockGetIdentityProviderUsage) ExpectCtxParam1(ctx context.Context) *mIdentityProviderUseCaseMockGetIdentityProviderUsage {
+	if mmGetIdentityProviderUsage.mock.funcGetIdentityProviderUsage != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProviderUsage mock is already set by Set")
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation == nil {
+		mmGetIdentityProviderUsage.defaultExpectation = &IdentityProviderUseCaseMockGetIdentityProviderUsageExpectation{}
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation.params != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProviderUsage mock is already set by Expect")
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation.paramPtrs == nil {
+		mmGetIdentityProviderUsage.defaultExpectation.paramPtrs = &IdentityProviderUseCaseMockGetIdentityProviderUsageParamPtrs{}
+	}
+	mmGetIdentityProviderUsage.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetIdentityProviderUsage.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetIdentityProviderUsage
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for IdentityProviderUseCase.GetIdentityProviderUsage
+func (mmGetIdentityProviderUsage *mIdentityProviderUseCaseMockGetIdentityProviderUsage) ExpectTenantIDParam2(tenantID uuid.UUID) *mIdentityProviderUseCaseMockGetIdentityProviderUsage {
+	if mmGetIdentityProviderUsage.mock.funcGetIdentityProviderUsage != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProviderUsage mock is already set by Set")
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation == nil {
+		mmGetIdentityProviderUsage.defaultExpectation = &IdentityProviderUseCaseMockGetIdentityProviderUsageExpectation{}
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation.params != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProviderUsage mock is already set by Expect")
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation.paramPtrs == nil {
+		mmGetIdentityProviderUsage.defaultExpectation.paramPtrs = &IdentityProviderUseCaseMockGetIdentityProviderUsageParamPtrs{}
+	}
+	mmGetIdentityProviderUsage.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetIdentityProviderUsage.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetIdentityProviderUsage
+}
+
+// Inspect accepts an inspector function that has same arguments as the IdentityProviderUseCase.GetIdentityProviderUsage
+func (mmGetIdentityProviderUsage *mIdentityProviderUseCaseMockGetIdentityProviderUsage) Inspect(f func(ctx context.Context, tenantID uuid.UUID)) *mIdentityProviderUseCaseMockGetIdentityProviderUsage {
+	if mmGetIdentityProviderUsage.mock.inspectFuncGetIdentityProviderUsage != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("Inspect function is already set for IdentityProviderUseCaseMock.GetIdentityProviderUsage")
+	}
+
+	mmGetIdentityProviderUsage.mock.inspectFuncGetIdentityProviderUsage = f
+
+	return mmGetIdentityProviderUsage
+}
+
+// Return sets up results that will be returned by IdentityProviderUseCase.GetIdentityProviderUsage
+func (mmGetIdentityProviderUsage *mIdentityProviderUseCaseMockGetIdentityProviderUsage) Return(m1 map[uuid.UUID]model.IdentityProviderUsage, err error) *IdentityProviderUseCaseMock {
+	if mmGetIdentityProviderUsage.mock.funcGetIdentityProviderUsage != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProviderUsage mock is already set by Set")
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation == nil {
+		mmGetIdentityProviderUsage.defaultExpectation = &IdentityProviderUseCaseMockGetIdentityProviderUsageExpectation{mock: mmGetIdentityProviderUsage.mock}
+	}
+	mmGetIdentityProviderUsage.defaultExpectation.results = &IdentityProviderUseCaseMockGetIdentityProviderUsageResults{m1, err}
+	mmGetIdentityProviderUsage.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetIdentityProviderUsage.mock
+}
+
+// Set uses given function f to mock the IdentityProviderUseCase.GetIdentityProviderUsage method
+func (mmGetIdentityProviderUsage *mIdentityProviderUseCaseMockGetIdentityProviderUsage) Set(f func(ctx context.Context, tenantID uuid.UUID) (m1 map[uuid.UUID]model.IdentityProviderUsage, err error)) *IdentityProviderUseCaseMock {
+	if mmGetIdentityProviderUsage.defaultExpectation != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("Default expectation is already set for the IdentityProviderUseCase.GetIdentityProviderUsage method")
+	}
+
+	if len(mmGetIdentityProviderUsage.expectations) > 0 {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("Some expectations are already set for the IdentityProviderUseCase.GetIdentityProviderUsage method")
+	}
+
+	mmGetIdentityProviderUsage.mock.funcGetIdentityProviderUsage = f
+	mmGetIdentityProviderUsage.mock.funcGetIdentityProviderUsageOrigin = minimock.CallerInfo(1)
+	return mmGetIdentityProviderUsage.mock
+}
+
+// When sets expectation for the IdentityProviderUseCase.GetIdentityProviderUsage which will trigger the result defined by the following
+// Then helper
+func (mmGetIdentityProviderUsage *mIdentityProviderUseCaseMockGetIdentityProviderUsage) When(ctx context.Context, tenantID uuid.UUID) *IdentityProviderUseCaseMockGetIdentityProviderUsageExpectation {
+	if mmGetIdentityProviderUsage.mock.funcGetIdentityProviderUsage != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("IdentityProviderUseCaseMock.GetIdentityProviderUsage mock is already set by Set")
+	}
+
+	expectation := &IdentityProviderUseCaseMockGetIdentityProviderUsageExpectation{
+		mock:               mmGetIdentityProviderUsage.mock,
+		params:             &IdentityProviderUseCaseMockGetIdentityProviderUsageParams{ctx, tenantID},
+		expectationOrigins: IdentityProviderUseCaseMockGetIdentityProviderUsageExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetIdentityProviderUsage.expectations = append(mmGetIdentityProviderUsage.expectations, expectation)
+	return expectation
+}
+
+// Then sets up IdentityProviderUseCase.GetIdentityProviderUsage return parameters for the expectation previously defined by the When method
+func (e *IdentityProviderUseCaseMockGetIdentityProviderUsageExpectation) Then(m1 map[uuid.UUID]model.IdentityProviderUsage, err error) *IdentityProviderUseCaseMock {
+	e.results = &IdentityProviderUseCaseMockGetIdentityProviderUsageResults{m1, err}
+	return e.mock
+}
+
+// Times sets number of times IdentityProviderUseCase.GetIdentityProviderUsage should be invoked
+func (mmGetIdentityProviderUsage *mIdentityProviderUseCaseMockGetIdentityProviderUsage) Times(n uint64) *mIdentityProviderUseCaseMockGetIdentityProviderUsage {
+	if n == 0 {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("Times of IdentityProviderUseCaseMock.GetIdentityProviderUsage mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetIdentityProviderUsage.expectedInvocations, n)
+	mmGetIdentityProviderUsage.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetIdentityProviderUsage
+}
+
+func (mmGetIdentityProviderUsage *mIdentityProviderUseCaseMockGetIdentityProviderUsage) invocationsDone() bool {
+	if len(mmGetIdentityProviderUsage.expectations) == 0 && mmGetIdentityProviderUsage.defaultExpectation == nil && mmGetIdentityProviderUsage.mock.funcGetIdentityProviderUsage == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetIdentityProviderUsage.mock.afterGetIdentityProviderUsageCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetIdentityProviderUsage.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetIdentityProviderUsage implements mm_port.IdentityProviderUseCase
+func (mmGetIdentityProviderUsage *IdentityProviderUseCaseMock) GetIdentityProviderUsage(ctx context.Context, tenantID uuid.UUID) (m1 map[uuid.UUID]model.IdentityProviderUsage, err error) {
+	mm_atomic.AddUint64(&mmGetIdentityProviderUsage.beforeGetIdentityProviderUsageCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetIdentityProviderUsage.afterGetIdentityProviderUsageCounter, 1)
+
+	mmGetIdentityProviderUsage.t.Helper()
+
+	if mmGetIdentityProviderUsage.inspectFuncGetIdentityProviderUsage != nil {
+		mmGetIdentityProviderUsage.inspectFuncGetIdentityProviderUsage(ctx, tenantID)
+	}
+
+	mm_params := IdentityProviderUseCaseMockGetIdentityProviderUsageParams{ctx, tenantID}
+
+	// Record call args
+	mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.mutex.Lock()
+	mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.callArgs = append(mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.callArgs, &mm_params)
+	mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.mutex.Unlock()
+
+	for _, e := range mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.m1, e.results.err
+		}
+	}
+
+	if mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.defaultExpectation.params
+		mm_want_ptrs := mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.defaultExpectation.paramPtrs
+
+		mm_got := IdentityProviderUseCaseMockGetIdentityProviderUsageParams{ctx, tenantID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetIdentityProviderUsage.t.Errorf("IdentityProviderUseCaseMock.GetIdentityProviderUsage got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetIdentityProviderUsage.t.Errorf("IdentityProviderUseCaseMock.GetIdentityProviderUsage got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetIdentityProviderUsage.t.Errorf("IdentityProviderUseCaseMock.GetIdentityProviderUsage got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetIdentityProviderUsage.t.Fatal("No results are set for the IdentityProviderUseCaseMock.GetIdentityProviderUsage")
+		}
+		return (*mm_results).m1, (*mm_results).err
+	}
+	if mmGetIdentityProviderUsage.funcGetIdentityProviderUsage != nil {
+		return mmGetIdentityProviderUsage.funcGetIdentityProviderUsage(ctx, tenantID)
+	}
+	mmGetIdentityProviderUsage.t.Fatalf("Unexpected call to IdentityProviderUseCaseMock.GetIdentityProviderUsage. %v %v", ctx, tenantID)
+	return
+}
+
+// GetIdentityProviderUsageAfterCounter returns a count of finished IdentityProviderUseCaseMock.GetIdentityProviderUsage invocations
+func (mmGetIdentityProviderUsage *IdentityProviderUseCaseMock) GetIdentityProviderUsageAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetIdentityProviderUsage.afterGetIdentityProviderUsageCounter)
+}
+
+// GetIdentityProviderUsageBeforeCounter returns a count of IdentityProviderUseCaseMock.GetIdentityProviderUsage invocations
+func (mmGetIdentityProviderUsage *IdentityProviderUseCaseMock) GetIdentityProviderUsageBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetIdentityProviderUsage.beforeGetIdentityProviderUsageCounter)
+}
+
+// Calls returns a list of arguments used in each call to IdentityProviderUseCaseMock.GetIdentityProviderUsage.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetIdentityProviderUsage *mIdentityProviderUseCaseMockGetIdentityProviderUsage) Calls() []*IdentityProviderUseCaseMockGetIdentityProviderUsageParams {
+	mmGetIdentityProviderUsage.mutex.RLock()
+
+	argCopy := make([]*IdentityProviderUseCaseMockGetIdentityProviderUsageParams, len(mmGetIdentityProviderUsage.callArgs))
+	copy(argCopy, mmGetIdentityProviderUsage.callArgs)
+
+	mmGetIdentityProviderUsage.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetIdentityProviderUsageDone returns true if the count of the GetIdentityProviderUsage invocations corresponds
+// the number of defined expectations
+func (m *IdentityProviderUseCaseMock) MinimockGetIdentityProviderUsageDone() bool {
+	if m.GetIdentityProviderUsageMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetIdentityProviderUsageMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetIdentityProviderUsageMock.invocationsDone()
+}
+
+// MinimockGetIdentityProviderUsageInspect logs each unmet expectation
+func (m *IdentityProviderUseCaseMock) MinimockGetIdentityProviderUsageInspect() {
+	for _, e := range m.GetIdentityProviderUsageMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to IdentityProviderUseCaseMock.GetIdentityProviderUsage at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetIdentityProviderUsageCounter := mm_atomic.LoadUint64(&m.afterGetIdentityProviderUsageCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetIdentityProviderUsageMock.defaultExpectation != nil && afterGetIdentityProviderUsageCounter < 1 {
+		if m.GetIdentityProviderUsageMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to IdentityProviderUseCaseMock.GetIdentityProviderUsage at\n%s", m.GetIdentityProviderUsageMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to IdentityProviderUseCaseMock.GetIdentityProviderUsage at\n%s with params: %#v", m.GetIdentityProviderUsageMock.defaultExpectation.expectationOrigins.origin, *m.GetIdentityProviderUsageMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetIdentityProviderUsage != nil && afterGetIdentityProviderUsageCounter < 1 {
+		m.t.Errorf("Expected call to IdentityProviderUseCaseMock.GetIdentityProviderUsage at\n%s", m.funcGetIdentityProviderUsageOrigin)
+	}
+
+	if !m.GetIdentityProviderUsageMock.invocationsDone() && afterGetIdentityProviderUsageCounter > 0 {
+		m.t.Errorf("Expected %d calls to IdentityProviderUseCaseMock.GetIdentityProviderUsage at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetIdentityProviderUsageMock.expectedInvocations), m.GetIdentityProviderUsageMock.expectedInvocationsOrigin, afterGetIdentityProviderUsageCounter)
+	}
+}
+
 type mIdentityProviderUseCaseMockGetIdentityProviders struct {
 	optional           bool
 	mock               *IdentityProviderUseCaseMock
@@ -1870,6 +2618,348 @@ func (m *IdentityProviderUseCaseMock) MinimockGetPartitionsWithProvidersInspect(
 	}
 }
 
+type mIdentityProviderUseCaseMockPatchIdentityProvider struct {
+	optional           bool
+	mock               *IdentityProviderUseCaseMock
+	defaultExpectation *IdentityProviderUseCaseMockPatchIdentityProviderExpectation
+	expectations       []*IdentityProviderUseCaseMockPatchIdentityProviderExpectation
+
+	callArgs []*IdentityProviderUseCaseMockPatchIdentityProviderParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// IdentityProviderUseCaseMockPatchIdentityProviderExpectation specifies expectation struct of the IdentityProviderUseCase.PatchIdentityProvider
+type IdentityProviderUseCaseMockPatchIdentityProviderExpectation struct {
+	mock               *IdentityProviderUseCaseMock
+	params             *IdentityProviderUseCaseMockPatchIdentityProviderParams
+	paramPtrs          *IdentityProviderUseCaseMockPatchIdentityProviderParamPtrs
+	expectationOrigins IdentityProviderUseCaseMockPatchIdentityProviderExpectationOrigins
+	results            *IdentityProviderUseCaseMockPatchIdentityProviderResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// IdentityProviderUseCaseMockPatchIdentityProviderParams contains parameters of the IdentityProviderUseCase.PatchIdentityProvider
+type IdentityProviderUseCaseMockPatchIdentityProviderParams struct {
+	ctx context.Context
+	cmd mm_port.PatchIdentityProviderCommand
+}
+
+// IdentityProviderUseCaseMockPatchIdentityProviderParamPtrs contains pointers to parameters of the IdentityProviderUseCase.PatchIdentityProvider
+type IdentityProviderUseCaseMockPatchIdentityProviderParamPtrs struct {
+	ctx *context.Context
+	cmd *mm_port.PatchIdentityProviderCommand
+}
+
+// IdentityProviderUseCaseMockPatchIdentityProviderResults contains results of the IdentityProviderUseCase.PatchIdentityProvider
+type IdentityProviderUseCaseMockPatchIdentityProviderResults struct {
+	err error
+}
+
+// IdentityProviderUseCaseMockPatchIdentityProviderOrigins contains origins of expectations of the IdentityProviderUseCase.PatchIdentityProvider
+type IdentityProviderUseCaseMockPatchIdentityProviderExpectationOrigins struct {
+	origin    string
+	originCtx string
+	originCmd string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmPatchIdentityProvider *mIdentityProviderUseCaseMockPatchIdentityProvider) Optional() *mIdentityProviderUseCaseMockPatchIdentityProvider {
+	mmPatchIdentityProvider.optional = true
+	return mmPatchIdentityProvider
+}
+
+// Expect sets up expected params for IdentityProviderUseCase.PatchIdentityProvider
+func (mmPatchIdentityProvider *mIdentityProviderUseCaseMockPatchIdentityProvider) Expect(ctx context.Context, cmd mm_port.PatchIdentityProviderCommand) *mIdentityProviderUseCaseMockPatchIdentityProvider {
+	if mmPatchIdentityProvider.mock.funcPatchIdentityProvider != nil {
+		mmPatchIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.PatchIdentityProvider mock is already set by Set")
+	}
+
+	if mmPatchIdentityProvider.defaultExpectation == nil {
+		mmPatchIdentityProvider.defaultExpectation = &IdentityProviderUseCaseMockPatchIdentityProviderExpectation{}
+	}
+
+	if mmPatchIdentityProvider.defaultExpectation.paramPtrs != nil {
+		mmPatchIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.PatchIdentityProvider mock is already set by ExpectParams functions")
+	}
+
+	mmPatchIdentityProvider.defaultExpectation.params = &IdentityProviderUseCaseMockPatchIdentityProviderParams{ctx, cmd}
+	mmPatchIdentityProvider.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmPatchIdentityProvider.expectations {
+		if minimock.Equal(e.params, mmPatchIdentityProvider.defaultExpectation.params) {
+			mmPatchIdentityProvider.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmPatchIdentityProvider.defaultExpectation.params)
+		}
+	}
+
+	return mmPatchIdentityProvider
+}
+
+// ExpectCtxParam1 sets up expected param ctx for IdentityProviderUseCase.PatchIdentityProvider
+func (mmPatchIdentityProvider *mIdentityProviderUseCaseMockPatchIdentityProvider) ExpectCtxParam1(ctx context.Context) *mIdentityProviderUseCaseMockPatchIdentityProvider {
+	if mmPatchIdentityProvider.mock.funcPatchIdentityProvider != nil {
+		mmPatchIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.PatchIdentityProvider mock is already set by Set")
+	}
+
+	if mmPatchIdentityProvider.defaultExpectation == nil {
+		mmPatchIdentityProvider.defaultExpectation = &IdentityProviderUseCaseMockPatchIdentityProviderExpectation{}
+	}
+
+	if mmPatchIdentityProvider.defaultExpectation.params != nil {
+		mmPatchIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.PatchIdentityProvider mock is already set by Expect")
+	}
+
+	if mmPatchIdentityProvider.defaultExpectation.paramPtrs == nil {
+		mmPatchIdentityProvider.defaultExpectation.paramPtrs = &IdentityProviderUseCaseMockPatchIdentityProviderParamPtrs{}
+	}
+	mmPatchIdentityProvider.defaultExpectation.paramPtrs.ctx = &ctx
+	mmPatchIdentityProvider.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmPatchIdentityProvider
+}
+
+// ExpectCmdParam2 sets up expected param cmd for IdentityProviderUseCase.PatchIdentityProvider
+func (mmPatchIdentityProvider *mIdentityProviderUseCaseMockPatchIdentityProvider) ExpectCmdParam2(cmd mm_port.PatchIdentityProviderCommand) *mIdentityProviderUseCaseMockPatchIdentityProvider {
+	if mmPatchIdentityProvider.mock.funcPatchIdentityProvider != nil {
+		mmPatchIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.PatchIdentityProvider mock is already set by Set")
+	}
+
+	if mmPatchIdentityProvider.defaultExpectation == nil {
+		mmPatchIdentityProvider.defaultExpectation = &IdentityProviderUseCaseMockPatchIdentityProviderExpectation{}
+	}
+
+	if mmPatchIdentityProvider.defaultExpectation.params != nil {
+		mmPatchIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.PatchIdentityProvider mock is already set by Expect")
+	}
+
+	if mmPatchIdentityProvider.defaultExpectation.paramPtrs == nil {
+		mmPatchIdentityProvider.defaultExpectation.paramPtrs = &IdentityProviderUseCaseMockPatchIdentityProviderParamPtrs{}
+	}
+	mmPatchIdentityProvider.defaultExpectation.paramPtrs.cmd = &cmd
+	mmPatchIdentityProvider.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
+
+	return mmPatchIdentityProvider
+}
+
+// Inspect accepts an inspector function that has same arguments as the IdentityProviderUseCase.PatchIdentityProvider
+func (mmPatchIdentityProvider *mIdentityProviderUseCaseMockPatchIdentityProvider) Inspect(f func(ctx context.Context, cmd mm_port.PatchIdentityProviderCommand)) *mIdentityProviderUseCaseMockPatchIdentityProvider {
+	if mmPatchIdentityProvider.mock.inspectFuncPatchIdentityProvider != nil {
+		mmPatchIdentityProvider.mock.t.Fatalf("Inspect function is already set for IdentityProviderUseCaseMock.PatchIdentityProvider")
+	}
+
+	mmPatchIdentityProvider.mock.inspectFuncPatchIdentityProvider = f
+
+	return mmPatchIdentityProvider
+}
+
+// Return sets up results that will be returned by IdentityProviderUseCase.PatchIdentityProvider
+func (mmPatchIdentityProvider *mIdentityProviderUseCaseMockPatchIdentityProvider) Return(err error) *IdentityProviderUseCaseMock {
+	if mmPatchIdentityProvider.mock.funcPatchIdentityProvider != nil {
+		mmPatchIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.PatchIdentityProvider mock is already set by Set")
+	}
+
+	if mmPatchIdentityProvider.defaultExpectation == nil {
+		mmPatchIdentityProvider.defaultExpectation = &IdentityProviderUseCaseMockPatchIdentityProviderExpectation{mock: mmPatchIdentityProvider.mock}
+	}
+	mmPatchIdentityProvider.defaultExpectation.results = &IdentityProviderUseCaseMockPatchIdentityProviderResults{err}
+	mmPatchIdentityProvider.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmPatchIdentityProvider.mock
+}
+
+// Set uses given function f to mock the IdentityProviderUseCase.PatchIdentityProvider method
+func (mmPatchIdentityProvider *mIdentityProviderUseCaseMockPatchIdentityProvider) Set(f func(ctx context.Context, cmd mm_port.PatchIdentityProviderCommand) (err error)) *IdentityProviderUseCaseMock {
+	if mmPatchIdentityProvider.defaultExpectation != nil {
+		mmPatchIdentityProvider.mock.t.Fatalf("Default expectation is already set for the IdentityProviderUseCase.PatchIdentityProvider method")
+	}
+
+	if len(mmPatchIdentityProvider.expectations) > 0 {
+		mmPatchIdentityProvider.mock.t.Fatalf("Some expectations are already set for the IdentityProviderUseCase.PatchIdentityProvider method")
+	}
+
+	mmPatchIdentityProvider.mock.funcPatchIdentityProvider = f
+	mmPatchIdentityProvider.mock.funcPatchIdentityProviderOrigin = minimock.CallerInfo(1)
+	return mmPatchIdentityProvider.mock
+}
+
+// When sets expectation for the IdentityProviderUseCase.PatchIdentityProvider which will trigger the result defined by the following
+// Then helper
+func (mmPatchIdentityProvider *mIdentityProviderUseCaseMockPatchIdentityProvider) When(ctx context.Context, cmd mm_port.PatchIdentityProviderCommand) *IdentityProviderUseCaseMockPatchIdentityProviderExpectation {
+	if mmPatchIdentityProvider.mock.funcPatchIdentityProvider != nil {
+		mmPatchIdentityProvider.mock.t.Fatalf("IdentityProviderUseCaseMock.PatchIdentityProvider mock is already set by Set")
+	}
+
+	expectation := &IdentityProviderUseCaseMockPatchIdentityProviderExpectation{
+		mock:               mmPatchIdentityProvider.mock,
+		params:             &IdentityProviderUseCaseMockPatchIdentityProviderParams{ctx, cmd},
+		expectationOrigins: IdentityProviderUseCaseMockPatchIdentityProviderExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmPatchIdentityProvider.expectations = append(mmPatchIdentityProvider.expectations, expectation)
+	return expectation
+}
+
+// Then sets up IdentityProviderUseCase.PatchIdentityProvider return parameters for the expectation previously defined by the When method
+func (e *IdentityProviderUseCaseMockPatchIdentityProviderExpectation) Then(err error) *IdentityProviderUseCaseMock {
+	e.results = &IdentityProviderUseCaseMockPatchIdentityProviderResults{err}
+	return e.mock
+}
+
+// Times sets number of times IdentityProviderUseCase.PatchIdentityProvider should be invoked
+func (mmPatchIdentityProvider *mIdentityProviderUseCaseMockPatchIdentityProvider) Times(n uint64) *mIdentityProviderUseCaseMockPatchIdentityProvider {
+	if n == 0 {
+		mmPatchIdentityProvider.mock.t.Fatalf("Times of IdentityProviderUseCaseMock.PatchIdentityProvider mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmPatchIdentityProvider.expectedInvocations, n)
+	mmPatchIdentityProvider.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmPatchIdentityProvider
+}
+
+func (mmPatchIdentityProvider *mIdentityProviderUseCaseMockPatchIdentityProvider) invocationsDone() bool {
+	if len(mmPatchIdentityProvider.expectations) == 0 && mmPatchIdentityProvider.defaultExpectation == nil && mmPatchIdentityProvider.mock.funcPatchIdentityProvider == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmPatchIdentityProvider.mock.afterPatchIdentityProviderCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmPatchIdentityProvider.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// PatchIdentityProvider implements mm_port.IdentityProviderUseCase
+func (mmPatchIdentityProvider *IdentityProviderUseCaseMock) PatchIdentityProvider(ctx context.Context, cmd mm_port.PatchIdentityProviderCommand) (err error) {
+	mm_atomic.AddUint64(&mmPatchIdentityProvider.beforePatchIdentityProviderCounter, 1)
+	defer mm_atomic.AddUint64(&mmPatchIdentityProvider.afterPatchIdentityProviderCounter, 1)
+
+	mmPatchIdentityProvider.t.Helper()
+
+	if mmPatchIdentityProvider.inspectFuncPatchIdentityProvider != nil {
+		mmPatchIdentityProvider.inspectFuncPatchIdentityProvider(ctx, cmd)
+	}
+
+	mm_params := IdentityProviderUseCaseMockPatchIdentityProviderParams{ctx, cmd}
+
+	// Record call args
+	mmPatchIdentityProvider.PatchIdentityProviderMock.mutex.Lock()
+	mmPatchIdentityProvider.PatchIdentityProviderMock.callArgs = append(mmPatchIdentityProvider.PatchIdentityProviderMock.callArgs, &mm_params)
+	mmPatchIdentityProvider.PatchIdentityProviderMock.mutex.Unlock()
+
+	for _, e := range mmPatchIdentityProvider.PatchIdentityProviderMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmPatchIdentityProvider.PatchIdentityProviderMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmPatchIdentityProvider.PatchIdentityProviderMock.defaultExpectation.Counter, 1)
+		mm_want := mmPatchIdentityProvider.PatchIdentityProviderMock.defaultExpectation.params
+		mm_want_ptrs := mmPatchIdentityProvider.PatchIdentityProviderMock.defaultExpectation.paramPtrs
+
+		mm_got := IdentityProviderUseCaseMockPatchIdentityProviderParams{ctx, cmd}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmPatchIdentityProvider.t.Errorf("IdentityProviderUseCaseMock.PatchIdentityProvider got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmPatchIdentityProvider.PatchIdentityProviderMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
+				mmPatchIdentityProvider.t.Errorf("IdentityProviderUseCaseMock.PatchIdentityProvider got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmPatchIdentityProvider.PatchIdentityProviderMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmPatchIdentityProvider.t.Errorf("IdentityProviderUseCaseMock.PatchIdentityProvider got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmPatchIdentityProvider.PatchIdentityProviderMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmPatchIdentityProvider.PatchIdentityProviderMock.defaultExpectation.results
+		if mm_results == nil {
+			mmPatchIdentityProvider.t.Fatal("No results are set for the IdentityProviderUseCaseMock.PatchIdentityProvider")
+		}
+		return (*mm_results).err
+	}
+	if mmPatchIdentityProvider.funcPatchIdentityProvider != nil {
+		return mmPatchIdentityProvider.funcPatchIdentityProvider(ctx, cmd)
+	}
+	mmPatchIdentityProvider.t.Fatalf("Unexpected call to IdentityProviderUseCaseMock.PatchIdentityProvider. %v %v", ctx, cmd)
+	return
+}
+
+// PatchIdentityProviderAfterCounter returns a count of finished IdentityProviderUseCaseMock.PatchIdentityProvider invocations
+func (mmPatchIdentityProvider *IdentityProviderUseCaseMock) PatchIdentityProviderAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmPatchIdentityProvider.afterPatchIdentityProviderCounter)
+}
+
+// PatchIdentityProviderBeforeCounter returns a count of IdentityProviderUseCaseMock.PatchIdentityProvider invocations
+func (mmPatchIdentityProvider *IdentityProviderUseCaseMock) PatchIdentityProviderBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmPatchIdentityProvider.beforePatchIdentityProviderCounter)
+}
+
+// Calls returns a list of arguments used in each call to IdentityProviderUseCaseMock.PatchIdentityProvider.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmPatchIdentityProvider *mIdentityProviderUseCaseMockPatchIdentityProvider) Calls() []*IdentityProviderUseCaseMockPatchIdentityProviderParams {
+	mmPatchIdentityProvider.mutex.RLock()
+
+	argCopy := make([]*IdentityProviderUseCaseMockPatchIdentityProviderParams, len(mmPatchIdentityProvider.callArgs))
+	copy(argCopy, mmPatchIdentityProvider.callArgs)
+
+	mmPatchIdentityProvider.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockPatchIdentityProviderDone returns true if the count of the PatchIdentityProvider invocations corresponds
+// the number of defined expectations
+func (m *IdentityProviderUseCaseMock) MinimockPatchIdentityProviderDone() bool {
+	if m.PatchIdentityProviderMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.PatchIdentityProviderMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.PatchIdentityProviderMock.invocationsDone()
+}
+
+// MinimockPatchIdentityProviderInspect logs each unmet expectation
+func (m *IdentityProviderUseCaseMock) MinimockPatchIdentityProviderInspect() {
+	for _, e := range m.PatchIdentityProviderMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to IdentityProviderUseCaseMock.PatchIdentityProvider at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterPatchIdentityProviderCounter := mm_atomic.LoadUint64(&m.afterPatchIdentityProviderCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.PatchIdentityProviderMock.defaultExpectation != nil && afterPatchIdentityProviderCounter < 1 {
+		if m.PatchIdentityProviderMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to IdentityProviderUseCaseMock.PatchIdentityProvider at\n%s", m.PatchIdentityProviderMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to IdentityProviderUseCaseMock.PatchIdentityProvider at\n%s with params: %#v", m.PatchIdentityProviderMock.defaultExpectation.expectationOrigins.origin, *m.PatchIdentityProviderMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcPatchIdentityProvider != nil && afterPatchIdentityProviderCounter < 1 {
+		m.t.Errorf("Expected call to IdentityProviderUseCaseMock.PatchIdentityProvider at\n%s", m.funcPatchIdentityProviderOrigin)
+	}
+
+	if !m.PatchIdentityProviderMock.invocationsDone() && afterPatchIdentityProviderCounter > 0 {
+		m.t.Errorf("Expected %d calls to IdentityProviderUseCaseMock.PatchIdentityProvider at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.PatchIdentityProviderMock.expectedInvocations), m.PatchIdentityProviderMock.expectedInvocationsOrigin, afterPatchIdentityProviderCounter)
+	}
+}
+
 type mIdentityProviderUseCaseMockUpdateIdentityProvider struct {
 	optional           bool
 	mock               *IdentityProviderUseCaseMock
@@ -2254,9 +3344,15 @@ func (m *IdentityProviderUseCaseMock) MinimockFinish() {
 
 			m.MinimockDiscoverOIDCInspect()
 
+			m.MinimockGetIdentityProviderInspect()
+
+			m.MinimockGetIdentityProviderUsageInspect()
+
 			m.MinimockGetIdentityProvidersInspect()
 
 			m.MinimockGetPartitionsWithProvidersInspect()
+
+			m.MinimockPatchIdentityProviderInspect()
 
 			m.MinimockUpdateIdentityProviderInspect()
 		}
@@ -2285,7 +3381,10 @@ func (m *IdentityProviderUseCaseMock) minimockDone() bool {
 		m.MinimockCreateIdentityProviderDone() &&
 		m.MinimockDeleteIdentityProviderDone() &&
 		m.MinimockDiscoverOIDCDone() &&
+		m.MinimockGetIdentityProviderDone() &&
+		m.MinimockGetIdentityProviderUsageDone() &&
 		m.MinimockGetIdentityProvidersDone() &&
 		m.MinimockGetPartitionsWithProvidersDone() &&
+		m.MinimockPatchIdentityProviderDone() &&
 		m.MinimockUpdateIdentityProviderDone()
 }

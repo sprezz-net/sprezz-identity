@@ -1,0 +1,78 @@
+package admin
+
+import "sprezz-identity/internal/domain/model"
+
+const idpInputClass = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+
+// IDPGeneralCard edits the display name and the enabled state. The alias, type and partition identify the
+// provider and are shown read-only.
+templ IDPGeneralCard(p *model.IdentityProvider, partition string, result SectionResult) {
+	@SectionCard(SectionCardProps{
+		ID:          "section-general",
+		Title:       "General",
+		Description: "How this provider is named in the console and offered on the sign-in page.",
+		Action:      idpSectionAction(p.ID.String(), "general"),
+		ReadOnly:    p.IsSystem,
+		Saved:       result.Saved,
+		Error:       result.Error,
+	}) {
+		<div>
+			<label for="name" class="block text-sm font-medium text-gray-700 mb-1">Display name</label>
+			<input id="name" type="text" name="name" value={ p.Name } required maxlength="100" class={ idpInputClass }/>
+			@FieldError(result.FieldErr("name"))
+		</div>
+		<dl class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+			<div>
+				<dt class="text-gray-500">Alias</dt>
+				<dd class="font-mono text-gray-900">{ p.Alias }</dd>
+			</div>
+			<div>
+				<dt class="text-gray-500">Type</dt>
+				<dd class="text-gray-900">{ idpTypeLabel(p.IDPType) }</dd>
+			</div>
+			<div>
+				<dt class="text-gray-500">Partition</dt>
+				<dd class="text-gray-900">{ partition }</dd>
+			</div>
+		</dl>
+		<p class="text-xs text-gray-500">The alias, type and partition identify the provider and cannot be changed. Delete and add it again to change them.</p>
+		@ToggleRow("enabled", "true", "Enabled", "A disabled provider is hidden from the sign-in page and refuses sign-ins.", p.Enabled, false)
+	}
+}
+
+// IDPConnectionCard edits where the provider is found. Saving fetches the provider's metadata again, and the
+// issuer always comes from that response, never from the form.
+templ IDPConnectionCard(p *model.IdentityProvider, result SectionResult) {
+	@SectionCard(SectionCardProps{
+		ID:          "section-connection",
+		Title:       "Connection",
+		Description: "Saving fetches the provider's metadata and confirms its issuer.",
+		Action:      idpSectionAction(p.ID.String(), "connection"),
+		ReadOnly:    p.IsSystem,
+		Saved:       result.Saved,
+		Error:       result.Error,
+	}) {
+		<div>
+			<label for="discovery_endpoint" class="block text-sm font-medium text-gray-700 mb-1">Discovery endpoint</label>
+			<input id="discovery_endpoint" type="url" name="discovery_endpoint" value={ p.Config.DiscoveryEndpoint } required placeholder="https://idp.example.com/.well-known/openid-configuration" class={ idpInputClass + " font-mono" }/>
+			@FieldError(result.FieldErr("discovery_endpoint"))
+		</div>
+		@IDPDiscoverySummary(p)
+		@FieldError(result.FieldErr("issuer"))
+		<div>
+			<label for="authentication_method" class="block text-sm font-medium text-gray-700 mb-1">Client authentication</label>
+			<select id="authentication_method" name="authentication_method" class={ idpInputClass + " bg-white" }>
+				<option value="client_secret_basic" selected?={ p.Config.AuthenticationMethod == "client_secret_basic" || p.Config.AuthenticationMethod == "" }>Client secret in the HTTP Basic header</option>
+				<option value="client_secret_post" selected?={ p.Config.AuthenticationMethod == "client_secret_post" }>Client secret in the request body</option>
+				<option value="none" selected?={ p.Config.AuthenticationMethod == "none" }>None (public client)</option>
+			</select>
+			@FieldError(result.FieldErr("authentication_method"))
+		</div>
+		<fieldset class="space-y-1">
+			<legend class="block text-sm font-medium text-gray-700 mb-1">Protocol features</legend>
+			@ToggleRow("pkce_enabled", "true", "PKCE", "Bind the authorization code to this sign-in attempt.", p.Config.PkceEnabled, false)
+			@ToggleRow("par_enabled", "true", "Pushed authorization requests", "Send the request to the provider directly instead of through the browser.", p.Config.ParEnabled, false)
+			@ToggleRow("slo_enabled", "true", "Single logout", "Sign the user out of this provider when they sign out here.", p.Config.SLOEnabled, false)
+		</fieldset>
+	}
+}

@@ -1792,6 +1792,7 @@ func (s *PostgresStorage) CreateIdentityProvider(ctx context.Context, tenantID u
 		Name:        provider.Name,
 		PartitionID: provider.PartitionID,
 		Issuer:      provider.Issuer,
+		IsSystem:    provider.IsSystem,
 		TenantUuid:  toPGUUID(tenantID),
 	})
 	if err != nil {
@@ -1834,6 +1835,7 @@ func (s *PostgresStorage) GetIdentityProviders(ctx context.Context, tenantID uui
 			Name:        row.Name,
 			PartitionID: row.PartitionID,
 			Issuer:      issuer,
+			IsSystem:    row.IsSystem,
 			Config:      providerCfg,
 			CreatedAt:   parsedCreatedAt,
 			UpdatedAt:   parsedUpdatedAt,
@@ -1885,6 +1887,7 @@ func (s *PostgresStorage) GetIdentityProvidersByUUIDs(ctx context.Context, tenan
 			Name:        row.Name,
 			PartitionID: row.PartitionID,
 			Issuer:      issuer,
+			IsSystem:    row.IsSystem,
 			Config:      providerCfg,
 			CreatedAt:   parsedCreatedAt,
 			UpdatedAt:   parsedUpdatedAt,
@@ -1932,6 +1935,7 @@ func (s *PostgresStorage) GetIdentityProvidersByTypeAndPartition(ctx context.Con
 			Name:        row.Name,
 			PartitionID: row.PartitionID,
 			Issuer:      issuerStr,
+			IsSystem:    row.IsSystem,
 			Config:      config,
 			CreatedAt:   row.CreatedAt.Time,
 			UpdatedAt:   row.UpdatedAt.Time,
@@ -1981,6 +1985,7 @@ func (s *PostgresStorage) GetIdentityProviderByAlias(ctx context.Context, tenant
 		Name:        row.Name,
 		PartitionID: row.PartitionID,
 		Issuer:      issuer,
+		IsSystem:    row.IsSystem,
 		Config:      providerCfg,
 		CreatedAt:   parsedCreatedAt,
 		UpdatedAt:   parsedUpdatedAt,
@@ -2032,6 +2037,7 @@ func (s *PostgresStorage) GetIdentityProviderByUUID(ctx context.Context, tenantI
 		Name:        row.Name,
 		PartitionID: row.PartitionID,
 		Issuer:      issuer,
+		IsSystem:    row.IsSystem,
 		Config:      providerCfg,
 		CreatedAt:   parsedCreatedAt,
 		UpdatedAt:   parsedUpdatedAt,
@@ -2117,6 +2123,7 @@ func (s *PostgresStorage) GetEnabledIdentityProviders(ctx context.Context, tenan
 			Name:        row.Name,
 			PartitionID: row.PartitionID,
 			Issuer:      issuer,
+			IsSystem:    row.IsSystem,
 			Config:      providerCfg,
 			CreatedAt:   parsedCreatedAt,
 			UpdatedAt:   parsedUpdatedAt,
@@ -3008,12 +3015,51 @@ func (s *PostgresStorage) DeleteTenant(ctx context.Context, tenantUUID uuid.UUID
 	return nil
 }
 
+// DeleteIdentityProvider removes a non-system provider. Users linked to it lose that link (their identity rows
+// cascade). A provider that an application group still allows is refused by the RESTRICT foreign key and reported
+// as port.ErrInUse. System providers are refused by the WHERE clause as a second guard behind the domain service.
 func (s *PostgresStorage) DeleteIdentityProvider(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) error {
-	_, err := s.pool.Exec(ctx, `
+	tag, err := s.pool.Exec(ctx, `
 		DELETE FROM identity_providers
-		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid) AND id = $2::uuid
+		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1::uuid)
+		  AND id = $2::uuid
+		  AND is_system = FALSE
 	`, toPGUUID(tenantID), toPGUUID(idpID))
-	return err
+	if err != nil {
+		return mapReferenceViolation(err, "identity provider")
+	}
+	if tag.RowsAffected() == 0 {
+		return port.ErrIdentityProviderNotFound
+	}
+	return nil
+}
+
+// GetIdentityProviderUsage reports linked users, allowing groups and the last sign-in for every provider.
+func (s *PostgresStorage) GetIdentityProviderUsage(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProviderUsage, error) {
+	rows, err := s.queries.GetIdentityProviderUsage(ctx, toPGUUID(tenantID))
+	if err != nil {
+		return nil, fmt.Errorf("storage: failed to read identity provider usage: %w", err)
+	}
+
+	usage := make([]model.IdentityProviderUsage, 0, len(rows))
+	for _, row := range rows {
+		id, err := pgUUIDToUUID(row.ProviderID)
+		if err != nil {
+			return nil, fmt.Errorf("storage: parse provider id: %w", err)
+		}
+		groupIDs := make([]uuid.UUID, 0, len(row.GroupIds))
+		for _, g := range row.GroupIds {
+			gid, _ := pgUUIDToUUID(g)
+			groupIDs = append(groupIDs, gid)
+		}
+		entry := model.IdentityProviderUsage{ProviderID: id, LinkedUsers: int(row.LinkedUsers), GroupIDs: groupIDs, GroupNames: row.GroupNames}
+		if row.LastLoginAt.Valid {
+			last := row.LastLoginAt.Time
+			entry.LastLoginAt = &last
+		}
+		usage = append(usage, entry)
+	}
+	return usage, nil
 }
 
 //nolint:unused

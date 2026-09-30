@@ -1,0 +1,84 @@
+package admin
+
+import (
+	"strconv"
+
+	"sprezz-identity/internal/domain/model"
+)
+
+// IDPsContent lists the identity providers. Search and filters are plain GET requests, so every view has a URL.
+templ IDPsContent(props IDPListProps) {
+	@FlashMessage(props.Msg)
+	@ListToolbar("+ Add provider", idpsBase()+"/new") {
+		<form hx-get={ idpsBase() } hx-target="main" hx-swap="innerHTML" hx-push-url="true" hx-trigger="change, keyup changed delay:300ms from:find input" class="flex flex-wrap items-center gap-3">
+			<input type="search" name="q" value={ props.Query } placeholder="Search name or alias" aria-label="Search providers" class="w-64 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"/>
+			<select name="partition_id" aria-label="Filter by partition" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+				<option value="">All partitions</option>
+				for _, part := range props.Partitions {
+					<option value={ strconv.FormatInt(part.ID, 10) } selected?={ props.PartitionID == part.ID }>{ partitionLabel(part) }</option>
+				}
+			</select>
+			<select name="type" aria-label="Filter by type" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+				<option value="" selected?={ props.Type == "" }>All types</option>
+				<option value="oidc" selected?={ props.Type == "oidc" }>OpenID Connect</option>
+				<option value="username-password" selected?={ props.Type == "username-password" }>Local accounts</option>
+			</select>
+			<select name="status" aria-label="Filter by status" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+				<option value="" selected?={ props.Status == "" }>Any status</option>
+				<option value="active" selected?={ props.Status == "active" }>Active</option>
+				<option value="disabled" selected?={ props.Status == "disabled" }>Disabled</option>
+			</select>
+		</form>
+	}
+	<div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
+		if len(props.Rows) == 0 {
+			@EmptyState("No identity providers found", "Add a provider to let users sign in.")
+		} else {
+			<table class="min-w-full divide-y divide-gray-200 text-sm">
+				<thead>
+					<tr class="bg-gray-50 text-gray-500 font-semibold">
+						<th scope="col" class="px-6 py-3 text-left">Provider</th>
+						<th scope="col" class="px-6 py-3 text-left">Type</th>
+						<th scope="col" class="px-6 py-3 text-left">Partition</th>
+						<th scope="col" class="px-6 py-3 text-right">Users</th>
+						<th scope="col" class="px-6 py-3 text-right">Groups</th>
+						<th scope="col" class="px-6 py-3 text-left">Status</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-gray-100">
+					for _, row := range props.Rows {
+						<tr class="hover:bg-gray-50">
+							<td class="px-6 py-3">
+								@rowLink(idpURL(row.Provider.ID.String())) {
+									{ row.Provider.Name }
+								}
+								<span class="block font-mono text-xs text-gray-500">{ row.Provider.Alias }</span>
+								if row.Provider.IsSystem {
+									@SystemBadge()
+								}
+							</td>
+							<td class="px-6 py-3 text-gray-600">{ idpTypeLabel(row.Provider.IDPType) }</td>
+							<td class="px-6 py-3 text-gray-600">{ row.PartitionName }</td>
+							<td class="px-6 py-3 text-right text-gray-600">{ itoa(row.Usage.LinkedUsers) }</td>
+							<td class="px-6 py-3 text-right text-gray-600">{ itoa(len(row.Usage.GroupNames)) }</td>
+							<td class="px-6 py-3">@StatusBadge(row.Provider.Enabled)</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	</div>
+}
+
+templ IDPsPage(props IDPListProps) {
+	@AdminLayout(AdminLayoutProps{Title: "Identity Providers", CurrentTab: "idps", TenantName: props.ActiveTenant.Name}) {
+		@IDPsContent(props)
+	}
+}
+
+func partitionLabel(p model.Partition) string {
+	if p.AliasName != "" {
+		return p.AliasName
+	}
+	return p.Name
+}

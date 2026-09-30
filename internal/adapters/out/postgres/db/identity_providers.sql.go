@@ -15,7 +15,7 @@ const createIdentityProvider = `-- name: CreateIdentityProvider :exec
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $9::uuid
+    WHERE tenant_uuid = $10::uuid
     LIMIT 1
 )
 INSERT INTO identity_providers (
@@ -27,7 +27,8 @@ INSERT INTO identity_providers (
     config,
     name,
     partition_id,
-    issuer
+    issuer,
+    is_system
 )
 SELECT
     $1::uuid,
@@ -38,13 +39,16 @@ SELECT
     $5::jsonb,
     $6,
     $7::bigint,
-    NULLIF($8::varchar, '')
+    NULLIF($8::varchar, ''),
+    $9::boolean
 FROM tenant t
 ON CONFLICT (tenant_id, partition_id, idp_type, alias_name) DO UPDATE SET
     enabled = EXCLUDED.enabled,
     config = EXCLUDED.config,
     name = EXCLUDED.name,
-    issuer = EXCLUDED.issuer
+    issuer = EXCLUDED.issuer,
+    -- One-way ratchet: an upsert can flag a provider as system-managed but never clear the flag.
+    is_system = identity_providers.is_system OR EXCLUDED.is_system
 `
 
 type CreateIdentityProviderParams struct {
@@ -56,6 +60,7 @@ type CreateIdentityProviderParams struct {
 	Name        string      `json:"name"`
 	PartitionID int64       `json:"partition_id"`
 	Issuer      string      `json:"issuer"`
+	IsSystem    bool        `json:"is_system"`
 	TenantUuid  pgtype.UUID `json:"tenant_uuid"`
 }
 
@@ -70,6 +75,7 @@ func (q *Queries) CreateIdentityProvider(ctx context.Context, arg CreateIdentity
 		arg.Name,
 		arg.PartitionID,
 		arg.Issuer,
+		arg.IsSystem,
 		arg.TenantUuid,
 	)
 	return err
@@ -91,6 +97,7 @@ SELECT
     name,
     partition_id,
     issuer,
+    is_system,
     config,
     created_at,
     updated_at
@@ -109,6 +116,7 @@ type GetEnabledIdentityProvidersRow struct {
 	Name        string             `json:"name"`
 	PartitionID int64              `json:"partition_id"`
 	Issuer      *string            `json:"issuer"`
+	IsSystem    bool               `json:"is_system"`
 	Config      []byte             `json:"config"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
@@ -133,6 +141,7 @@ func (q *Queries) GetEnabledIdentityProviders(ctx context.Context, tenantUuid pg
 			&i.Name,
 			&i.PartitionID,
 			&i.Issuer,
+			&i.IsSystem,
 			&i.Config,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -163,6 +172,7 @@ SELECT
     name,
     partition_id,
     issuer,
+    is_system,
     config,
     created_at,
     updated_at
@@ -186,6 +196,7 @@ type GetIdentityProviderByAliasRow struct {
 	Name        string             `json:"name"`
 	PartitionID int64              `json:"partition_id"`
 	Issuer      *string            `json:"issuer"`
+	IsSystem    bool               `json:"is_system"`
 	Config      []byte             `json:"config"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
@@ -204,6 +215,7 @@ func (q *Queries) GetIdentityProviderByAlias(ctx context.Context, arg GetIdentit
 		&i.Name,
 		&i.PartitionID,
 		&i.Issuer,
+		&i.IsSystem,
 		&i.Config,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -227,6 +239,7 @@ SELECT
     name,
     partition_id,
     issuer,
+    is_system,
     config,
     created_at,
     updated_at
@@ -250,6 +263,7 @@ type GetIdentityProviderByUUIDRow struct {
 	Name        string             `json:"name"`
 	PartitionID int64              `json:"partition_id"`
 	Issuer      *string            `json:"issuer"`
+	IsSystem    bool               `json:"is_system"`
 	Config      []byte             `json:"config"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
@@ -268,11 +282,79 @@ func (q *Queries) GetIdentityProviderByUUID(ctx context.Context, arg GetIdentity
 		&i.Name,
 		&i.PartitionID,
 		&i.Issuer,
+		&i.IsSystem,
 		&i.Config,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getIdentityProviderUsage = `-- name: GetIdentityProviderUsage :many
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $1::uuid
+    LIMIT 1
+)
+SELECT
+    ip.id AS provider_id,
+    COALESCE((
+        SELECT COUNT(*) FROM user_identities ui WHERE ui.identity_provider_id = ip.id
+    ), 0)::bigint AS linked_users,
+    (
+        SELECT MAX(ui.last_login_at) FROM user_identities ui WHERE ui.identity_provider_id = ip.id
+    )::timestamptz AS last_login_at,
+    COALESCE((
+        SELECT ARRAY_AGG(ag.id ORDER BY ag.group_name)
+        FROM application_group_idps agi
+        JOIN application_groups ag ON ag.id = agi.group_id
+        WHERE agi.idp_id = ip.id
+    ), '{}'::uuid[])::uuid[] AS group_ids,
+    COALESCE((
+        SELECT ARRAY_AGG(ag.group_name ORDER BY ag.group_name)
+        FROM application_group_idps agi
+        JOIN application_groups ag ON ag.id = agi.group_id
+        WHERE agi.idp_id = ip.id
+    ), '{}'::text[])::text[] AS group_names
+FROM identity_providers ip
+WHERE ip.tenant_id = (SELECT id FROM tenant)
+`
+
+type GetIdentityProviderUsageRow struct {
+	ProviderID  pgtype.UUID        `json:"provider_id"`
+	LinkedUsers int64              `json:"linked_users"`
+	LastLoginAt pgtype.Timestamptz `json:"last_login_at"`
+	GroupIds    []pgtype.UUID      `json:"group_ids"`
+	GroupNames  []string           `json:"group_names"`
+}
+
+// GetIdentityProviderUsage reports, for every provider of a tenant, how many user identities are linked to it, which
+// application groups allow it, and when a user last signed in through it.
+func (q *Queries) GetIdentityProviderUsage(ctx context.Context, tenantUuid pgtype.UUID) ([]GetIdentityProviderUsageRow, error) {
+	rows, err := q.db.Query(ctx, getIdentityProviderUsage, tenantUuid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetIdentityProviderUsageRow{}
+	for rows.Next() {
+		var i GetIdentityProviderUsageRow
+		if err := rows.Scan(
+			&i.ProviderID,
+			&i.LinkedUsers,
+			&i.LastLoginAt,
+			&i.GroupIds,
+			&i.GroupNames,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getIdentityProviders = `-- name: GetIdentityProviders :many
@@ -291,6 +373,7 @@ SELECT
     name,
     partition_id,
     issuer,
+    is_system,
     config,
     created_at,
     updated_at
@@ -308,6 +391,7 @@ type GetIdentityProvidersRow struct {
 	Name        string             `json:"name"`
 	PartitionID int64              `json:"partition_id"`
 	Issuer      *string            `json:"issuer"`
+	IsSystem    bool               `json:"is_system"`
 	Config      []byte             `json:"config"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
@@ -332,6 +416,7 @@ func (q *Queries) GetIdentityProviders(ctx context.Context, tenantUuid pgtype.UU
 			&i.Name,
 			&i.PartitionID,
 			&i.Issuer,
+			&i.IsSystem,
 			&i.Config,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -362,6 +447,7 @@ SELECT
     ip.name,
     ip.partition_id,
     ip.issuer,
+    ip.is_system,
     ip.config,
     ip.created_at,
     ip.updated_at
@@ -386,6 +472,7 @@ type GetIdentityProvidersByTypeAndPartitionRow struct {
 	Name        string             `json:"name"`
 	PartitionID int64              `json:"partition_id"`
 	Issuer      *string            `json:"issuer"`
+	IsSystem    bool               `json:"is_system"`
 	Config      []byte             `json:"config"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
@@ -411,6 +498,7 @@ func (q *Queries) GetIdentityProvidersByTypeAndPartition(ctx context.Context, ar
 			&i.Name,
 			&i.PartitionID,
 			&i.Issuer,
+			&i.IsSystem,
 			&i.Config,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -441,6 +529,7 @@ SELECT
     name,
     partition_id,
     issuer,
+    is_system,
     config,
     created_at,
     updated_at
@@ -463,6 +552,7 @@ type GetIdentityProvidersByUUIDsRow struct {
 	Name        string             `json:"name"`
 	PartitionID int64              `json:"partition_id"`
 	Issuer      *string            `json:"issuer"`
+	IsSystem    bool               `json:"is_system"`
 	Config      []byte             `json:"config"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
@@ -487,6 +577,7 @@ func (q *Queries) GetIdentityProvidersByUUIDs(ctx context.Context, arg GetIdenti
 			&i.Name,
 			&i.PartitionID,
 			&i.Issuer,
+			&i.IsSystem,
 			&i.Config,
 			&i.CreatedAt,
 			&i.UpdatedAt,

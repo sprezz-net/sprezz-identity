@@ -215,6 +215,69 @@ type AdminApplicationUseCase interface {
 	ListApplicationsByProfile(ctx context.Context, tenantID uuid.UUID, profileID uuid.UUID) ([]model.ApplicationSummary, error)
 }
 
+// IdentityProviderSection names one independently saved part of the identity provider page.
+type IdentityProviderSection string
+
+const (
+	IDPSectionGeneral     IdentityProviderSection = "general"
+	IDPSectionConnection  IdentityProviderSection = "connection"
+	IDPSectionCredentials IdentityProviderSection = "credentials"
+	IDPSectionBehavior    IdentityProviderSection = "behavior"
+	IDPSectionAssurance   IdentityProviderSection = "assurance"
+	IDPSectionLocalPolicy IdentityProviderSection = "local-policy"
+)
+
+// PatchIdentityProviderCommand saves one section of a provider. Only the fields that belong to Section are read.
+// Every other part of the stored provider, including configuration the form never shows, keeps its value.
+type PatchIdentityProviderCommand struct {
+	TenantID uuid.UUID
+	ID       uuid.UUID
+	Section  IdentityProviderSection
+
+	// General
+	Name    string
+	Enabled bool
+
+	// Connection (OIDC)
+	DiscoveryEndpoint    string
+	Issuer               string
+	AuthenticationMethod string
+	PkceEnabled          bool
+	ParEnabled           bool
+	SLOEnabled           bool
+
+	// Credentials (OIDC). An empty ClientSecret keeps the stored secret; ClearSecret removes it.
+	ClientID     string
+	ClientSecret string
+	ClearSecret  bool
+
+	// Behavior (OIDC)
+	Scopes              []string
+	UserIdentifierClaim string
+	DomainAliases       []string
+	AutoProvisionUser   bool
+	AutoVerifyEmail     bool
+
+	// Assurance
+	AAL        int
+	IAL        int
+	ACRValues  []string
+	AcrToTuple map[string]model.AcrTuple
+	AmrToAAL   map[string]int
+
+	// LocalPolicy
+	UsernameField              string
+	MaxFailedVerificationCount int
+	PasswordBlockedTime        int
+	AllowDecoupling            bool
+}
+
+// IdentityProviderDeletion describes what removing a provider would do, for the delete dialog.
+type IdentityProviderDeletion struct {
+	LinkedUsers int
+	GroupNames  []string
+}
+
 // IdentityProviderUseCase defines the driving ports for identity provider operations.
 type IdentityProviderUseCase interface {
 	GetIdentityProviders(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProvider, error)
@@ -223,4 +286,11 @@ type IdentityProviderUseCase interface {
 	CreateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) (*model.IdentityProvider, error)
 	UpdateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) (*model.IdentityProvider, error)
 	DeleteIdentityProvider(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) error
+
+	// GetIdentityProvider returns one provider of the tenant.
+	GetIdentityProvider(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) (*model.IdentityProvider, error)
+	// PatchIdentityProvider saves one page section; see PatchIdentityProviderCommand.
+	PatchIdentityProvider(ctx context.Context, cmd PatchIdentityProviderCommand) error
+	// GetIdentityProviderUsage feeds the list and detail pages with linked users, groups and last sign-in.
+	GetIdentityProviderUsage(ctx context.Context, tenantID uuid.UUID) (map[uuid.UUID]model.IdentityProviderUsage, error)
 }

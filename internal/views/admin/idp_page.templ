@@ -1,0 +1,61 @@
+package admin
+
+// IDPContent is the detail page of one provider. Every card saves on its own.
+templ IDPContent(props IDPPageProps) {
+	@PageHeader(props.Provider.Name, "Identity providers", idpsBase()) {
+		if props.Provider.IsSystem {
+			@SystemBadge()
+		}
+		if props.Provider.Enabled {
+			@Badge("Active", "active")
+		} else {
+			@Badge("Disabled", "inactive")
+		}
+	}
+	@FlashMessage(props.Msg)
+	if props.Provider.IsSystem {
+		@SystemBanner("Managed by Sprezz. The admin console depends on this provider, so it cannot be changed or deleted.")
+	}
+	<div class="grid grid-cols-1 lg:grid-cols-[14rem_minmax(0,1fr)] gap-8 items-start">
+		@idpRail(props)
+		<div class="space-y-6 min-w-0">
+			@IDPGeneralCard(props.Provider, props.PartitionName, props.Section("general"))
+			if props.Provider.IDPType == "oidc" {
+				@IDPConnectionCard(props.Provider, props.Section("connection"))
+				@IDPCredentialsCard(props.Provider, props.Section("credentials"))
+				@IDPBehaviorCard(props.Provider, props.Section("behavior"))
+			} else {
+				@IDPLocalPolicyCard(props.Provider, props.Section("local-policy"))
+			}
+			@IDPAssuranceCard(props.Provider, props.Section("assurance"))
+			@IDPUsageCard(props)
+			if !props.Provider.IsSystem {
+				@ConfirmDelete(IDPDeleteProps(props))
+			}
+		</div>
+	</div>
+}
+
+templ IDPPage(props IDPPageProps) {
+	@AdminLayout(AdminLayoutProps{Title: props.Provider.Name, CurrentTab: "idps", TenantName: props.ActiveTenant.Name}) {
+		@IDPContent(props)
+	}
+}
+
+// idpRail is the section anchor list on the left of the page.
+templ idpRail(props IDPPageProps) {
+	<nav class="lg:sticky lg:top-24 text-sm" aria-label="Sections">
+		<ul class="space-y-1">
+			<li><a href="#section-general" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">General</a></li>
+			if props.Provider.IDPType == "oidc" {
+				<li><a href="#section-connection" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Connection</a></li>
+				<li><a href="#section-credentials" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Credentials</a></li>
+				<li><a href="#section-behavior" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">User handling</a></li>
+			} else {
+				<li><a href="#section-local-policy" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Sign-in policy</a></li>
+			}
+			<li><a href="#section-assurance" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Assurance</a></li>
+			<li><a href="#section-usage" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Usage</a></li>
+		</ul>
+	</nav>
+}

@@ -116,7 +116,7 @@ internal/
 
 The admin UI is built from type-safe `templ` components, compiled Tailwind and CSP-safe Alpine.js components.
 
-- **`AdminLayout`**: side navigation from a `[]NavItem` slice, a global spinner and a modal container. The Tenants, Identity Providers and Users pages still use modals.
+- **`AdminLayout`**: side navigation from a `[]NavItem` slice, a global spinner and a modal container. The Tenants and Users pages still use modals.
 - **`ApplicationsSubNav`**: the Applications | Groups | Profiles tab strip. Active state comes from the route, so each tab has its own address and needs no client state.
 - **`PageHeader`, `SystemBadge`, `SystemBanner`, `FlashMessage`, `EmptyState`**: page chrome. System objects always show the badge and a banner explaining why the page is read-only.
 - **`SectionCard` and `SaveBar`**: one independently saved part of a detail page. Each card is its own form (`hx-put` to `.../{section}`) that swaps only itself, with "Unsaved changes" and "Saved" indicators.
@@ -167,7 +167,7 @@ When designing nested forms or complex multi-component configuration pages, the 
 
 To maintain full compliance, prevent parser deadlocks, and eliminate redundant window event overhead:
 
-1. **Scope Inheritance**: Since nested sub-components reside directly inside the parent `<form>` layout tag, they inherit the parent manager (e.g., `applicationFormManager` or `oidcFormManager`) scope natively.
+1. **Scope Inheritance**: Since nested sub-components reside directly inside the parent `<form>` layout tag, they inherit the parent manager (e.g., `applicationFormManager`) scope natively.
 2. **Internal Event Dispatching**: Any necessary cross-component notifications are dispatched from within the compiled JavaScript context of the manager method itself using `this.$dispatch` securely (e.g., `this.$dispatch('grant-type-change', { authCode: checked });`). This keeps our HTML markup perfectly flat, simple, and 100% compliant under strict Content Security Policies.
 
 ### 5.2.2 Declarative Dataset Initialization Pattern
@@ -389,3 +389,26 @@ To prevent lexical confusion and ensure semantic clarity, a strict separation is
 1. **Application-Level Descriptors (`application_*`)**: Any inputs, fields, or validation handles managing the administrative identity, name, or metadata of the registered entity MUST strictly use the phrase **`application_name`** (mapped directly onto `ApplicationName`). The word *Client* is prohibited for descriptions to ensure end-administrators are not confused by technical developer values.
 2. **Credential-Level Identifiers (`client_*`)**: Dynamic tokens, keys, secrets, and protocol identifiers MUST preserve the OIDC vocabulary standard using **`client`** prefixes (e.g. `client_id`, `client_secret`, and structural mappings to `ClientID` and `ClientSecretHash`).
 3. **Form-to-Handler Validation Parity**: Every administrative flow must audit form parameter namespaces for perfect symmetry. The HTML input tag's `name` attribute, the Go handler's `r.FormValue(...)` parsing key, and the targeted component `Errors[...]` key must match this nomenclature flawlessly (e.g., changing legacy `client_name` lookups and errors to `application_name` on form invalidations).
+
+
+## Identity providers
+
+Identity providers follow the same routed, section-card design as groups and profiles.
+
+| Route | Purpose |
+| --- | --- |
+| `GET /admin/idps` | List with search (`q`), `partition_id`, `type` and `status` filters, plus linked users and allowing groups per provider |
+| `GET /admin/idps/new[?type=]` | Type picker, then a short form for the chosen type |
+| `POST /admin/idps` | Create, then redirect to the provider page |
+| `GET /admin/idps/{id}` | Detail page with one card per section |
+| `PUT /admin/idps/{id}/{section}` | Save one section (`general`, `connection`, `credentials`, `behavior`, `assurance`, `local-policy`); answers with that card only |
+| `DELETE /admin/idps/{id}` | Delete after the alias is typed |
+
+Rules the pages rely on, all enforced in the domain service:
+
+- A section save re-reads the stored provider, overlays only that section and validates the whole, so configuration no card shows is never lost.
+- The alias, type and partition are the storage conflict key and cannot be changed after creation.
+- The issuer and the metadata snapshot are taken from the provider's discovery response when the connection is saved; the discovery endpoint must be https (http only for localhost).
+- The client secret is write-only. The field is always empty; an empty submission keeps the stored secret.
+- System providers (the admin tenant's local accounts and every tenant's `admin-sso`, flag `is_system`) are read-only and cannot be deleted. Only `CreateSystemIdentityProvider`, which is not on the admin use case port, can create one.
+- A provider that an application group allows cannot be deleted. Deleting one that users have signed in with removes their link, and the danger zone says how many users that is.

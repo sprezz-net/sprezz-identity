@@ -177,6 +177,7 @@ func (s *TenantBootstrapService) ensureDefaultIdentityProvider(ctx context.Conte
 		Enabled:     true,
 		Alias:       usernamePasswordIDPAlias,
 		Name:        "Local Accounts",
+		IsSystem:    true,
 		PartitionID: partitionID,
 		Config: model.IdentityProviderConfig{
 			UsernameField: "preferredUsername",

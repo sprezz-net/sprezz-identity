@@ -110,13 +110,14 @@ func (s *TenantService) CreateTenant(ctx context.Context, cmd port.CreateTenantC
 		Enabled:     true,
 		Alias:       "admin-sso",
 		Name:        "Administrative SSO",
+		IsSystem:    true,
 		PartitionID: p2.ID,
 		Issuer:      adminIssuerURL,
 		Config:      idpConfig,
 	}
 
 	// 6. Call the Identity Provider domain service to register the OIDC link safely
-	_, err = s.idpService.CreateIdentityProvider(ctx, newTenant.ID, idp)
+	_, err = s.idpService.CreateSystemIdentityProvider(ctx, newTenant.ID, idp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to broker secure administrative idp configuration: %w", err)
 	}

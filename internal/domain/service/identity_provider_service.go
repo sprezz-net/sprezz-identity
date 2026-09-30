@@ -220,69 +220,6 @@ func (s *IdentityProviderService) ChangePassword(ctx context.Context, tenantID u
 	return nil
 }
 
-func (s *IdentityProviderService) CreateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) (*model.IdentityProvider, error) {
-	if provider.Alias == "" {
-		return nil, fmt.Errorf("provider alias is required")
-	}
-	if provider.IDPType == "" {
-		return nil, fmt.Errorf("provider IDP type is required")
-	}
-
-	if provider.IDPType == model.UsernamePasswordIDPType {
-		existing, err := s.storage.GetIdentityProviders(ctx, tenantID)
-		if err != nil {
-			return nil, err
-		}
-		for _, ext := range existing {
-			if ext.IDPType == model.UsernamePasswordIDPType && ext.PartitionID == provider.PartitionID {
-				return nil, errors.New("a username-password identity provider already exists for this partition")
-			}
-		}
-	}
-
-	provider.ID = uuid.New()
-	provider.TenantID = tenantID
-
-	if err := s.adminStorage.CreateIdentityProvider(ctx, tenantID, provider); err != nil {
-		return nil, err
-	}
-
-	return &provider, nil
-}
-
-func (s *IdentityProviderService) DeleteIdentityProvider(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) error {
-	return s.adminStorage.DeleteIdentityProvider(ctx, tenantID, idpID)
-}
-
-func (s *IdentityProviderService) UpdateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) (*model.IdentityProvider, error) {
-	if provider.Alias == "" {
-		return nil, fmt.Errorf("provider alias is required")
-	}
-	if provider.IDPType == "" {
-		return nil, fmt.Errorf("provider IDP type is required")
-	}
-
-	if provider.IDPType == model.UsernamePasswordIDPType {
-		existing, err := s.storage.GetIdentityProviders(ctx, tenantID)
-		if err != nil {
-			return nil, err
-		}
-		for _, ext := range existing {
-			if ext.IDPType == model.UsernamePasswordIDPType && ext.ID != provider.ID && ext.PartitionID == provider.PartitionID {
-				return nil, errors.New("a username-password identity provider already exists for this partition")
-			}
-		}
-	}
-
-	provider.TenantID = tenantID
-	// In our PostgresStorage implementation, CreateIdentityProvider uses ON CONFLICT DO UPDATE
-	if err := s.adminStorage.CreateIdentityProvider(ctx, tenantID, provider); err != nil {
-		return nil, err
-	}
-
-	return &provider, nil
-}
-
 func (s *IdentityProviderService) DiscoverOIDC(ctx context.Context, endpoint string) (*model.OIDCDiscoveryMetadata, error) {
 	if endpoint == "" {
 		return nil, errors.New("discovery endpoint is required")

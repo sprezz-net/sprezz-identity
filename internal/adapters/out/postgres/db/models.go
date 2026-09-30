@@ -182,6 +182,7 @@ type IdentityProvider struct {
 	PartitionID int64              `json:"partition_id"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	Issuer      *string            `json:"issuer"`
+	IsSystem    bool               `json:"is_system"`
 }
 
 type InteractionSession struct {

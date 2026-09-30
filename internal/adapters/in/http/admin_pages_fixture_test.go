@@ -23,6 +23,7 @@ type pagesFixture struct {
 	adapter  *HttpAdapter
 	apps     *portmock.AdminApplicationUseCaseMock
 	idps     *portmock.IdentityProviderUseCaseMock
+	storage  *portmock.StorageMock
 	tenant   *model.Tenant
 	tenantID uuid.UUID
 	userID   uuid.UUID
@@ -61,7 +62,7 @@ func newPagesFixture(t *testing.T) *pagesFixture {
 		portmock.NewUserProfileUseCaseMock(ctrl), portmock.NewUserRegistrationUseCaseMock(ctrl), portmock.NewLocalAuthUseCaseMock(ctrl),
 		apps, nil, idps, storage, portmock.NewCryptoMock(ctrl), "unittest", testAdminHost)
 
-	return &pagesFixture{t: t, adapter: adapter, apps: apps, idps: idps, tenant: tenant, tenantID: tenantID, userID: userID}
+	return &pagesFixture{t: t, adapter: adapter, apps: apps, idps: idps, storage: storage, tenant: tenant, tenantID: tenantID, userID: userID}
 }
 
 // do issues a request carrying a valid admin session. Extra headers and a form body are optional.

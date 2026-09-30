@@ -28,6 +28,8 @@ func adminErrorStatus(err error) (int, string) {
 		return http.StatusNotFound, port.ErrGroupNotFound.Error()
 	case errors.Is(err, port.ErrProfileNotFound):
 		return http.StatusNotFound, port.ErrProfileNotFound.Error()
+	case errors.Is(err, port.ErrIdentityProviderNotFound):
+		return http.StatusNotFound, port.ErrIdentityProviderNotFound.Error()
 	case errors.Is(err, port.ErrTenantNotFound):
 		return http.StatusNotFound, port.ErrTenantNotFound.Error()
 	default:

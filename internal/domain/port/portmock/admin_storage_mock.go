@@ -167,6 +167,13 @@ type AdminStorageMock struct {
 	beforeGetDynamicApplicationsSummaryCounter uint64
 	GetDynamicApplicationsSummaryMock          mAdminStorageMockGetDynamicApplicationsSummary
 
+	funcGetIdentityProviderUsage          func(ctx context.Context, tenantID uuid.UUID) (ia1 []model.IdentityProviderUsage, err error)
+	funcGetIdentityProviderUsageOrigin    string
+	inspectFuncGetIdentityProviderUsage   func(ctx context.Context, tenantID uuid.UUID)
+	afterGetIdentityProviderUsageCounter  uint64
+	beforeGetIdentityProviderUsageCounter uint64
+	GetIdentityProviderUsageMock          mAdminStorageMockGetIdentityProviderUsage
+
 	funcGetStaticApplicationsSummary          func(ctx context.Context, tenantUUID uuid.UUID) (aa1 []model.ApplicationSummary, err error)
 	funcGetStaticApplicationsSummaryOrigin    string
 	inspectFuncGetStaticApplicationsSummary   func(ctx context.Context, tenantUUID uuid.UUID)
@@ -287,6 +294,9 @@ func NewAdminStorageMock(t minimock.Tester) *AdminStorageMock {
 
 	m.GetDynamicApplicationsSummaryMock = mAdminStorageMockGetDynamicApplicationsSummary{mock: m}
 	m.GetDynamicApplicationsSummaryMock.callArgs = []*AdminStorageMockGetDynamicApplicationsSummaryParams{}
+
+	m.GetIdentityProviderUsageMock = mAdminStorageMockGetIdentityProviderUsage{mock: m}
+	m.GetIdentityProviderUsageMock.callArgs = []*AdminStorageMockGetIdentityProviderUsageParams{}
 
 	m.GetStaticApplicationsSummaryMock = mAdminStorageMockGetStaticApplicationsSummary{mock: m}
 	m.GetStaticApplicationsSummaryMock.callArgs = []*AdminStorageMockGetStaticApplicationsSummaryParams{}
@@ -8001,6 +8011,349 @@ func (m *AdminStorageMock) MinimockGetDynamicApplicationsSummaryInspect() {
 	}
 }
 
+type mAdminStorageMockGetIdentityProviderUsage struct {
+	optional           bool
+	mock               *AdminStorageMock
+	defaultExpectation *AdminStorageMockGetIdentityProviderUsageExpectation
+	expectations       []*AdminStorageMockGetIdentityProviderUsageExpectation
+
+	callArgs []*AdminStorageMockGetIdentityProviderUsageParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AdminStorageMockGetIdentityProviderUsageExpectation specifies expectation struct of the AdminStorage.GetIdentityProviderUsage
+type AdminStorageMockGetIdentityProviderUsageExpectation struct {
+	mock               *AdminStorageMock
+	params             *AdminStorageMockGetIdentityProviderUsageParams
+	paramPtrs          *AdminStorageMockGetIdentityProviderUsageParamPtrs
+	expectationOrigins AdminStorageMockGetIdentityProviderUsageExpectationOrigins
+	results            *AdminStorageMockGetIdentityProviderUsageResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AdminStorageMockGetIdentityProviderUsageParams contains parameters of the AdminStorage.GetIdentityProviderUsage
+type AdminStorageMockGetIdentityProviderUsageParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+}
+
+// AdminStorageMockGetIdentityProviderUsageParamPtrs contains pointers to parameters of the AdminStorage.GetIdentityProviderUsage
+type AdminStorageMockGetIdentityProviderUsageParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+}
+
+// AdminStorageMockGetIdentityProviderUsageResults contains results of the AdminStorage.GetIdentityProviderUsage
+type AdminStorageMockGetIdentityProviderUsageResults struct {
+	ia1 []model.IdentityProviderUsage
+	err error
+}
+
+// AdminStorageMockGetIdentityProviderUsageOrigins contains origins of expectations of the AdminStorage.GetIdentityProviderUsage
+type AdminStorageMockGetIdentityProviderUsageExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetIdentityProviderUsage *mAdminStorageMockGetIdentityProviderUsage) Optional() *mAdminStorageMockGetIdentityProviderUsage {
+	mmGetIdentityProviderUsage.optional = true
+	return mmGetIdentityProviderUsage
+}
+
+// Expect sets up expected params for AdminStorage.GetIdentityProviderUsage
+func (mmGetIdentityProviderUsage *mAdminStorageMockGetIdentityProviderUsage) Expect(ctx context.Context, tenantID uuid.UUID) *mAdminStorageMockGetIdentityProviderUsage {
+	if mmGetIdentityProviderUsage.mock.funcGetIdentityProviderUsage != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("AdminStorageMock.GetIdentityProviderUsage mock is already set by Set")
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation == nil {
+		mmGetIdentityProviderUsage.defaultExpectation = &AdminStorageMockGetIdentityProviderUsageExpectation{}
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation.paramPtrs != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("AdminStorageMock.GetIdentityProviderUsage mock is already set by ExpectParams functions")
+	}
+
+	mmGetIdentityProviderUsage.defaultExpectation.params = &AdminStorageMockGetIdentityProviderUsageParams{ctx, tenantID}
+	mmGetIdentityProviderUsage.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetIdentityProviderUsage.expectations {
+		if minimock.Equal(e.params, mmGetIdentityProviderUsage.defaultExpectation.params) {
+			mmGetIdentityProviderUsage.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetIdentityProviderUsage.defaultExpectation.params)
+		}
+	}
+
+	return mmGetIdentityProviderUsage
+}
+
+// ExpectCtxParam1 sets up expected param ctx for AdminStorage.GetIdentityProviderUsage
+func (mmGetIdentityProviderUsage *mAdminStorageMockGetIdentityProviderUsage) ExpectCtxParam1(ctx context.Context) *mAdminStorageMockGetIdentityProviderUsage {
+	if mmGetIdentityProviderUsage.mock.funcGetIdentityProviderUsage != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("AdminStorageMock.GetIdentityProviderUsage mock is already set by Set")
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation == nil {
+		mmGetIdentityProviderUsage.defaultExpectation = &AdminStorageMockGetIdentityProviderUsageExpectation{}
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation.params != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("AdminStorageMock.GetIdentityProviderUsage mock is already set by Expect")
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation.paramPtrs == nil {
+		mmGetIdentityProviderUsage.defaultExpectation.paramPtrs = &AdminStorageMockGetIdentityProviderUsageParamPtrs{}
+	}
+	mmGetIdentityProviderUsage.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetIdentityProviderUsage.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetIdentityProviderUsage
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for AdminStorage.GetIdentityProviderUsage
+func (mmGetIdentityProviderUsage *mAdminStorageMockGetIdentityProviderUsage) ExpectTenantIDParam2(tenantID uuid.UUID) *mAdminStorageMockGetIdentityProviderUsage {
+	if mmGetIdentityProviderUsage.mock.funcGetIdentityProviderUsage != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("AdminStorageMock.GetIdentityProviderUsage mock is already set by Set")
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation == nil {
+		mmGetIdentityProviderUsage.defaultExpectation = &AdminStorageMockGetIdentityProviderUsageExpectation{}
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation.params != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("AdminStorageMock.GetIdentityProviderUsage mock is already set by Expect")
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation.paramPtrs == nil {
+		mmGetIdentityProviderUsage.defaultExpectation.paramPtrs = &AdminStorageMockGetIdentityProviderUsageParamPtrs{}
+	}
+	mmGetIdentityProviderUsage.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetIdentityProviderUsage.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetIdentityProviderUsage
+}
+
+// Inspect accepts an inspector function that has same arguments as the AdminStorage.GetIdentityProviderUsage
+func (mmGetIdentityProviderUsage *mAdminStorageMockGetIdentityProviderUsage) Inspect(f func(ctx context.Context, tenantID uuid.UUID)) *mAdminStorageMockGetIdentityProviderUsage {
+	if mmGetIdentityProviderUsage.mock.inspectFuncGetIdentityProviderUsage != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("Inspect function is already set for AdminStorageMock.GetIdentityProviderUsage")
+	}
+
+	mmGetIdentityProviderUsage.mock.inspectFuncGetIdentityProviderUsage = f
+
+	return mmGetIdentityProviderUsage
+}
+
+// Return sets up results that will be returned by AdminStorage.GetIdentityProviderUsage
+func (mmGetIdentityProviderUsage *mAdminStorageMockGetIdentityProviderUsage) Return(ia1 []model.IdentityProviderUsage, err error) *AdminStorageMock {
+	if mmGetIdentityProviderUsage.mock.funcGetIdentityProviderUsage != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("AdminStorageMock.GetIdentityProviderUsage mock is already set by Set")
+	}
+
+	if mmGetIdentityProviderUsage.defaultExpectation == nil {
+		mmGetIdentityProviderUsage.defaultExpectation = &AdminStorageMockGetIdentityProviderUsageExpectation{mock: mmGetIdentityProviderUsage.mock}
+	}
+	mmGetIdentityProviderUsage.defaultExpectation.results = &AdminStorageMockGetIdentityProviderUsageResults{ia1, err}
+	mmGetIdentityProviderUsage.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetIdentityProviderUsage.mock
+}
+
+// Set uses given function f to mock the AdminStorage.GetIdentityProviderUsage method
+func (mmGetIdentityProviderUsage *mAdminStorageMockGetIdentityProviderUsage) Set(f func(ctx context.Context, tenantID uuid.UUID) (ia1 []model.IdentityProviderUsage, err error)) *AdminStorageMock {
+	if mmGetIdentityProviderUsage.defaultExpectation != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("Default expectation is already set for the AdminStorage.GetIdentityProviderUsage method")
+	}
+
+	if len(mmGetIdentityProviderUsage.expectations) > 0 {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("Some expectations are already set for the AdminStorage.GetIdentityProviderUsage method")
+	}
+
+	mmGetIdentityProviderUsage.mock.funcGetIdentityProviderUsage = f
+	mmGetIdentityProviderUsage.mock.funcGetIdentityProviderUsageOrigin = minimock.CallerInfo(1)
+	return mmGetIdentityProviderUsage.mock
+}
+
+// When sets expectation for the AdminStorage.GetIdentityProviderUsage which will trigger the result defined by the following
+// Then helper
+func (mmGetIdentityProviderUsage *mAdminStorageMockGetIdentityProviderUsage) When(ctx context.Context, tenantID uuid.UUID) *AdminStorageMockGetIdentityProviderUsageExpectation {
+	if mmGetIdentityProviderUsage.mock.funcGetIdentityProviderUsage != nil {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("AdminStorageMock.GetIdentityProviderUsage mock is already set by Set")
+	}
+
+	expectation := &AdminStorageMockGetIdentityProviderUsageExpectation{
+		mock:               mmGetIdentityProviderUsage.mock,
+		params:             &AdminStorageMockGetIdentityProviderUsageParams{ctx, tenantID},
+		expectationOrigins: AdminStorageMockGetIdentityProviderUsageExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetIdentityProviderUsage.expectations = append(mmGetIdentityProviderUsage.expectations, expectation)
+	return expectation
+}
+
+// Then sets up AdminStorage.GetIdentityProviderUsage return parameters for the expectation previously defined by the When method
+func (e *AdminStorageMockGetIdentityProviderUsageExpectation) Then(ia1 []model.IdentityProviderUsage, err error) *AdminStorageMock {
+	e.results = &AdminStorageMockGetIdentityProviderUsageResults{ia1, err}
+	return e.mock
+}
+
+// Times sets number of times AdminStorage.GetIdentityProviderUsage should be invoked
+func (mmGetIdentityProviderUsage *mAdminStorageMockGetIdentityProviderUsage) Times(n uint64) *mAdminStorageMockGetIdentityProviderUsage {
+	if n == 0 {
+		mmGetIdentityProviderUsage.mock.t.Fatalf("Times of AdminStorageMock.GetIdentityProviderUsage mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetIdentityProviderUsage.expectedInvocations, n)
+	mmGetIdentityProviderUsage.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetIdentityProviderUsage
+}
+
+func (mmGetIdentityProviderUsage *mAdminStorageMockGetIdentityProviderUsage) invocationsDone() bool {
+	if len(mmGetIdentityProviderUsage.expectations) == 0 && mmGetIdentityProviderUsage.defaultExpectation == nil && mmGetIdentityProviderUsage.mock.funcGetIdentityProviderUsage == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetIdentityProviderUsage.mock.afterGetIdentityProviderUsageCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetIdentityProviderUsage.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetIdentityProviderUsage implements mm_port.AdminStorage
+func (mmGetIdentityProviderUsage *AdminStorageMock) GetIdentityProviderUsage(ctx context.Context, tenantID uuid.UUID) (ia1 []model.IdentityProviderUsage, err error) {
+	mm_atomic.AddUint64(&mmGetIdentityProviderUsage.beforeGetIdentityProviderUsageCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetIdentityProviderUsage.afterGetIdentityProviderUsageCounter, 1)
+
+	mmGetIdentityProviderUsage.t.Helper()
+
+	if mmGetIdentityProviderUsage.inspectFuncGetIdentityProviderUsage != nil {
+		mmGetIdentityProviderUsage.inspectFuncGetIdentityProviderUsage(ctx, tenantID)
+	}
+
+	mm_params := AdminStorageMockGetIdentityProviderUsageParams{ctx, tenantID}
+
+	// Record call args
+	mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.mutex.Lock()
+	mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.callArgs = append(mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.callArgs, &mm_params)
+	mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.mutex.Unlock()
+
+	for _, e := range mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.ia1, e.results.err
+		}
+	}
+
+	if mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.defaultExpectation.params
+		mm_want_ptrs := mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.defaultExpectation.paramPtrs
+
+		mm_got := AdminStorageMockGetIdentityProviderUsageParams{ctx, tenantID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetIdentityProviderUsage.t.Errorf("AdminStorageMock.GetIdentityProviderUsage got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetIdentityProviderUsage.t.Errorf("AdminStorageMock.GetIdentityProviderUsage got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetIdentityProviderUsage.t.Errorf("AdminStorageMock.GetIdentityProviderUsage got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetIdentityProviderUsage.GetIdentityProviderUsageMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetIdentityProviderUsage.t.Fatal("No results are set for the AdminStorageMock.GetIdentityProviderUsage")
+		}
+		return (*mm_results).ia1, (*mm_results).err
+	}
+	if mmGetIdentityProviderUsage.funcGetIdentityProviderUsage != nil {
+		return mmGetIdentityProviderUsage.funcGetIdentityProviderUsage(ctx, tenantID)
+	}
+	mmGetIdentityProviderUsage.t.Fatalf("Unexpected call to AdminStorageMock.GetIdentityProviderUsage. %v %v", ctx, tenantID)
+	return
+}
+
+// GetIdentityProviderUsageAfterCounter returns a count of finished AdminStorageMock.GetIdentityProviderUsage invocations
+func (mmGetIdentityProviderUsage *AdminStorageMock) GetIdentityProviderUsageAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetIdentityProviderUsage.afterGetIdentityProviderUsageCounter)
+}
+
+// GetIdentityProviderUsageBeforeCounter returns a count of AdminStorageMock.GetIdentityProviderUsage invocations
+func (mmGetIdentityProviderUsage *AdminStorageMock) GetIdentityProviderUsageBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetIdentityProviderUsage.beforeGetIdentityProviderUsageCounter)
+}
+
+// Calls returns a list of arguments used in each call to AdminStorageMock.GetIdentityProviderUsage.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetIdentityProviderUsage *mAdminStorageMockGetIdentityProviderUsage) Calls() []*AdminStorageMockGetIdentityProviderUsageParams {
+	mmGetIdentityProviderUsage.mutex.RLock()
+
+	argCopy := make([]*AdminStorageMockGetIdentityProviderUsageParams, len(mmGetIdentityProviderUsage.callArgs))
+	copy(argCopy, mmGetIdentityProviderUsage.callArgs)
+
+	mmGetIdentityProviderUsage.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetIdentityProviderUsageDone returns true if the count of the GetIdentityProviderUsage invocations corresponds
+// the number of defined expectations
+func (m *AdminStorageMock) MinimockGetIdentityProviderUsageDone() bool {
+	if m.GetIdentityProviderUsageMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetIdentityProviderUsageMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetIdentityProviderUsageMock.invocationsDone()
+}
+
+// MinimockGetIdentityProviderUsageInspect logs each unmet expectation
+func (m *AdminStorageMock) MinimockGetIdentityProviderUsageInspect() {
+	for _, e := range m.GetIdentityProviderUsageMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AdminStorageMock.GetIdentityProviderUsage at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetIdentityProviderUsageCounter := mm_atomic.LoadUint64(&m.afterGetIdentityProviderUsageCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetIdentityProviderUsageMock.defaultExpectation != nil && afterGetIdentityProviderUsageCounter < 1 {
+		if m.GetIdentityProviderUsageMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AdminStorageMock.GetIdentityProviderUsage at\n%s", m.GetIdentityProviderUsageMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AdminStorageMock.GetIdentityProviderUsage at\n%s with params: %#v", m.GetIdentityProviderUsageMock.defaultExpectation.expectationOrigins.origin, *m.GetIdentityProviderUsageMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetIdentityProviderUsage != nil && afterGetIdentityProviderUsageCounter < 1 {
+		m.t.Errorf("Expected call to AdminStorageMock.GetIdentityProviderUsage at\n%s", m.funcGetIdentityProviderUsageOrigin)
+	}
+
+	if !m.GetIdentityProviderUsageMock.invocationsDone() && afterGetIdentityProviderUsageCounter > 0 {
+		m.t.Errorf("Expected %d calls to AdminStorageMock.GetIdentityProviderUsage at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetIdentityProviderUsageMock.expectedInvocations), m.GetIdentityProviderUsageMock.expectedInvocationsOrigin, afterGetIdentityProviderUsageCounter)
+	}
+}
+
 type mAdminStorageMockGetStaticApplicationsSummary struct {
 	optional           bool
 	mock               *AdminStorageMock
@@ -10661,6 +11014,8 @@ func (m *AdminStorageMock) MinimockFinish() {
 
 			m.MinimockGetDynamicApplicationsSummaryInspect()
 
+			m.MinimockGetIdentityProviderUsageInspect()
+
 			m.MinimockGetStaticApplicationsSummaryInspect()
 
 			m.MinimockGetUserIdentitiesInspect()
@@ -10718,6 +11073,7 @@ func (m *AdminStorageMock) minimockDone() bool {
 		m.MinimockGetApplicationsByGroupDone() &&
 		m.MinimockGetApplicationsByProfileDone() &&
 		m.MinimockGetDynamicApplicationsSummaryDone() &&
+		m.MinimockGetIdentityProviderUsageDone() &&
 		m.MinimockGetStaticApplicationsSummaryDone() &&
 		m.MinimockGetUserIdentitiesDone() &&
 		m.MinimockGetUserProfilesByTenantDone() &&

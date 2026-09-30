@@ -143,6 +143,8 @@ type AdminStorage interface {
 	DeleteTenant(ctx context.Context, tenantUUID uuid.UUID) error
 
 	CreateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) error
+	// GetIdentityProviderUsage reports linked users, allowing groups and the last sign-in per provider of a tenant.
+	GetIdentityProviderUsage(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProviderUsage, error)
 	DeleteIdentityProvider(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) error
 
 	GetUserProfilesByTenant(ctx context.Context, tenantID uuid.UUID, partitionID int64) ([]model.UserProfile, error)

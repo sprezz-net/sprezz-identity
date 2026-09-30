@@ -1,0 +1,122 @@
+package admin
+
+import "sprezz-identity/internal/domain/model"
+
+// IDPBehaviorCard edits what is requested from the provider and how arriving users are handled.
+templ IDPBehaviorCard(p *model.IdentityProvider, result SectionResult) {
+	@SectionCard(SectionCardProps{
+		ID:          "section-behavior",
+		Title:       "User handling",
+		Description: "Which data is requested and what happens when a user signs in for the first time.",
+		Action:      idpSectionAction(p.ID.String(), "behavior"),
+		ReadOnly:    p.IsSystem,
+		Saved:       result.Saved,
+		Error:       result.Error,
+	}) {
+		<div>
+			<label for="scopes" class="block text-sm font-medium text-gray-700 mb-1">Scopes</label>
+			<input id="scopes" type="text" name="scopes" value={ joinSpaces(p.Config.Scopes) } placeholder="openid profile email" class={ idpInputClass + " font-mono" }/>
+			@FieldError(result.FieldErr("scopes"))
+			<p class="mt-1 text-xs text-gray-500">Separated by spaces. The openid scope is required.</p>
+		</div>
+		<div>
+			<label for="user_identifier_claim" class="block text-sm font-medium text-gray-700 mb-1">User identifier claim</label>
+			<input id="user_identifier_claim" type="text" name="user_identifier_claim" value={ p.Config.UserIdentifierClaim } placeholder="sub" class={ idpInputClass + " font-mono" }/>
+			<p class="mt-1 text-xs text-gray-500">The claim that uniquely identifies a user at the provider. Empty means sub.</p>
+		</div>
+		<div>
+			<label for="domain_aliases" class="block text-sm font-medium text-gray-700 mb-1">Email domains</label>
+			<textarea id="domain_aliases" name="domain_aliases" rows="3" placeholder="example.com" class={ idpInputClass + " font-mono" }>{ joinLines(p.Config.DomainAliases) }</textarea>
+			@FieldError(result.FieldErr("domain_aliases"))
+			<p class="mt-1 text-xs text-gray-500">One domain per line. Users with these email domains are sent to this provider.</p>
+		</div>
+		@ToggleRow("auto_provision_user", "true", "Create accounts on first sign-in", "Unknown users who authenticate at the provider get a local account.", p.Config.AutoProvisionUser, false)
+		@ToggleRow("auto_verify_email", "true", "Trust the provider's email verification", "Mark the email address as verified when the provider says it is.", p.Config.AutoVerifyEmail, false)
+	}
+}
+
+// IDPAssuranceCard edits the assurance levels this provider's sign-ins count for.
+templ IDPAssuranceCard(p *model.IdentityProvider, result SectionResult) {
+	@SectionCard(SectionCardProps{
+		ID:          "section-assurance",
+		Title:       "Assurance",
+		Description: "Levels granted to users who sign in through this provider. They can be raised per ACR value.",
+		Action:      idpSectionAction(p.ID.String(), "assurance"),
+		ReadOnly:    p.IsSystem,
+		Saved:       result.Saved,
+		Error:       result.Error,
+	}) {
+		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+			<div>
+				<label for="aal" class="block text-sm font-medium text-gray-700 mb-1">Authenticator assurance (AAL)</label>
+				@levelSelect("aal", p.Config.AAL, false)
+				@FieldError(result.FieldErr("aal"))
+			</div>
+			<div>
+				<label for="ial" class="block text-sm font-medium text-gray-700 mb-1">Identity assurance (IAL)</label>
+				@levelSelect("ial", p.Config.IAL, false)
+				@FieldError(result.FieldErr("ial"))
+			</div>
+		</div>
+		if p.IDPType == "oidc" {
+			@acrMappingTable(p, result)
+			<div>
+				<label for="amr_to_aal" class="block text-sm font-medium text-gray-700 mb-1">Authentication methods</label>
+				<textarea id="amr_to_aal" name="amr_to_aal" rows="3" placeholder="otp=2" class={ idpInputClass + " font-mono" }>{ amrLines(p) }</textarea>
+				@FieldError(result.FieldErr("amr_to_aal"))
+				<p class="mt-1 text-xs text-gray-500">One per line as name=level, for example otp=2. Raises the AAL when the provider reports that method.</p>
+			</div>
+		}
+	}
+}
+
+// levelSelect is a 1 to 4 picker; allowDefault adds a "use the provider default" choice.
+templ levelSelect(name string, current int, allowDefault bool) {
+	<select id={ name } name={ name } class={ idpInputClass + " bg-white" }>
+		if allowDefault {
+			<option value="0" selected?={ current == 0 }>Provider default</option>
+		}
+		for _, level := range []int{1, 2, 3, 4} {
+			<option value={ levelText(level) } selected?={ current == level }>{ levelText(level) }</option>
+		}
+	</select>
+}
+
+templ acrMappingTable(p *model.IdentityProvider, result SectionResult) {
+	if choices := acrChoices(p); len(choices) > 0 {
+		<div>
+			<p class="block text-sm font-medium text-gray-700 mb-1">ACR values</p>
+			<table class="min-w-full text-sm">
+				<thead>
+					<tr class="text-left text-gray-500">
+						<th scope="col" class="py-1 pr-4 font-medium">ACR value</th>
+						<th scope="col" class="py-1 pr-4 font-medium">AAL</th>
+						<th scope="col" class="py-1 font-medium">IAL</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, acr := range choices {
+						<tr>
+							<td class="py-1 pr-4 font-mono text-xs text-gray-800">
+								{ acr }
+								<input type="hidden" name="acr_value" value={ acr }/>
+							</td>
+							<td class="py-1 pr-4">@acrLevel("acr_aal", acr, p.Config.AcrToTuple[acr].AAL)</td>
+							<td class="py-1">@acrLevel("acr_ial", acr, p.Config.AcrToTuple[acr].IAL)</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+			@FieldError(result.FieldErr("acr_to_tuple"))
+		</div>
+	}
+}
+
+templ acrLevel(prefix, acr string, current int) {
+	<select name={ prefix + ":" + acr } aria-label={ prefix + " for " + acr } class="px-2 py-1 border border-gray-300 rounded-lg text-sm bg-white">
+		<option value="0" selected?={ current == 0 }>Default</option>
+		for _, level := range []int{1, 2, 3, 4} {
+			<option value={ levelText(level) } selected?={ current == level }>{ levelText(level) }</option>
+		}
+	</select>
+}
