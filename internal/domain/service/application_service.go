@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -362,9 +363,13 @@ func (s *ApplicationService) GetGroup(ctx context.Context, tenantID uuid.UUID, i
 	return s.adminStorage.GetApplicationGroupByID(ctx, tenantID, id)
 }
 
-// CreateGroup creates a standalone routing group.
+// CreateGroup creates a standalone routing group after validating its routing content and sign-in methods.
 func (s *ApplicationService) CreateGroup(ctx context.Context, cmd port.CreateGroupCommand) error {
+	content, verr := normalizeGroupContent(groupContentFromCreate(cmd))
 	cmd.DefaultIDPID = normalizeDefaultIDP(cmd.DefaultIDPID)
+	if verr.HasErrors() {
+		return verr
+	}
 	if err := s.validateGroupIDPs(ctx, cmd.TenantID, cmd.AllowedIDPIDs, cmd.DefaultIDPID, false); err != nil {
 		return err
 	}
@@ -372,15 +377,16 @@ func (s *ApplicationService) CreateGroup(ctx context.Context, cmd port.CreateGro
 	group := model.ApplicationGroup{
 		ID:                     uuid.New(),
 		TenantID:               cmd.TenantID,
-		GroupName:              cmd.GroupName,
+		GroupName:              strings.TrimSpace(cmd.GroupName),
 		IsEnabled:              true,
-		RedirectURIs:           cmd.RedirectURIs,
-		PostLogoutRedirectURIs: cmd.PostLogoutRedirectURIs,
-		FrontChannelLogoutURI:  cmd.FrontChannelLogoutURI,
-		BackChannelLogoutURI:   cmd.BackChannelLogoutURI,
-		AllowedScopes:          cmd.AllowedScopes,
-		DefaultScopes:          cmd.DefaultScopes,
-		AllowedAudiences:       cmd.AllowedAudiences,
+		RedirectURI:            content.defaultRedirectURI,
+		RedirectURIs:           content.redirectURIs,
+		PostLogoutRedirectURIs: content.postLogoutRedirectURIs,
+		FrontChannelLogoutURI:  content.frontChannelLogoutURI,
+		BackChannelLogoutURI:   content.backChannelLogoutURI,
+		AllowedScopes:          content.allowedScopes,
+		DefaultScopes:          content.defaultScopes,
+		AllowedAudiences:       content.allowedAudiences,
 		AllowedIDPIDs:          cmd.AllowedIDPIDs,
 		DefaultIDPID:           cmd.DefaultIDPID,
 		CreatedAt:              s.clock.Now(),
@@ -388,6 +394,23 @@ func (s *ApplicationService) CreateGroup(ctx context.Context, cmd port.CreateGro
 	}
 
 	return s.adminStorage.CreateApplicationGroup(ctx, cmd.TenantID, group)
+}
+
+// groupContentFromCreate and groupContentFromUpdate adapt the two command types to the shared validator.
+func groupContentFromCreate(cmd port.CreateGroupCommand) groupContentInput {
+	return groupContentInput{
+		redirectURIs: cmd.RedirectURIs, defaultRedirectURI: cmd.DefaultRedirectURI, postLogoutRedirectURIs: cmd.PostLogoutRedirectURIs,
+		frontChannelLogoutURI: cmd.FrontChannelLogoutURI, backChannelLogoutURI: cmd.BackChannelLogoutURI,
+		allowedScopes: cmd.AllowedScopes, defaultScopes: cmd.DefaultScopes, allowedAudiences: cmd.AllowedAudiences,
+	}
+}
+
+func groupContentFromUpdate(cmd port.UpdateGroupCommand) groupContentInput {
+	return groupContentInput{
+		redirectURIs: cmd.RedirectURIs, defaultRedirectURI: cmd.DefaultRedirectURI, postLogoutRedirectURIs: cmd.PostLogoutRedirectURIs,
+		frontChannelLogoutURI: cmd.FrontChannelLogoutURI, backChannelLogoutURI: cmd.BackChannelLogoutURI,
+		allowedScopes: cmd.AllowedScopes, defaultScopes: cmd.DefaultScopes, allowedAudiences: cmd.AllowedAudiences,
+	}
 }
 
 // UpdateGroup updates an existing standalone routing group.
@@ -405,6 +428,10 @@ func (s *ApplicationService) UpdateGroup(ctx context.Context, cmd port.UpdateGro
 		return s.updateSystemGroupIDPs(ctx, existing, cmd)
 	}
 
+	content, verr := normalizeGroupContent(groupContentFromUpdate(cmd))
+	if verr.HasErrors() {
+		return verr
+	}
 	if err := s.validateGroupIDPs(ctx, cmd.TenantID, cmd.AllowedIDPIDs, cmd.DefaultIDPID, false); err != nil {
 		return err
 	}
@@ -412,15 +439,16 @@ func (s *ApplicationService) UpdateGroup(ctx context.Context, cmd port.UpdateGro
 	group := model.ApplicationGroup{
 		ID:                     cmd.ID,
 		TenantID:               cmd.TenantID,
-		GroupName:              cmd.GroupName,
+		GroupName:              strings.TrimSpace(cmd.GroupName),
 		IsEnabled:              existing.IsEnabled,
-		RedirectURIs:           cmd.RedirectURIs,
-		PostLogoutRedirectURIs: cmd.PostLogoutRedirectURIs,
-		FrontChannelLogoutURI:  cmd.FrontChannelLogoutURI,
-		BackChannelLogoutURI:   cmd.BackChannelLogoutURI,
-		AllowedScopes:          cmd.AllowedScopes,
-		DefaultScopes:          cmd.DefaultScopes,
-		AllowedAudiences:       cmd.AllowedAudiences,
+		RedirectURI:            content.defaultRedirectURI,
+		RedirectURIs:           content.redirectURIs,
+		PostLogoutRedirectURIs: content.postLogoutRedirectURIs,
+		FrontChannelLogoutURI:  content.frontChannelLogoutURI,
+		BackChannelLogoutURI:   content.backChannelLogoutURI,
+		AllowedScopes:          content.allowedScopes,
+		DefaultScopes:          content.defaultScopes,
+		AllowedAudiences:       content.allowedAudiences,
 		AllowedIDPIDs:          cmd.AllowedIDPIDs,
 		DefaultIDPID:           cmd.DefaultIDPID,
 		UpdatedAt:              s.clock.Now(),
@@ -501,4 +529,62 @@ func checkGroupProviders(allowed []uuid.UUID, providers []model.IdentityProvider
 		}
 	}
 	return ""
+}
+
+// GetApplication returns a single application with its profile and group for detail pages.
+func (s *ApplicationService) GetApplication(ctx context.Context, tenantID uuid.UUID, clientID string) (*model.ApplicationDetailsProps, error) {
+	return s.GetApplicationDetails(ctx, tenantID, clientID)
+}
+
+// DeleteGroup removes a group. System groups and groups that applications still use cannot be removed.
+func (s *ApplicationService) DeleteGroup(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) error {
+	group, err := s.adminStorage.GetApplicationGroupByID(ctx, tenantID, id)
+	if err != nil {
+		return fmt.Errorf("failed locating group for removal: %w", err)
+	}
+	if group.IsSystem {
+		return port.ErrSystemManaged
+	}
+
+	users, err := s.adminStorage.GetApplicationsByGroup(ctx, tenantID, id)
+	if err != nil {
+		return fmt.Errorf("failed checking group usage: %w", err)
+	}
+	if len(users) > 0 {
+		return fmt.Errorf("group is used by %d application(s): %w", len(users), port.ErrInUse)
+	}
+
+	// The storage layer re-checks through the foreign key, which also covers an application bound after the check above.
+	return s.adminStorage.DeleteApplicationGroup(ctx, tenantID, id)
+}
+
+// DeleteProfile removes a profile with the same protections as DeleteGroup.
+func (s *ApplicationService) DeleteProfile(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) error {
+	profile, err := s.adminStorage.GetApplicationProfileByID(ctx, tenantID, id)
+	if err != nil {
+		return fmt.Errorf("failed locating profile for removal: %w", err)
+	}
+	if profile.IsSystem {
+		return port.ErrSystemManaged
+	}
+
+	users, err := s.adminStorage.GetApplicationsByProfile(ctx, tenantID, id)
+	if err != nil {
+		return fmt.Errorf("failed checking profile usage: %w", err)
+	}
+	if len(users) > 0 {
+		return fmt.Errorf("profile is used by %d application(s): %w", len(users), port.ErrInUse)
+	}
+
+	return s.adminStorage.DeleteApplicationProfile(ctx, tenantID, id)
+}
+
+// ListApplicationsByGroup lists the applications bound to a group.
+func (s *ApplicationService) ListApplicationsByGroup(ctx context.Context, tenantID uuid.UUID, groupID uuid.UUID) ([]model.ApplicationSummary, error) {
+	return s.adminStorage.GetApplicationsByGroup(ctx, tenantID, groupID)
+}
+
+// ListApplicationsByProfile lists the applications bound to a profile.
+func (s *ApplicationService) ListApplicationsByProfile(ctx context.Context, tenantID uuid.UUID, profileID uuid.UUID) ([]model.ApplicationSummary, error) {
+	return s.adminStorage.GetApplicationsByProfile(ctx, tenantID, profileID)
 }

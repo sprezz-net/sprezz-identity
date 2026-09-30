@@ -92,7 +92,7 @@ const createApplicationGroup = `-- name: CreateApplicationGroup :exec
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $11::uuid
+    WHERE tenant_uuid = $14::uuid
     LIMIT 1
 )
 INSERT INTO application_groups (
@@ -105,8 +105,11 @@ INSERT INTO application_groups (
     default_scopes,
     allowed_audiences,
     default_idp_id, -- Cleaned name matching normalization schema updates
+    redirect_uri,
     redirect_uris,
-    post_logout_redirect_uris
+    post_logout_redirect_uris,
+    front_channel_logout_uri,
+    back_channel_logout_uri
 )
 SELECT
     $1::uuid,
@@ -119,7 +122,10 @@ SELECT
     $7,
     $8::uuid, -- Type-safe UUID input parameter mapping
     $9,
-    $10
+    $10,
+    $11,
+    $12,
+    $13
 FROM tenant
 `
 
@@ -132,8 +138,11 @@ type CreateApplicationGroupParams struct {
 	DefaultScopes          []string    `json:"default_scopes"`
 	AllowedAudiences       []string    `json:"allowed_audiences"`
 	DefaultIdpID           pgtype.UUID `json:"default_idp_id"`
+	RedirectUri            string      `json:"redirect_uri"`
 	RedirectUris           []string    `json:"redirect_uris"`
 	PostLogoutRedirectUris []string    `json:"post_logout_redirect_uris"`
+	FrontChannelLogoutUri  *string     `json:"front_channel_logout_uri"`
+	BackChannelLogoutUri   *string     `json:"back_channel_logout_uri"`
 	TenantUuid             pgtype.UUID `json:"tenant_uuid"`
 }
 
@@ -148,8 +157,11 @@ func (q *Queries) CreateApplicationGroup(ctx context.Context, arg CreateApplicat
 		arg.DefaultScopes,
 		arg.AllowedAudiences,
 		arg.DefaultIdpID,
+		arg.RedirectUri,
 		arg.RedirectUris,
 		arg.PostLogoutRedirectUris,
+		arg.FrontChannelLogoutUri,
+		arg.BackChannelLogoutUri,
 		arg.TenantUuid,
 	)
 	return err
@@ -251,6 +263,62 @@ type DeleteApplicationParams struct {
 func (q *Queries) DeleteApplication(ctx context.Context, arg DeleteApplicationParams) error {
 	_, err := q.db.Exec(ctx, deleteApplication, arg.ClientID, arg.TenantUuid)
 	return err
+}
+
+const deleteApplicationGroup = `-- name: DeleteApplicationGroup :execrows
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $2::uuid
+    LIMIT 1
+)
+DELETE FROM application_groups g
+USING tenant
+WHERE g.id = $1::uuid
+  AND g.tenant_id = tenant.id
+  AND g.is_system = FALSE
+`
+
+type DeleteApplicationGroupParams struct {
+	ID         pgtype.UUID `json:"id"`
+	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+}
+
+// DeleteApplicationGroup removes a non-system group. Its identity provider bindings cascade.
+func (q *Queries) DeleteApplicationGroup(ctx context.Context, arg DeleteApplicationGroupParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteApplicationGroup, arg.ID, arg.TenantUuid)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteApplicationProfile = `-- name: DeleteApplicationProfile :execrows
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $2::uuid
+    LIMIT 1
+)
+DELETE FROM application_profiles p
+USING tenant
+WHERE p.id = $1::uuid
+  AND p.tenant_id = tenant.id
+  AND p.is_system = FALSE
+`
+
+type DeleteApplicationProfileParams struct {
+	ID         pgtype.UUID `json:"id"`
+	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+}
+
+// DeleteApplicationProfile removes a non-system profile.
+func (q *Queries) DeleteApplicationProfile(ctx context.Context, arg DeleteApplicationProfileParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteApplicationProfile, arg.ID, arg.TenantUuid)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getApplicationByClientID = `-- name: GetApplicationByClientID :one
@@ -407,6 +475,170 @@ func (q *Queries) GetApplicationByClientID(ctx context.Context, arg GetApplicati
 		&i.AllowedIdpIds,
 	)
 	return i, err
+}
+
+const getApplicationsByGroup = `-- name: GetApplicationsByGroup :many
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $2::uuid
+    LIMIT 1
+)
+SELECT
+    a.id,
+    a.client_id,
+    a.application_name,
+    a.is_enabled,
+    a.is_dynamic,
+    a.created_at,
+    a.updated_at,
+    a.last_used_at,
+    p.id AS profile_id,
+    p.profile_name,
+    g.id AS group_id,
+    g.group_name
+FROM applications a
+JOIN tenant ON a.tenant_id = tenant.id
+JOIN application_profiles p ON a.profile_id = p.id AND a.tenant_id = p.tenant_id
+JOIN application_groups g ON a.group_id = g.id AND a.tenant_id = g.tenant_id
+WHERE a.group_id = $1::uuid
+ORDER BY a.application_name ASC
+`
+
+type GetApplicationsByGroupParams struct {
+	GroupID    pgtype.UUID `json:"group_id"`
+	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+}
+
+type GetApplicationsByGroupRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	ClientID        string             `json:"client_id"`
+	ApplicationName string             `json:"application_name"`
+	IsEnabled       bool               `json:"is_enabled"`
+	IsDynamic       bool               `json:"is_dynamic"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	LastUsedAt      pgtype.Timestamptz `json:"last_used_at"`
+	ProfileID       pgtype.UUID        `json:"profile_id"`
+	ProfileName     string             `json:"profile_name"`
+	GroupID         pgtype.UUID        `json:"group_id"`
+	GroupName       string             `json:"group_name"`
+}
+
+// GetApplicationsByGroup lists the applications bound to one authorization group (usage view and delete guard).
+func (q *Queries) GetApplicationsByGroup(ctx context.Context, arg GetApplicationsByGroupParams) ([]GetApplicationsByGroupRow, error) {
+	rows, err := q.db.Query(ctx, getApplicationsByGroup, arg.GroupID, arg.TenantUuid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetApplicationsByGroupRow{}
+	for rows.Next() {
+		var i GetApplicationsByGroupRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClientID,
+			&i.ApplicationName,
+			&i.IsEnabled,
+			&i.IsDynamic,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LastUsedAt,
+			&i.ProfileID,
+			&i.ProfileName,
+			&i.GroupID,
+			&i.GroupName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getApplicationsByProfile = `-- name: GetApplicationsByProfile :many
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $2::uuid
+    LIMIT 1
+)
+SELECT
+    a.id,
+    a.client_id,
+    a.application_name,
+    a.is_enabled,
+    a.is_dynamic,
+    a.created_at,
+    a.updated_at,
+    a.last_used_at,
+    p.id AS profile_id,
+    p.profile_name,
+    g.id AS group_id,
+    g.group_name
+FROM applications a
+JOIN tenant ON a.tenant_id = tenant.id
+JOIN application_profiles p ON a.profile_id = p.id AND a.tenant_id = p.tenant_id
+JOIN application_groups g ON a.group_id = g.id AND a.tenant_id = g.tenant_id
+WHERE a.profile_id = $1::uuid
+ORDER BY a.application_name ASC
+`
+
+type GetApplicationsByProfileParams struct {
+	ProfileID  pgtype.UUID `json:"profile_id"`
+	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+}
+
+type GetApplicationsByProfileRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	ClientID        string             `json:"client_id"`
+	ApplicationName string             `json:"application_name"`
+	IsEnabled       bool               `json:"is_enabled"`
+	IsDynamic       bool               `json:"is_dynamic"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	LastUsedAt      pgtype.Timestamptz `json:"last_used_at"`
+	ProfileID       pgtype.UUID        `json:"profile_id"`
+	ProfileName     string             `json:"profile_name"`
+	GroupID         pgtype.UUID        `json:"group_id"`
+	GroupName       string             `json:"group_name"`
+}
+
+// GetApplicationsByProfile lists the applications bound to one security profile (usage view and delete guard).
+func (q *Queries) GetApplicationsByProfile(ctx context.Context, arg GetApplicationsByProfileParams) ([]GetApplicationsByProfileRow, error) {
+	rows, err := q.db.Query(ctx, getApplicationsByProfile, arg.ProfileID, arg.TenantUuid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetApplicationsByProfileRow{}
+	for rows.Next() {
+		var i GetApplicationsByProfileRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClientID,
+			&i.ApplicationName,
+			&i.IsEnabled,
+			&i.IsDynamic,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LastUsedAt,
+			&i.ProfileID,
+			&i.ProfileName,
+			&i.GroupID,
+			&i.GroupName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getApplicationsLogoutContextByTenant = `-- name: GetApplicationsLogoutContextByTenant :many
@@ -730,7 +962,7 @@ const updateApplicationGroup = `-- name: UpdateApplicationGroup :exec
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $10::uuid
+    WHERE tenant_uuid = $13::uuid
     LIMIT 1
 )
 UPDATE application_groups g
@@ -741,11 +973,14 @@ SET
     default_scopes = $4,
     allowed_audiences = $5,
     default_idp_id = $6::uuid,
-    redirect_uris = $7,
-    post_logout_redirect_uris = $8,
+    redirect_uri = $7,
+    redirect_uris = $8,
+    post_logout_redirect_uris = $9,
+    front_channel_logout_uri = $10,
+    back_channel_logout_uri = $11,
     updated_at = NOW()
 FROM tenant
-WHERE g.id = $9::uuid
+WHERE g.id = $12::uuid
   AND g.tenant_id = tenant.id
 `
 
@@ -756,8 +991,11 @@ type UpdateApplicationGroupParams struct {
 	DefaultScopes          []string    `json:"default_scopes"`
 	AllowedAudiences       []string    `json:"allowed_audiences"`
 	DefaultIdpID           pgtype.UUID `json:"default_idp_id"`
+	RedirectUri            string      `json:"redirect_uri"`
 	RedirectUris           []string    `json:"redirect_uris"`
 	PostLogoutRedirectUris []string    `json:"post_logout_redirect_uris"`
+	FrontChannelLogoutUri  *string     `json:"front_channel_logout_uri"`
+	BackChannelLogoutUri   *string     `json:"back_channel_logout_uri"`
 	ID                     pgtype.UUID `json:"id"`
 	TenantUuid             pgtype.UUID `json:"tenant_uuid"`
 }
@@ -771,8 +1009,11 @@ func (q *Queries) UpdateApplicationGroup(ctx context.Context, arg UpdateApplicat
 		arg.DefaultScopes,
 		arg.AllowedAudiences,
 		arg.DefaultIdpID,
+		arg.RedirectUri,
 		arg.RedirectUris,
 		arg.PostLogoutRedirectUris,
+		arg.FrontChannelLogoutUri,
+		arg.BackChannelLogoutUri,
 		arg.ID,
 		arg.TenantUuid,
 	)

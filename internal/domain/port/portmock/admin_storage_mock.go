@@ -76,6 +76,20 @@ type AdminStorageMock struct {
 	beforeDeleteApplicationCounter uint64
 	DeleteApplicationMock          mAdminStorageMockDeleteApplication
 
+	funcDeleteApplicationGroup          func(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) (err error)
+	funcDeleteApplicationGroupOrigin    string
+	inspectFuncDeleteApplicationGroup   func(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID)
+	afterDeleteApplicationGroupCounter  uint64
+	beforeDeleteApplicationGroupCounter uint64
+	DeleteApplicationGroupMock          mAdminStorageMockDeleteApplicationGroup
+
+	funcDeleteApplicationProfile          func(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) (err error)
+	funcDeleteApplicationProfileOrigin    string
+	inspectFuncDeleteApplicationProfile   func(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID)
+	afterDeleteApplicationProfileCounter  uint64
+	beforeDeleteApplicationProfileCounter uint64
+	DeleteApplicationProfileMock          mAdminStorageMockDeleteApplicationProfile
+
 	funcDeleteIdentityProvider          func(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) (err error)
 	funcDeleteIdentityProviderOrigin    string
 	inspectFuncDeleteIdentityProvider   func(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID)
@@ -131,6 +145,20 @@ type AdminStorageMock struct {
 	afterGetApplicationProfilesCounter  uint64
 	beforeGetApplicationProfilesCounter uint64
 	GetApplicationProfilesMock          mAdminStorageMockGetApplicationProfiles
+
+	funcGetApplicationsByGroup          func(ctx context.Context, tenantUUID uuid.UUID, groupID uuid.UUID) (aa1 []model.ApplicationSummary, err error)
+	funcGetApplicationsByGroupOrigin    string
+	inspectFuncGetApplicationsByGroup   func(ctx context.Context, tenantUUID uuid.UUID, groupID uuid.UUID)
+	afterGetApplicationsByGroupCounter  uint64
+	beforeGetApplicationsByGroupCounter uint64
+	GetApplicationsByGroupMock          mAdminStorageMockGetApplicationsByGroup
+
+	funcGetApplicationsByProfile          func(ctx context.Context, tenantUUID uuid.UUID, profileID uuid.UUID) (aa1 []model.ApplicationSummary, err error)
+	funcGetApplicationsByProfileOrigin    string
+	inspectFuncGetApplicationsByProfile   func(ctx context.Context, tenantUUID uuid.UUID, profileID uuid.UUID)
+	afterGetApplicationsByProfileCounter  uint64
+	beforeGetApplicationsByProfileCounter uint64
+	GetApplicationsByProfileMock          mAdminStorageMockGetApplicationsByProfile
 
 	funcGetDynamicApplicationsSummary          func(ctx context.Context, tenantUUID uuid.UUID) (aa1 []model.ApplicationSummary, err error)
 	funcGetDynamicApplicationsSummaryOrigin    string
@@ -221,6 +249,12 @@ func NewAdminStorageMock(t minimock.Tester) *AdminStorageMock {
 	m.DeleteApplicationMock = mAdminStorageMockDeleteApplication{mock: m}
 	m.DeleteApplicationMock.callArgs = []*AdminStorageMockDeleteApplicationParams{}
 
+	m.DeleteApplicationGroupMock = mAdminStorageMockDeleteApplicationGroup{mock: m}
+	m.DeleteApplicationGroupMock.callArgs = []*AdminStorageMockDeleteApplicationGroupParams{}
+
+	m.DeleteApplicationProfileMock = mAdminStorageMockDeleteApplicationProfile{mock: m}
+	m.DeleteApplicationProfileMock.callArgs = []*AdminStorageMockDeleteApplicationProfileParams{}
+
 	m.DeleteIdentityProviderMock = mAdminStorageMockDeleteIdentityProvider{mock: m}
 	m.DeleteIdentityProviderMock.callArgs = []*AdminStorageMockDeleteIdentityProviderParams{}
 
@@ -244,6 +278,12 @@ func NewAdminStorageMock(t minimock.Tester) *AdminStorageMock {
 
 	m.GetApplicationProfilesMock = mAdminStorageMockGetApplicationProfiles{mock: m}
 	m.GetApplicationProfilesMock.callArgs = []*AdminStorageMockGetApplicationProfilesParams{}
+
+	m.GetApplicationsByGroupMock = mAdminStorageMockGetApplicationsByGroup{mock: m}
+	m.GetApplicationsByGroupMock.callArgs = []*AdminStorageMockGetApplicationsByGroupParams{}
+
+	m.GetApplicationsByProfileMock = mAdminStorageMockGetApplicationsByProfile{mock: m}
+	m.GetApplicationsByProfileMock.callArgs = []*AdminStorageMockGetApplicationsByProfileParams{}
 
 	m.GetDynamicApplicationsSummaryMock = mAdminStorageMockGetDynamicApplicationsSummary{mock: m}
 	m.GetDynamicApplicationsSummaryMock.callArgs = []*AdminStorageMockGetDynamicApplicationsSummaryParams{}
@@ -3259,6 +3299,752 @@ func (m *AdminStorageMock) MinimockDeleteApplicationInspect() {
 	}
 }
 
+type mAdminStorageMockDeleteApplicationGroup struct {
+	optional           bool
+	mock               *AdminStorageMock
+	defaultExpectation *AdminStorageMockDeleteApplicationGroupExpectation
+	expectations       []*AdminStorageMockDeleteApplicationGroupExpectation
+
+	callArgs []*AdminStorageMockDeleteApplicationGroupParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AdminStorageMockDeleteApplicationGroupExpectation specifies expectation struct of the AdminStorage.DeleteApplicationGroup
+type AdminStorageMockDeleteApplicationGroupExpectation struct {
+	mock               *AdminStorageMock
+	params             *AdminStorageMockDeleteApplicationGroupParams
+	paramPtrs          *AdminStorageMockDeleteApplicationGroupParamPtrs
+	expectationOrigins AdminStorageMockDeleteApplicationGroupExpectationOrigins
+	results            *AdminStorageMockDeleteApplicationGroupResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AdminStorageMockDeleteApplicationGroupParams contains parameters of the AdminStorage.DeleteApplicationGroup
+type AdminStorageMockDeleteApplicationGroupParams struct {
+	ctx        context.Context
+	tenantUUID uuid.UUID
+	id         uuid.UUID
+}
+
+// AdminStorageMockDeleteApplicationGroupParamPtrs contains pointers to parameters of the AdminStorage.DeleteApplicationGroup
+type AdminStorageMockDeleteApplicationGroupParamPtrs struct {
+	ctx        *context.Context
+	tenantUUID *uuid.UUID
+	id         *uuid.UUID
+}
+
+// AdminStorageMockDeleteApplicationGroupResults contains results of the AdminStorage.DeleteApplicationGroup
+type AdminStorageMockDeleteApplicationGroupResults struct {
+	err error
+}
+
+// AdminStorageMockDeleteApplicationGroupOrigins contains origins of expectations of the AdminStorage.DeleteApplicationGroup
+type AdminStorageMockDeleteApplicationGroupExpectationOrigins struct {
+	origin           string
+	originCtx        string
+	originTenantUUID string
+	originId         string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmDeleteApplicationGroup *mAdminStorageMockDeleteApplicationGroup) Optional() *mAdminStorageMockDeleteApplicationGroup {
+	mmDeleteApplicationGroup.optional = true
+	return mmDeleteApplicationGroup
+}
+
+// Expect sets up expected params for AdminStorage.DeleteApplicationGroup
+func (mmDeleteApplicationGroup *mAdminStorageMockDeleteApplicationGroup) Expect(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) *mAdminStorageMockDeleteApplicationGroup {
+	if mmDeleteApplicationGroup.mock.funcDeleteApplicationGroup != nil {
+		mmDeleteApplicationGroup.mock.t.Fatalf("AdminStorageMock.DeleteApplicationGroup mock is already set by Set")
+	}
+
+	if mmDeleteApplicationGroup.defaultExpectation == nil {
+		mmDeleteApplicationGroup.defaultExpectation = &AdminStorageMockDeleteApplicationGroupExpectation{}
+	}
+
+	if mmDeleteApplicationGroup.defaultExpectation.paramPtrs != nil {
+		mmDeleteApplicationGroup.mock.t.Fatalf("AdminStorageMock.DeleteApplicationGroup mock is already set by ExpectParams functions")
+	}
+
+	mmDeleteApplicationGroup.defaultExpectation.params = &AdminStorageMockDeleteApplicationGroupParams{ctx, tenantUUID, id}
+	mmDeleteApplicationGroup.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmDeleteApplicationGroup.expectations {
+		if minimock.Equal(e.params, mmDeleteApplicationGroup.defaultExpectation.params) {
+			mmDeleteApplicationGroup.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmDeleteApplicationGroup.defaultExpectation.params)
+		}
+	}
+
+	return mmDeleteApplicationGroup
+}
+
+// ExpectCtxParam1 sets up expected param ctx for AdminStorage.DeleteApplicationGroup
+func (mmDeleteApplicationGroup *mAdminStorageMockDeleteApplicationGroup) ExpectCtxParam1(ctx context.Context) *mAdminStorageMockDeleteApplicationGroup {
+	if mmDeleteApplicationGroup.mock.funcDeleteApplicationGroup != nil {
+		mmDeleteApplicationGroup.mock.t.Fatalf("AdminStorageMock.DeleteApplicationGroup mock is already set by Set")
+	}
+
+	if mmDeleteApplicationGroup.defaultExpectation == nil {
+		mmDeleteApplicationGroup.defaultExpectation = &AdminStorageMockDeleteApplicationGroupExpectation{}
+	}
+
+	if mmDeleteApplicationGroup.defaultExpectation.params != nil {
+		mmDeleteApplicationGroup.mock.t.Fatalf("AdminStorageMock.DeleteApplicationGroup mock is already set by Expect")
+	}
+
+	if mmDeleteApplicationGroup.defaultExpectation.paramPtrs == nil {
+		mmDeleteApplicationGroup.defaultExpectation.paramPtrs = &AdminStorageMockDeleteApplicationGroupParamPtrs{}
+	}
+	mmDeleteApplicationGroup.defaultExpectation.paramPtrs.ctx = &ctx
+	mmDeleteApplicationGroup.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmDeleteApplicationGroup
+}
+
+// ExpectTenantUUIDParam2 sets up expected param tenantUUID for AdminStorage.DeleteApplicationGroup
+func (mmDeleteApplicationGroup *mAdminStorageMockDeleteApplicationGroup) ExpectTenantUUIDParam2(tenantUUID uuid.UUID) *mAdminStorageMockDeleteApplicationGroup {
+	if mmDeleteApplicationGroup.mock.funcDeleteApplicationGroup != nil {
+		mmDeleteApplicationGroup.mock.t.Fatalf("AdminStorageMock.DeleteApplicationGroup mock is already set by Set")
+	}
+
+	if mmDeleteApplicationGroup.defaultExpectation == nil {
+		mmDeleteApplicationGroup.defaultExpectation = &AdminStorageMockDeleteApplicationGroupExpectation{}
+	}
+
+	if mmDeleteApplicationGroup.defaultExpectation.params != nil {
+		mmDeleteApplicationGroup.mock.t.Fatalf("AdminStorageMock.DeleteApplicationGroup mock is already set by Expect")
+	}
+
+	if mmDeleteApplicationGroup.defaultExpectation.paramPtrs == nil {
+		mmDeleteApplicationGroup.defaultExpectation.paramPtrs = &AdminStorageMockDeleteApplicationGroupParamPtrs{}
+	}
+	mmDeleteApplicationGroup.defaultExpectation.paramPtrs.tenantUUID = &tenantUUID
+	mmDeleteApplicationGroup.defaultExpectation.expectationOrigins.originTenantUUID = minimock.CallerInfo(1)
+
+	return mmDeleteApplicationGroup
+}
+
+// ExpectIdParam3 sets up expected param id for AdminStorage.DeleteApplicationGroup
+func (mmDeleteApplicationGroup *mAdminStorageMockDeleteApplicationGroup) ExpectIdParam3(id uuid.UUID) *mAdminStorageMockDeleteApplicationGroup {
+	if mmDeleteApplicationGroup.mock.funcDeleteApplicationGroup != nil {
+		mmDeleteApplicationGroup.mock.t.Fatalf("AdminStorageMock.DeleteApplicationGroup mock is already set by Set")
+	}
+
+	if mmDeleteApplicationGroup.defaultExpectation == nil {
+		mmDeleteApplicationGroup.defaultExpectation = &AdminStorageMockDeleteApplicationGroupExpectation{}
+	}
+
+	if mmDeleteApplicationGroup.defaultExpectation.params != nil {
+		mmDeleteApplicationGroup.mock.t.Fatalf("AdminStorageMock.DeleteApplicationGroup mock is already set by Expect")
+	}
+
+	if mmDeleteApplicationGroup.defaultExpectation.paramPtrs == nil {
+		mmDeleteApplicationGroup.defaultExpectation.paramPtrs = &AdminStorageMockDeleteApplicationGroupParamPtrs{}
+	}
+	mmDeleteApplicationGroup.defaultExpectation.paramPtrs.id = &id
+	mmDeleteApplicationGroup.defaultExpectation.expectationOrigins.originId = minimock.CallerInfo(1)
+
+	return mmDeleteApplicationGroup
+}
+
+// Inspect accepts an inspector function that has same arguments as the AdminStorage.DeleteApplicationGroup
+func (mmDeleteApplicationGroup *mAdminStorageMockDeleteApplicationGroup) Inspect(f func(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID)) *mAdminStorageMockDeleteApplicationGroup {
+	if mmDeleteApplicationGroup.mock.inspectFuncDeleteApplicationGroup != nil {
+		mmDeleteApplicationGroup.mock.t.Fatalf("Inspect function is already set for AdminStorageMock.DeleteApplicationGroup")
+	}
+
+	mmDeleteApplicationGroup.mock.inspectFuncDeleteApplicationGroup = f
+
+	return mmDeleteApplicationGroup
+}
+
+// Return sets up results that will be returned by AdminStorage.DeleteApplicationGroup
+func (mmDeleteApplicationGroup *mAdminStorageMockDeleteApplicationGroup) Return(err error) *AdminStorageMock {
+	if mmDeleteApplicationGroup.mock.funcDeleteApplicationGroup != nil {
+		mmDeleteApplicationGroup.mock.t.Fatalf("AdminStorageMock.DeleteApplicationGroup mock is already set by Set")
+	}
+
+	if mmDeleteApplicationGroup.defaultExpectation == nil {
+		mmDeleteApplicationGroup.defaultExpectation = &AdminStorageMockDeleteApplicationGroupExpectation{mock: mmDeleteApplicationGroup.mock}
+	}
+	mmDeleteApplicationGroup.defaultExpectation.results = &AdminStorageMockDeleteApplicationGroupResults{err}
+	mmDeleteApplicationGroup.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmDeleteApplicationGroup.mock
+}
+
+// Set uses given function f to mock the AdminStorage.DeleteApplicationGroup method
+func (mmDeleteApplicationGroup *mAdminStorageMockDeleteApplicationGroup) Set(f func(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) (err error)) *AdminStorageMock {
+	if mmDeleteApplicationGroup.defaultExpectation != nil {
+		mmDeleteApplicationGroup.mock.t.Fatalf("Default expectation is already set for the AdminStorage.DeleteApplicationGroup method")
+	}
+
+	if len(mmDeleteApplicationGroup.expectations) > 0 {
+		mmDeleteApplicationGroup.mock.t.Fatalf("Some expectations are already set for the AdminStorage.DeleteApplicationGroup method")
+	}
+
+	mmDeleteApplicationGroup.mock.funcDeleteApplicationGroup = f
+	mmDeleteApplicationGroup.mock.funcDeleteApplicationGroupOrigin = minimock.CallerInfo(1)
+	return mmDeleteApplicationGroup.mock
+}
+
+// When sets expectation for the AdminStorage.DeleteApplicationGroup which will trigger the result defined by the following
+// Then helper
+func (mmDeleteApplicationGroup *mAdminStorageMockDeleteApplicationGroup) When(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) *AdminStorageMockDeleteApplicationGroupExpectation {
+	if mmDeleteApplicationGroup.mock.funcDeleteApplicationGroup != nil {
+		mmDeleteApplicationGroup.mock.t.Fatalf("AdminStorageMock.DeleteApplicationGroup mock is already set by Set")
+	}
+
+	expectation := &AdminStorageMockDeleteApplicationGroupExpectation{
+		mock:               mmDeleteApplicationGroup.mock,
+		params:             &AdminStorageMockDeleteApplicationGroupParams{ctx, tenantUUID, id},
+		expectationOrigins: AdminStorageMockDeleteApplicationGroupExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmDeleteApplicationGroup.expectations = append(mmDeleteApplicationGroup.expectations, expectation)
+	return expectation
+}
+
+// Then sets up AdminStorage.DeleteApplicationGroup return parameters for the expectation previously defined by the When method
+func (e *AdminStorageMockDeleteApplicationGroupExpectation) Then(err error) *AdminStorageMock {
+	e.results = &AdminStorageMockDeleteApplicationGroupResults{err}
+	return e.mock
+}
+
+// Times sets number of times AdminStorage.DeleteApplicationGroup should be invoked
+func (mmDeleteApplicationGroup *mAdminStorageMockDeleteApplicationGroup) Times(n uint64) *mAdminStorageMockDeleteApplicationGroup {
+	if n == 0 {
+		mmDeleteApplicationGroup.mock.t.Fatalf("Times of AdminStorageMock.DeleteApplicationGroup mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmDeleteApplicationGroup.expectedInvocations, n)
+	mmDeleteApplicationGroup.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmDeleteApplicationGroup
+}
+
+func (mmDeleteApplicationGroup *mAdminStorageMockDeleteApplicationGroup) invocationsDone() bool {
+	if len(mmDeleteApplicationGroup.expectations) == 0 && mmDeleteApplicationGroup.defaultExpectation == nil && mmDeleteApplicationGroup.mock.funcDeleteApplicationGroup == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmDeleteApplicationGroup.mock.afterDeleteApplicationGroupCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmDeleteApplicationGroup.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// DeleteApplicationGroup implements mm_port.AdminStorage
+func (mmDeleteApplicationGroup *AdminStorageMock) DeleteApplicationGroup(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) (err error) {
+	mm_atomic.AddUint64(&mmDeleteApplicationGroup.beforeDeleteApplicationGroupCounter, 1)
+	defer mm_atomic.AddUint64(&mmDeleteApplicationGroup.afterDeleteApplicationGroupCounter, 1)
+
+	mmDeleteApplicationGroup.t.Helper()
+
+	if mmDeleteApplicationGroup.inspectFuncDeleteApplicationGroup != nil {
+		mmDeleteApplicationGroup.inspectFuncDeleteApplicationGroup(ctx, tenantUUID, id)
+	}
+
+	mm_params := AdminStorageMockDeleteApplicationGroupParams{ctx, tenantUUID, id}
+
+	// Record call args
+	mmDeleteApplicationGroup.DeleteApplicationGroupMock.mutex.Lock()
+	mmDeleteApplicationGroup.DeleteApplicationGroupMock.callArgs = append(mmDeleteApplicationGroup.DeleteApplicationGroupMock.callArgs, &mm_params)
+	mmDeleteApplicationGroup.DeleteApplicationGroupMock.mutex.Unlock()
+
+	for _, e := range mmDeleteApplicationGroup.DeleteApplicationGroupMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmDeleteApplicationGroup.DeleteApplicationGroupMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmDeleteApplicationGroup.DeleteApplicationGroupMock.defaultExpectation.Counter, 1)
+		mm_want := mmDeleteApplicationGroup.DeleteApplicationGroupMock.defaultExpectation.params
+		mm_want_ptrs := mmDeleteApplicationGroup.DeleteApplicationGroupMock.defaultExpectation.paramPtrs
+
+		mm_got := AdminStorageMockDeleteApplicationGroupParams{ctx, tenantUUID, id}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmDeleteApplicationGroup.t.Errorf("AdminStorageMock.DeleteApplicationGroup got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteApplicationGroup.DeleteApplicationGroupMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantUUID != nil && !minimock.Equal(*mm_want_ptrs.tenantUUID, mm_got.tenantUUID) {
+				mmDeleteApplicationGroup.t.Errorf("AdminStorageMock.DeleteApplicationGroup got unexpected parameter tenantUUID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteApplicationGroup.DeleteApplicationGroupMock.defaultExpectation.expectationOrigins.originTenantUUID, *mm_want_ptrs.tenantUUID, mm_got.tenantUUID, minimock.Diff(*mm_want_ptrs.tenantUUID, mm_got.tenantUUID))
+			}
+
+			if mm_want_ptrs.id != nil && !minimock.Equal(*mm_want_ptrs.id, mm_got.id) {
+				mmDeleteApplicationGroup.t.Errorf("AdminStorageMock.DeleteApplicationGroup got unexpected parameter id, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteApplicationGroup.DeleteApplicationGroupMock.defaultExpectation.expectationOrigins.originId, *mm_want_ptrs.id, mm_got.id, minimock.Diff(*mm_want_ptrs.id, mm_got.id))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmDeleteApplicationGroup.t.Errorf("AdminStorageMock.DeleteApplicationGroup got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmDeleteApplicationGroup.DeleteApplicationGroupMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmDeleteApplicationGroup.DeleteApplicationGroupMock.defaultExpectation.results
+		if mm_results == nil {
+			mmDeleteApplicationGroup.t.Fatal("No results are set for the AdminStorageMock.DeleteApplicationGroup")
+		}
+		return (*mm_results).err
+	}
+	if mmDeleteApplicationGroup.funcDeleteApplicationGroup != nil {
+		return mmDeleteApplicationGroup.funcDeleteApplicationGroup(ctx, tenantUUID, id)
+	}
+	mmDeleteApplicationGroup.t.Fatalf("Unexpected call to AdminStorageMock.DeleteApplicationGroup. %v %v %v", ctx, tenantUUID, id)
+	return
+}
+
+// DeleteApplicationGroupAfterCounter returns a count of finished AdminStorageMock.DeleteApplicationGroup invocations
+func (mmDeleteApplicationGroup *AdminStorageMock) DeleteApplicationGroupAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteApplicationGroup.afterDeleteApplicationGroupCounter)
+}
+
+// DeleteApplicationGroupBeforeCounter returns a count of AdminStorageMock.DeleteApplicationGroup invocations
+func (mmDeleteApplicationGroup *AdminStorageMock) DeleteApplicationGroupBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteApplicationGroup.beforeDeleteApplicationGroupCounter)
+}
+
+// Calls returns a list of arguments used in each call to AdminStorageMock.DeleteApplicationGroup.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmDeleteApplicationGroup *mAdminStorageMockDeleteApplicationGroup) Calls() []*AdminStorageMockDeleteApplicationGroupParams {
+	mmDeleteApplicationGroup.mutex.RLock()
+
+	argCopy := make([]*AdminStorageMockDeleteApplicationGroupParams, len(mmDeleteApplicationGroup.callArgs))
+	copy(argCopy, mmDeleteApplicationGroup.callArgs)
+
+	mmDeleteApplicationGroup.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockDeleteApplicationGroupDone returns true if the count of the DeleteApplicationGroup invocations corresponds
+// the number of defined expectations
+func (m *AdminStorageMock) MinimockDeleteApplicationGroupDone() bool {
+	if m.DeleteApplicationGroupMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.DeleteApplicationGroupMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.DeleteApplicationGroupMock.invocationsDone()
+}
+
+// MinimockDeleteApplicationGroupInspect logs each unmet expectation
+func (m *AdminStorageMock) MinimockDeleteApplicationGroupInspect() {
+	for _, e := range m.DeleteApplicationGroupMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AdminStorageMock.DeleteApplicationGroup at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterDeleteApplicationGroupCounter := mm_atomic.LoadUint64(&m.afterDeleteApplicationGroupCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.DeleteApplicationGroupMock.defaultExpectation != nil && afterDeleteApplicationGroupCounter < 1 {
+		if m.DeleteApplicationGroupMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AdminStorageMock.DeleteApplicationGroup at\n%s", m.DeleteApplicationGroupMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AdminStorageMock.DeleteApplicationGroup at\n%s with params: %#v", m.DeleteApplicationGroupMock.defaultExpectation.expectationOrigins.origin, *m.DeleteApplicationGroupMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcDeleteApplicationGroup != nil && afterDeleteApplicationGroupCounter < 1 {
+		m.t.Errorf("Expected call to AdminStorageMock.DeleteApplicationGroup at\n%s", m.funcDeleteApplicationGroupOrigin)
+	}
+
+	if !m.DeleteApplicationGroupMock.invocationsDone() && afterDeleteApplicationGroupCounter > 0 {
+		m.t.Errorf("Expected %d calls to AdminStorageMock.DeleteApplicationGroup at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.DeleteApplicationGroupMock.expectedInvocations), m.DeleteApplicationGroupMock.expectedInvocationsOrigin, afterDeleteApplicationGroupCounter)
+	}
+}
+
+type mAdminStorageMockDeleteApplicationProfile struct {
+	optional           bool
+	mock               *AdminStorageMock
+	defaultExpectation *AdminStorageMockDeleteApplicationProfileExpectation
+	expectations       []*AdminStorageMockDeleteApplicationProfileExpectation
+
+	callArgs []*AdminStorageMockDeleteApplicationProfileParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AdminStorageMockDeleteApplicationProfileExpectation specifies expectation struct of the AdminStorage.DeleteApplicationProfile
+type AdminStorageMockDeleteApplicationProfileExpectation struct {
+	mock               *AdminStorageMock
+	params             *AdminStorageMockDeleteApplicationProfileParams
+	paramPtrs          *AdminStorageMockDeleteApplicationProfileParamPtrs
+	expectationOrigins AdminStorageMockDeleteApplicationProfileExpectationOrigins
+	results            *AdminStorageMockDeleteApplicationProfileResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AdminStorageMockDeleteApplicationProfileParams contains parameters of the AdminStorage.DeleteApplicationProfile
+type AdminStorageMockDeleteApplicationProfileParams struct {
+	ctx        context.Context
+	tenantUUID uuid.UUID
+	id         uuid.UUID
+}
+
+// AdminStorageMockDeleteApplicationProfileParamPtrs contains pointers to parameters of the AdminStorage.DeleteApplicationProfile
+type AdminStorageMockDeleteApplicationProfileParamPtrs struct {
+	ctx        *context.Context
+	tenantUUID *uuid.UUID
+	id         *uuid.UUID
+}
+
+// AdminStorageMockDeleteApplicationProfileResults contains results of the AdminStorage.DeleteApplicationProfile
+type AdminStorageMockDeleteApplicationProfileResults struct {
+	err error
+}
+
+// AdminStorageMockDeleteApplicationProfileOrigins contains origins of expectations of the AdminStorage.DeleteApplicationProfile
+type AdminStorageMockDeleteApplicationProfileExpectationOrigins struct {
+	origin           string
+	originCtx        string
+	originTenantUUID string
+	originId         string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmDeleteApplicationProfile *mAdminStorageMockDeleteApplicationProfile) Optional() *mAdminStorageMockDeleteApplicationProfile {
+	mmDeleteApplicationProfile.optional = true
+	return mmDeleteApplicationProfile
+}
+
+// Expect sets up expected params for AdminStorage.DeleteApplicationProfile
+func (mmDeleteApplicationProfile *mAdminStorageMockDeleteApplicationProfile) Expect(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) *mAdminStorageMockDeleteApplicationProfile {
+	if mmDeleteApplicationProfile.mock.funcDeleteApplicationProfile != nil {
+		mmDeleteApplicationProfile.mock.t.Fatalf("AdminStorageMock.DeleteApplicationProfile mock is already set by Set")
+	}
+
+	if mmDeleteApplicationProfile.defaultExpectation == nil {
+		mmDeleteApplicationProfile.defaultExpectation = &AdminStorageMockDeleteApplicationProfileExpectation{}
+	}
+
+	if mmDeleteApplicationProfile.defaultExpectation.paramPtrs != nil {
+		mmDeleteApplicationProfile.mock.t.Fatalf("AdminStorageMock.DeleteApplicationProfile mock is already set by ExpectParams functions")
+	}
+
+	mmDeleteApplicationProfile.defaultExpectation.params = &AdminStorageMockDeleteApplicationProfileParams{ctx, tenantUUID, id}
+	mmDeleteApplicationProfile.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmDeleteApplicationProfile.expectations {
+		if minimock.Equal(e.params, mmDeleteApplicationProfile.defaultExpectation.params) {
+			mmDeleteApplicationProfile.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmDeleteApplicationProfile.defaultExpectation.params)
+		}
+	}
+
+	return mmDeleteApplicationProfile
+}
+
+// ExpectCtxParam1 sets up expected param ctx for AdminStorage.DeleteApplicationProfile
+func (mmDeleteApplicationProfile *mAdminStorageMockDeleteApplicationProfile) ExpectCtxParam1(ctx context.Context) *mAdminStorageMockDeleteApplicationProfile {
+	if mmDeleteApplicationProfile.mock.funcDeleteApplicationProfile != nil {
+		mmDeleteApplicationProfile.mock.t.Fatalf("AdminStorageMock.DeleteApplicationProfile mock is already set by Set")
+	}
+
+	if mmDeleteApplicationProfile.defaultExpectation == nil {
+		mmDeleteApplicationProfile.defaultExpectation = &AdminStorageMockDeleteApplicationProfileExpectation{}
+	}
+
+	if mmDeleteApplicationProfile.defaultExpectation.params != nil {
+		mmDeleteApplicationProfile.mock.t.Fatalf("AdminStorageMock.DeleteApplicationProfile mock is already set by Expect")
+	}
+
+	if mmDeleteApplicationProfile.defaultExpectation.paramPtrs == nil {
+		mmDeleteApplicationProfile.defaultExpectation.paramPtrs = &AdminStorageMockDeleteApplicationProfileParamPtrs{}
+	}
+	mmDeleteApplicationProfile.defaultExpectation.paramPtrs.ctx = &ctx
+	mmDeleteApplicationProfile.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmDeleteApplicationProfile
+}
+
+// ExpectTenantUUIDParam2 sets up expected param tenantUUID for AdminStorage.DeleteApplicationProfile
+func (mmDeleteApplicationProfile *mAdminStorageMockDeleteApplicationProfile) ExpectTenantUUIDParam2(tenantUUID uuid.UUID) *mAdminStorageMockDeleteApplicationProfile {
+	if mmDeleteApplicationProfile.mock.funcDeleteApplicationProfile != nil {
+		mmDeleteApplicationProfile.mock.t.Fatalf("AdminStorageMock.DeleteApplicationProfile mock is already set by Set")
+	}
+
+	if mmDeleteApplicationProfile.defaultExpectation == nil {
+		mmDeleteApplicationProfile.defaultExpectation = &AdminStorageMockDeleteApplicationProfileExpectation{}
+	}
+
+	if mmDeleteApplicationProfile.defaultExpectation.params != nil {
+		mmDeleteApplicationProfile.mock.t.Fatalf("AdminStorageMock.DeleteApplicationProfile mock is already set by Expect")
+	}
+
+	if mmDeleteApplicationProfile.defaultExpectation.paramPtrs == nil {
+		mmDeleteApplicationProfile.defaultExpectation.paramPtrs = &AdminStorageMockDeleteApplicationProfileParamPtrs{}
+	}
+	mmDeleteApplicationProfile.defaultExpectation.paramPtrs.tenantUUID = &tenantUUID
+	mmDeleteApplicationProfile.defaultExpectation.expectationOrigins.originTenantUUID = minimock.CallerInfo(1)
+
+	return mmDeleteApplicationProfile
+}
+
+// ExpectIdParam3 sets up expected param id for AdminStorage.DeleteApplicationProfile
+func (mmDeleteApplicationProfile *mAdminStorageMockDeleteApplicationProfile) ExpectIdParam3(id uuid.UUID) *mAdminStorageMockDeleteApplicationProfile {
+	if mmDeleteApplicationProfile.mock.funcDeleteApplicationProfile != nil {
+		mmDeleteApplicationProfile.mock.t.Fatalf("AdminStorageMock.DeleteApplicationProfile mock is already set by Set")
+	}
+
+	if mmDeleteApplicationProfile.defaultExpectation == nil {
+		mmDeleteApplicationProfile.defaultExpectation = &AdminStorageMockDeleteApplicationProfileExpectation{}
+	}
+
+	if mmDeleteApplicationProfile.defaultExpectation.params != nil {
+		mmDeleteApplicationProfile.mock.t.Fatalf("AdminStorageMock.DeleteApplicationProfile mock is already set by Expect")
+	}
+
+	if mmDeleteApplicationProfile.defaultExpectation.paramPtrs == nil {
+		mmDeleteApplicationProfile.defaultExpectation.paramPtrs = &AdminStorageMockDeleteApplicationProfileParamPtrs{}
+	}
+	mmDeleteApplicationProfile.defaultExpectation.paramPtrs.id = &id
+	mmDeleteApplicationProfile.defaultExpectation.expectationOrigins.originId = minimock.CallerInfo(1)
+
+	return mmDeleteApplicationProfile
+}
+
+// Inspect accepts an inspector function that has same arguments as the AdminStorage.DeleteApplicationProfile
+func (mmDeleteApplicationProfile *mAdminStorageMockDeleteApplicationProfile) Inspect(f func(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID)) *mAdminStorageMockDeleteApplicationProfile {
+	if mmDeleteApplicationProfile.mock.inspectFuncDeleteApplicationProfile != nil {
+		mmDeleteApplicationProfile.mock.t.Fatalf("Inspect function is already set for AdminStorageMock.DeleteApplicationProfile")
+	}
+
+	mmDeleteApplicationProfile.mock.inspectFuncDeleteApplicationProfile = f
+
+	return mmDeleteApplicationProfile
+}
+
+// Return sets up results that will be returned by AdminStorage.DeleteApplicationProfile
+func (mmDeleteApplicationProfile *mAdminStorageMockDeleteApplicationProfile) Return(err error) *AdminStorageMock {
+	if mmDeleteApplicationProfile.mock.funcDeleteApplicationProfile != nil {
+		mmDeleteApplicationProfile.mock.t.Fatalf("AdminStorageMock.DeleteApplicationProfile mock is already set by Set")
+	}
+
+	if mmDeleteApplicationProfile.defaultExpectation == nil {
+		mmDeleteApplicationProfile.defaultExpectation = &AdminStorageMockDeleteApplicationProfileExpectation{mock: mmDeleteApplicationProfile.mock}
+	}
+	mmDeleteApplicationProfile.defaultExpectation.results = &AdminStorageMockDeleteApplicationProfileResults{err}
+	mmDeleteApplicationProfile.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmDeleteApplicationProfile.mock
+}
+
+// Set uses given function f to mock the AdminStorage.DeleteApplicationProfile method
+func (mmDeleteApplicationProfile *mAdminStorageMockDeleteApplicationProfile) Set(f func(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) (err error)) *AdminStorageMock {
+	if mmDeleteApplicationProfile.defaultExpectation != nil {
+		mmDeleteApplicationProfile.mock.t.Fatalf("Default expectation is already set for the AdminStorage.DeleteApplicationProfile method")
+	}
+
+	if len(mmDeleteApplicationProfile.expectations) > 0 {
+		mmDeleteApplicationProfile.mock.t.Fatalf("Some expectations are already set for the AdminStorage.DeleteApplicationProfile method")
+	}
+
+	mmDeleteApplicationProfile.mock.funcDeleteApplicationProfile = f
+	mmDeleteApplicationProfile.mock.funcDeleteApplicationProfileOrigin = minimock.CallerInfo(1)
+	return mmDeleteApplicationProfile.mock
+}
+
+// When sets expectation for the AdminStorage.DeleteApplicationProfile which will trigger the result defined by the following
+// Then helper
+func (mmDeleteApplicationProfile *mAdminStorageMockDeleteApplicationProfile) When(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) *AdminStorageMockDeleteApplicationProfileExpectation {
+	if mmDeleteApplicationProfile.mock.funcDeleteApplicationProfile != nil {
+		mmDeleteApplicationProfile.mock.t.Fatalf("AdminStorageMock.DeleteApplicationProfile mock is already set by Set")
+	}
+
+	expectation := &AdminStorageMockDeleteApplicationProfileExpectation{
+		mock:               mmDeleteApplicationProfile.mock,
+		params:             &AdminStorageMockDeleteApplicationProfileParams{ctx, tenantUUID, id},
+		expectationOrigins: AdminStorageMockDeleteApplicationProfileExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmDeleteApplicationProfile.expectations = append(mmDeleteApplicationProfile.expectations, expectation)
+	return expectation
+}
+
+// Then sets up AdminStorage.DeleteApplicationProfile return parameters for the expectation previously defined by the When method
+func (e *AdminStorageMockDeleteApplicationProfileExpectation) Then(err error) *AdminStorageMock {
+	e.results = &AdminStorageMockDeleteApplicationProfileResults{err}
+	return e.mock
+}
+
+// Times sets number of times AdminStorage.DeleteApplicationProfile should be invoked
+func (mmDeleteApplicationProfile *mAdminStorageMockDeleteApplicationProfile) Times(n uint64) *mAdminStorageMockDeleteApplicationProfile {
+	if n == 0 {
+		mmDeleteApplicationProfile.mock.t.Fatalf("Times of AdminStorageMock.DeleteApplicationProfile mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmDeleteApplicationProfile.expectedInvocations, n)
+	mmDeleteApplicationProfile.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmDeleteApplicationProfile
+}
+
+func (mmDeleteApplicationProfile *mAdminStorageMockDeleteApplicationProfile) invocationsDone() bool {
+	if len(mmDeleteApplicationProfile.expectations) == 0 && mmDeleteApplicationProfile.defaultExpectation == nil && mmDeleteApplicationProfile.mock.funcDeleteApplicationProfile == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmDeleteApplicationProfile.mock.afterDeleteApplicationProfileCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmDeleteApplicationProfile.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// DeleteApplicationProfile implements mm_port.AdminStorage
+func (mmDeleteApplicationProfile *AdminStorageMock) DeleteApplicationProfile(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) (err error) {
+	mm_atomic.AddUint64(&mmDeleteApplicationProfile.beforeDeleteApplicationProfileCounter, 1)
+	defer mm_atomic.AddUint64(&mmDeleteApplicationProfile.afterDeleteApplicationProfileCounter, 1)
+
+	mmDeleteApplicationProfile.t.Helper()
+
+	if mmDeleteApplicationProfile.inspectFuncDeleteApplicationProfile != nil {
+		mmDeleteApplicationProfile.inspectFuncDeleteApplicationProfile(ctx, tenantUUID, id)
+	}
+
+	mm_params := AdminStorageMockDeleteApplicationProfileParams{ctx, tenantUUID, id}
+
+	// Record call args
+	mmDeleteApplicationProfile.DeleteApplicationProfileMock.mutex.Lock()
+	mmDeleteApplicationProfile.DeleteApplicationProfileMock.callArgs = append(mmDeleteApplicationProfile.DeleteApplicationProfileMock.callArgs, &mm_params)
+	mmDeleteApplicationProfile.DeleteApplicationProfileMock.mutex.Unlock()
+
+	for _, e := range mmDeleteApplicationProfile.DeleteApplicationProfileMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmDeleteApplicationProfile.DeleteApplicationProfileMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmDeleteApplicationProfile.DeleteApplicationProfileMock.defaultExpectation.Counter, 1)
+		mm_want := mmDeleteApplicationProfile.DeleteApplicationProfileMock.defaultExpectation.params
+		mm_want_ptrs := mmDeleteApplicationProfile.DeleteApplicationProfileMock.defaultExpectation.paramPtrs
+
+		mm_got := AdminStorageMockDeleteApplicationProfileParams{ctx, tenantUUID, id}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmDeleteApplicationProfile.t.Errorf("AdminStorageMock.DeleteApplicationProfile got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteApplicationProfile.DeleteApplicationProfileMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantUUID != nil && !minimock.Equal(*mm_want_ptrs.tenantUUID, mm_got.tenantUUID) {
+				mmDeleteApplicationProfile.t.Errorf("AdminStorageMock.DeleteApplicationProfile got unexpected parameter tenantUUID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteApplicationProfile.DeleteApplicationProfileMock.defaultExpectation.expectationOrigins.originTenantUUID, *mm_want_ptrs.tenantUUID, mm_got.tenantUUID, minimock.Diff(*mm_want_ptrs.tenantUUID, mm_got.tenantUUID))
+			}
+
+			if mm_want_ptrs.id != nil && !minimock.Equal(*mm_want_ptrs.id, mm_got.id) {
+				mmDeleteApplicationProfile.t.Errorf("AdminStorageMock.DeleteApplicationProfile got unexpected parameter id, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteApplicationProfile.DeleteApplicationProfileMock.defaultExpectation.expectationOrigins.originId, *mm_want_ptrs.id, mm_got.id, minimock.Diff(*mm_want_ptrs.id, mm_got.id))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmDeleteApplicationProfile.t.Errorf("AdminStorageMock.DeleteApplicationProfile got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmDeleteApplicationProfile.DeleteApplicationProfileMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmDeleteApplicationProfile.DeleteApplicationProfileMock.defaultExpectation.results
+		if mm_results == nil {
+			mmDeleteApplicationProfile.t.Fatal("No results are set for the AdminStorageMock.DeleteApplicationProfile")
+		}
+		return (*mm_results).err
+	}
+	if mmDeleteApplicationProfile.funcDeleteApplicationProfile != nil {
+		return mmDeleteApplicationProfile.funcDeleteApplicationProfile(ctx, tenantUUID, id)
+	}
+	mmDeleteApplicationProfile.t.Fatalf("Unexpected call to AdminStorageMock.DeleteApplicationProfile. %v %v %v", ctx, tenantUUID, id)
+	return
+}
+
+// DeleteApplicationProfileAfterCounter returns a count of finished AdminStorageMock.DeleteApplicationProfile invocations
+func (mmDeleteApplicationProfile *AdminStorageMock) DeleteApplicationProfileAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteApplicationProfile.afterDeleteApplicationProfileCounter)
+}
+
+// DeleteApplicationProfileBeforeCounter returns a count of AdminStorageMock.DeleteApplicationProfile invocations
+func (mmDeleteApplicationProfile *AdminStorageMock) DeleteApplicationProfileBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteApplicationProfile.beforeDeleteApplicationProfileCounter)
+}
+
+// Calls returns a list of arguments used in each call to AdminStorageMock.DeleteApplicationProfile.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmDeleteApplicationProfile *mAdminStorageMockDeleteApplicationProfile) Calls() []*AdminStorageMockDeleteApplicationProfileParams {
+	mmDeleteApplicationProfile.mutex.RLock()
+
+	argCopy := make([]*AdminStorageMockDeleteApplicationProfileParams, len(mmDeleteApplicationProfile.callArgs))
+	copy(argCopy, mmDeleteApplicationProfile.callArgs)
+
+	mmDeleteApplicationProfile.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockDeleteApplicationProfileDone returns true if the count of the DeleteApplicationProfile invocations corresponds
+// the number of defined expectations
+func (m *AdminStorageMock) MinimockDeleteApplicationProfileDone() bool {
+	if m.DeleteApplicationProfileMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.DeleteApplicationProfileMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.DeleteApplicationProfileMock.invocationsDone()
+}
+
+// MinimockDeleteApplicationProfileInspect logs each unmet expectation
+func (m *AdminStorageMock) MinimockDeleteApplicationProfileInspect() {
+	for _, e := range m.DeleteApplicationProfileMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AdminStorageMock.DeleteApplicationProfile at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterDeleteApplicationProfileCounter := mm_atomic.LoadUint64(&m.afterDeleteApplicationProfileCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.DeleteApplicationProfileMock.defaultExpectation != nil && afterDeleteApplicationProfileCounter < 1 {
+		if m.DeleteApplicationProfileMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AdminStorageMock.DeleteApplicationProfile at\n%s", m.DeleteApplicationProfileMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AdminStorageMock.DeleteApplicationProfile at\n%s with params: %#v", m.DeleteApplicationProfileMock.defaultExpectation.expectationOrigins.origin, *m.DeleteApplicationProfileMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcDeleteApplicationProfile != nil && afterDeleteApplicationProfileCounter < 1 {
+		m.t.Errorf("Expected call to AdminStorageMock.DeleteApplicationProfile at\n%s", m.funcDeleteApplicationProfileOrigin)
+	}
+
+	if !m.DeleteApplicationProfileMock.invocationsDone() && afterDeleteApplicationProfileCounter > 0 {
+		m.t.Errorf("Expected %d calls to AdminStorageMock.DeleteApplicationProfile at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.DeleteApplicationProfileMock.expectedInvocations), m.DeleteApplicationProfileMock.expectedInvocationsOrigin, afterDeleteApplicationProfileCounter)
+	}
+}
+
 type mAdminStorageMockDeleteIdentityProvider struct {
 	optional           bool
 	mock               *AdminStorageMock
@@ -6121,6 +6907,754 @@ func (m *AdminStorageMock) MinimockGetApplicationProfilesInspect() {
 	if !m.GetApplicationProfilesMock.invocationsDone() && afterGetApplicationProfilesCounter > 0 {
 		m.t.Errorf("Expected %d calls to AdminStorageMock.GetApplicationProfiles at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.GetApplicationProfilesMock.expectedInvocations), m.GetApplicationProfilesMock.expectedInvocationsOrigin, afterGetApplicationProfilesCounter)
+	}
+}
+
+type mAdminStorageMockGetApplicationsByGroup struct {
+	optional           bool
+	mock               *AdminStorageMock
+	defaultExpectation *AdminStorageMockGetApplicationsByGroupExpectation
+	expectations       []*AdminStorageMockGetApplicationsByGroupExpectation
+
+	callArgs []*AdminStorageMockGetApplicationsByGroupParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AdminStorageMockGetApplicationsByGroupExpectation specifies expectation struct of the AdminStorage.GetApplicationsByGroup
+type AdminStorageMockGetApplicationsByGroupExpectation struct {
+	mock               *AdminStorageMock
+	params             *AdminStorageMockGetApplicationsByGroupParams
+	paramPtrs          *AdminStorageMockGetApplicationsByGroupParamPtrs
+	expectationOrigins AdminStorageMockGetApplicationsByGroupExpectationOrigins
+	results            *AdminStorageMockGetApplicationsByGroupResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AdminStorageMockGetApplicationsByGroupParams contains parameters of the AdminStorage.GetApplicationsByGroup
+type AdminStorageMockGetApplicationsByGroupParams struct {
+	ctx        context.Context
+	tenantUUID uuid.UUID
+	groupID    uuid.UUID
+}
+
+// AdminStorageMockGetApplicationsByGroupParamPtrs contains pointers to parameters of the AdminStorage.GetApplicationsByGroup
+type AdminStorageMockGetApplicationsByGroupParamPtrs struct {
+	ctx        *context.Context
+	tenantUUID *uuid.UUID
+	groupID    *uuid.UUID
+}
+
+// AdminStorageMockGetApplicationsByGroupResults contains results of the AdminStorage.GetApplicationsByGroup
+type AdminStorageMockGetApplicationsByGroupResults struct {
+	aa1 []model.ApplicationSummary
+	err error
+}
+
+// AdminStorageMockGetApplicationsByGroupOrigins contains origins of expectations of the AdminStorage.GetApplicationsByGroup
+type AdminStorageMockGetApplicationsByGroupExpectationOrigins struct {
+	origin           string
+	originCtx        string
+	originTenantUUID string
+	originGroupID    string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetApplicationsByGroup *mAdminStorageMockGetApplicationsByGroup) Optional() *mAdminStorageMockGetApplicationsByGroup {
+	mmGetApplicationsByGroup.optional = true
+	return mmGetApplicationsByGroup
+}
+
+// Expect sets up expected params for AdminStorage.GetApplicationsByGroup
+func (mmGetApplicationsByGroup *mAdminStorageMockGetApplicationsByGroup) Expect(ctx context.Context, tenantUUID uuid.UUID, groupID uuid.UUID) *mAdminStorageMockGetApplicationsByGroup {
+	if mmGetApplicationsByGroup.mock.funcGetApplicationsByGroup != nil {
+		mmGetApplicationsByGroup.mock.t.Fatalf("AdminStorageMock.GetApplicationsByGroup mock is already set by Set")
+	}
+
+	if mmGetApplicationsByGroup.defaultExpectation == nil {
+		mmGetApplicationsByGroup.defaultExpectation = &AdminStorageMockGetApplicationsByGroupExpectation{}
+	}
+
+	if mmGetApplicationsByGroup.defaultExpectation.paramPtrs != nil {
+		mmGetApplicationsByGroup.mock.t.Fatalf("AdminStorageMock.GetApplicationsByGroup mock is already set by ExpectParams functions")
+	}
+
+	mmGetApplicationsByGroup.defaultExpectation.params = &AdminStorageMockGetApplicationsByGroupParams{ctx, tenantUUID, groupID}
+	mmGetApplicationsByGroup.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetApplicationsByGroup.expectations {
+		if minimock.Equal(e.params, mmGetApplicationsByGroup.defaultExpectation.params) {
+			mmGetApplicationsByGroup.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetApplicationsByGroup.defaultExpectation.params)
+		}
+	}
+
+	return mmGetApplicationsByGroup
+}
+
+// ExpectCtxParam1 sets up expected param ctx for AdminStorage.GetApplicationsByGroup
+func (mmGetApplicationsByGroup *mAdminStorageMockGetApplicationsByGroup) ExpectCtxParam1(ctx context.Context) *mAdminStorageMockGetApplicationsByGroup {
+	if mmGetApplicationsByGroup.mock.funcGetApplicationsByGroup != nil {
+		mmGetApplicationsByGroup.mock.t.Fatalf("AdminStorageMock.GetApplicationsByGroup mock is already set by Set")
+	}
+
+	if mmGetApplicationsByGroup.defaultExpectation == nil {
+		mmGetApplicationsByGroup.defaultExpectation = &AdminStorageMockGetApplicationsByGroupExpectation{}
+	}
+
+	if mmGetApplicationsByGroup.defaultExpectation.params != nil {
+		mmGetApplicationsByGroup.mock.t.Fatalf("AdminStorageMock.GetApplicationsByGroup mock is already set by Expect")
+	}
+
+	if mmGetApplicationsByGroup.defaultExpectation.paramPtrs == nil {
+		mmGetApplicationsByGroup.defaultExpectation.paramPtrs = &AdminStorageMockGetApplicationsByGroupParamPtrs{}
+	}
+	mmGetApplicationsByGroup.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetApplicationsByGroup.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetApplicationsByGroup
+}
+
+// ExpectTenantUUIDParam2 sets up expected param tenantUUID for AdminStorage.GetApplicationsByGroup
+func (mmGetApplicationsByGroup *mAdminStorageMockGetApplicationsByGroup) ExpectTenantUUIDParam2(tenantUUID uuid.UUID) *mAdminStorageMockGetApplicationsByGroup {
+	if mmGetApplicationsByGroup.mock.funcGetApplicationsByGroup != nil {
+		mmGetApplicationsByGroup.mock.t.Fatalf("AdminStorageMock.GetApplicationsByGroup mock is already set by Set")
+	}
+
+	if mmGetApplicationsByGroup.defaultExpectation == nil {
+		mmGetApplicationsByGroup.defaultExpectation = &AdminStorageMockGetApplicationsByGroupExpectation{}
+	}
+
+	if mmGetApplicationsByGroup.defaultExpectation.params != nil {
+		mmGetApplicationsByGroup.mock.t.Fatalf("AdminStorageMock.GetApplicationsByGroup mock is already set by Expect")
+	}
+
+	if mmGetApplicationsByGroup.defaultExpectation.paramPtrs == nil {
+		mmGetApplicationsByGroup.defaultExpectation.paramPtrs = &AdminStorageMockGetApplicationsByGroupParamPtrs{}
+	}
+	mmGetApplicationsByGroup.defaultExpectation.paramPtrs.tenantUUID = &tenantUUID
+	mmGetApplicationsByGroup.defaultExpectation.expectationOrigins.originTenantUUID = minimock.CallerInfo(1)
+
+	return mmGetApplicationsByGroup
+}
+
+// ExpectGroupIDParam3 sets up expected param groupID for AdminStorage.GetApplicationsByGroup
+func (mmGetApplicationsByGroup *mAdminStorageMockGetApplicationsByGroup) ExpectGroupIDParam3(groupID uuid.UUID) *mAdminStorageMockGetApplicationsByGroup {
+	if mmGetApplicationsByGroup.mock.funcGetApplicationsByGroup != nil {
+		mmGetApplicationsByGroup.mock.t.Fatalf("AdminStorageMock.GetApplicationsByGroup mock is already set by Set")
+	}
+
+	if mmGetApplicationsByGroup.defaultExpectation == nil {
+		mmGetApplicationsByGroup.defaultExpectation = &AdminStorageMockGetApplicationsByGroupExpectation{}
+	}
+
+	if mmGetApplicationsByGroup.defaultExpectation.params != nil {
+		mmGetApplicationsByGroup.mock.t.Fatalf("AdminStorageMock.GetApplicationsByGroup mock is already set by Expect")
+	}
+
+	if mmGetApplicationsByGroup.defaultExpectation.paramPtrs == nil {
+		mmGetApplicationsByGroup.defaultExpectation.paramPtrs = &AdminStorageMockGetApplicationsByGroupParamPtrs{}
+	}
+	mmGetApplicationsByGroup.defaultExpectation.paramPtrs.groupID = &groupID
+	mmGetApplicationsByGroup.defaultExpectation.expectationOrigins.originGroupID = minimock.CallerInfo(1)
+
+	return mmGetApplicationsByGroup
+}
+
+// Inspect accepts an inspector function that has same arguments as the AdminStorage.GetApplicationsByGroup
+func (mmGetApplicationsByGroup *mAdminStorageMockGetApplicationsByGroup) Inspect(f func(ctx context.Context, tenantUUID uuid.UUID, groupID uuid.UUID)) *mAdminStorageMockGetApplicationsByGroup {
+	if mmGetApplicationsByGroup.mock.inspectFuncGetApplicationsByGroup != nil {
+		mmGetApplicationsByGroup.mock.t.Fatalf("Inspect function is already set for AdminStorageMock.GetApplicationsByGroup")
+	}
+
+	mmGetApplicationsByGroup.mock.inspectFuncGetApplicationsByGroup = f
+
+	return mmGetApplicationsByGroup
+}
+
+// Return sets up results that will be returned by AdminStorage.GetApplicationsByGroup
+func (mmGetApplicationsByGroup *mAdminStorageMockGetApplicationsByGroup) Return(aa1 []model.ApplicationSummary, err error) *AdminStorageMock {
+	if mmGetApplicationsByGroup.mock.funcGetApplicationsByGroup != nil {
+		mmGetApplicationsByGroup.mock.t.Fatalf("AdminStorageMock.GetApplicationsByGroup mock is already set by Set")
+	}
+
+	if mmGetApplicationsByGroup.defaultExpectation == nil {
+		mmGetApplicationsByGroup.defaultExpectation = &AdminStorageMockGetApplicationsByGroupExpectation{mock: mmGetApplicationsByGroup.mock}
+	}
+	mmGetApplicationsByGroup.defaultExpectation.results = &AdminStorageMockGetApplicationsByGroupResults{aa1, err}
+	mmGetApplicationsByGroup.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetApplicationsByGroup.mock
+}
+
+// Set uses given function f to mock the AdminStorage.GetApplicationsByGroup method
+func (mmGetApplicationsByGroup *mAdminStorageMockGetApplicationsByGroup) Set(f func(ctx context.Context, tenantUUID uuid.UUID, groupID uuid.UUID) (aa1 []model.ApplicationSummary, err error)) *AdminStorageMock {
+	if mmGetApplicationsByGroup.defaultExpectation != nil {
+		mmGetApplicationsByGroup.mock.t.Fatalf("Default expectation is already set for the AdminStorage.GetApplicationsByGroup method")
+	}
+
+	if len(mmGetApplicationsByGroup.expectations) > 0 {
+		mmGetApplicationsByGroup.mock.t.Fatalf("Some expectations are already set for the AdminStorage.GetApplicationsByGroup method")
+	}
+
+	mmGetApplicationsByGroup.mock.funcGetApplicationsByGroup = f
+	mmGetApplicationsByGroup.mock.funcGetApplicationsByGroupOrigin = minimock.CallerInfo(1)
+	return mmGetApplicationsByGroup.mock
+}
+
+// When sets expectation for the AdminStorage.GetApplicationsByGroup which will trigger the result defined by the following
+// Then helper
+func (mmGetApplicationsByGroup *mAdminStorageMockGetApplicationsByGroup) When(ctx context.Context, tenantUUID uuid.UUID, groupID uuid.UUID) *AdminStorageMockGetApplicationsByGroupExpectation {
+	if mmGetApplicationsByGroup.mock.funcGetApplicationsByGroup != nil {
+		mmGetApplicationsByGroup.mock.t.Fatalf("AdminStorageMock.GetApplicationsByGroup mock is already set by Set")
+	}
+
+	expectation := &AdminStorageMockGetApplicationsByGroupExpectation{
+		mock:               mmGetApplicationsByGroup.mock,
+		params:             &AdminStorageMockGetApplicationsByGroupParams{ctx, tenantUUID, groupID},
+		expectationOrigins: AdminStorageMockGetApplicationsByGroupExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetApplicationsByGroup.expectations = append(mmGetApplicationsByGroup.expectations, expectation)
+	return expectation
+}
+
+// Then sets up AdminStorage.GetApplicationsByGroup return parameters for the expectation previously defined by the When method
+func (e *AdminStorageMockGetApplicationsByGroupExpectation) Then(aa1 []model.ApplicationSummary, err error) *AdminStorageMock {
+	e.results = &AdminStorageMockGetApplicationsByGroupResults{aa1, err}
+	return e.mock
+}
+
+// Times sets number of times AdminStorage.GetApplicationsByGroup should be invoked
+func (mmGetApplicationsByGroup *mAdminStorageMockGetApplicationsByGroup) Times(n uint64) *mAdminStorageMockGetApplicationsByGroup {
+	if n == 0 {
+		mmGetApplicationsByGroup.mock.t.Fatalf("Times of AdminStorageMock.GetApplicationsByGroup mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetApplicationsByGroup.expectedInvocations, n)
+	mmGetApplicationsByGroup.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetApplicationsByGroup
+}
+
+func (mmGetApplicationsByGroup *mAdminStorageMockGetApplicationsByGroup) invocationsDone() bool {
+	if len(mmGetApplicationsByGroup.expectations) == 0 && mmGetApplicationsByGroup.defaultExpectation == nil && mmGetApplicationsByGroup.mock.funcGetApplicationsByGroup == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetApplicationsByGroup.mock.afterGetApplicationsByGroupCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetApplicationsByGroup.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetApplicationsByGroup implements mm_port.AdminStorage
+func (mmGetApplicationsByGroup *AdminStorageMock) GetApplicationsByGroup(ctx context.Context, tenantUUID uuid.UUID, groupID uuid.UUID) (aa1 []model.ApplicationSummary, err error) {
+	mm_atomic.AddUint64(&mmGetApplicationsByGroup.beforeGetApplicationsByGroupCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetApplicationsByGroup.afterGetApplicationsByGroupCounter, 1)
+
+	mmGetApplicationsByGroup.t.Helper()
+
+	if mmGetApplicationsByGroup.inspectFuncGetApplicationsByGroup != nil {
+		mmGetApplicationsByGroup.inspectFuncGetApplicationsByGroup(ctx, tenantUUID, groupID)
+	}
+
+	mm_params := AdminStorageMockGetApplicationsByGroupParams{ctx, tenantUUID, groupID}
+
+	// Record call args
+	mmGetApplicationsByGroup.GetApplicationsByGroupMock.mutex.Lock()
+	mmGetApplicationsByGroup.GetApplicationsByGroupMock.callArgs = append(mmGetApplicationsByGroup.GetApplicationsByGroupMock.callArgs, &mm_params)
+	mmGetApplicationsByGroup.GetApplicationsByGroupMock.mutex.Unlock()
+
+	for _, e := range mmGetApplicationsByGroup.GetApplicationsByGroupMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.aa1, e.results.err
+		}
+	}
+
+	if mmGetApplicationsByGroup.GetApplicationsByGroupMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetApplicationsByGroup.GetApplicationsByGroupMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetApplicationsByGroup.GetApplicationsByGroupMock.defaultExpectation.params
+		mm_want_ptrs := mmGetApplicationsByGroup.GetApplicationsByGroupMock.defaultExpectation.paramPtrs
+
+		mm_got := AdminStorageMockGetApplicationsByGroupParams{ctx, tenantUUID, groupID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetApplicationsByGroup.t.Errorf("AdminStorageMock.GetApplicationsByGroup got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetApplicationsByGroup.GetApplicationsByGroupMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantUUID != nil && !minimock.Equal(*mm_want_ptrs.tenantUUID, mm_got.tenantUUID) {
+				mmGetApplicationsByGroup.t.Errorf("AdminStorageMock.GetApplicationsByGroup got unexpected parameter tenantUUID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetApplicationsByGroup.GetApplicationsByGroupMock.defaultExpectation.expectationOrigins.originTenantUUID, *mm_want_ptrs.tenantUUID, mm_got.tenantUUID, minimock.Diff(*mm_want_ptrs.tenantUUID, mm_got.tenantUUID))
+			}
+
+			if mm_want_ptrs.groupID != nil && !minimock.Equal(*mm_want_ptrs.groupID, mm_got.groupID) {
+				mmGetApplicationsByGroup.t.Errorf("AdminStorageMock.GetApplicationsByGroup got unexpected parameter groupID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetApplicationsByGroup.GetApplicationsByGroupMock.defaultExpectation.expectationOrigins.originGroupID, *mm_want_ptrs.groupID, mm_got.groupID, minimock.Diff(*mm_want_ptrs.groupID, mm_got.groupID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetApplicationsByGroup.t.Errorf("AdminStorageMock.GetApplicationsByGroup got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetApplicationsByGroup.GetApplicationsByGroupMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetApplicationsByGroup.GetApplicationsByGroupMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetApplicationsByGroup.t.Fatal("No results are set for the AdminStorageMock.GetApplicationsByGroup")
+		}
+		return (*mm_results).aa1, (*mm_results).err
+	}
+	if mmGetApplicationsByGroup.funcGetApplicationsByGroup != nil {
+		return mmGetApplicationsByGroup.funcGetApplicationsByGroup(ctx, tenantUUID, groupID)
+	}
+	mmGetApplicationsByGroup.t.Fatalf("Unexpected call to AdminStorageMock.GetApplicationsByGroup. %v %v %v", ctx, tenantUUID, groupID)
+	return
+}
+
+// GetApplicationsByGroupAfterCounter returns a count of finished AdminStorageMock.GetApplicationsByGroup invocations
+func (mmGetApplicationsByGroup *AdminStorageMock) GetApplicationsByGroupAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetApplicationsByGroup.afterGetApplicationsByGroupCounter)
+}
+
+// GetApplicationsByGroupBeforeCounter returns a count of AdminStorageMock.GetApplicationsByGroup invocations
+func (mmGetApplicationsByGroup *AdminStorageMock) GetApplicationsByGroupBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetApplicationsByGroup.beforeGetApplicationsByGroupCounter)
+}
+
+// Calls returns a list of arguments used in each call to AdminStorageMock.GetApplicationsByGroup.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetApplicationsByGroup *mAdminStorageMockGetApplicationsByGroup) Calls() []*AdminStorageMockGetApplicationsByGroupParams {
+	mmGetApplicationsByGroup.mutex.RLock()
+
+	argCopy := make([]*AdminStorageMockGetApplicationsByGroupParams, len(mmGetApplicationsByGroup.callArgs))
+	copy(argCopy, mmGetApplicationsByGroup.callArgs)
+
+	mmGetApplicationsByGroup.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetApplicationsByGroupDone returns true if the count of the GetApplicationsByGroup invocations corresponds
+// the number of defined expectations
+func (m *AdminStorageMock) MinimockGetApplicationsByGroupDone() bool {
+	if m.GetApplicationsByGroupMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetApplicationsByGroupMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetApplicationsByGroupMock.invocationsDone()
+}
+
+// MinimockGetApplicationsByGroupInspect logs each unmet expectation
+func (m *AdminStorageMock) MinimockGetApplicationsByGroupInspect() {
+	for _, e := range m.GetApplicationsByGroupMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AdminStorageMock.GetApplicationsByGroup at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetApplicationsByGroupCounter := mm_atomic.LoadUint64(&m.afterGetApplicationsByGroupCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetApplicationsByGroupMock.defaultExpectation != nil && afterGetApplicationsByGroupCounter < 1 {
+		if m.GetApplicationsByGroupMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AdminStorageMock.GetApplicationsByGroup at\n%s", m.GetApplicationsByGroupMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AdminStorageMock.GetApplicationsByGroup at\n%s with params: %#v", m.GetApplicationsByGroupMock.defaultExpectation.expectationOrigins.origin, *m.GetApplicationsByGroupMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetApplicationsByGroup != nil && afterGetApplicationsByGroupCounter < 1 {
+		m.t.Errorf("Expected call to AdminStorageMock.GetApplicationsByGroup at\n%s", m.funcGetApplicationsByGroupOrigin)
+	}
+
+	if !m.GetApplicationsByGroupMock.invocationsDone() && afterGetApplicationsByGroupCounter > 0 {
+		m.t.Errorf("Expected %d calls to AdminStorageMock.GetApplicationsByGroup at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetApplicationsByGroupMock.expectedInvocations), m.GetApplicationsByGroupMock.expectedInvocationsOrigin, afterGetApplicationsByGroupCounter)
+	}
+}
+
+type mAdminStorageMockGetApplicationsByProfile struct {
+	optional           bool
+	mock               *AdminStorageMock
+	defaultExpectation *AdminStorageMockGetApplicationsByProfileExpectation
+	expectations       []*AdminStorageMockGetApplicationsByProfileExpectation
+
+	callArgs []*AdminStorageMockGetApplicationsByProfileParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AdminStorageMockGetApplicationsByProfileExpectation specifies expectation struct of the AdminStorage.GetApplicationsByProfile
+type AdminStorageMockGetApplicationsByProfileExpectation struct {
+	mock               *AdminStorageMock
+	params             *AdminStorageMockGetApplicationsByProfileParams
+	paramPtrs          *AdminStorageMockGetApplicationsByProfileParamPtrs
+	expectationOrigins AdminStorageMockGetApplicationsByProfileExpectationOrigins
+	results            *AdminStorageMockGetApplicationsByProfileResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AdminStorageMockGetApplicationsByProfileParams contains parameters of the AdminStorage.GetApplicationsByProfile
+type AdminStorageMockGetApplicationsByProfileParams struct {
+	ctx        context.Context
+	tenantUUID uuid.UUID
+	profileID  uuid.UUID
+}
+
+// AdminStorageMockGetApplicationsByProfileParamPtrs contains pointers to parameters of the AdminStorage.GetApplicationsByProfile
+type AdminStorageMockGetApplicationsByProfileParamPtrs struct {
+	ctx        *context.Context
+	tenantUUID *uuid.UUID
+	profileID  *uuid.UUID
+}
+
+// AdminStorageMockGetApplicationsByProfileResults contains results of the AdminStorage.GetApplicationsByProfile
+type AdminStorageMockGetApplicationsByProfileResults struct {
+	aa1 []model.ApplicationSummary
+	err error
+}
+
+// AdminStorageMockGetApplicationsByProfileOrigins contains origins of expectations of the AdminStorage.GetApplicationsByProfile
+type AdminStorageMockGetApplicationsByProfileExpectationOrigins struct {
+	origin           string
+	originCtx        string
+	originTenantUUID string
+	originProfileID  string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetApplicationsByProfile *mAdminStorageMockGetApplicationsByProfile) Optional() *mAdminStorageMockGetApplicationsByProfile {
+	mmGetApplicationsByProfile.optional = true
+	return mmGetApplicationsByProfile
+}
+
+// Expect sets up expected params for AdminStorage.GetApplicationsByProfile
+func (mmGetApplicationsByProfile *mAdminStorageMockGetApplicationsByProfile) Expect(ctx context.Context, tenantUUID uuid.UUID, profileID uuid.UUID) *mAdminStorageMockGetApplicationsByProfile {
+	if mmGetApplicationsByProfile.mock.funcGetApplicationsByProfile != nil {
+		mmGetApplicationsByProfile.mock.t.Fatalf("AdminStorageMock.GetApplicationsByProfile mock is already set by Set")
+	}
+
+	if mmGetApplicationsByProfile.defaultExpectation == nil {
+		mmGetApplicationsByProfile.defaultExpectation = &AdminStorageMockGetApplicationsByProfileExpectation{}
+	}
+
+	if mmGetApplicationsByProfile.defaultExpectation.paramPtrs != nil {
+		mmGetApplicationsByProfile.mock.t.Fatalf("AdminStorageMock.GetApplicationsByProfile mock is already set by ExpectParams functions")
+	}
+
+	mmGetApplicationsByProfile.defaultExpectation.params = &AdminStorageMockGetApplicationsByProfileParams{ctx, tenantUUID, profileID}
+	mmGetApplicationsByProfile.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetApplicationsByProfile.expectations {
+		if minimock.Equal(e.params, mmGetApplicationsByProfile.defaultExpectation.params) {
+			mmGetApplicationsByProfile.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetApplicationsByProfile.defaultExpectation.params)
+		}
+	}
+
+	return mmGetApplicationsByProfile
+}
+
+// ExpectCtxParam1 sets up expected param ctx for AdminStorage.GetApplicationsByProfile
+func (mmGetApplicationsByProfile *mAdminStorageMockGetApplicationsByProfile) ExpectCtxParam1(ctx context.Context) *mAdminStorageMockGetApplicationsByProfile {
+	if mmGetApplicationsByProfile.mock.funcGetApplicationsByProfile != nil {
+		mmGetApplicationsByProfile.mock.t.Fatalf("AdminStorageMock.GetApplicationsByProfile mock is already set by Set")
+	}
+
+	if mmGetApplicationsByProfile.defaultExpectation == nil {
+		mmGetApplicationsByProfile.defaultExpectation = &AdminStorageMockGetApplicationsByProfileExpectation{}
+	}
+
+	if mmGetApplicationsByProfile.defaultExpectation.params != nil {
+		mmGetApplicationsByProfile.mock.t.Fatalf("AdminStorageMock.GetApplicationsByProfile mock is already set by Expect")
+	}
+
+	if mmGetApplicationsByProfile.defaultExpectation.paramPtrs == nil {
+		mmGetApplicationsByProfile.defaultExpectation.paramPtrs = &AdminStorageMockGetApplicationsByProfileParamPtrs{}
+	}
+	mmGetApplicationsByProfile.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetApplicationsByProfile.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetApplicationsByProfile
+}
+
+// ExpectTenantUUIDParam2 sets up expected param tenantUUID for AdminStorage.GetApplicationsByProfile
+func (mmGetApplicationsByProfile *mAdminStorageMockGetApplicationsByProfile) ExpectTenantUUIDParam2(tenantUUID uuid.UUID) *mAdminStorageMockGetApplicationsByProfile {
+	if mmGetApplicationsByProfile.mock.funcGetApplicationsByProfile != nil {
+		mmGetApplicationsByProfile.mock.t.Fatalf("AdminStorageMock.GetApplicationsByProfile mock is already set by Set")
+	}
+
+	if mmGetApplicationsByProfile.defaultExpectation == nil {
+		mmGetApplicationsByProfile.defaultExpectation = &AdminStorageMockGetApplicationsByProfileExpectation{}
+	}
+
+	if mmGetApplicationsByProfile.defaultExpectation.params != nil {
+		mmGetApplicationsByProfile.mock.t.Fatalf("AdminStorageMock.GetApplicationsByProfile mock is already set by Expect")
+	}
+
+	if mmGetApplicationsByProfile.defaultExpectation.paramPtrs == nil {
+		mmGetApplicationsByProfile.defaultExpectation.paramPtrs = &AdminStorageMockGetApplicationsByProfileParamPtrs{}
+	}
+	mmGetApplicationsByProfile.defaultExpectation.paramPtrs.tenantUUID = &tenantUUID
+	mmGetApplicationsByProfile.defaultExpectation.expectationOrigins.originTenantUUID = minimock.CallerInfo(1)
+
+	return mmGetApplicationsByProfile
+}
+
+// ExpectProfileIDParam3 sets up expected param profileID for AdminStorage.GetApplicationsByProfile
+func (mmGetApplicationsByProfile *mAdminStorageMockGetApplicationsByProfile) ExpectProfileIDParam3(profileID uuid.UUID) *mAdminStorageMockGetApplicationsByProfile {
+	if mmGetApplicationsByProfile.mock.funcGetApplicationsByProfile != nil {
+		mmGetApplicationsByProfile.mock.t.Fatalf("AdminStorageMock.GetApplicationsByProfile mock is already set by Set")
+	}
+
+	if mmGetApplicationsByProfile.defaultExpectation == nil {
+		mmGetApplicationsByProfile.defaultExpectation = &AdminStorageMockGetApplicationsByProfileExpectation{}
+	}
+
+	if mmGetApplicationsByProfile.defaultExpectation.params != nil {
+		mmGetApplicationsByProfile.mock.t.Fatalf("AdminStorageMock.GetApplicationsByProfile mock is already set by Expect")
+	}
+
+	if mmGetApplicationsByProfile.defaultExpectation.paramPtrs == nil {
+		mmGetApplicationsByProfile.defaultExpectation.paramPtrs = &AdminStorageMockGetApplicationsByProfileParamPtrs{}
+	}
+	mmGetApplicationsByProfile.defaultExpectation.paramPtrs.profileID = &profileID
+	mmGetApplicationsByProfile.defaultExpectation.expectationOrigins.originProfileID = minimock.CallerInfo(1)
+
+	return mmGetApplicationsByProfile
+}
+
+// Inspect accepts an inspector function that has same arguments as the AdminStorage.GetApplicationsByProfile
+func (mmGetApplicationsByProfile *mAdminStorageMockGetApplicationsByProfile) Inspect(f func(ctx context.Context, tenantUUID uuid.UUID, profileID uuid.UUID)) *mAdminStorageMockGetApplicationsByProfile {
+	if mmGetApplicationsByProfile.mock.inspectFuncGetApplicationsByProfile != nil {
+		mmGetApplicationsByProfile.mock.t.Fatalf("Inspect function is already set for AdminStorageMock.GetApplicationsByProfile")
+	}
+
+	mmGetApplicationsByProfile.mock.inspectFuncGetApplicationsByProfile = f
+
+	return mmGetApplicationsByProfile
+}
+
+// Return sets up results that will be returned by AdminStorage.GetApplicationsByProfile
+func (mmGetApplicationsByProfile *mAdminStorageMockGetApplicationsByProfile) Return(aa1 []model.ApplicationSummary, err error) *AdminStorageMock {
+	if mmGetApplicationsByProfile.mock.funcGetApplicationsByProfile != nil {
+		mmGetApplicationsByProfile.mock.t.Fatalf("AdminStorageMock.GetApplicationsByProfile mock is already set by Set")
+	}
+
+	if mmGetApplicationsByProfile.defaultExpectation == nil {
+		mmGetApplicationsByProfile.defaultExpectation = &AdminStorageMockGetApplicationsByProfileExpectation{mock: mmGetApplicationsByProfile.mock}
+	}
+	mmGetApplicationsByProfile.defaultExpectation.results = &AdminStorageMockGetApplicationsByProfileResults{aa1, err}
+	mmGetApplicationsByProfile.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetApplicationsByProfile.mock
+}
+
+// Set uses given function f to mock the AdminStorage.GetApplicationsByProfile method
+func (mmGetApplicationsByProfile *mAdminStorageMockGetApplicationsByProfile) Set(f func(ctx context.Context, tenantUUID uuid.UUID, profileID uuid.UUID) (aa1 []model.ApplicationSummary, err error)) *AdminStorageMock {
+	if mmGetApplicationsByProfile.defaultExpectation != nil {
+		mmGetApplicationsByProfile.mock.t.Fatalf("Default expectation is already set for the AdminStorage.GetApplicationsByProfile method")
+	}
+
+	if len(mmGetApplicationsByProfile.expectations) > 0 {
+		mmGetApplicationsByProfile.mock.t.Fatalf("Some expectations are already set for the AdminStorage.GetApplicationsByProfile method")
+	}
+
+	mmGetApplicationsByProfile.mock.funcGetApplicationsByProfile = f
+	mmGetApplicationsByProfile.mock.funcGetApplicationsByProfileOrigin = minimock.CallerInfo(1)
+	return mmGetApplicationsByProfile.mock
+}
+
+// When sets expectation for the AdminStorage.GetApplicationsByProfile which will trigger the result defined by the following
+// Then helper
+func (mmGetApplicationsByProfile *mAdminStorageMockGetApplicationsByProfile) When(ctx context.Context, tenantUUID uuid.UUID, profileID uuid.UUID) *AdminStorageMockGetApplicationsByProfileExpectation {
+	if mmGetApplicationsByProfile.mock.funcGetApplicationsByProfile != nil {
+		mmGetApplicationsByProfile.mock.t.Fatalf("AdminStorageMock.GetApplicationsByProfile mock is already set by Set")
+	}
+
+	expectation := &AdminStorageMockGetApplicationsByProfileExpectation{
+		mock:               mmGetApplicationsByProfile.mock,
+		params:             &AdminStorageMockGetApplicationsByProfileParams{ctx, tenantUUID, profileID},
+		expectationOrigins: AdminStorageMockGetApplicationsByProfileExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetApplicationsByProfile.expectations = append(mmGetApplicationsByProfile.expectations, expectation)
+	return expectation
+}
+
+// Then sets up AdminStorage.GetApplicationsByProfile return parameters for the expectation previously defined by the When method
+func (e *AdminStorageMockGetApplicationsByProfileExpectation) Then(aa1 []model.ApplicationSummary, err error) *AdminStorageMock {
+	e.results = &AdminStorageMockGetApplicationsByProfileResults{aa1, err}
+	return e.mock
+}
+
+// Times sets number of times AdminStorage.GetApplicationsByProfile should be invoked
+func (mmGetApplicationsByProfile *mAdminStorageMockGetApplicationsByProfile) Times(n uint64) *mAdminStorageMockGetApplicationsByProfile {
+	if n == 0 {
+		mmGetApplicationsByProfile.mock.t.Fatalf("Times of AdminStorageMock.GetApplicationsByProfile mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetApplicationsByProfile.expectedInvocations, n)
+	mmGetApplicationsByProfile.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetApplicationsByProfile
+}
+
+func (mmGetApplicationsByProfile *mAdminStorageMockGetApplicationsByProfile) invocationsDone() bool {
+	if len(mmGetApplicationsByProfile.expectations) == 0 && mmGetApplicationsByProfile.defaultExpectation == nil && mmGetApplicationsByProfile.mock.funcGetApplicationsByProfile == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetApplicationsByProfile.mock.afterGetApplicationsByProfileCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetApplicationsByProfile.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetApplicationsByProfile implements mm_port.AdminStorage
+func (mmGetApplicationsByProfile *AdminStorageMock) GetApplicationsByProfile(ctx context.Context, tenantUUID uuid.UUID, profileID uuid.UUID) (aa1 []model.ApplicationSummary, err error) {
+	mm_atomic.AddUint64(&mmGetApplicationsByProfile.beforeGetApplicationsByProfileCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetApplicationsByProfile.afterGetApplicationsByProfileCounter, 1)
+
+	mmGetApplicationsByProfile.t.Helper()
+
+	if mmGetApplicationsByProfile.inspectFuncGetApplicationsByProfile != nil {
+		mmGetApplicationsByProfile.inspectFuncGetApplicationsByProfile(ctx, tenantUUID, profileID)
+	}
+
+	mm_params := AdminStorageMockGetApplicationsByProfileParams{ctx, tenantUUID, profileID}
+
+	// Record call args
+	mmGetApplicationsByProfile.GetApplicationsByProfileMock.mutex.Lock()
+	mmGetApplicationsByProfile.GetApplicationsByProfileMock.callArgs = append(mmGetApplicationsByProfile.GetApplicationsByProfileMock.callArgs, &mm_params)
+	mmGetApplicationsByProfile.GetApplicationsByProfileMock.mutex.Unlock()
+
+	for _, e := range mmGetApplicationsByProfile.GetApplicationsByProfileMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.aa1, e.results.err
+		}
+	}
+
+	if mmGetApplicationsByProfile.GetApplicationsByProfileMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetApplicationsByProfile.GetApplicationsByProfileMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetApplicationsByProfile.GetApplicationsByProfileMock.defaultExpectation.params
+		mm_want_ptrs := mmGetApplicationsByProfile.GetApplicationsByProfileMock.defaultExpectation.paramPtrs
+
+		mm_got := AdminStorageMockGetApplicationsByProfileParams{ctx, tenantUUID, profileID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetApplicationsByProfile.t.Errorf("AdminStorageMock.GetApplicationsByProfile got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetApplicationsByProfile.GetApplicationsByProfileMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantUUID != nil && !minimock.Equal(*mm_want_ptrs.tenantUUID, mm_got.tenantUUID) {
+				mmGetApplicationsByProfile.t.Errorf("AdminStorageMock.GetApplicationsByProfile got unexpected parameter tenantUUID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetApplicationsByProfile.GetApplicationsByProfileMock.defaultExpectation.expectationOrigins.originTenantUUID, *mm_want_ptrs.tenantUUID, mm_got.tenantUUID, minimock.Diff(*mm_want_ptrs.tenantUUID, mm_got.tenantUUID))
+			}
+
+			if mm_want_ptrs.profileID != nil && !minimock.Equal(*mm_want_ptrs.profileID, mm_got.profileID) {
+				mmGetApplicationsByProfile.t.Errorf("AdminStorageMock.GetApplicationsByProfile got unexpected parameter profileID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetApplicationsByProfile.GetApplicationsByProfileMock.defaultExpectation.expectationOrigins.originProfileID, *mm_want_ptrs.profileID, mm_got.profileID, minimock.Diff(*mm_want_ptrs.profileID, mm_got.profileID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetApplicationsByProfile.t.Errorf("AdminStorageMock.GetApplicationsByProfile got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetApplicationsByProfile.GetApplicationsByProfileMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetApplicationsByProfile.GetApplicationsByProfileMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetApplicationsByProfile.t.Fatal("No results are set for the AdminStorageMock.GetApplicationsByProfile")
+		}
+		return (*mm_results).aa1, (*mm_results).err
+	}
+	if mmGetApplicationsByProfile.funcGetApplicationsByProfile != nil {
+		return mmGetApplicationsByProfile.funcGetApplicationsByProfile(ctx, tenantUUID, profileID)
+	}
+	mmGetApplicationsByProfile.t.Fatalf("Unexpected call to AdminStorageMock.GetApplicationsByProfile. %v %v %v", ctx, tenantUUID, profileID)
+	return
+}
+
+// GetApplicationsByProfileAfterCounter returns a count of finished AdminStorageMock.GetApplicationsByProfile invocations
+func (mmGetApplicationsByProfile *AdminStorageMock) GetApplicationsByProfileAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetApplicationsByProfile.afterGetApplicationsByProfileCounter)
+}
+
+// GetApplicationsByProfileBeforeCounter returns a count of AdminStorageMock.GetApplicationsByProfile invocations
+func (mmGetApplicationsByProfile *AdminStorageMock) GetApplicationsByProfileBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetApplicationsByProfile.beforeGetApplicationsByProfileCounter)
+}
+
+// Calls returns a list of arguments used in each call to AdminStorageMock.GetApplicationsByProfile.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetApplicationsByProfile *mAdminStorageMockGetApplicationsByProfile) Calls() []*AdminStorageMockGetApplicationsByProfileParams {
+	mmGetApplicationsByProfile.mutex.RLock()
+
+	argCopy := make([]*AdminStorageMockGetApplicationsByProfileParams, len(mmGetApplicationsByProfile.callArgs))
+	copy(argCopy, mmGetApplicationsByProfile.callArgs)
+
+	mmGetApplicationsByProfile.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetApplicationsByProfileDone returns true if the count of the GetApplicationsByProfile invocations corresponds
+// the number of defined expectations
+func (m *AdminStorageMock) MinimockGetApplicationsByProfileDone() bool {
+	if m.GetApplicationsByProfileMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetApplicationsByProfileMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetApplicationsByProfileMock.invocationsDone()
+}
+
+// MinimockGetApplicationsByProfileInspect logs each unmet expectation
+func (m *AdminStorageMock) MinimockGetApplicationsByProfileInspect() {
+	for _, e := range m.GetApplicationsByProfileMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AdminStorageMock.GetApplicationsByProfile at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetApplicationsByProfileCounter := mm_atomic.LoadUint64(&m.afterGetApplicationsByProfileCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetApplicationsByProfileMock.defaultExpectation != nil && afterGetApplicationsByProfileCounter < 1 {
+		if m.GetApplicationsByProfileMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AdminStorageMock.GetApplicationsByProfile at\n%s", m.GetApplicationsByProfileMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AdminStorageMock.GetApplicationsByProfile at\n%s with params: %#v", m.GetApplicationsByProfileMock.defaultExpectation.expectationOrigins.origin, *m.GetApplicationsByProfileMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetApplicationsByProfile != nil && afterGetApplicationsByProfileCounter < 1 {
+		m.t.Errorf("Expected call to AdminStorageMock.GetApplicationsByProfile at\n%s", m.funcGetApplicationsByProfileOrigin)
+	}
+
+	if !m.GetApplicationsByProfileMock.invocationsDone() && afterGetApplicationsByProfileCounter > 0 {
+		m.t.Errorf("Expected %d calls to AdminStorageMock.GetApplicationsByProfile at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetApplicationsByProfileMock.expectedInvocations), m.GetApplicationsByProfileMock.expectedInvocationsOrigin, afterGetApplicationsByProfileCounter)
 	}
 }
 
@@ -9101,6 +10635,10 @@ func (m *AdminStorageMock) MinimockFinish() {
 
 			m.MinimockDeleteApplicationInspect()
 
+			m.MinimockDeleteApplicationGroupInspect()
+
+			m.MinimockDeleteApplicationProfileInspect()
+
 			m.MinimockDeleteIdentityProviderInspect()
 
 			m.MinimockDeleteTenantInspect()
@@ -9116,6 +10654,10 @@ func (m *AdminStorageMock) MinimockFinish() {
 			m.MinimockGetApplicationProfileByIDInspect()
 
 			m.MinimockGetApplicationProfilesInspect()
+
+			m.MinimockGetApplicationsByGroupInspect()
+
+			m.MinimockGetApplicationsByProfileInspect()
 
 			m.MinimockGetDynamicApplicationsSummaryInspect()
 
@@ -9163,6 +10705,8 @@ func (m *AdminStorageMock) minimockDone() bool {
 		m.MinimockCreateTenantDone() &&
 		m.MinimockDecoupleIdentityDone() &&
 		m.MinimockDeleteApplicationDone() &&
+		m.MinimockDeleteApplicationGroupDone() &&
+		m.MinimockDeleteApplicationProfileDone() &&
 		m.MinimockDeleteIdentityProviderDone() &&
 		m.MinimockDeleteTenantDone() &&
 		m.MinimockDeleteUserProfileDone() &&
@@ -9171,6 +10715,8 @@ func (m *AdminStorageMock) minimockDone() bool {
 		m.MinimockGetApplicationGroupsDone() &&
 		m.MinimockGetApplicationProfileByIDDone() &&
 		m.MinimockGetApplicationProfilesDone() &&
+		m.MinimockGetApplicationsByGroupDone() &&
+		m.MinimockGetApplicationsByProfileDone() &&
 		m.MinimockGetDynamicApplicationsSummaryDone() &&
 		m.MinimockGetStaticApplicationsSummaryDone() &&
 		m.MinimockGetUserIdentitiesDone() &&

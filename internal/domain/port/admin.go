@@ -73,6 +73,7 @@ type UpdateProfileCommand struct {
 type CreateGroupCommand struct {
 	TenantID               uuid.UUID
 	GroupName              string
+	DefaultRedirectURI     string // must be one of RedirectURIs; empty means the first entry is used
 	RedirectURIs           []string
 	PostLogoutRedirectURIs []string
 	FrontChannelLogoutURI  string
@@ -89,6 +90,7 @@ type UpdateGroupCommand struct {
 	TenantID               uuid.UUID
 	ID                     uuid.UUID
 	GroupName              string
+	DefaultRedirectURI     string // must be one of RedirectURIs; empty means the first entry is used
 	RedirectURIs           []string
 	PostLogoutRedirectURIs []string
 	FrontChannelLogoutURI  string
@@ -104,6 +106,8 @@ type UpdateGroupCommand struct {
 type AdminApplicationUseCase interface {
 	GetApplicationDashboard(ctx context.Context, tenantID uuid.UUID) ([]model.ApplicationSummary, []model.ApplicationProfile, []model.ApplicationGroup, error)
 	GetApplicationDetails(ctx context.Context, tenantID uuid.UUID, clientID string) (*model.ApplicationDetailsProps, error)
+	// GetApplication is the detail-page lookup; it returns the application together with its profile and group.
+	GetApplication(ctx context.Context, tenantID uuid.UUID, clientID string) (*model.ApplicationDetailsProps, error)
 
 	// Standalone Application CRUD
 	CreateApplication(ctx context.Context, cmd CreateApplicationCommand) (*model.Application, error)
@@ -123,6 +127,14 @@ type AdminApplicationUseCase interface {
 	GetGroup(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.ApplicationGroup, error)
 	CreateGroup(ctx context.Context, cmd CreateGroupCommand) error
 	UpdateGroup(ctx context.Context, cmd UpdateGroupCommand) error
+
+	// Removal is refused with ErrSystemManaged for bootstrap objects and ErrInUse while applications still use them.
+	DeleteGroup(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) error
+	DeleteProfile(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) error
+
+	// Usage listings feed the "used by" sections of the group and profile pages.
+	ListApplicationsByGroup(ctx context.Context, tenantID uuid.UUID, groupID uuid.UUID) ([]model.ApplicationSummary, error)
+	ListApplicationsByProfile(ctx context.Context, tenantID uuid.UUID, profileID uuid.UUID) ([]model.ApplicationSummary, error)
 }
 
 // IdentityProviderUseCase defines the driving ports for identity provider operations.

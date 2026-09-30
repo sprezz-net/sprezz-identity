@@ -242,8 +242,11 @@ INSERT INTO application_groups (
     default_scopes,
     allowed_audiences,
     default_idp_id, -- Cleaned name matching normalization schema updates
+    redirect_uri,
     redirect_uris,
-    post_logout_redirect_uris
+    post_logout_redirect_uris,
+    front_channel_logout_uri,
+    back_channel_logout_uri
 )
 SELECT
     @id::uuid,
@@ -255,8 +258,11 @@ SELECT
     @default_scopes,
     @allowed_audiences,
     @default_idp_id::uuid, -- Type-safe UUID input parameter mapping
+    @redirect_uri,
     @redirect_uris,
-    @post_logout_redirect_uris
+    @post_logout_redirect_uris,
+    @front_channel_logout_uri,
+    @back_channel_logout_uri
 FROM tenant;
 
 -- name: CreateApplication :exec
@@ -341,8 +347,11 @@ SET
     default_scopes = @default_scopes,
     allowed_audiences = @allowed_audiences,
     default_idp_id = @default_idp_id::uuid,
+    redirect_uri = @redirect_uri,
     redirect_uris = @redirect_uris,
     post_logout_redirect_uris = @post_logout_redirect_uris,
+    front_channel_logout_uri = @front_channel_logout_uri,
+    back_channel_logout_uri = @back_channel_logout_uri,
     updated_at = NOW()
 FROM tenant
 WHERE g.id = @id::uuid
@@ -357,3 +366,87 @@ VALUES ($1, $2, $3);
 -- ClearIdentityProvidersFromGroup drops permission relations before rewriting values during updates.
 DELETE FROM application_group_idps
 WHERE group_id = @group_id::uuid AND tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = @tenant_uuid::uuid LIMIT 1);
+
+-- name: GetApplicationsByGroup :many
+-- GetApplicationsByGroup lists the applications bound to one authorization group (usage view and delete guard).
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = @tenant_uuid::uuid
+    LIMIT 1
+)
+SELECT
+    a.id,
+    a.client_id,
+    a.application_name,
+    a.is_enabled,
+    a.is_dynamic,
+    a.created_at,
+    a.updated_at,
+    a.last_used_at,
+    p.id AS profile_id,
+    p.profile_name,
+    g.id AS group_id,
+    g.group_name
+FROM applications a
+JOIN tenant ON a.tenant_id = tenant.id
+JOIN application_profiles p ON a.profile_id = p.id AND a.tenant_id = p.tenant_id
+JOIN application_groups g ON a.group_id = g.id AND a.tenant_id = g.tenant_id
+WHERE a.group_id = @group_id::uuid
+ORDER BY a.application_name ASC;
+
+-- name: GetApplicationsByProfile :many
+-- GetApplicationsByProfile lists the applications bound to one security profile (usage view and delete guard).
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = @tenant_uuid::uuid
+    LIMIT 1
+)
+SELECT
+    a.id,
+    a.client_id,
+    a.application_name,
+    a.is_enabled,
+    a.is_dynamic,
+    a.created_at,
+    a.updated_at,
+    a.last_used_at,
+    p.id AS profile_id,
+    p.profile_name,
+    g.id AS group_id,
+    g.group_name
+FROM applications a
+JOIN tenant ON a.tenant_id = tenant.id
+JOIN application_profiles p ON a.profile_id = p.id AND a.tenant_id = p.tenant_id
+JOIN application_groups g ON a.group_id = g.id AND a.tenant_id = g.tenant_id
+WHERE a.profile_id = @profile_id::uuid
+ORDER BY a.application_name ASC;
+
+-- name: DeleteApplicationGroup :execrows
+-- DeleteApplicationGroup removes a non-system group. Its identity provider bindings cascade.
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = @tenant_uuid::uuid
+    LIMIT 1
+)
+DELETE FROM application_groups g
+USING tenant
+WHERE g.id = @id::uuid
+  AND g.tenant_id = tenant.id
+  AND g.is_system = FALSE;
+
+-- name: DeleteApplicationProfile :execrows
+-- DeleteApplicationProfile removes a non-system profile.
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = @tenant_uuid::uuid
+    LIMIT 1
+)
+DELETE FROM application_profiles p
+USING tenant
+WHERE p.id = @id::uuid
+  AND p.tenant_id = tenant.id
+  AND p.is_system = FALSE;

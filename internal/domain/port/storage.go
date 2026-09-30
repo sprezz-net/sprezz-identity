@@ -133,6 +133,10 @@ type AdminStorage interface {
 
 	CreateApplicationGroup(ctx context.Context, tenantUUID uuid.UUID, group model.ApplicationGroup) error
 	UpdateApplicationGroup(ctx context.Context, tenantUUID uuid.UUID, group model.ApplicationGroup) error
+	DeleteApplicationGroup(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) error
+	DeleteApplicationProfile(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) error
+	GetApplicationsByGroup(ctx context.Context, tenantUUID uuid.UUID, groupID uuid.UUID) ([]model.ApplicationSummary, error)
+	GetApplicationsByProfile(ctx context.Context, tenantUUID uuid.UUID, profileID uuid.UUID) ([]model.ApplicationSummary, error)
 
 	CreateTenant(ctx context.Context, tenant model.Tenant) error
 	GetAllTenants(ctx context.Context) ([]model.Tenant, error)

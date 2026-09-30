@@ -49,6 +49,27 @@ type AdminApplicationUseCaseMock struct {
 	beforeDeleteApplicationCounter uint64
 	DeleteApplicationMock          mAdminApplicationUseCaseMockDeleteApplication
 
+	funcDeleteGroup          func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (err error)
+	funcDeleteGroupOrigin    string
+	inspectFuncDeleteGroup   func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID)
+	afterDeleteGroupCounter  uint64
+	beforeDeleteGroupCounter uint64
+	DeleteGroupMock          mAdminApplicationUseCaseMockDeleteGroup
+
+	funcDeleteProfile          func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (err error)
+	funcDeleteProfileOrigin    string
+	inspectFuncDeleteProfile   func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID)
+	afterDeleteProfileCounter  uint64
+	beforeDeleteProfileCounter uint64
+	DeleteProfileMock          mAdminApplicationUseCaseMockDeleteProfile
+
+	funcGetApplication          func(ctx context.Context, tenantID uuid.UUID, clientID string) (ap1 *model.ApplicationDetailsProps, err error)
+	funcGetApplicationOrigin    string
+	inspectFuncGetApplication   func(ctx context.Context, tenantID uuid.UUID, clientID string)
+	afterGetApplicationCounter  uint64
+	beforeGetApplicationCounter uint64
+	GetApplicationMock          mAdminApplicationUseCaseMockGetApplication
+
 	funcGetApplicationDashboard          func(ctx context.Context, tenantID uuid.UUID) (aa1 []model.ApplicationSummary, aa2 []model.ApplicationProfile, aa3 []model.ApplicationGroup, err error)
 	funcGetApplicationDashboardOrigin    string
 	inspectFuncGetApplicationDashboard   func(ctx context.Context, tenantID uuid.UUID)
@@ -90,6 +111,20 @@ type AdminApplicationUseCaseMock struct {
 	afterGetProfilesCounter  uint64
 	beforeGetProfilesCounter uint64
 	GetProfilesMock          mAdminApplicationUseCaseMockGetProfiles
+
+	funcListApplicationsByGroup          func(ctx context.Context, tenantID uuid.UUID, groupID uuid.UUID) (aa1 []model.ApplicationSummary, err error)
+	funcListApplicationsByGroupOrigin    string
+	inspectFuncListApplicationsByGroup   func(ctx context.Context, tenantID uuid.UUID, groupID uuid.UUID)
+	afterListApplicationsByGroupCounter  uint64
+	beforeListApplicationsByGroupCounter uint64
+	ListApplicationsByGroupMock          mAdminApplicationUseCaseMockListApplicationsByGroup
+
+	funcListApplicationsByProfile          func(ctx context.Context, tenantID uuid.UUID, profileID uuid.UUID) (aa1 []model.ApplicationSummary, err error)
+	funcListApplicationsByProfileOrigin    string
+	inspectFuncListApplicationsByProfile   func(ctx context.Context, tenantID uuid.UUID, profileID uuid.UUID)
+	afterListApplicationsByProfileCounter  uint64
+	beforeListApplicationsByProfileCounter uint64
+	ListApplicationsByProfileMock          mAdminApplicationUseCaseMockListApplicationsByProfile
 
 	funcResetApplicationSecret          func(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand) (err error)
 	funcResetApplicationSecretOrigin    string
@@ -147,6 +182,15 @@ func NewAdminApplicationUseCaseMock(t minimock.Tester) *AdminApplicationUseCaseM
 	m.DeleteApplicationMock = mAdminApplicationUseCaseMockDeleteApplication{mock: m}
 	m.DeleteApplicationMock.callArgs = []*AdminApplicationUseCaseMockDeleteApplicationParams{}
 
+	m.DeleteGroupMock = mAdminApplicationUseCaseMockDeleteGroup{mock: m}
+	m.DeleteGroupMock.callArgs = []*AdminApplicationUseCaseMockDeleteGroupParams{}
+
+	m.DeleteProfileMock = mAdminApplicationUseCaseMockDeleteProfile{mock: m}
+	m.DeleteProfileMock.callArgs = []*AdminApplicationUseCaseMockDeleteProfileParams{}
+
+	m.GetApplicationMock = mAdminApplicationUseCaseMockGetApplication{mock: m}
+	m.GetApplicationMock.callArgs = []*AdminApplicationUseCaseMockGetApplicationParams{}
+
 	m.GetApplicationDashboardMock = mAdminApplicationUseCaseMockGetApplicationDashboard{mock: m}
 	m.GetApplicationDashboardMock.callArgs = []*AdminApplicationUseCaseMockGetApplicationDashboardParams{}
 
@@ -164,6 +208,12 @@ func NewAdminApplicationUseCaseMock(t minimock.Tester) *AdminApplicationUseCaseM
 
 	m.GetProfilesMock = mAdminApplicationUseCaseMockGetProfiles{mock: m}
 	m.GetProfilesMock.callArgs = []*AdminApplicationUseCaseMockGetProfilesParams{}
+
+	m.ListApplicationsByGroupMock = mAdminApplicationUseCaseMockListApplicationsByGroup{mock: m}
+	m.ListApplicationsByGroupMock.callArgs = []*AdminApplicationUseCaseMockListApplicationsByGroupParams{}
+
+	m.ListApplicationsByProfileMock = mAdminApplicationUseCaseMockListApplicationsByProfile{mock: m}
+	m.ListApplicationsByProfileMock.callArgs = []*AdminApplicationUseCaseMockListApplicationsByProfileParams{}
 
 	m.ResetApplicationSecretMock = mAdminApplicationUseCaseMockResetApplicationSecret{mock: m}
 	m.ResetApplicationSecretMock.callArgs = []*AdminApplicationUseCaseMockResetApplicationSecretParams{}
@@ -1582,6 +1632,1126 @@ func (m *AdminApplicationUseCaseMock) MinimockDeleteApplicationInspect() {
 	if !m.DeleteApplicationMock.invocationsDone() && afterDeleteApplicationCounter > 0 {
 		m.t.Errorf("Expected %d calls to AdminApplicationUseCaseMock.DeleteApplication at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.DeleteApplicationMock.expectedInvocations), m.DeleteApplicationMock.expectedInvocationsOrigin, afterDeleteApplicationCounter)
+	}
+}
+
+type mAdminApplicationUseCaseMockDeleteGroup struct {
+	optional           bool
+	mock               *AdminApplicationUseCaseMock
+	defaultExpectation *AdminApplicationUseCaseMockDeleteGroupExpectation
+	expectations       []*AdminApplicationUseCaseMockDeleteGroupExpectation
+
+	callArgs []*AdminApplicationUseCaseMockDeleteGroupParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AdminApplicationUseCaseMockDeleteGroupExpectation specifies expectation struct of the AdminApplicationUseCase.DeleteGroup
+type AdminApplicationUseCaseMockDeleteGroupExpectation struct {
+	mock               *AdminApplicationUseCaseMock
+	params             *AdminApplicationUseCaseMockDeleteGroupParams
+	paramPtrs          *AdminApplicationUseCaseMockDeleteGroupParamPtrs
+	expectationOrigins AdminApplicationUseCaseMockDeleteGroupExpectationOrigins
+	results            *AdminApplicationUseCaseMockDeleteGroupResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AdminApplicationUseCaseMockDeleteGroupParams contains parameters of the AdminApplicationUseCase.DeleteGroup
+type AdminApplicationUseCaseMockDeleteGroupParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+	id       uuid.UUID
+}
+
+// AdminApplicationUseCaseMockDeleteGroupParamPtrs contains pointers to parameters of the AdminApplicationUseCase.DeleteGroup
+type AdminApplicationUseCaseMockDeleteGroupParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+	id       *uuid.UUID
+}
+
+// AdminApplicationUseCaseMockDeleteGroupResults contains results of the AdminApplicationUseCase.DeleteGroup
+type AdminApplicationUseCaseMockDeleteGroupResults struct {
+	err error
+}
+
+// AdminApplicationUseCaseMockDeleteGroupOrigins contains origins of expectations of the AdminApplicationUseCase.DeleteGroup
+type AdminApplicationUseCaseMockDeleteGroupExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+	originId       string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmDeleteGroup *mAdminApplicationUseCaseMockDeleteGroup) Optional() *mAdminApplicationUseCaseMockDeleteGroup {
+	mmDeleteGroup.optional = true
+	return mmDeleteGroup
+}
+
+// Expect sets up expected params for AdminApplicationUseCase.DeleteGroup
+func (mmDeleteGroup *mAdminApplicationUseCaseMockDeleteGroup) Expect(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) *mAdminApplicationUseCaseMockDeleteGroup {
+	if mmDeleteGroup.mock.funcDeleteGroup != nil {
+		mmDeleteGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteGroup mock is already set by Set")
+	}
+
+	if mmDeleteGroup.defaultExpectation == nil {
+		mmDeleteGroup.defaultExpectation = &AdminApplicationUseCaseMockDeleteGroupExpectation{}
+	}
+
+	if mmDeleteGroup.defaultExpectation.paramPtrs != nil {
+		mmDeleteGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteGroup mock is already set by ExpectParams functions")
+	}
+
+	mmDeleteGroup.defaultExpectation.params = &AdminApplicationUseCaseMockDeleteGroupParams{ctx, tenantID, id}
+	mmDeleteGroup.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmDeleteGroup.expectations {
+		if minimock.Equal(e.params, mmDeleteGroup.defaultExpectation.params) {
+			mmDeleteGroup.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmDeleteGroup.defaultExpectation.params)
+		}
+	}
+
+	return mmDeleteGroup
+}
+
+// ExpectCtxParam1 sets up expected param ctx for AdminApplicationUseCase.DeleteGroup
+func (mmDeleteGroup *mAdminApplicationUseCaseMockDeleteGroup) ExpectCtxParam1(ctx context.Context) *mAdminApplicationUseCaseMockDeleteGroup {
+	if mmDeleteGroup.mock.funcDeleteGroup != nil {
+		mmDeleteGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteGroup mock is already set by Set")
+	}
+
+	if mmDeleteGroup.defaultExpectation == nil {
+		mmDeleteGroup.defaultExpectation = &AdminApplicationUseCaseMockDeleteGroupExpectation{}
+	}
+
+	if mmDeleteGroup.defaultExpectation.params != nil {
+		mmDeleteGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteGroup mock is already set by Expect")
+	}
+
+	if mmDeleteGroup.defaultExpectation.paramPtrs == nil {
+		mmDeleteGroup.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockDeleteGroupParamPtrs{}
+	}
+	mmDeleteGroup.defaultExpectation.paramPtrs.ctx = &ctx
+	mmDeleteGroup.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmDeleteGroup
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for AdminApplicationUseCase.DeleteGroup
+func (mmDeleteGroup *mAdminApplicationUseCaseMockDeleteGroup) ExpectTenantIDParam2(tenantID uuid.UUID) *mAdminApplicationUseCaseMockDeleteGroup {
+	if mmDeleteGroup.mock.funcDeleteGroup != nil {
+		mmDeleteGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteGroup mock is already set by Set")
+	}
+
+	if mmDeleteGroup.defaultExpectation == nil {
+		mmDeleteGroup.defaultExpectation = &AdminApplicationUseCaseMockDeleteGroupExpectation{}
+	}
+
+	if mmDeleteGroup.defaultExpectation.params != nil {
+		mmDeleteGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteGroup mock is already set by Expect")
+	}
+
+	if mmDeleteGroup.defaultExpectation.paramPtrs == nil {
+		mmDeleteGroup.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockDeleteGroupParamPtrs{}
+	}
+	mmDeleteGroup.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmDeleteGroup.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmDeleteGroup
+}
+
+// ExpectIdParam3 sets up expected param id for AdminApplicationUseCase.DeleteGroup
+func (mmDeleteGroup *mAdminApplicationUseCaseMockDeleteGroup) ExpectIdParam3(id uuid.UUID) *mAdminApplicationUseCaseMockDeleteGroup {
+	if mmDeleteGroup.mock.funcDeleteGroup != nil {
+		mmDeleteGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteGroup mock is already set by Set")
+	}
+
+	if mmDeleteGroup.defaultExpectation == nil {
+		mmDeleteGroup.defaultExpectation = &AdminApplicationUseCaseMockDeleteGroupExpectation{}
+	}
+
+	if mmDeleteGroup.defaultExpectation.params != nil {
+		mmDeleteGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteGroup mock is already set by Expect")
+	}
+
+	if mmDeleteGroup.defaultExpectation.paramPtrs == nil {
+		mmDeleteGroup.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockDeleteGroupParamPtrs{}
+	}
+	mmDeleteGroup.defaultExpectation.paramPtrs.id = &id
+	mmDeleteGroup.defaultExpectation.expectationOrigins.originId = minimock.CallerInfo(1)
+
+	return mmDeleteGroup
+}
+
+// Inspect accepts an inspector function that has same arguments as the AdminApplicationUseCase.DeleteGroup
+func (mmDeleteGroup *mAdminApplicationUseCaseMockDeleteGroup) Inspect(f func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID)) *mAdminApplicationUseCaseMockDeleteGroup {
+	if mmDeleteGroup.mock.inspectFuncDeleteGroup != nil {
+		mmDeleteGroup.mock.t.Fatalf("Inspect function is already set for AdminApplicationUseCaseMock.DeleteGroup")
+	}
+
+	mmDeleteGroup.mock.inspectFuncDeleteGroup = f
+
+	return mmDeleteGroup
+}
+
+// Return sets up results that will be returned by AdminApplicationUseCase.DeleteGroup
+func (mmDeleteGroup *mAdminApplicationUseCaseMockDeleteGroup) Return(err error) *AdminApplicationUseCaseMock {
+	if mmDeleteGroup.mock.funcDeleteGroup != nil {
+		mmDeleteGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteGroup mock is already set by Set")
+	}
+
+	if mmDeleteGroup.defaultExpectation == nil {
+		mmDeleteGroup.defaultExpectation = &AdminApplicationUseCaseMockDeleteGroupExpectation{mock: mmDeleteGroup.mock}
+	}
+	mmDeleteGroup.defaultExpectation.results = &AdminApplicationUseCaseMockDeleteGroupResults{err}
+	mmDeleteGroup.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmDeleteGroup.mock
+}
+
+// Set uses given function f to mock the AdminApplicationUseCase.DeleteGroup method
+func (mmDeleteGroup *mAdminApplicationUseCaseMockDeleteGroup) Set(f func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (err error)) *AdminApplicationUseCaseMock {
+	if mmDeleteGroup.defaultExpectation != nil {
+		mmDeleteGroup.mock.t.Fatalf("Default expectation is already set for the AdminApplicationUseCase.DeleteGroup method")
+	}
+
+	if len(mmDeleteGroup.expectations) > 0 {
+		mmDeleteGroup.mock.t.Fatalf("Some expectations are already set for the AdminApplicationUseCase.DeleteGroup method")
+	}
+
+	mmDeleteGroup.mock.funcDeleteGroup = f
+	mmDeleteGroup.mock.funcDeleteGroupOrigin = minimock.CallerInfo(1)
+	return mmDeleteGroup.mock
+}
+
+// When sets expectation for the AdminApplicationUseCase.DeleteGroup which will trigger the result defined by the following
+// Then helper
+func (mmDeleteGroup *mAdminApplicationUseCaseMockDeleteGroup) When(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) *AdminApplicationUseCaseMockDeleteGroupExpectation {
+	if mmDeleteGroup.mock.funcDeleteGroup != nil {
+		mmDeleteGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteGroup mock is already set by Set")
+	}
+
+	expectation := &AdminApplicationUseCaseMockDeleteGroupExpectation{
+		mock:               mmDeleteGroup.mock,
+		params:             &AdminApplicationUseCaseMockDeleteGroupParams{ctx, tenantID, id},
+		expectationOrigins: AdminApplicationUseCaseMockDeleteGroupExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmDeleteGroup.expectations = append(mmDeleteGroup.expectations, expectation)
+	return expectation
+}
+
+// Then sets up AdminApplicationUseCase.DeleteGroup return parameters for the expectation previously defined by the When method
+func (e *AdminApplicationUseCaseMockDeleteGroupExpectation) Then(err error) *AdminApplicationUseCaseMock {
+	e.results = &AdminApplicationUseCaseMockDeleteGroupResults{err}
+	return e.mock
+}
+
+// Times sets number of times AdminApplicationUseCase.DeleteGroup should be invoked
+func (mmDeleteGroup *mAdminApplicationUseCaseMockDeleteGroup) Times(n uint64) *mAdminApplicationUseCaseMockDeleteGroup {
+	if n == 0 {
+		mmDeleteGroup.mock.t.Fatalf("Times of AdminApplicationUseCaseMock.DeleteGroup mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmDeleteGroup.expectedInvocations, n)
+	mmDeleteGroup.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmDeleteGroup
+}
+
+func (mmDeleteGroup *mAdminApplicationUseCaseMockDeleteGroup) invocationsDone() bool {
+	if len(mmDeleteGroup.expectations) == 0 && mmDeleteGroup.defaultExpectation == nil && mmDeleteGroup.mock.funcDeleteGroup == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmDeleteGroup.mock.afterDeleteGroupCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmDeleteGroup.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// DeleteGroup implements mm_port.AdminApplicationUseCase
+func (mmDeleteGroup *AdminApplicationUseCaseMock) DeleteGroup(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (err error) {
+	mm_atomic.AddUint64(&mmDeleteGroup.beforeDeleteGroupCounter, 1)
+	defer mm_atomic.AddUint64(&mmDeleteGroup.afterDeleteGroupCounter, 1)
+
+	mmDeleteGroup.t.Helper()
+
+	if mmDeleteGroup.inspectFuncDeleteGroup != nil {
+		mmDeleteGroup.inspectFuncDeleteGroup(ctx, tenantID, id)
+	}
+
+	mm_params := AdminApplicationUseCaseMockDeleteGroupParams{ctx, tenantID, id}
+
+	// Record call args
+	mmDeleteGroup.DeleteGroupMock.mutex.Lock()
+	mmDeleteGroup.DeleteGroupMock.callArgs = append(mmDeleteGroup.DeleteGroupMock.callArgs, &mm_params)
+	mmDeleteGroup.DeleteGroupMock.mutex.Unlock()
+
+	for _, e := range mmDeleteGroup.DeleteGroupMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmDeleteGroup.DeleteGroupMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmDeleteGroup.DeleteGroupMock.defaultExpectation.Counter, 1)
+		mm_want := mmDeleteGroup.DeleteGroupMock.defaultExpectation.params
+		mm_want_ptrs := mmDeleteGroup.DeleteGroupMock.defaultExpectation.paramPtrs
+
+		mm_got := AdminApplicationUseCaseMockDeleteGroupParams{ctx, tenantID, id}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmDeleteGroup.t.Errorf("AdminApplicationUseCaseMock.DeleteGroup got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteGroup.DeleteGroupMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmDeleteGroup.t.Errorf("AdminApplicationUseCaseMock.DeleteGroup got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteGroup.DeleteGroupMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.id != nil && !minimock.Equal(*mm_want_ptrs.id, mm_got.id) {
+				mmDeleteGroup.t.Errorf("AdminApplicationUseCaseMock.DeleteGroup got unexpected parameter id, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteGroup.DeleteGroupMock.defaultExpectation.expectationOrigins.originId, *mm_want_ptrs.id, mm_got.id, minimock.Diff(*mm_want_ptrs.id, mm_got.id))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmDeleteGroup.t.Errorf("AdminApplicationUseCaseMock.DeleteGroup got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmDeleteGroup.DeleteGroupMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmDeleteGroup.DeleteGroupMock.defaultExpectation.results
+		if mm_results == nil {
+			mmDeleteGroup.t.Fatal("No results are set for the AdminApplicationUseCaseMock.DeleteGroup")
+		}
+		return (*mm_results).err
+	}
+	if mmDeleteGroup.funcDeleteGroup != nil {
+		return mmDeleteGroup.funcDeleteGroup(ctx, tenantID, id)
+	}
+	mmDeleteGroup.t.Fatalf("Unexpected call to AdminApplicationUseCaseMock.DeleteGroup. %v %v %v", ctx, tenantID, id)
+	return
+}
+
+// DeleteGroupAfterCounter returns a count of finished AdminApplicationUseCaseMock.DeleteGroup invocations
+func (mmDeleteGroup *AdminApplicationUseCaseMock) DeleteGroupAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteGroup.afterDeleteGroupCounter)
+}
+
+// DeleteGroupBeforeCounter returns a count of AdminApplicationUseCaseMock.DeleteGroup invocations
+func (mmDeleteGroup *AdminApplicationUseCaseMock) DeleteGroupBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteGroup.beforeDeleteGroupCounter)
+}
+
+// Calls returns a list of arguments used in each call to AdminApplicationUseCaseMock.DeleteGroup.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmDeleteGroup *mAdminApplicationUseCaseMockDeleteGroup) Calls() []*AdminApplicationUseCaseMockDeleteGroupParams {
+	mmDeleteGroup.mutex.RLock()
+
+	argCopy := make([]*AdminApplicationUseCaseMockDeleteGroupParams, len(mmDeleteGroup.callArgs))
+	copy(argCopy, mmDeleteGroup.callArgs)
+
+	mmDeleteGroup.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockDeleteGroupDone returns true if the count of the DeleteGroup invocations corresponds
+// the number of defined expectations
+func (m *AdminApplicationUseCaseMock) MinimockDeleteGroupDone() bool {
+	if m.DeleteGroupMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.DeleteGroupMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.DeleteGroupMock.invocationsDone()
+}
+
+// MinimockDeleteGroupInspect logs each unmet expectation
+func (m *AdminApplicationUseCaseMock) MinimockDeleteGroupInspect() {
+	for _, e := range m.DeleteGroupMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.DeleteGroup at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterDeleteGroupCounter := mm_atomic.LoadUint64(&m.afterDeleteGroupCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.DeleteGroupMock.defaultExpectation != nil && afterDeleteGroupCounter < 1 {
+		if m.DeleteGroupMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.DeleteGroup at\n%s", m.DeleteGroupMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.DeleteGroup at\n%s with params: %#v", m.DeleteGroupMock.defaultExpectation.expectationOrigins.origin, *m.DeleteGroupMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcDeleteGroup != nil && afterDeleteGroupCounter < 1 {
+		m.t.Errorf("Expected call to AdminApplicationUseCaseMock.DeleteGroup at\n%s", m.funcDeleteGroupOrigin)
+	}
+
+	if !m.DeleteGroupMock.invocationsDone() && afterDeleteGroupCounter > 0 {
+		m.t.Errorf("Expected %d calls to AdminApplicationUseCaseMock.DeleteGroup at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.DeleteGroupMock.expectedInvocations), m.DeleteGroupMock.expectedInvocationsOrigin, afterDeleteGroupCounter)
+	}
+}
+
+type mAdminApplicationUseCaseMockDeleteProfile struct {
+	optional           bool
+	mock               *AdminApplicationUseCaseMock
+	defaultExpectation *AdminApplicationUseCaseMockDeleteProfileExpectation
+	expectations       []*AdminApplicationUseCaseMockDeleteProfileExpectation
+
+	callArgs []*AdminApplicationUseCaseMockDeleteProfileParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AdminApplicationUseCaseMockDeleteProfileExpectation specifies expectation struct of the AdminApplicationUseCase.DeleteProfile
+type AdminApplicationUseCaseMockDeleteProfileExpectation struct {
+	mock               *AdminApplicationUseCaseMock
+	params             *AdminApplicationUseCaseMockDeleteProfileParams
+	paramPtrs          *AdminApplicationUseCaseMockDeleteProfileParamPtrs
+	expectationOrigins AdminApplicationUseCaseMockDeleteProfileExpectationOrigins
+	results            *AdminApplicationUseCaseMockDeleteProfileResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AdminApplicationUseCaseMockDeleteProfileParams contains parameters of the AdminApplicationUseCase.DeleteProfile
+type AdminApplicationUseCaseMockDeleteProfileParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+	id       uuid.UUID
+}
+
+// AdminApplicationUseCaseMockDeleteProfileParamPtrs contains pointers to parameters of the AdminApplicationUseCase.DeleteProfile
+type AdminApplicationUseCaseMockDeleteProfileParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+	id       *uuid.UUID
+}
+
+// AdminApplicationUseCaseMockDeleteProfileResults contains results of the AdminApplicationUseCase.DeleteProfile
+type AdminApplicationUseCaseMockDeleteProfileResults struct {
+	err error
+}
+
+// AdminApplicationUseCaseMockDeleteProfileOrigins contains origins of expectations of the AdminApplicationUseCase.DeleteProfile
+type AdminApplicationUseCaseMockDeleteProfileExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+	originId       string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmDeleteProfile *mAdminApplicationUseCaseMockDeleteProfile) Optional() *mAdminApplicationUseCaseMockDeleteProfile {
+	mmDeleteProfile.optional = true
+	return mmDeleteProfile
+}
+
+// Expect sets up expected params for AdminApplicationUseCase.DeleteProfile
+func (mmDeleteProfile *mAdminApplicationUseCaseMockDeleteProfile) Expect(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) *mAdminApplicationUseCaseMockDeleteProfile {
+	if mmDeleteProfile.mock.funcDeleteProfile != nil {
+		mmDeleteProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteProfile mock is already set by Set")
+	}
+
+	if mmDeleteProfile.defaultExpectation == nil {
+		mmDeleteProfile.defaultExpectation = &AdminApplicationUseCaseMockDeleteProfileExpectation{}
+	}
+
+	if mmDeleteProfile.defaultExpectation.paramPtrs != nil {
+		mmDeleteProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteProfile mock is already set by ExpectParams functions")
+	}
+
+	mmDeleteProfile.defaultExpectation.params = &AdminApplicationUseCaseMockDeleteProfileParams{ctx, tenantID, id}
+	mmDeleteProfile.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmDeleteProfile.expectations {
+		if minimock.Equal(e.params, mmDeleteProfile.defaultExpectation.params) {
+			mmDeleteProfile.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmDeleteProfile.defaultExpectation.params)
+		}
+	}
+
+	return mmDeleteProfile
+}
+
+// ExpectCtxParam1 sets up expected param ctx for AdminApplicationUseCase.DeleteProfile
+func (mmDeleteProfile *mAdminApplicationUseCaseMockDeleteProfile) ExpectCtxParam1(ctx context.Context) *mAdminApplicationUseCaseMockDeleteProfile {
+	if mmDeleteProfile.mock.funcDeleteProfile != nil {
+		mmDeleteProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteProfile mock is already set by Set")
+	}
+
+	if mmDeleteProfile.defaultExpectation == nil {
+		mmDeleteProfile.defaultExpectation = &AdminApplicationUseCaseMockDeleteProfileExpectation{}
+	}
+
+	if mmDeleteProfile.defaultExpectation.params != nil {
+		mmDeleteProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteProfile mock is already set by Expect")
+	}
+
+	if mmDeleteProfile.defaultExpectation.paramPtrs == nil {
+		mmDeleteProfile.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockDeleteProfileParamPtrs{}
+	}
+	mmDeleteProfile.defaultExpectation.paramPtrs.ctx = &ctx
+	mmDeleteProfile.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmDeleteProfile
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for AdminApplicationUseCase.DeleteProfile
+func (mmDeleteProfile *mAdminApplicationUseCaseMockDeleteProfile) ExpectTenantIDParam2(tenantID uuid.UUID) *mAdminApplicationUseCaseMockDeleteProfile {
+	if mmDeleteProfile.mock.funcDeleteProfile != nil {
+		mmDeleteProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteProfile mock is already set by Set")
+	}
+
+	if mmDeleteProfile.defaultExpectation == nil {
+		mmDeleteProfile.defaultExpectation = &AdminApplicationUseCaseMockDeleteProfileExpectation{}
+	}
+
+	if mmDeleteProfile.defaultExpectation.params != nil {
+		mmDeleteProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteProfile mock is already set by Expect")
+	}
+
+	if mmDeleteProfile.defaultExpectation.paramPtrs == nil {
+		mmDeleteProfile.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockDeleteProfileParamPtrs{}
+	}
+	mmDeleteProfile.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmDeleteProfile.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmDeleteProfile
+}
+
+// ExpectIdParam3 sets up expected param id for AdminApplicationUseCase.DeleteProfile
+func (mmDeleteProfile *mAdminApplicationUseCaseMockDeleteProfile) ExpectIdParam3(id uuid.UUID) *mAdminApplicationUseCaseMockDeleteProfile {
+	if mmDeleteProfile.mock.funcDeleteProfile != nil {
+		mmDeleteProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteProfile mock is already set by Set")
+	}
+
+	if mmDeleteProfile.defaultExpectation == nil {
+		mmDeleteProfile.defaultExpectation = &AdminApplicationUseCaseMockDeleteProfileExpectation{}
+	}
+
+	if mmDeleteProfile.defaultExpectation.params != nil {
+		mmDeleteProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteProfile mock is already set by Expect")
+	}
+
+	if mmDeleteProfile.defaultExpectation.paramPtrs == nil {
+		mmDeleteProfile.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockDeleteProfileParamPtrs{}
+	}
+	mmDeleteProfile.defaultExpectation.paramPtrs.id = &id
+	mmDeleteProfile.defaultExpectation.expectationOrigins.originId = minimock.CallerInfo(1)
+
+	return mmDeleteProfile
+}
+
+// Inspect accepts an inspector function that has same arguments as the AdminApplicationUseCase.DeleteProfile
+func (mmDeleteProfile *mAdminApplicationUseCaseMockDeleteProfile) Inspect(f func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID)) *mAdminApplicationUseCaseMockDeleteProfile {
+	if mmDeleteProfile.mock.inspectFuncDeleteProfile != nil {
+		mmDeleteProfile.mock.t.Fatalf("Inspect function is already set for AdminApplicationUseCaseMock.DeleteProfile")
+	}
+
+	mmDeleteProfile.mock.inspectFuncDeleteProfile = f
+
+	return mmDeleteProfile
+}
+
+// Return sets up results that will be returned by AdminApplicationUseCase.DeleteProfile
+func (mmDeleteProfile *mAdminApplicationUseCaseMockDeleteProfile) Return(err error) *AdminApplicationUseCaseMock {
+	if mmDeleteProfile.mock.funcDeleteProfile != nil {
+		mmDeleteProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteProfile mock is already set by Set")
+	}
+
+	if mmDeleteProfile.defaultExpectation == nil {
+		mmDeleteProfile.defaultExpectation = &AdminApplicationUseCaseMockDeleteProfileExpectation{mock: mmDeleteProfile.mock}
+	}
+	mmDeleteProfile.defaultExpectation.results = &AdminApplicationUseCaseMockDeleteProfileResults{err}
+	mmDeleteProfile.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmDeleteProfile.mock
+}
+
+// Set uses given function f to mock the AdminApplicationUseCase.DeleteProfile method
+func (mmDeleteProfile *mAdminApplicationUseCaseMockDeleteProfile) Set(f func(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (err error)) *AdminApplicationUseCaseMock {
+	if mmDeleteProfile.defaultExpectation != nil {
+		mmDeleteProfile.mock.t.Fatalf("Default expectation is already set for the AdminApplicationUseCase.DeleteProfile method")
+	}
+
+	if len(mmDeleteProfile.expectations) > 0 {
+		mmDeleteProfile.mock.t.Fatalf("Some expectations are already set for the AdminApplicationUseCase.DeleteProfile method")
+	}
+
+	mmDeleteProfile.mock.funcDeleteProfile = f
+	mmDeleteProfile.mock.funcDeleteProfileOrigin = minimock.CallerInfo(1)
+	return mmDeleteProfile.mock
+}
+
+// When sets expectation for the AdminApplicationUseCase.DeleteProfile which will trigger the result defined by the following
+// Then helper
+func (mmDeleteProfile *mAdminApplicationUseCaseMockDeleteProfile) When(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) *AdminApplicationUseCaseMockDeleteProfileExpectation {
+	if mmDeleteProfile.mock.funcDeleteProfile != nil {
+		mmDeleteProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.DeleteProfile mock is already set by Set")
+	}
+
+	expectation := &AdminApplicationUseCaseMockDeleteProfileExpectation{
+		mock:               mmDeleteProfile.mock,
+		params:             &AdminApplicationUseCaseMockDeleteProfileParams{ctx, tenantID, id},
+		expectationOrigins: AdminApplicationUseCaseMockDeleteProfileExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmDeleteProfile.expectations = append(mmDeleteProfile.expectations, expectation)
+	return expectation
+}
+
+// Then sets up AdminApplicationUseCase.DeleteProfile return parameters for the expectation previously defined by the When method
+func (e *AdminApplicationUseCaseMockDeleteProfileExpectation) Then(err error) *AdminApplicationUseCaseMock {
+	e.results = &AdminApplicationUseCaseMockDeleteProfileResults{err}
+	return e.mock
+}
+
+// Times sets number of times AdminApplicationUseCase.DeleteProfile should be invoked
+func (mmDeleteProfile *mAdminApplicationUseCaseMockDeleteProfile) Times(n uint64) *mAdminApplicationUseCaseMockDeleteProfile {
+	if n == 0 {
+		mmDeleteProfile.mock.t.Fatalf("Times of AdminApplicationUseCaseMock.DeleteProfile mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmDeleteProfile.expectedInvocations, n)
+	mmDeleteProfile.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmDeleteProfile
+}
+
+func (mmDeleteProfile *mAdminApplicationUseCaseMockDeleteProfile) invocationsDone() bool {
+	if len(mmDeleteProfile.expectations) == 0 && mmDeleteProfile.defaultExpectation == nil && mmDeleteProfile.mock.funcDeleteProfile == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmDeleteProfile.mock.afterDeleteProfileCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmDeleteProfile.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// DeleteProfile implements mm_port.AdminApplicationUseCase
+func (mmDeleteProfile *AdminApplicationUseCaseMock) DeleteProfile(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (err error) {
+	mm_atomic.AddUint64(&mmDeleteProfile.beforeDeleteProfileCounter, 1)
+	defer mm_atomic.AddUint64(&mmDeleteProfile.afterDeleteProfileCounter, 1)
+
+	mmDeleteProfile.t.Helper()
+
+	if mmDeleteProfile.inspectFuncDeleteProfile != nil {
+		mmDeleteProfile.inspectFuncDeleteProfile(ctx, tenantID, id)
+	}
+
+	mm_params := AdminApplicationUseCaseMockDeleteProfileParams{ctx, tenantID, id}
+
+	// Record call args
+	mmDeleteProfile.DeleteProfileMock.mutex.Lock()
+	mmDeleteProfile.DeleteProfileMock.callArgs = append(mmDeleteProfile.DeleteProfileMock.callArgs, &mm_params)
+	mmDeleteProfile.DeleteProfileMock.mutex.Unlock()
+
+	for _, e := range mmDeleteProfile.DeleteProfileMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmDeleteProfile.DeleteProfileMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmDeleteProfile.DeleteProfileMock.defaultExpectation.Counter, 1)
+		mm_want := mmDeleteProfile.DeleteProfileMock.defaultExpectation.params
+		mm_want_ptrs := mmDeleteProfile.DeleteProfileMock.defaultExpectation.paramPtrs
+
+		mm_got := AdminApplicationUseCaseMockDeleteProfileParams{ctx, tenantID, id}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmDeleteProfile.t.Errorf("AdminApplicationUseCaseMock.DeleteProfile got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteProfile.DeleteProfileMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmDeleteProfile.t.Errorf("AdminApplicationUseCaseMock.DeleteProfile got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteProfile.DeleteProfileMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.id != nil && !minimock.Equal(*mm_want_ptrs.id, mm_got.id) {
+				mmDeleteProfile.t.Errorf("AdminApplicationUseCaseMock.DeleteProfile got unexpected parameter id, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteProfile.DeleteProfileMock.defaultExpectation.expectationOrigins.originId, *mm_want_ptrs.id, mm_got.id, minimock.Diff(*mm_want_ptrs.id, mm_got.id))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmDeleteProfile.t.Errorf("AdminApplicationUseCaseMock.DeleteProfile got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmDeleteProfile.DeleteProfileMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmDeleteProfile.DeleteProfileMock.defaultExpectation.results
+		if mm_results == nil {
+			mmDeleteProfile.t.Fatal("No results are set for the AdminApplicationUseCaseMock.DeleteProfile")
+		}
+		return (*mm_results).err
+	}
+	if mmDeleteProfile.funcDeleteProfile != nil {
+		return mmDeleteProfile.funcDeleteProfile(ctx, tenantID, id)
+	}
+	mmDeleteProfile.t.Fatalf("Unexpected call to AdminApplicationUseCaseMock.DeleteProfile. %v %v %v", ctx, tenantID, id)
+	return
+}
+
+// DeleteProfileAfterCounter returns a count of finished AdminApplicationUseCaseMock.DeleteProfile invocations
+func (mmDeleteProfile *AdminApplicationUseCaseMock) DeleteProfileAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteProfile.afterDeleteProfileCounter)
+}
+
+// DeleteProfileBeforeCounter returns a count of AdminApplicationUseCaseMock.DeleteProfile invocations
+func (mmDeleteProfile *AdminApplicationUseCaseMock) DeleteProfileBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteProfile.beforeDeleteProfileCounter)
+}
+
+// Calls returns a list of arguments used in each call to AdminApplicationUseCaseMock.DeleteProfile.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmDeleteProfile *mAdminApplicationUseCaseMockDeleteProfile) Calls() []*AdminApplicationUseCaseMockDeleteProfileParams {
+	mmDeleteProfile.mutex.RLock()
+
+	argCopy := make([]*AdminApplicationUseCaseMockDeleteProfileParams, len(mmDeleteProfile.callArgs))
+	copy(argCopy, mmDeleteProfile.callArgs)
+
+	mmDeleteProfile.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockDeleteProfileDone returns true if the count of the DeleteProfile invocations corresponds
+// the number of defined expectations
+func (m *AdminApplicationUseCaseMock) MinimockDeleteProfileDone() bool {
+	if m.DeleteProfileMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.DeleteProfileMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.DeleteProfileMock.invocationsDone()
+}
+
+// MinimockDeleteProfileInspect logs each unmet expectation
+func (m *AdminApplicationUseCaseMock) MinimockDeleteProfileInspect() {
+	for _, e := range m.DeleteProfileMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.DeleteProfile at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterDeleteProfileCounter := mm_atomic.LoadUint64(&m.afterDeleteProfileCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.DeleteProfileMock.defaultExpectation != nil && afterDeleteProfileCounter < 1 {
+		if m.DeleteProfileMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.DeleteProfile at\n%s", m.DeleteProfileMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.DeleteProfile at\n%s with params: %#v", m.DeleteProfileMock.defaultExpectation.expectationOrigins.origin, *m.DeleteProfileMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcDeleteProfile != nil && afterDeleteProfileCounter < 1 {
+		m.t.Errorf("Expected call to AdminApplicationUseCaseMock.DeleteProfile at\n%s", m.funcDeleteProfileOrigin)
+	}
+
+	if !m.DeleteProfileMock.invocationsDone() && afterDeleteProfileCounter > 0 {
+		m.t.Errorf("Expected %d calls to AdminApplicationUseCaseMock.DeleteProfile at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.DeleteProfileMock.expectedInvocations), m.DeleteProfileMock.expectedInvocationsOrigin, afterDeleteProfileCounter)
+	}
+}
+
+type mAdminApplicationUseCaseMockGetApplication struct {
+	optional           bool
+	mock               *AdminApplicationUseCaseMock
+	defaultExpectation *AdminApplicationUseCaseMockGetApplicationExpectation
+	expectations       []*AdminApplicationUseCaseMockGetApplicationExpectation
+
+	callArgs []*AdminApplicationUseCaseMockGetApplicationParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AdminApplicationUseCaseMockGetApplicationExpectation specifies expectation struct of the AdminApplicationUseCase.GetApplication
+type AdminApplicationUseCaseMockGetApplicationExpectation struct {
+	mock               *AdminApplicationUseCaseMock
+	params             *AdminApplicationUseCaseMockGetApplicationParams
+	paramPtrs          *AdminApplicationUseCaseMockGetApplicationParamPtrs
+	expectationOrigins AdminApplicationUseCaseMockGetApplicationExpectationOrigins
+	results            *AdminApplicationUseCaseMockGetApplicationResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AdminApplicationUseCaseMockGetApplicationParams contains parameters of the AdminApplicationUseCase.GetApplication
+type AdminApplicationUseCaseMockGetApplicationParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+	clientID string
+}
+
+// AdminApplicationUseCaseMockGetApplicationParamPtrs contains pointers to parameters of the AdminApplicationUseCase.GetApplication
+type AdminApplicationUseCaseMockGetApplicationParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+	clientID *string
+}
+
+// AdminApplicationUseCaseMockGetApplicationResults contains results of the AdminApplicationUseCase.GetApplication
+type AdminApplicationUseCaseMockGetApplicationResults struct {
+	ap1 *model.ApplicationDetailsProps
+	err error
+}
+
+// AdminApplicationUseCaseMockGetApplicationOrigins contains origins of expectations of the AdminApplicationUseCase.GetApplication
+type AdminApplicationUseCaseMockGetApplicationExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+	originClientID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetApplication *mAdminApplicationUseCaseMockGetApplication) Optional() *mAdminApplicationUseCaseMockGetApplication {
+	mmGetApplication.optional = true
+	return mmGetApplication
+}
+
+// Expect sets up expected params for AdminApplicationUseCase.GetApplication
+func (mmGetApplication *mAdminApplicationUseCaseMockGetApplication) Expect(ctx context.Context, tenantID uuid.UUID, clientID string) *mAdminApplicationUseCaseMockGetApplication {
+	if mmGetApplication.mock.funcGetApplication != nil {
+		mmGetApplication.mock.t.Fatalf("AdminApplicationUseCaseMock.GetApplication mock is already set by Set")
+	}
+
+	if mmGetApplication.defaultExpectation == nil {
+		mmGetApplication.defaultExpectation = &AdminApplicationUseCaseMockGetApplicationExpectation{}
+	}
+
+	if mmGetApplication.defaultExpectation.paramPtrs != nil {
+		mmGetApplication.mock.t.Fatalf("AdminApplicationUseCaseMock.GetApplication mock is already set by ExpectParams functions")
+	}
+
+	mmGetApplication.defaultExpectation.params = &AdminApplicationUseCaseMockGetApplicationParams{ctx, tenantID, clientID}
+	mmGetApplication.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetApplication.expectations {
+		if minimock.Equal(e.params, mmGetApplication.defaultExpectation.params) {
+			mmGetApplication.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetApplication.defaultExpectation.params)
+		}
+	}
+
+	return mmGetApplication
+}
+
+// ExpectCtxParam1 sets up expected param ctx for AdminApplicationUseCase.GetApplication
+func (mmGetApplication *mAdminApplicationUseCaseMockGetApplication) ExpectCtxParam1(ctx context.Context) *mAdminApplicationUseCaseMockGetApplication {
+	if mmGetApplication.mock.funcGetApplication != nil {
+		mmGetApplication.mock.t.Fatalf("AdminApplicationUseCaseMock.GetApplication mock is already set by Set")
+	}
+
+	if mmGetApplication.defaultExpectation == nil {
+		mmGetApplication.defaultExpectation = &AdminApplicationUseCaseMockGetApplicationExpectation{}
+	}
+
+	if mmGetApplication.defaultExpectation.params != nil {
+		mmGetApplication.mock.t.Fatalf("AdminApplicationUseCaseMock.GetApplication mock is already set by Expect")
+	}
+
+	if mmGetApplication.defaultExpectation.paramPtrs == nil {
+		mmGetApplication.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockGetApplicationParamPtrs{}
+	}
+	mmGetApplication.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetApplication.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetApplication
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for AdminApplicationUseCase.GetApplication
+func (mmGetApplication *mAdminApplicationUseCaseMockGetApplication) ExpectTenantIDParam2(tenantID uuid.UUID) *mAdminApplicationUseCaseMockGetApplication {
+	if mmGetApplication.mock.funcGetApplication != nil {
+		mmGetApplication.mock.t.Fatalf("AdminApplicationUseCaseMock.GetApplication mock is already set by Set")
+	}
+
+	if mmGetApplication.defaultExpectation == nil {
+		mmGetApplication.defaultExpectation = &AdminApplicationUseCaseMockGetApplicationExpectation{}
+	}
+
+	if mmGetApplication.defaultExpectation.params != nil {
+		mmGetApplication.mock.t.Fatalf("AdminApplicationUseCaseMock.GetApplication mock is already set by Expect")
+	}
+
+	if mmGetApplication.defaultExpectation.paramPtrs == nil {
+		mmGetApplication.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockGetApplicationParamPtrs{}
+	}
+	mmGetApplication.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetApplication.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetApplication
+}
+
+// ExpectClientIDParam3 sets up expected param clientID for AdminApplicationUseCase.GetApplication
+func (mmGetApplication *mAdminApplicationUseCaseMockGetApplication) ExpectClientIDParam3(clientID string) *mAdminApplicationUseCaseMockGetApplication {
+	if mmGetApplication.mock.funcGetApplication != nil {
+		mmGetApplication.mock.t.Fatalf("AdminApplicationUseCaseMock.GetApplication mock is already set by Set")
+	}
+
+	if mmGetApplication.defaultExpectation == nil {
+		mmGetApplication.defaultExpectation = &AdminApplicationUseCaseMockGetApplicationExpectation{}
+	}
+
+	if mmGetApplication.defaultExpectation.params != nil {
+		mmGetApplication.mock.t.Fatalf("AdminApplicationUseCaseMock.GetApplication mock is already set by Expect")
+	}
+
+	if mmGetApplication.defaultExpectation.paramPtrs == nil {
+		mmGetApplication.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockGetApplicationParamPtrs{}
+	}
+	mmGetApplication.defaultExpectation.paramPtrs.clientID = &clientID
+	mmGetApplication.defaultExpectation.expectationOrigins.originClientID = minimock.CallerInfo(1)
+
+	return mmGetApplication
+}
+
+// Inspect accepts an inspector function that has same arguments as the AdminApplicationUseCase.GetApplication
+func (mmGetApplication *mAdminApplicationUseCaseMockGetApplication) Inspect(f func(ctx context.Context, tenantID uuid.UUID, clientID string)) *mAdminApplicationUseCaseMockGetApplication {
+	if mmGetApplication.mock.inspectFuncGetApplication != nil {
+		mmGetApplication.mock.t.Fatalf("Inspect function is already set for AdminApplicationUseCaseMock.GetApplication")
+	}
+
+	mmGetApplication.mock.inspectFuncGetApplication = f
+
+	return mmGetApplication
+}
+
+// Return sets up results that will be returned by AdminApplicationUseCase.GetApplication
+func (mmGetApplication *mAdminApplicationUseCaseMockGetApplication) Return(ap1 *model.ApplicationDetailsProps, err error) *AdminApplicationUseCaseMock {
+	if mmGetApplication.mock.funcGetApplication != nil {
+		mmGetApplication.mock.t.Fatalf("AdminApplicationUseCaseMock.GetApplication mock is already set by Set")
+	}
+
+	if mmGetApplication.defaultExpectation == nil {
+		mmGetApplication.defaultExpectation = &AdminApplicationUseCaseMockGetApplicationExpectation{mock: mmGetApplication.mock}
+	}
+	mmGetApplication.defaultExpectation.results = &AdminApplicationUseCaseMockGetApplicationResults{ap1, err}
+	mmGetApplication.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetApplication.mock
+}
+
+// Set uses given function f to mock the AdminApplicationUseCase.GetApplication method
+func (mmGetApplication *mAdminApplicationUseCaseMockGetApplication) Set(f func(ctx context.Context, tenantID uuid.UUID, clientID string) (ap1 *model.ApplicationDetailsProps, err error)) *AdminApplicationUseCaseMock {
+	if mmGetApplication.defaultExpectation != nil {
+		mmGetApplication.mock.t.Fatalf("Default expectation is already set for the AdminApplicationUseCase.GetApplication method")
+	}
+
+	if len(mmGetApplication.expectations) > 0 {
+		mmGetApplication.mock.t.Fatalf("Some expectations are already set for the AdminApplicationUseCase.GetApplication method")
+	}
+
+	mmGetApplication.mock.funcGetApplication = f
+	mmGetApplication.mock.funcGetApplicationOrigin = minimock.CallerInfo(1)
+	return mmGetApplication.mock
+}
+
+// When sets expectation for the AdminApplicationUseCase.GetApplication which will trigger the result defined by the following
+// Then helper
+func (mmGetApplication *mAdminApplicationUseCaseMockGetApplication) When(ctx context.Context, tenantID uuid.UUID, clientID string) *AdminApplicationUseCaseMockGetApplicationExpectation {
+	if mmGetApplication.mock.funcGetApplication != nil {
+		mmGetApplication.mock.t.Fatalf("AdminApplicationUseCaseMock.GetApplication mock is already set by Set")
+	}
+
+	expectation := &AdminApplicationUseCaseMockGetApplicationExpectation{
+		mock:               mmGetApplication.mock,
+		params:             &AdminApplicationUseCaseMockGetApplicationParams{ctx, tenantID, clientID},
+		expectationOrigins: AdminApplicationUseCaseMockGetApplicationExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetApplication.expectations = append(mmGetApplication.expectations, expectation)
+	return expectation
+}
+
+// Then sets up AdminApplicationUseCase.GetApplication return parameters for the expectation previously defined by the When method
+func (e *AdminApplicationUseCaseMockGetApplicationExpectation) Then(ap1 *model.ApplicationDetailsProps, err error) *AdminApplicationUseCaseMock {
+	e.results = &AdminApplicationUseCaseMockGetApplicationResults{ap1, err}
+	return e.mock
+}
+
+// Times sets number of times AdminApplicationUseCase.GetApplication should be invoked
+func (mmGetApplication *mAdminApplicationUseCaseMockGetApplication) Times(n uint64) *mAdminApplicationUseCaseMockGetApplication {
+	if n == 0 {
+		mmGetApplication.mock.t.Fatalf("Times of AdminApplicationUseCaseMock.GetApplication mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetApplication.expectedInvocations, n)
+	mmGetApplication.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetApplication
+}
+
+func (mmGetApplication *mAdminApplicationUseCaseMockGetApplication) invocationsDone() bool {
+	if len(mmGetApplication.expectations) == 0 && mmGetApplication.defaultExpectation == nil && mmGetApplication.mock.funcGetApplication == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetApplication.mock.afterGetApplicationCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetApplication.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetApplication implements mm_port.AdminApplicationUseCase
+func (mmGetApplication *AdminApplicationUseCaseMock) GetApplication(ctx context.Context, tenantID uuid.UUID, clientID string) (ap1 *model.ApplicationDetailsProps, err error) {
+	mm_atomic.AddUint64(&mmGetApplication.beforeGetApplicationCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetApplication.afterGetApplicationCounter, 1)
+
+	mmGetApplication.t.Helper()
+
+	if mmGetApplication.inspectFuncGetApplication != nil {
+		mmGetApplication.inspectFuncGetApplication(ctx, tenantID, clientID)
+	}
+
+	mm_params := AdminApplicationUseCaseMockGetApplicationParams{ctx, tenantID, clientID}
+
+	// Record call args
+	mmGetApplication.GetApplicationMock.mutex.Lock()
+	mmGetApplication.GetApplicationMock.callArgs = append(mmGetApplication.GetApplicationMock.callArgs, &mm_params)
+	mmGetApplication.GetApplicationMock.mutex.Unlock()
+
+	for _, e := range mmGetApplication.GetApplicationMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.ap1, e.results.err
+		}
+	}
+
+	if mmGetApplication.GetApplicationMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetApplication.GetApplicationMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetApplication.GetApplicationMock.defaultExpectation.params
+		mm_want_ptrs := mmGetApplication.GetApplicationMock.defaultExpectation.paramPtrs
+
+		mm_got := AdminApplicationUseCaseMockGetApplicationParams{ctx, tenantID, clientID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetApplication.t.Errorf("AdminApplicationUseCaseMock.GetApplication got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetApplication.GetApplicationMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetApplication.t.Errorf("AdminApplicationUseCaseMock.GetApplication got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetApplication.GetApplicationMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.clientID != nil && !minimock.Equal(*mm_want_ptrs.clientID, mm_got.clientID) {
+				mmGetApplication.t.Errorf("AdminApplicationUseCaseMock.GetApplication got unexpected parameter clientID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetApplication.GetApplicationMock.defaultExpectation.expectationOrigins.originClientID, *mm_want_ptrs.clientID, mm_got.clientID, minimock.Diff(*mm_want_ptrs.clientID, mm_got.clientID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetApplication.t.Errorf("AdminApplicationUseCaseMock.GetApplication got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetApplication.GetApplicationMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetApplication.GetApplicationMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetApplication.t.Fatal("No results are set for the AdminApplicationUseCaseMock.GetApplication")
+		}
+		return (*mm_results).ap1, (*mm_results).err
+	}
+	if mmGetApplication.funcGetApplication != nil {
+		return mmGetApplication.funcGetApplication(ctx, tenantID, clientID)
+	}
+	mmGetApplication.t.Fatalf("Unexpected call to AdminApplicationUseCaseMock.GetApplication. %v %v %v", ctx, tenantID, clientID)
+	return
+}
+
+// GetApplicationAfterCounter returns a count of finished AdminApplicationUseCaseMock.GetApplication invocations
+func (mmGetApplication *AdminApplicationUseCaseMock) GetApplicationAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetApplication.afterGetApplicationCounter)
+}
+
+// GetApplicationBeforeCounter returns a count of AdminApplicationUseCaseMock.GetApplication invocations
+func (mmGetApplication *AdminApplicationUseCaseMock) GetApplicationBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetApplication.beforeGetApplicationCounter)
+}
+
+// Calls returns a list of arguments used in each call to AdminApplicationUseCaseMock.GetApplication.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetApplication *mAdminApplicationUseCaseMockGetApplication) Calls() []*AdminApplicationUseCaseMockGetApplicationParams {
+	mmGetApplication.mutex.RLock()
+
+	argCopy := make([]*AdminApplicationUseCaseMockGetApplicationParams, len(mmGetApplication.callArgs))
+	copy(argCopy, mmGetApplication.callArgs)
+
+	mmGetApplication.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetApplicationDone returns true if the count of the GetApplication invocations corresponds
+// the number of defined expectations
+func (m *AdminApplicationUseCaseMock) MinimockGetApplicationDone() bool {
+	if m.GetApplicationMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetApplicationMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetApplicationMock.invocationsDone()
+}
+
+// MinimockGetApplicationInspect logs each unmet expectation
+func (m *AdminApplicationUseCaseMock) MinimockGetApplicationInspect() {
+	for _, e := range m.GetApplicationMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.GetApplication at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetApplicationCounter := mm_atomic.LoadUint64(&m.afterGetApplicationCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetApplicationMock.defaultExpectation != nil && afterGetApplicationCounter < 1 {
+		if m.GetApplicationMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.GetApplication at\n%s", m.GetApplicationMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.GetApplication at\n%s with params: %#v", m.GetApplicationMock.defaultExpectation.expectationOrigins.origin, *m.GetApplicationMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetApplication != nil && afterGetApplicationCounter < 1 {
+		m.t.Errorf("Expected call to AdminApplicationUseCaseMock.GetApplication at\n%s", m.funcGetApplicationOrigin)
+	}
+
+	if !m.GetApplicationMock.invocationsDone() && afterGetApplicationCounter > 0 {
+		m.t.Errorf("Expected %d calls to AdminApplicationUseCaseMock.GetApplication at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetApplicationMock.expectedInvocations), m.GetApplicationMock.expectedInvocationsOrigin, afterGetApplicationCounter)
 	}
 }
 
@@ -3738,6 +4908,754 @@ func (m *AdminApplicationUseCaseMock) MinimockGetProfilesInspect() {
 	}
 }
 
+type mAdminApplicationUseCaseMockListApplicationsByGroup struct {
+	optional           bool
+	mock               *AdminApplicationUseCaseMock
+	defaultExpectation *AdminApplicationUseCaseMockListApplicationsByGroupExpectation
+	expectations       []*AdminApplicationUseCaseMockListApplicationsByGroupExpectation
+
+	callArgs []*AdminApplicationUseCaseMockListApplicationsByGroupParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AdminApplicationUseCaseMockListApplicationsByGroupExpectation specifies expectation struct of the AdminApplicationUseCase.ListApplicationsByGroup
+type AdminApplicationUseCaseMockListApplicationsByGroupExpectation struct {
+	mock               *AdminApplicationUseCaseMock
+	params             *AdminApplicationUseCaseMockListApplicationsByGroupParams
+	paramPtrs          *AdminApplicationUseCaseMockListApplicationsByGroupParamPtrs
+	expectationOrigins AdminApplicationUseCaseMockListApplicationsByGroupExpectationOrigins
+	results            *AdminApplicationUseCaseMockListApplicationsByGroupResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AdminApplicationUseCaseMockListApplicationsByGroupParams contains parameters of the AdminApplicationUseCase.ListApplicationsByGroup
+type AdminApplicationUseCaseMockListApplicationsByGroupParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+	groupID  uuid.UUID
+}
+
+// AdminApplicationUseCaseMockListApplicationsByGroupParamPtrs contains pointers to parameters of the AdminApplicationUseCase.ListApplicationsByGroup
+type AdminApplicationUseCaseMockListApplicationsByGroupParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+	groupID  *uuid.UUID
+}
+
+// AdminApplicationUseCaseMockListApplicationsByGroupResults contains results of the AdminApplicationUseCase.ListApplicationsByGroup
+type AdminApplicationUseCaseMockListApplicationsByGroupResults struct {
+	aa1 []model.ApplicationSummary
+	err error
+}
+
+// AdminApplicationUseCaseMockListApplicationsByGroupOrigins contains origins of expectations of the AdminApplicationUseCase.ListApplicationsByGroup
+type AdminApplicationUseCaseMockListApplicationsByGroupExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+	originGroupID  string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmListApplicationsByGroup *mAdminApplicationUseCaseMockListApplicationsByGroup) Optional() *mAdminApplicationUseCaseMockListApplicationsByGroup {
+	mmListApplicationsByGroup.optional = true
+	return mmListApplicationsByGroup
+}
+
+// Expect sets up expected params for AdminApplicationUseCase.ListApplicationsByGroup
+func (mmListApplicationsByGroup *mAdminApplicationUseCaseMockListApplicationsByGroup) Expect(ctx context.Context, tenantID uuid.UUID, groupID uuid.UUID) *mAdminApplicationUseCaseMockListApplicationsByGroup {
+	if mmListApplicationsByGroup.mock.funcListApplicationsByGroup != nil {
+		mmListApplicationsByGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByGroup mock is already set by Set")
+	}
+
+	if mmListApplicationsByGroup.defaultExpectation == nil {
+		mmListApplicationsByGroup.defaultExpectation = &AdminApplicationUseCaseMockListApplicationsByGroupExpectation{}
+	}
+
+	if mmListApplicationsByGroup.defaultExpectation.paramPtrs != nil {
+		mmListApplicationsByGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByGroup mock is already set by ExpectParams functions")
+	}
+
+	mmListApplicationsByGroup.defaultExpectation.params = &AdminApplicationUseCaseMockListApplicationsByGroupParams{ctx, tenantID, groupID}
+	mmListApplicationsByGroup.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmListApplicationsByGroup.expectations {
+		if minimock.Equal(e.params, mmListApplicationsByGroup.defaultExpectation.params) {
+			mmListApplicationsByGroup.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmListApplicationsByGroup.defaultExpectation.params)
+		}
+	}
+
+	return mmListApplicationsByGroup
+}
+
+// ExpectCtxParam1 sets up expected param ctx for AdminApplicationUseCase.ListApplicationsByGroup
+func (mmListApplicationsByGroup *mAdminApplicationUseCaseMockListApplicationsByGroup) ExpectCtxParam1(ctx context.Context) *mAdminApplicationUseCaseMockListApplicationsByGroup {
+	if mmListApplicationsByGroup.mock.funcListApplicationsByGroup != nil {
+		mmListApplicationsByGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByGroup mock is already set by Set")
+	}
+
+	if mmListApplicationsByGroup.defaultExpectation == nil {
+		mmListApplicationsByGroup.defaultExpectation = &AdminApplicationUseCaseMockListApplicationsByGroupExpectation{}
+	}
+
+	if mmListApplicationsByGroup.defaultExpectation.params != nil {
+		mmListApplicationsByGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByGroup mock is already set by Expect")
+	}
+
+	if mmListApplicationsByGroup.defaultExpectation.paramPtrs == nil {
+		mmListApplicationsByGroup.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockListApplicationsByGroupParamPtrs{}
+	}
+	mmListApplicationsByGroup.defaultExpectation.paramPtrs.ctx = &ctx
+	mmListApplicationsByGroup.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmListApplicationsByGroup
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for AdminApplicationUseCase.ListApplicationsByGroup
+func (mmListApplicationsByGroup *mAdminApplicationUseCaseMockListApplicationsByGroup) ExpectTenantIDParam2(tenantID uuid.UUID) *mAdminApplicationUseCaseMockListApplicationsByGroup {
+	if mmListApplicationsByGroup.mock.funcListApplicationsByGroup != nil {
+		mmListApplicationsByGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByGroup mock is already set by Set")
+	}
+
+	if mmListApplicationsByGroup.defaultExpectation == nil {
+		mmListApplicationsByGroup.defaultExpectation = &AdminApplicationUseCaseMockListApplicationsByGroupExpectation{}
+	}
+
+	if mmListApplicationsByGroup.defaultExpectation.params != nil {
+		mmListApplicationsByGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByGroup mock is already set by Expect")
+	}
+
+	if mmListApplicationsByGroup.defaultExpectation.paramPtrs == nil {
+		mmListApplicationsByGroup.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockListApplicationsByGroupParamPtrs{}
+	}
+	mmListApplicationsByGroup.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmListApplicationsByGroup.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmListApplicationsByGroup
+}
+
+// ExpectGroupIDParam3 sets up expected param groupID for AdminApplicationUseCase.ListApplicationsByGroup
+func (mmListApplicationsByGroup *mAdminApplicationUseCaseMockListApplicationsByGroup) ExpectGroupIDParam3(groupID uuid.UUID) *mAdminApplicationUseCaseMockListApplicationsByGroup {
+	if mmListApplicationsByGroup.mock.funcListApplicationsByGroup != nil {
+		mmListApplicationsByGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByGroup mock is already set by Set")
+	}
+
+	if mmListApplicationsByGroup.defaultExpectation == nil {
+		mmListApplicationsByGroup.defaultExpectation = &AdminApplicationUseCaseMockListApplicationsByGroupExpectation{}
+	}
+
+	if mmListApplicationsByGroup.defaultExpectation.params != nil {
+		mmListApplicationsByGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByGroup mock is already set by Expect")
+	}
+
+	if mmListApplicationsByGroup.defaultExpectation.paramPtrs == nil {
+		mmListApplicationsByGroup.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockListApplicationsByGroupParamPtrs{}
+	}
+	mmListApplicationsByGroup.defaultExpectation.paramPtrs.groupID = &groupID
+	mmListApplicationsByGroup.defaultExpectation.expectationOrigins.originGroupID = minimock.CallerInfo(1)
+
+	return mmListApplicationsByGroup
+}
+
+// Inspect accepts an inspector function that has same arguments as the AdminApplicationUseCase.ListApplicationsByGroup
+func (mmListApplicationsByGroup *mAdminApplicationUseCaseMockListApplicationsByGroup) Inspect(f func(ctx context.Context, tenantID uuid.UUID, groupID uuid.UUID)) *mAdminApplicationUseCaseMockListApplicationsByGroup {
+	if mmListApplicationsByGroup.mock.inspectFuncListApplicationsByGroup != nil {
+		mmListApplicationsByGroup.mock.t.Fatalf("Inspect function is already set for AdminApplicationUseCaseMock.ListApplicationsByGroup")
+	}
+
+	mmListApplicationsByGroup.mock.inspectFuncListApplicationsByGroup = f
+
+	return mmListApplicationsByGroup
+}
+
+// Return sets up results that will be returned by AdminApplicationUseCase.ListApplicationsByGroup
+func (mmListApplicationsByGroup *mAdminApplicationUseCaseMockListApplicationsByGroup) Return(aa1 []model.ApplicationSummary, err error) *AdminApplicationUseCaseMock {
+	if mmListApplicationsByGroup.mock.funcListApplicationsByGroup != nil {
+		mmListApplicationsByGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByGroup mock is already set by Set")
+	}
+
+	if mmListApplicationsByGroup.defaultExpectation == nil {
+		mmListApplicationsByGroup.defaultExpectation = &AdminApplicationUseCaseMockListApplicationsByGroupExpectation{mock: mmListApplicationsByGroup.mock}
+	}
+	mmListApplicationsByGroup.defaultExpectation.results = &AdminApplicationUseCaseMockListApplicationsByGroupResults{aa1, err}
+	mmListApplicationsByGroup.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmListApplicationsByGroup.mock
+}
+
+// Set uses given function f to mock the AdminApplicationUseCase.ListApplicationsByGroup method
+func (mmListApplicationsByGroup *mAdminApplicationUseCaseMockListApplicationsByGroup) Set(f func(ctx context.Context, tenantID uuid.UUID, groupID uuid.UUID) (aa1 []model.ApplicationSummary, err error)) *AdminApplicationUseCaseMock {
+	if mmListApplicationsByGroup.defaultExpectation != nil {
+		mmListApplicationsByGroup.mock.t.Fatalf("Default expectation is already set for the AdminApplicationUseCase.ListApplicationsByGroup method")
+	}
+
+	if len(mmListApplicationsByGroup.expectations) > 0 {
+		mmListApplicationsByGroup.mock.t.Fatalf("Some expectations are already set for the AdminApplicationUseCase.ListApplicationsByGroup method")
+	}
+
+	mmListApplicationsByGroup.mock.funcListApplicationsByGroup = f
+	mmListApplicationsByGroup.mock.funcListApplicationsByGroupOrigin = minimock.CallerInfo(1)
+	return mmListApplicationsByGroup.mock
+}
+
+// When sets expectation for the AdminApplicationUseCase.ListApplicationsByGroup which will trigger the result defined by the following
+// Then helper
+func (mmListApplicationsByGroup *mAdminApplicationUseCaseMockListApplicationsByGroup) When(ctx context.Context, tenantID uuid.UUID, groupID uuid.UUID) *AdminApplicationUseCaseMockListApplicationsByGroupExpectation {
+	if mmListApplicationsByGroup.mock.funcListApplicationsByGroup != nil {
+		mmListApplicationsByGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByGroup mock is already set by Set")
+	}
+
+	expectation := &AdminApplicationUseCaseMockListApplicationsByGroupExpectation{
+		mock:               mmListApplicationsByGroup.mock,
+		params:             &AdminApplicationUseCaseMockListApplicationsByGroupParams{ctx, tenantID, groupID},
+		expectationOrigins: AdminApplicationUseCaseMockListApplicationsByGroupExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmListApplicationsByGroup.expectations = append(mmListApplicationsByGroup.expectations, expectation)
+	return expectation
+}
+
+// Then sets up AdminApplicationUseCase.ListApplicationsByGroup return parameters for the expectation previously defined by the When method
+func (e *AdminApplicationUseCaseMockListApplicationsByGroupExpectation) Then(aa1 []model.ApplicationSummary, err error) *AdminApplicationUseCaseMock {
+	e.results = &AdminApplicationUseCaseMockListApplicationsByGroupResults{aa1, err}
+	return e.mock
+}
+
+// Times sets number of times AdminApplicationUseCase.ListApplicationsByGroup should be invoked
+func (mmListApplicationsByGroup *mAdminApplicationUseCaseMockListApplicationsByGroup) Times(n uint64) *mAdminApplicationUseCaseMockListApplicationsByGroup {
+	if n == 0 {
+		mmListApplicationsByGroup.mock.t.Fatalf("Times of AdminApplicationUseCaseMock.ListApplicationsByGroup mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmListApplicationsByGroup.expectedInvocations, n)
+	mmListApplicationsByGroup.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmListApplicationsByGroup
+}
+
+func (mmListApplicationsByGroup *mAdminApplicationUseCaseMockListApplicationsByGroup) invocationsDone() bool {
+	if len(mmListApplicationsByGroup.expectations) == 0 && mmListApplicationsByGroup.defaultExpectation == nil && mmListApplicationsByGroup.mock.funcListApplicationsByGroup == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmListApplicationsByGroup.mock.afterListApplicationsByGroupCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmListApplicationsByGroup.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// ListApplicationsByGroup implements mm_port.AdminApplicationUseCase
+func (mmListApplicationsByGroup *AdminApplicationUseCaseMock) ListApplicationsByGroup(ctx context.Context, tenantID uuid.UUID, groupID uuid.UUID) (aa1 []model.ApplicationSummary, err error) {
+	mm_atomic.AddUint64(&mmListApplicationsByGroup.beforeListApplicationsByGroupCounter, 1)
+	defer mm_atomic.AddUint64(&mmListApplicationsByGroup.afterListApplicationsByGroupCounter, 1)
+
+	mmListApplicationsByGroup.t.Helper()
+
+	if mmListApplicationsByGroup.inspectFuncListApplicationsByGroup != nil {
+		mmListApplicationsByGroup.inspectFuncListApplicationsByGroup(ctx, tenantID, groupID)
+	}
+
+	mm_params := AdminApplicationUseCaseMockListApplicationsByGroupParams{ctx, tenantID, groupID}
+
+	// Record call args
+	mmListApplicationsByGroup.ListApplicationsByGroupMock.mutex.Lock()
+	mmListApplicationsByGroup.ListApplicationsByGroupMock.callArgs = append(mmListApplicationsByGroup.ListApplicationsByGroupMock.callArgs, &mm_params)
+	mmListApplicationsByGroup.ListApplicationsByGroupMock.mutex.Unlock()
+
+	for _, e := range mmListApplicationsByGroup.ListApplicationsByGroupMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.aa1, e.results.err
+		}
+	}
+
+	if mmListApplicationsByGroup.ListApplicationsByGroupMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmListApplicationsByGroup.ListApplicationsByGroupMock.defaultExpectation.Counter, 1)
+		mm_want := mmListApplicationsByGroup.ListApplicationsByGroupMock.defaultExpectation.params
+		mm_want_ptrs := mmListApplicationsByGroup.ListApplicationsByGroupMock.defaultExpectation.paramPtrs
+
+		mm_got := AdminApplicationUseCaseMockListApplicationsByGroupParams{ctx, tenantID, groupID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmListApplicationsByGroup.t.Errorf("AdminApplicationUseCaseMock.ListApplicationsByGroup got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmListApplicationsByGroup.ListApplicationsByGroupMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmListApplicationsByGroup.t.Errorf("AdminApplicationUseCaseMock.ListApplicationsByGroup got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmListApplicationsByGroup.ListApplicationsByGroupMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.groupID != nil && !minimock.Equal(*mm_want_ptrs.groupID, mm_got.groupID) {
+				mmListApplicationsByGroup.t.Errorf("AdminApplicationUseCaseMock.ListApplicationsByGroup got unexpected parameter groupID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmListApplicationsByGroup.ListApplicationsByGroupMock.defaultExpectation.expectationOrigins.originGroupID, *mm_want_ptrs.groupID, mm_got.groupID, minimock.Diff(*mm_want_ptrs.groupID, mm_got.groupID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmListApplicationsByGroup.t.Errorf("AdminApplicationUseCaseMock.ListApplicationsByGroup got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmListApplicationsByGroup.ListApplicationsByGroupMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmListApplicationsByGroup.ListApplicationsByGroupMock.defaultExpectation.results
+		if mm_results == nil {
+			mmListApplicationsByGroup.t.Fatal("No results are set for the AdminApplicationUseCaseMock.ListApplicationsByGroup")
+		}
+		return (*mm_results).aa1, (*mm_results).err
+	}
+	if mmListApplicationsByGroup.funcListApplicationsByGroup != nil {
+		return mmListApplicationsByGroup.funcListApplicationsByGroup(ctx, tenantID, groupID)
+	}
+	mmListApplicationsByGroup.t.Fatalf("Unexpected call to AdminApplicationUseCaseMock.ListApplicationsByGroup. %v %v %v", ctx, tenantID, groupID)
+	return
+}
+
+// ListApplicationsByGroupAfterCounter returns a count of finished AdminApplicationUseCaseMock.ListApplicationsByGroup invocations
+func (mmListApplicationsByGroup *AdminApplicationUseCaseMock) ListApplicationsByGroupAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmListApplicationsByGroup.afterListApplicationsByGroupCounter)
+}
+
+// ListApplicationsByGroupBeforeCounter returns a count of AdminApplicationUseCaseMock.ListApplicationsByGroup invocations
+func (mmListApplicationsByGroup *AdminApplicationUseCaseMock) ListApplicationsByGroupBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmListApplicationsByGroup.beforeListApplicationsByGroupCounter)
+}
+
+// Calls returns a list of arguments used in each call to AdminApplicationUseCaseMock.ListApplicationsByGroup.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmListApplicationsByGroup *mAdminApplicationUseCaseMockListApplicationsByGroup) Calls() []*AdminApplicationUseCaseMockListApplicationsByGroupParams {
+	mmListApplicationsByGroup.mutex.RLock()
+
+	argCopy := make([]*AdminApplicationUseCaseMockListApplicationsByGroupParams, len(mmListApplicationsByGroup.callArgs))
+	copy(argCopy, mmListApplicationsByGroup.callArgs)
+
+	mmListApplicationsByGroup.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockListApplicationsByGroupDone returns true if the count of the ListApplicationsByGroup invocations corresponds
+// the number of defined expectations
+func (m *AdminApplicationUseCaseMock) MinimockListApplicationsByGroupDone() bool {
+	if m.ListApplicationsByGroupMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.ListApplicationsByGroupMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.ListApplicationsByGroupMock.invocationsDone()
+}
+
+// MinimockListApplicationsByGroupInspect logs each unmet expectation
+func (m *AdminApplicationUseCaseMock) MinimockListApplicationsByGroupInspect() {
+	for _, e := range m.ListApplicationsByGroupMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.ListApplicationsByGroup at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterListApplicationsByGroupCounter := mm_atomic.LoadUint64(&m.afterListApplicationsByGroupCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.ListApplicationsByGroupMock.defaultExpectation != nil && afterListApplicationsByGroupCounter < 1 {
+		if m.ListApplicationsByGroupMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.ListApplicationsByGroup at\n%s", m.ListApplicationsByGroupMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.ListApplicationsByGroup at\n%s with params: %#v", m.ListApplicationsByGroupMock.defaultExpectation.expectationOrigins.origin, *m.ListApplicationsByGroupMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcListApplicationsByGroup != nil && afterListApplicationsByGroupCounter < 1 {
+		m.t.Errorf("Expected call to AdminApplicationUseCaseMock.ListApplicationsByGroup at\n%s", m.funcListApplicationsByGroupOrigin)
+	}
+
+	if !m.ListApplicationsByGroupMock.invocationsDone() && afterListApplicationsByGroupCounter > 0 {
+		m.t.Errorf("Expected %d calls to AdminApplicationUseCaseMock.ListApplicationsByGroup at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.ListApplicationsByGroupMock.expectedInvocations), m.ListApplicationsByGroupMock.expectedInvocationsOrigin, afterListApplicationsByGroupCounter)
+	}
+}
+
+type mAdminApplicationUseCaseMockListApplicationsByProfile struct {
+	optional           bool
+	mock               *AdminApplicationUseCaseMock
+	defaultExpectation *AdminApplicationUseCaseMockListApplicationsByProfileExpectation
+	expectations       []*AdminApplicationUseCaseMockListApplicationsByProfileExpectation
+
+	callArgs []*AdminApplicationUseCaseMockListApplicationsByProfileParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AdminApplicationUseCaseMockListApplicationsByProfileExpectation specifies expectation struct of the AdminApplicationUseCase.ListApplicationsByProfile
+type AdminApplicationUseCaseMockListApplicationsByProfileExpectation struct {
+	mock               *AdminApplicationUseCaseMock
+	params             *AdminApplicationUseCaseMockListApplicationsByProfileParams
+	paramPtrs          *AdminApplicationUseCaseMockListApplicationsByProfileParamPtrs
+	expectationOrigins AdminApplicationUseCaseMockListApplicationsByProfileExpectationOrigins
+	results            *AdminApplicationUseCaseMockListApplicationsByProfileResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AdminApplicationUseCaseMockListApplicationsByProfileParams contains parameters of the AdminApplicationUseCase.ListApplicationsByProfile
+type AdminApplicationUseCaseMockListApplicationsByProfileParams struct {
+	ctx       context.Context
+	tenantID  uuid.UUID
+	profileID uuid.UUID
+}
+
+// AdminApplicationUseCaseMockListApplicationsByProfileParamPtrs contains pointers to parameters of the AdminApplicationUseCase.ListApplicationsByProfile
+type AdminApplicationUseCaseMockListApplicationsByProfileParamPtrs struct {
+	ctx       *context.Context
+	tenantID  *uuid.UUID
+	profileID *uuid.UUID
+}
+
+// AdminApplicationUseCaseMockListApplicationsByProfileResults contains results of the AdminApplicationUseCase.ListApplicationsByProfile
+type AdminApplicationUseCaseMockListApplicationsByProfileResults struct {
+	aa1 []model.ApplicationSummary
+	err error
+}
+
+// AdminApplicationUseCaseMockListApplicationsByProfileOrigins contains origins of expectations of the AdminApplicationUseCase.ListApplicationsByProfile
+type AdminApplicationUseCaseMockListApplicationsByProfileExpectationOrigins struct {
+	origin          string
+	originCtx       string
+	originTenantID  string
+	originProfileID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmListApplicationsByProfile *mAdminApplicationUseCaseMockListApplicationsByProfile) Optional() *mAdminApplicationUseCaseMockListApplicationsByProfile {
+	mmListApplicationsByProfile.optional = true
+	return mmListApplicationsByProfile
+}
+
+// Expect sets up expected params for AdminApplicationUseCase.ListApplicationsByProfile
+func (mmListApplicationsByProfile *mAdminApplicationUseCaseMockListApplicationsByProfile) Expect(ctx context.Context, tenantID uuid.UUID, profileID uuid.UUID) *mAdminApplicationUseCaseMockListApplicationsByProfile {
+	if mmListApplicationsByProfile.mock.funcListApplicationsByProfile != nil {
+		mmListApplicationsByProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByProfile mock is already set by Set")
+	}
+
+	if mmListApplicationsByProfile.defaultExpectation == nil {
+		mmListApplicationsByProfile.defaultExpectation = &AdminApplicationUseCaseMockListApplicationsByProfileExpectation{}
+	}
+
+	if mmListApplicationsByProfile.defaultExpectation.paramPtrs != nil {
+		mmListApplicationsByProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByProfile mock is already set by ExpectParams functions")
+	}
+
+	mmListApplicationsByProfile.defaultExpectation.params = &AdminApplicationUseCaseMockListApplicationsByProfileParams{ctx, tenantID, profileID}
+	mmListApplicationsByProfile.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmListApplicationsByProfile.expectations {
+		if minimock.Equal(e.params, mmListApplicationsByProfile.defaultExpectation.params) {
+			mmListApplicationsByProfile.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmListApplicationsByProfile.defaultExpectation.params)
+		}
+	}
+
+	return mmListApplicationsByProfile
+}
+
+// ExpectCtxParam1 sets up expected param ctx for AdminApplicationUseCase.ListApplicationsByProfile
+func (mmListApplicationsByProfile *mAdminApplicationUseCaseMockListApplicationsByProfile) ExpectCtxParam1(ctx context.Context) *mAdminApplicationUseCaseMockListApplicationsByProfile {
+	if mmListApplicationsByProfile.mock.funcListApplicationsByProfile != nil {
+		mmListApplicationsByProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByProfile mock is already set by Set")
+	}
+
+	if mmListApplicationsByProfile.defaultExpectation == nil {
+		mmListApplicationsByProfile.defaultExpectation = &AdminApplicationUseCaseMockListApplicationsByProfileExpectation{}
+	}
+
+	if mmListApplicationsByProfile.defaultExpectation.params != nil {
+		mmListApplicationsByProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByProfile mock is already set by Expect")
+	}
+
+	if mmListApplicationsByProfile.defaultExpectation.paramPtrs == nil {
+		mmListApplicationsByProfile.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockListApplicationsByProfileParamPtrs{}
+	}
+	mmListApplicationsByProfile.defaultExpectation.paramPtrs.ctx = &ctx
+	mmListApplicationsByProfile.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmListApplicationsByProfile
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for AdminApplicationUseCase.ListApplicationsByProfile
+func (mmListApplicationsByProfile *mAdminApplicationUseCaseMockListApplicationsByProfile) ExpectTenantIDParam2(tenantID uuid.UUID) *mAdminApplicationUseCaseMockListApplicationsByProfile {
+	if mmListApplicationsByProfile.mock.funcListApplicationsByProfile != nil {
+		mmListApplicationsByProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByProfile mock is already set by Set")
+	}
+
+	if mmListApplicationsByProfile.defaultExpectation == nil {
+		mmListApplicationsByProfile.defaultExpectation = &AdminApplicationUseCaseMockListApplicationsByProfileExpectation{}
+	}
+
+	if mmListApplicationsByProfile.defaultExpectation.params != nil {
+		mmListApplicationsByProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByProfile mock is already set by Expect")
+	}
+
+	if mmListApplicationsByProfile.defaultExpectation.paramPtrs == nil {
+		mmListApplicationsByProfile.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockListApplicationsByProfileParamPtrs{}
+	}
+	mmListApplicationsByProfile.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmListApplicationsByProfile.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmListApplicationsByProfile
+}
+
+// ExpectProfileIDParam3 sets up expected param profileID for AdminApplicationUseCase.ListApplicationsByProfile
+func (mmListApplicationsByProfile *mAdminApplicationUseCaseMockListApplicationsByProfile) ExpectProfileIDParam3(profileID uuid.UUID) *mAdminApplicationUseCaseMockListApplicationsByProfile {
+	if mmListApplicationsByProfile.mock.funcListApplicationsByProfile != nil {
+		mmListApplicationsByProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByProfile mock is already set by Set")
+	}
+
+	if mmListApplicationsByProfile.defaultExpectation == nil {
+		mmListApplicationsByProfile.defaultExpectation = &AdminApplicationUseCaseMockListApplicationsByProfileExpectation{}
+	}
+
+	if mmListApplicationsByProfile.defaultExpectation.params != nil {
+		mmListApplicationsByProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByProfile mock is already set by Expect")
+	}
+
+	if mmListApplicationsByProfile.defaultExpectation.paramPtrs == nil {
+		mmListApplicationsByProfile.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockListApplicationsByProfileParamPtrs{}
+	}
+	mmListApplicationsByProfile.defaultExpectation.paramPtrs.profileID = &profileID
+	mmListApplicationsByProfile.defaultExpectation.expectationOrigins.originProfileID = minimock.CallerInfo(1)
+
+	return mmListApplicationsByProfile
+}
+
+// Inspect accepts an inspector function that has same arguments as the AdminApplicationUseCase.ListApplicationsByProfile
+func (mmListApplicationsByProfile *mAdminApplicationUseCaseMockListApplicationsByProfile) Inspect(f func(ctx context.Context, tenantID uuid.UUID, profileID uuid.UUID)) *mAdminApplicationUseCaseMockListApplicationsByProfile {
+	if mmListApplicationsByProfile.mock.inspectFuncListApplicationsByProfile != nil {
+		mmListApplicationsByProfile.mock.t.Fatalf("Inspect function is already set for AdminApplicationUseCaseMock.ListApplicationsByProfile")
+	}
+
+	mmListApplicationsByProfile.mock.inspectFuncListApplicationsByProfile = f
+
+	return mmListApplicationsByProfile
+}
+
+// Return sets up results that will be returned by AdminApplicationUseCase.ListApplicationsByProfile
+func (mmListApplicationsByProfile *mAdminApplicationUseCaseMockListApplicationsByProfile) Return(aa1 []model.ApplicationSummary, err error) *AdminApplicationUseCaseMock {
+	if mmListApplicationsByProfile.mock.funcListApplicationsByProfile != nil {
+		mmListApplicationsByProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByProfile mock is already set by Set")
+	}
+
+	if mmListApplicationsByProfile.defaultExpectation == nil {
+		mmListApplicationsByProfile.defaultExpectation = &AdminApplicationUseCaseMockListApplicationsByProfileExpectation{mock: mmListApplicationsByProfile.mock}
+	}
+	mmListApplicationsByProfile.defaultExpectation.results = &AdminApplicationUseCaseMockListApplicationsByProfileResults{aa1, err}
+	mmListApplicationsByProfile.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmListApplicationsByProfile.mock
+}
+
+// Set uses given function f to mock the AdminApplicationUseCase.ListApplicationsByProfile method
+func (mmListApplicationsByProfile *mAdminApplicationUseCaseMockListApplicationsByProfile) Set(f func(ctx context.Context, tenantID uuid.UUID, profileID uuid.UUID) (aa1 []model.ApplicationSummary, err error)) *AdminApplicationUseCaseMock {
+	if mmListApplicationsByProfile.defaultExpectation != nil {
+		mmListApplicationsByProfile.mock.t.Fatalf("Default expectation is already set for the AdminApplicationUseCase.ListApplicationsByProfile method")
+	}
+
+	if len(mmListApplicationsByProfile.expectations) > 0 {
+		mmListApplicationsByProfile.mock.t.Fatalf("Some expectations are already set for the AdminApplicationUseCase.ListApplicationsByProfile method")
+	}
+
+	mmListApplicationsByProfile.mock.funcListApplicationsByProfile = f
+	mmListApplicationsByProfile.mock.funcListApplicationsByProfileOrigin = minimock.CallerInfo(1)
+	return mmListApplicationsByProfile.mock
+}
+
+// When sets expectation for the AdminApplicationUseCase.ListApplicationsByProfile which will trigger the result defined by the following
+// Then helper
+func (mmListApplicationsByProfile *mAdminApplicationUseCaseMockListApplicationsByProfile) When(ctx context.Context, tenantID uuid.UUID, profileID uuid.UUID) *AdminApplicationUseCaseMockListApplicationsByProfileExpectation {
+	if mmListApplicationsByProfile.mock.funcListApplicationsByProfile != nil {
+		mmListApplicationsByProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.ListApplicationsByProfile mock is already set by Set")
+	}
+
+	expectation := &AdminApplicationUseCaseMockListApplicationsByProfileExpectation{
+		mock:               mmListApplicationsByProfile.mock,
+		params:             &AdminApplicationUseCaseMockListApplicationsByProfileParams{ctx, tenantID, profileID},
+		expectationOrigins: AdminApplicationUseCaseMockListApplicationsByProfileExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmListApplicationsByProfile.expectations = append(mmListApplicationsByProfile.expectations, expectation)
+	return expectation
+}
+
+// Then sets up AdminApplicationUseCase.ListApplicationsByProfile return parameters for the expectation previously defined by the When method
+func (e *AdminApplicationUseCaseMockListApplicationsByProfileExpectation) Then(aa1 []model.ApplicationSummary, err error) *AdminApplicationUseCaseMock {
+	e.results = &AdminApplicationUseCaseMockListApplicationsByProfileResults{aa1, err}
+	return e.mock
+}
+
+// Times sets number of times AdminApplicationUseCase.ListApplicationsByProfile should be invoked
+func (mmListApplicationsByProfile *mAdminApplicationUseCaseMockListApplicationsByProfile) Times(n uint64) *mAdminApplicationUseCaseMockListApplicationsByProfile {
+	if n == 0 {
+		mmListApplicationsByProfile.mock.t.Fatalf("Times of AdminApplicationUseCaseMock.ListApplicationsByProfile mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmListApplicationsByProfile.expectedInvocations, n)
+	mmListApplicationsByProfile.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmListApplicationsByProfile
+}
+
+func (mmListApplicationsByProfile *mAdminApplicationUseCaseMockListApplicationsByProfile) invocationsDone() bool {
+	if len(mmListApplicationsByProfile.expectations) == 0 && mmListApplicationsByProfile.defaultExpectation == nil && mmListApplicationsByProfile.mock.funcListApplicationsByProfile == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmListApplicationsByProfile.mock.afterListApplicationsByProfileCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmListApplicationsByProfile.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// ListApplicationsByProfile implements mm_port.AdminApplicationUseCase
+func (mmListApplicationsByProfile *AdminApplicationUseCaseMock) ListApplicationsByProfile(ctx context.Context, tenantID uuid.UUID, profileID uuid.UUID) (aa1 []model.ApplicationSummary, err error) {
+	mm_atomic.AddUint64(&mmListApplicationsByProfile.beforeListApplicationsByProfileCounter, 1)
+	defer mm_atomic.AddUint64(&mmListApplicationsByProfile.afterListApplicationsByProfileCounter, 1)
+
+	mmListApplicationsByProfile.t.Helper()
+
+	if mmListApplicationsByProfile.inspectFuncListApplicationsByProfile != nil {
+		mmListApplicationsByProfile.inspectFuncListApplicationsByProfile(ctx, tenantID, profileID)
+	}
+
+	mm_params := AdminApplicationUseCaseMockListApplicationsByProfileParams{ctx, tenantID, profileID}
+
+	// Record call args
+	mmListApplicationsByProfile.ListApplicationsByProfileMock.mutex.Lock()
+	mmListApplicationsByProfile.ListApplicationsByProfileMock.callArgs = append(mmListApplicationsByProfile.ListApplicationsByProfileMock.callArgs, &mm_params)
+	mmListApplicationsByProfile.ListApplicationsByProfileMock.mutex.Unlock()
+
+	for _, e := range mmListApplicationsByProfile.ListApplicationsByProfileMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.aa1, e.results.err
+		}
+	}
+
+	if mmListApplicationsByProfile.ListApplicationsByProfileMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmListApplicationsByProfile.ListApplicationsByProfileMock.defaultExpectation.Counter, 1)
+		mm_want := mmListApplicationsByProfile.ListApplicationsByProfileMock.defaultExpectation.params
+		mm_want_ptrs := mmListApplicationsByProfile.ListApplicationsByProfileMock.defaultExpectation.paramPtrs
+
+		mm_got := AdminApplicationUseCaseMockListApplicationsByProfileParams{ctx, tenantID, profileID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmListApplicationsByProfile.t.Errorf("AdminApplicationUseCaseMock.ListApplicationsByProfile got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmListApplicationsByProfile.ListApplicationsByProfileMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmListApplicationsByProfile.t.Errorf("AdminApplicationUseCaseMock.ListApplicationsByProfile got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmListApplicationsByProfile.ListApplicationsByProfileMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.profileID != nil && !minimock.Equal(*mm_want_ptrs.profileID, mm_got.profileID) {
+				mmListApplicationsByProfile.t.Errorf("AdminApplicationUseCaseMock.ListApplicationsByProfile got unexpected parameter profileID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmListApplicationsByProfile.ListApplicationsByProfileMock.defaultExpectation.expectationOrigins.originProfileID, *mm_want_ptrs.profileID, mm_got.profileID, minimock.Diff(*mm_want_ptrs.profileID, mm_got.profileID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmListApplicationsByProfile.t.Errorf("AdminApplicationUseCaseMock.ListApplicationsByProfile got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmListApplicationsByProfile.ListApplicationsByProfileMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmListApplicationsByProfile.ListApplicationsByProfileMock.defaultExpectation.results
+		if mm_results == nil {
+			mmListApplicationsByProfile.t.Fatal("No results are set for the AdminApplicationUseCaseMock.ListApplicationsByProfile")
+		}
+		return (*mm_results).aa1, (*mm_results).err
+	}
+	if mmListApplicationsByProfile.funcListApplicationsByProfile != nil {
+		return mmListApplicationsByProfile.funcListApplicationsByProfile(ctx, tenantID, profileID)
+	}
+	mmListApplicationsByProfile.t.Fatalf("Unexpected call to AdminApplicationUseCaseMock.ListApplicationsByProfile. %v %v %v", ctx, tenantID, profileID)
+	return
+}
+
+// ListApplicationsByProfileAfterCounter returns a count of finished AdminApplicationUseCaseMock.ListApplicationsByProfile invocations
+func (mmListApplicationsByProfile *AdminApplicationUseCaseMock) ListApplicationsByProfileAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmListApplicationsByProfile.afterListApplicationsByProfileCounter)
+}
+
+// ListApplicationsByProfileBeforeCounter returns a count of AdminApplicationUseCaseMock.ListApplicationsByProfile invocations
+func (mmListApplicationsByProfile *AdminApplicationUseCaseMock) ListApplicationsByProfileBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmListApplicationsByProfile.beforeListApplicationsByProfileCounter)
+}
+
+// Calls returns a list of arguments used in each call to AdminApplicationUseCaseMock.ListApplicationsByProfile.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmListApplicationsByProfile *mAdminApplicationUseCaseMockListApplicationsByProfile) Calls() []*AdminApplicationUseCaseMockListApplicationsByProfileParams {
+	mmListApplicationsByProfile.mutex.RLock()
+
+	argCopy := make([]*AdminApplicationUseCaseMockListApplicationsByProfileParams, len(mmListApplicationsByProfile.callArgs))
+	copy(argCopy, mmListApplicationsByProfile.callArgs)
+
+	mmListApplicationsByProfile.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockListApplicationsByProfileDone returns true if the count of the ListApplicationsByProfile invocations corresponds
+// the number of defined expectations
+func (m *AdminApplicationUseCaseMock) MinimockListApplicationsByProfileDone() bool {
+	if m.ListApplicationsByProfileMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.ListApplicationsByProfileMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.ListApplicationsByProfileMock.invocationsDone()
+}
+
+// MinimockListApplicationsByProfileInspect logs each unmet expectation
+func (m *AdminApplicationUseCaseMock) MinimockListApplicationsByProfileInspect() {
+	for _, e := range m.ListApplicationsByProfileMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.ListApplicationsByProfile at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterListApplicationsByProfileCounter := mm_atomic.LoadUint64(&m.afterListApplicationsByProfileCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.ListApplicationsByProfileMock.defaultExpectation != nil && afterListApplicationsByProfileCounter < 1 {
+		if m.ListApplicationsByProfileMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.ListApplicationsByProfile at\n%s", m.ListApplicationsByProfileMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.ListApplicationsByProfile at\n%s with params: %#v", m.ListApplicationsByProfileMock.defaultExpectation.expectationOrigins.origin, *m.ListApplicationsByProfileMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcListApplicationsByProfile != nil && afterListApplicationsByProfileCounter < 1 {
+		m.t.Errorf("Expected call to AdminApplicationUseCaseMock.ListApplicationsByProfile at\n%s", m.funcListApplicationsByProfileOrigin)
+	}
+
+	if !m.ListApplicationsByProfileMock.invocationsDone() && afterListApplicationsByProfileCounter > 0 {
+		m.t.Errorf("Expected %d calls to AdminApplicationUseCaseMock.ListApplicationsByProfile at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.ListApplicationsByProfileMock.expectedInvocations), m.ListApplicationsByProfileMock.expectedInvocationsOrigin, afterListApplicationsByProfileCounter)
+	}
+}
+
 type mAdminApplicationUseCaseMockResetApplicationSecret struct {
 	optional           bool
 	mock               *AdminApplicationUseCaseMock
@@ -5492,6 +7410,12 @@ func (m *AdminApplicationUseCaseMock) MinimockFinish() {
 
 			m.MinimockDeleteApplicationInspect()
 
+			m.MinimockDeleteGroupInspect()
+
+			m.MinimockDeleteProfileInspect()
+
+			m.MinimockGetApplicationInspect()
+
 			m.MinimockGetApplicationDashboardInspect()
 
 			m.MinimockGetApplicationDetailsInspect()
@@ -5503,6 +7427,10 @@ func (m *AdminApplicationUseCaseMock) MinimockFinish() {
 			m.MinimockGetProfileInspect()
 
 			m.MinimockGetProfilesInspect()
+
+			m.MinimockListApplicationsByGroupInspect()
+
+			m.MinimockListApplicationsByProfileInspect()
 
 			m.MinimockResetApplicationSecretInspect()
 
@@ -5540,12 +7468,17 @@ func (m *AdminApplicationUseCaseMock) minimockDone() bool {
 		m.MinimockCreateGroupDone() &&
 		m.MinimockCreateProfileDone() &&
 		m.MinimockDeleteApplicationDone() &&
+		m.MinimockDeleteGroupDone() &&
+		m.MinimockDeleteProfileDone() &&
+		m.MinimockGetApplicationDone() &&
 		m.MinimockGetApplicationDashboardDone() &&
 		m.MinimockGetApplicationDetailsDone() &&
 		m.MinimockGetGroupDone() &&
 		m.MinimockGetGroupsDone() &&
 		m.MinimockGetProfileDone() &&
 		m.MinimockGetProfilesDone() &&
+		m.MinimockListApplicationsByGroupDone() &&
+		m.MinimockListApplicationsByProfileDone() &&
 		m.MinimockResetApplicationSecretDone() &&
 		m.MinimockToggleApplicationStatusDone() &&
 		m.MinimockUpdateApplicationDone() &&

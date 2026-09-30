@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -1426,6 +1427,20 @@ func (s *Storage) GetIdentityProviderByAlias(ctx context.Context, tenantID uuid.
 }
 
 func (s *Storage) UpdateApplicationGroup(ctx context.Context, tenantUUID uuid.UUID, group model.ApplicationGroup) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	existing, ok := s.groups[group.ID]
+	if !ok || existing.TenantID != tenantUUID {
+		return port.ErrGroupNotFound
+	}
+	delete(s.groupNames, fmt.Sprintf("%s|%s", tenantUUID.String(), existing.GroupName))
+	clone := group
+	clone.TenantID = tenantUUID
+	clone.IsSystem = existing.IsSystem
+	clone.CreatedAt = existing.CreatedAt
+	s.groups[group.ID] = &clone
+	s.groupNames[fmt.Sprintf("%s|%s", tenantUUID.String(), group.GroupName)] = group.ID
 	return nil
 }
 
@@ -1446,6 +1461,20 @@ func (s *Storage) GetIdentityProviderByUUID(ctx context.Context, tenantID uuid.U
 }
 
 func (s *Storage) UpdateApplicationProfile(ctx context.Context, tenantUUID uuid.UUID, profile model.ApplicationProfile) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	existing, ok := s.profiles[profile.ID]
+	if !ok || existing.TenantID != tenantUUID {
+		return port.ErrProfileNotFound
+	}
+	delete(s.profileNames, fmt.Sprintf("%s|%s", tenantUUID.String(), existing.ProfileName))
+	clone := profile
+	clone.TenantID = tenantUUID
+	clone.IsSystem = existing.IsSystem
+	clone.CreatedAt = existing.CreatedAt
+	s.profiles[profile.ID] = &clone
+	s.profileNames[fmt.Sprintf("%s|%s", tenantUUID.String(), profile.ProfileName)] = profile.ID
 	return nil
 }
 
@@ -1550,17 +1579,128 @@ func (s *Storage) RecordClientSessionLink(ctx context.Context, tenantID uuid.UUI
 }
 
 func (s *Storage) GetApplicationProfiles(ctx context.Context, tenantUUID uuid.UUID) ([]model.ApplicationProfile, error) {
-	return nil, nil
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	list := []model.ApplicationProfile{}
+	for _, p := range s.profiles {
+		if p.TenantID == tenantUUID {
+			list = append(list, *p)
+		}
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].ProfileName < list[j].ProfileName })
+	return list, nil
 }
 
 func (s *Storage) GetApplicationGroups(ctx context.Context, tenantUUID uuid.UUID) ([]model.ApplicationGroup, error) {
-	return nil, nil
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	list := []model.ApplicationGroup{}
+	for _, g := range s.groups {
+		if g.TenantID == tenantUUID {
+			list = append(list, *g)
+		}
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].GroupName < list[j].GroupName })
+	return list, nil
 }
 
 func (s *Storage) GetApplicationProfileByID(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) (*model.ApplicationProfile, error) {
-	return nil, nil
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	p, ok := s.profiles[id]
+	if !ok || p.TenantID != tenantUUID {
+		return nil, port.ErrProfileNotFound
+	}
+	clone := *p
+	return &clone, nil
 }
 
 func (s *Storage) GetApplicationGroupByID(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) (*model.ApplicationGroup, error) {
-	return nil, nil
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	g, ok := s.groups[id]
+	if !ok || g.TenantID != tenantUUID {
+		return nil, port.ErrGroupNotFound
+	}
+	clone := *g
+	return &clone, nil
+}
+
+// GetApplicationsByGroup lists the applications bound to one authorization group.
+func (s *Storage) GetApplicationsByGroup(ctx context.Context, tenantUUID uuid.UUID, groupID uuid.UUID) ([]model.ApplicationSummary, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.summariesWhere(tenantUUID, func(a *model.Application) bool { return a.GroupID == groupID }), nil
+}
+
+// GetApplicationsByProfile lists the applications bound to one security profile.
+func (s *Storage) GetApplicationsByProfile(ctx context.Context, tenantUUID uuid.UUID, profileID uuid.UUID) ([]model.ApplicationSummary, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.summariesWhere(tenantUUID, func(a *model.Application) bool { return a.ProfileID == profileID }), nil
+}
+
+// summariesWhere projects matching applications; the caller must hold the read lock.
+func (s *Storage) summariesWhere(tenantUUID uuid.UUID, match func(*model.Application) bool) []model.ApplicationSummary {
+	result := []model.ApplicationSummary{}
+	for _, a := range s.applications {
+		if a.TenantID != tenantUUID || !match(a) {
+			continue
+		}
+		summary := model.ApplicationSummary{
+			ID: a.ID, ClientID: a.ClientID, ApplicationName: a.ApplicationName, IsEnabled: a.IsEnabled, IsDynamic: a.IsDynamic,
+			CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt, LastUsedAt: a.LastUsedAt, ProfileID: a.ProfileID, GroupID: a.GroupID,
+		}
+		if p, ok := s.profiles[a.ProfileID]; ok {
+			summary.ProfileName = p.ProfileName
+		}
+		if g, ok := s.groups[a.GroupID]; ok {
+			summary.GroupName = g.GroupName
+		}
+		result = append(result, summary)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ApplicationName < result[j].ApplicationName })
+	return result
+}
+
+// DeleteApplicationGroup removes a non-system group that no application references.
+func (s *Storage) DeleteApplicationGroup(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	g, ok := s.groups[id]
+	if !ok || g.TenantID != tenantUUID || g.IsSystem {
+		return port.ErrGroupNotFound
+	}
+	for _, a := range s.applications {
+		if a.GroupID == id {
+			return port.ErrInUse
+		}
+	}
+	delete(s.groupNames, fmt.Sprintf("%s|%s", tenantUUID.String(), g.GroupName))
+	delete(s.groups, id)
+	return nil
+}
+
+// DeleteApplicationProfile removes a non-system profile that no application references.
+func (s *Storage) DeleteApplicationProfile(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	p, ok := s.profiles[id]
+	if !ok || p.TenantID != tenantUUID || p.IsSystem {
+		return port.ErrProfileNotFound
+	}
+	for _, a := range s.applications {
+		if a.ProfileID == id {
+			return port.ErrInUse
+		}
+	}
+	delete(s.profileNames, fmt.Sprintf("%s|%s", tenantUUID.String(), p.ProfileName))
+	delete(s.profiles, id)
+	return nil
 }

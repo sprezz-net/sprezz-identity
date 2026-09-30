@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -1240,8 +1241,11 @@ func (s *PostgresStorage) UpdateApplicationGroup(ctx context.Context, tenantUUID
 		DefaultScopes:          group.DefaultScopes,
 		AllowedAudiences:       group.AllowedAudiences,
 		DefaultIdpID:           pgDefaultIDP,
+		RedirectUri:            group.RedirectURI,
 		RedirectUris:           group.RedirectURIs,
 		PostLogoutRedirectUris: group.PostLogoutRedirectURIs,
+		FrontChannelLogoutUri:  &group.FrontChannelLogoutURI,
+		BackChannelLogoutUri:   &group.BackChannelLogoutURI,
 		TenantUuid:             toPGUUID(tenantUUID),
 	})
 	if err != nil {
@@ -1440,7 +1444,7 @@ func (s *PostgresStorage) GetApplicationProfiles(ctx context.Context, tenantUUID
 // GetApplicationGroups retrieves all standalone routing / authorization groups for a tenant.
 func (s *PostgresStorage) GetApplicationGroups(ctx context.Context, tenantUUID uuid.UUID) ([]model.ApplicationGroup, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, group_name, is_enabled, is_system, redirect_uris, post_logout_redirect_uris,
+		SELECT id, group_name, is_enabled, is_system, redirect_uri, redirect_uris, post_logout_redirect_uris,
 		       front_channel_logout_uri, back_channel_logout_uri, allowed_scopes, default_scopes, allowed_audiences, default_idp_id, updated_at
 		FROM application_groups
 		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1 LIMIT 1)
@@ -1458,7 +1462,7 @@ func (s *PostgresStorage) GetApplicationGroups(ctx context.Context, tenantUUID u
 		var defaultIdpID pgtype.UUID
 		var updatedAt pgtype.Timestamptz
 
-		if err := rows.Scan(&pgID, &g.GroupName, &g.IsEnabled, &g.IsSystem, &g.RedirectURIs, &g.PostLogoutRedirectURIs,
+		if err := rows.Scan(&pgID, &g.GroupName, &g.IsEnabled, &g.IsSystem, &g.RedirectURI, &g.RedirectURIs, &g.PostLogoutRedirectURIs,
 			&g.FrontChannelLogoutURI, &g.BackChannelLogoutURI, &g.AllowedScopes, &g.DefaultScopes, &g.AllowedAudiences, &defaultIdpID, &updatedAt); err != nil {
 			return nil, fmt.Errorf("storage: scan group row: %w", err)
 		}
@@ -1545,11 +1549,11 @@ func (s *PostgresStorage) GetApplicationGroupByID(ctx context.Context, tenantUUI
 	var updatedAt pgtype.Timestamptz
 
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, group_name, is_enabled, is_system, redirect_uris, post_logout_redirect_uris,
+		SELECT id, group_name, is_enabled, is_system, redirect_uri, redirect_uris, post_logout_redirect_uris,
 		       front_channel_logout_uri, back_channel_logout_uri, allowed_scopes, default_scopes, allowed_audiences, default_idp_id, updated_at
 		FROM application_groups
 		WHERE id = $1 AND tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $2 LIMIT 1)
-	`, toPGUUID(id), toPGUUID(tenantUUID)).Scan(&pgID, &g.GroupName, &g.IsEnabled, &g.IsSystem, &g.RedirectURIs, &g.PostLogoutRedirectURIs,
+	`, toPGUUID(id), toPGUUID(tenantUUID)).Scan(&pgID, &g.GroupName, &g.IsEnabled, &g.IsSystem, &g.RedirectURI, &g.RedirectURIs, &g.PostLogoutRedirectURIs,
 		&g.FrontChannelLogoutURI, &g.BackChannelLogoutURI, &g.AllowedScopes, &g.DefaultScopes, &g.AllowedAudiences, &defaultIdpID, &updatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -2816,8 +2820,11 @@ func (s *PostgresStorage) CreateApplicationGroup(ctx context.Context, tenantUUID
 		DefaultScopes:          group.DefaultScopes,
 		AllowedAudiences:       group.AllowedAudiences,
 		DefaultIdpID:           pgDefaultIDPID,
+		RedirectUri:            group.RedirectURI,
 		RedirectUris:           group.RedirectURIs,
 		PostLogoutRedirectUris: group.PostLogoutRedirectURIs,
+		FrontChannelLogoutUri:  &group.FrontChannelLogoutURI,
+		BackChannelLogoutUri:   &group.BackChannelLogoutURI,
 		TenantUuid:             toPGUUID(tenantUUID),
 	})
 	if err != nil {
@@ -2892,6 +2899,97 @@ func (s *PostgresStorage) DeleteApplication(ctx context.Context, tenantUUID uuid
 		return fmt.Errorf("storage: failed to remove application record: %w", err)
 	}
 	return nil
+}
+
+// summariesFromRows maps the shared application usage projection onto the domain summary model.
+func summariesFromRows[T any](rows []T, project func(T) model.ApplicationSummary) []model.ApplicationSummary {
+	summaries := make([]model.ApplicationSummary, 0, len(rows))
+	for _, row := range rows {
+		summaries = append(summaries, project(row))
+	}
+	return summaries
+}
+
+// GetApplicationsByGroup lists the applications bound to one authorization group.
+func (s *PostgresStorage) GetApplicationsByGroup(ctx context.Context, tenantUUID uuid.UUID, groupID uuid.UUID) ([]model.ApplicationSummary, error) {
+	rows, err := s.queries.GetApplicationsByGroup(ctx, sqlcdb.GetApplicationsByGroupParams{
+		TenantUuid: toPGUUID(tenantUUID),
+		GroupID:    toPGUUID(groupID),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("storage: failed to list applications by group: %w", err)
+	}
+	return summariesFromRows(rows, func(r sqlcdb.GetApplicationsByGroupRow) model.ApplicationSummary {
+		return applicationSummary(r.ID, r.ProfileID, r.GroupID, r.ClientID, r.ApplicationName, r.ProfileName, r.GroupName, r.IsEnabled, r.IsDynamic, r.CreatedAt, r.UpdatedAt, r.LastUsedAt)
+	}), nil
+}
+
+// GetApplicationsByProfile lists the applications bound to one security profile.
+func (s *PostgresStorage) GetApplicationsByProfile(ctx context.Context, tenantUUID uuid.UUID, profileID uuid.UUID) ([]model.ApplicationSummary, error) {
+	rows, err := s.queries.GetApplicationsByProfile(ctx, sqlcdb.GetApplicationsByProfileParams{
+		TenantUuid: toPGUUID(tenantUUID),
+		ProfileID:  toPGUUID(profileID),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("storage: failed to list applications by profile: %w", err)
+	}
+	return summariesFromRows(rows, func(r sqlcdb.GetApplicationsByProfileRow) model.ApplicationSummary {
+		return applicationSummary(r.ID, r.ProfileID, r.GroupID, r.ClientID, r.ApplicationName, r.ProfileName, r.GroupName, r.IsEnabled, r.IsDynamic, r.CreatedAt, r.UpdatedAt, r.LastUsedAt)
+	}), nil
+}
+
+func applicationSummary(id, profileID, groupID pgtype.UUID, clientID, appName, profileName, groupName string, enabled, dynamic bool, created, updated, lastUsed pgtype.Timestamptz) model.ApplicationSummary {
+	appUUID, _ := pgUUIDToUUID(id)
+	profileUUID, _ := pgUUIDToUUID(profileID)
+	groupUUID, _ := pgUUIDToUUID(groupID)
+	return model.ApplicationSummary{
+		ID:              appUUID,
+		ClientID:        clientID,
+		ApplicationName: appName,
+		IsEnabled:       enabled,
+		IsDynamic:       dynamic,
+		CreatedAt:       pgTimestamptzToTimeOrZero(created),
+		UpdatedAt:       pgTimestamptzToTimeOrZero(updated),
+		LastUsedAt:      pgTimestamptzToTimeOrZero(lastUsed),
+		ProfileID:       profileUUID,
+		ProfileName:     profileName,
+		GroupID:         groupUUID,
+		GroupName:       groupName,
+	}
+}
+
+// DeleteApplicationGroup removes a non-system group. Applications still bound to it make the database
+// reject the delete through the ON DELETE RESTRICT foreign key, which is reported as port.ErrInUse.
+func (s *PostgresStorage) DeleteApplicationGroup(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) error {
+	rows, err := s.queries.DeleteApplicationGroup(ctx, sqlcdb.DeleteApplicationGroupParams{TenantUuid: toPGUUID(tenantUUID), ID: toPGUUID(id)})
+	if err != nil {
+		return mapReferenceViolation(err, "group")
+	}
+	if rows == 0 {
+		return port.ErrGroupNotFound
+	}
+	return nil
+}
+
+// DeleteApplicationProfile removes a non-system profile with the same in-use protection as groups.
+func (s *PostgresStorage) DeleteApplicationProfile(ctx context.Context, tenantUUID uuid.UUID, id uuid.UUID) error {
+	rows, err := s.queries.DeleteApplicationProfile(ctx, sqlcdb.DeleteApplicationProfileParams{TenantUuid: toPGUUID(tenantUUID), ID: toPGUUID(id)})
+	if err != nil {
+		return mapReferenceViolation(err, "profile")
+	}
+	if rows == 0 {
+		return port.ErrProfileNotFound
+	}
+	return nil
+}
+
+// mapReferenceViolation translates a PostgreSQL foreign key violation (SQLSTATE 23503) into port.ErrInUse.
+func mapReferenceViolation(err error, kind string) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+		return fmt.Errorf("storage: %s is still referenced: %w", kind, port.ErrInUse)
+	}
+	return fmt.Errorf("storage: failed to delete %s: %w", kind, err)
 }
 
 // DeleteTenant permanently removes a tenant. Every tenant-owned table cascades (migration 00028),

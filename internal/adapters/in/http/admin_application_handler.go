@@ -314,6 +314,7 @@ func (h *AdminApplicationHandler) adminSaveProfile(w http.ResponseWriter, r *htt
 type SaveGroupPayload struct {
 	IDStr                 string
 	GroupName             string
+	DefaultRedirectURI    string
 	RedirectURIs          []string
 	PostLogoutURIs        []string
 	FrontChannelLogoutURI string
@@ -328,6 +329,7 @@ func NewSaveGroupPayload(r *http.Request) *SaveGroupPayload {
 	return &SaveGroupPayload{
 		IDStr:                 r.FormValue("id"),
 		GroupName:             strings.TrimSpace(r.FormValue("group_name")),
+		DefaultRedirectURI:    strings.TrimSpace(r.FormValue("default_redirect_uri")),
 		RedirectURIs:          CleanBoundaryStringSlice(parseFormStringSlice(r.Form, "redirect_uris")),
 		PostLogoutURIs:        CleanBoundaryStringSlice(parseFormStringSlice(r.Form, "post_logout_redirect_uris")),
 		FrontChannelLogoutURI: strings.TrimSpace(r.FormValue("front_channel_logout_uri")),
@@ -369,6 +371,7 @@ func groupFromPayload(payload *SaveGroupPayload, allowed []uuid.UUID, def *uuid.
 	return &model.ApplicationGroup{
 		ID:                     id,
 		GroupName:              payload.GroupName,
+		RedirectURI:            payload.DefaultRedirectURI,
 		RedirectURIs:           payload.RedirectURIs,
 		PostLogoutRedirectURIs: payload.PostLogoutURIs,
 		FrontChannelLogoutURI:  payload.FrontChannelLogoutURI,
@@ -429,6 +432,7 @@ func (h *AdminApplicationHandler) adminSaveGroup(w http.ResponseWriter, r *http.
 			TenantID:               tenant.ID,
 			ID:                     view.ID,
 			GroupName:              payload.GroupName,
+			DefaultRedirectURI:     payload.DefaultRedirectURI,
 			RedirectURIs:           payload.RedirectURIs,
 			PostLogoutRedirectURIs: payload.PostLogoutURIs,
 			FrontChannelLogoutURI:  payload.FrontChannelLogoutURI,
@@ -443,6 +447,7 @@ func (h *AdminApplicationHandler) adminSaveGroup(w http.ResponseWriter, r *http.
 		err = h.adminApplicationUseCase.CreateGroup(r.Context(), port.CreateGroupCommand{
 			TenantID:               tenant.ID,
 			GroupName:              payload.GroupName,
+			DefaultRedirectURI:     payload.DefaultRedirectURI,
 			RedirectURIs:           payload.RedirectURIs,
 			PostLogoutRedirectURIs: payload.PostLogoutURIs,
 			FrontChannelLogoutURI:  payload.FrontChannelLogoutURI,
