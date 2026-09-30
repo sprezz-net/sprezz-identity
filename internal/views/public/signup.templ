@@ -1,6 +1,7 @@
 package public
 
 import (
+	"sprezz-identity/internal/views/assets"
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
 )
@@ -13,8 +14,7 @@ templ SignUp(fieldErrors map[string]string, provider *model.IdentityProvider, em
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Sign Up - Sprezz Identity</title>
-		<script src="https://unpkg.com/htmx.org@1.9.12" nonce={ templ.GetNonce(ctx) }></script>
-		<script src="https://cdn.tailwindcss.com" nonce={ templ.GetNonce(ctx) }></script>
+		@assets.Head()
 	</head>
 	<body class="h-full flex items-center justify-center p-6">
 		<div class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
@@ -54,7 +54,7 @@ templ SignUpForm(fieldErrors map[string]string, provider *model.IdentityProvider
 					name="name"
 					value={ name }
 					required
-					class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
+					class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
 					placeholder="Your full name"
 				/>
 				<p class="mt-1 text-xs font-medium text-red-600">{ fieldErrors["name"] }</p>
@@ -64,7 +64,7 @@ templ SignUpForm(fieldErrors map[string]string, provider *model.IdentityProvider
 					name="name"
 					value={ name }
 					required
-					class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-slate-300 focus:ring-blue-500 focus:border-blue-500"
+					class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-slate-300 focus:ring-blue-500 focus:border-blue-500"
 					placeholder="Your full name"
 				/>
 			}
@@ -79,7 +79,7 @@ templ SignUpForm(fieldErrors map[string]string, provider *model.IdentityProvider
 						name="email"
 						value={ email }
 						required
-						class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
+						class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
 						placeholder="you@domain.com"
 					/>
 					<p class="mt-1 text-xs font-medium text-red-600">{ fieldErrors["email"] }</p>
@@ -89,7 +89,7 @@ templ SignUpForm(fieldErrors map[string]string, provider *model.IdentityProvider
 						name="email"
 						value={ email }
 						required
-						class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-slate-300 focus:ring-blue-500 focus:border-blue-500"
+						class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-slate-300 focus:ring-blue-500 focus:border-blue-500"
 						placeholder="you@domain.com"
 					/>
 				}
@@ -103,7 +103,7 @@ templ SignUpForm(fieldErrors map[string]string, provider *model.IdentityProvider
 						name="username"
 						value={ username }
 						required
-						class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
+						class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
 						placeholder="Choose a username"
 					/>
 					<p class="mt-1 text-xs font-medium text-red-600">{ fieldErrors["username"] }</p>
@@ -113,7 +113,7 @@ templ SignUpForm(fieldErrors map[string]string, provider *model.IdentityProvider
 						name="username"
 						value={ username }
 						required
-						class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-slate-300 focus:ring-blue-500 focus:border-blue-500"
+						class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-slate-300 focus:ring-blue-500 focus:border-blue-500"
 						placeholder="Choose a username"
 					/>
 				}
@@ -127,7 +127,7 @@ templ SignUpForm(fieldErrors map[string]string, provider *model.IdentityProvider
 						name="email"
 						value={ email }
 						required
-						class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
+						class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
 						placeholder="you@domain.com"
 					/>
 					<p class="mt-1 text-xs font-medium text-red-600">{ fieldErrors["email"] }</p>
@@ -137,7 +137,7 @@ templ SignUpForm(fieldErrors map[string]string, provider *model.IdentityProvider
 						name="email"
 						value={ email }
 						required
-						class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-slate-300 focus:ring-blue-500 focus:border-blue-500"
+						class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-slate-300 focus:ring-blue-500 focus:border-blue-500"
 						placeholder="you@domain.com"
 					/>
 				}
@@ -152,7 +152,7 @@ templ SignUpForm(fieldErrors map[string]string, provider *model.IdentityProvider
 					name="password"
 					minlength="8"
 					required
-					class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
+					class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
 					placeholder="Minimum 8 characters"
 				/>
 				<p class="mt-1 text-xs font-medium text-red-600">{ fieldErrors["password"] }</p>
@@ -162,7 +162,7 @@ templ SignUpForm(fieldErrors map[string]string, provider *model.IdentityProvider
 					name="password"
 					minlength="8"
 					required
-					class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-slate-300 focus:ring-blue-500 focus:border-blue-500"
+					class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-slate-300 focus:ring-blue-500 focus:border-blue-500"
 					placeholder="Minimum 8 characters"
 				/>
 			}
@@ -176,7 +176,7 @@ templ SignUpForm(fieldErrors map[string]string, provider *model.IdentityProvider
 					name="confirm_password"
 					minlength="8"
 					required
-					class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
+					class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
 					placeholder="Re-enter password"
 				/>
 				<p class="mt-1 text-xs font-medium text-red-600">{ fieldErrors["confirm_password"] }</p>
@@ -186,7 +186,7 @@ templ SignUpForm(fieldErrors map[string]string, provider *model.IdentityProvider
 					name="confirm_password"
 					minlength="8"
 					required
-					class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-slate-300 focus:ring-blue-500 focus:border-blue-500"
+					class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-slate-300 focus:ring-blue-500 focus:border-blue-500"
 					placeholder="Re-enter password"
 				/>
 			}
@@ -195,7 +195,7 @@ templ SignUpForm(fieldErrors map[string]string, provider *model.IdentityProvider
 		<div class="pt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
 			<button
 				type="submit"
-				class="w-full sm:w-auto px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm"
+				class="w-full sm:w-auto px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-xs"
 			>
 				Sign Up
 			</button>

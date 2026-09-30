@@ -28,7 +28,7 @@ templ IDPsContent(props IDPsPageProps) {
 			</div>
 		}
 
-		<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+		<div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
 			<div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-4">
 				<div class="flex items-center gap-4">
 					<select
@@ -36,7 +36,7 @@ templ IDPsContent(props IDPsPageProps) {
 						hx-get="/admin/idps"
 						hx-target="main"
 						hx-trigger="change"
-						class="px-3 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+						class="px-3 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
 					>
 						<option value="">All Partitions</option>
 						for _, part := range props.Partitions {
@@ -53,7 +53,7 @@ templ IDPsContent(props IDPsPageProps) {
 				<button
 					hx-get="/admin/idps/new?modal=true"
 					hx-target="#modal-container"
-					class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm"
+					class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-xs"
 				>
 					+ Add Provider
 				</button>
@@ -154,7 +154,7 @@ templ IDPForm(props IDPFormProps) {
 						name="idp_type"
 						x-model="idpType"
 						@change="handleIdpTypeChange($el.value)"
-						class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+						class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-sm"
 					>
 						<option value="username-password">Local Accounts</option>
 						<option value="oidc">OpenID Connect</option>
@@ -167,7 +167,7 @@ templ IDPForm(props IDPFormProps) {
 					type="text"
 					name="alias"
 					x-model="alias"
-					class={ "w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm", templ.KV("border-red-500 focus:ring-red-500", props.Errors["alias"] != ""), templ.KV("border-slate-300", props.Errors["alias"] == "") }
+					class={ "w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-sm", templ.KV("border-red-500 focus:ring-red-500", props.Errors["alias"] != ""), templ.KV("border-slate-300", props.Errors["alias"] == "") }
 					required
 					:readonly={ fmt.Sprintf("%t", props.IsEdit) }
 				/>
@@ -184,12 +184,12 @@ templ IDPForm(props IDPFormProps) {
 					type="text"
 					name="name"
 					x-model="name"
-					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-sm"
 				/>
 			</div>
 			<div>
 				<label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Partition</label>
-				<select name="partition_id" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm">
+				<select name="partition_id" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-sm">
 					for _, part := range props.Partitions {
 						<option value={ fmt.Sprintf("%d", part.ID) } selected?={ props.Provider.PartitionID == part.ID }>
 							if part.AliasName != "" {
@@ -210,7 +210,7 @@ templ IDPForm(props IDPFormProps) {
 				name="enabled"
 				value="true"
 				checked?={ props.Provider.Enabled }
-				class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+				class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm cursor-pointer"
 			/>
 			<label for="enabled" class="text-sm font-semibold text-slate-700 cursor-pointer">Enabled</label>
 		</div>
@@ -248,7 +248,7 @@ templ IDPForm(props IDPFormProps) {
 		</div>
 
 		<!-- Federated OIDC Metadata Discovery Block -->
-		<div x-show="idpType === 'oidc'" class="border-t border-slate-200 pt-5 space-y-4" style="display: none;">
+		<div x-show="idpType === 'oidc'" class="border-t border-slate-200 pt-5 space-y-4" x-cloak>
 			<h4 class="text-sm font-bold text-slate-800 uppercase tracking-wide">Federation Metadata & Discovery</h4>
 			<div class="bg-slate-50/50 p-4 border border-slate-200 rounded-xl space-y-3">
 				<div>
@@ -270,7 +270,7 @@ templ IDPForm(props IDPFormProps) {
 							<span x-text="isDiscovering ? 'Connecting...' : 'Fetch Metadata'"></span>
 						</button>
 					</div>
-					<p x-show="discoveryError" class="text-xs text-red-500 mt-1" x-text="discoveryError" style="display: none;"></p>
+					<p x-show="discoveryError" class="text-xs text-red-500 mt-1" x-text="discoveryError" x-cloak></p>
 				</div>
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1.5">
 					<div>
@@ -316,24 +316,24 @@ templ IDPForm(props IDPFormProps) {
 			<!-- Advanced Capabilities side-by-side check rows layout -->
 			<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-3 border border-slate-200 rounded-xl">
 				<div class="flex items-start gap-2.5 p-1">
-					<input type="checkbox" id="pkce_enabled" name="pkce_enabled" value="true" x-model="pkceEnabled" @change="handlePkceChange($el.checked)" :disabled="pkceLocked" class="h-4 w-4 text-blue-600 rounded mt-0.5" />
+					<input type="checkbox" id="pkce_enabled" name="pkce_enabled" value="true" x-model="pkceEnabled" @change="handlePkceChange($el.checked)" :disabled="pkceLocked" class="h-4 w-4 text-blue-600 rounded-sm mt-0.5" />
 					<div>
 						<label for="pkce_enabled" class="text-xs font-bold text-slate-800 block">Enforce PKCE</label>
 						<span class="text-[10px] text-slate-400 block mt-0.5">Mandates secure challenge signatures.</span>
 					</div>
 				</div>
 				<div class="flex items-start gap-2.5 p-1">
-					<input type="checkbox" id="par_enabled" name="par_enabled" value="true" x-model="parEnabled" @change="handleParChange($el.checked)" :disabled="parLocked" class="h-4 w-4 text-blue-600 rounded mt-0.5" />
+					<input type="checkbox" id="par_enabled" name="par_enabled" value="true" x-model="parEnabled" @change="handleParChange($el.checked)" :disabled="parLocked" class="h-4 w-4 text-blue-600 rounded-sm mt-0.5" />
 					<div>
 						<label for="par_enabled" class="text-xs font-bold text-slate-800 flex items-center gap-1">
 							Enable PAR Mode
-							<span x-show="parEnforced" class="text-[9px] px-1 bg-amber-100 text-amber-800 rounded font-bold border border-amber-200">Enforced</span>
+							<span x-show="parEnforced" class="text-[9px] px-1 bg-amber-100 text-amber-800 rounded-sm font-bold border border-amber-200">Enforced</span>
 						</label>
 						<span class="text-[10px] text-slate-400 block mt-0.5">Dispatches auth attributes out-of-band.</span>
 					</div>
 				</div>
 				<div class="flex items-start gap-2.5 p-1" x-show="sloSupported || sloEnabled">
-					<input type="checkbox" id="slo_enabled" name="slo_enabled" value="true" x-model="sloEnabled" @change="handleSloChange($el.checked)" class="h-4 w-4 text-blue-600 rounded mt-0.5" />
+					<input type="checkbox" id="slo_enabled" name="slo_enabled" value="true" x-model="sloEnabled" @change="handleSloChange($el.checked)" class="h-4 w-4 text-blue-600 rounded-sm mt-0.5" />
 					<div>
 						<label for="slo_enabled" class="text-xs font-bold text-slate-800 block">Federated SLO</label>
 						<span class="text-[10px] text-slate-400 block mt-0.5">Coordinates cluster sign-out syncs.</span>
@@ -343,7 +343,7 @@ templ IDPForm(props IDPFormProps) {
 		</div>
 
 		<!-- Scope & Assurance Capabilities -->
-		<div x-show="idpType === 'oidc' && issuer" class="space-y-4 border-t border-slate-200 pt-5" style="display: none;">
+		<div x-show="idpType === 'oidc' && issuer" class="space-y-4 border-t border-slate-200 pt-5" x-cloak>
 			<h4 class="text-sm font-bold text-slate-800 uppercase tracking-wide">Scope & Assurance Capabilities</h4>
 
 			<!-- Scopes Selector -->
@@ -361,7 +361,7 @@ templ IDPForm(props IDPFormProps) {
 							type="button"
 							@click="toggleScope(scope)"
 							class="px-2.5 py-1 rounded-lg text-xs font-semibold border font-mono transition-all duration-150 cursor-pointer"
-							:class="selectedScopes.includes(scope) ? 'bg-blue-600 border-blue-700 text-white shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'"
+							:class="selectedScopes.includes(scope) ? 'bg-blue-600 border-blue-700 text-white shadow-xs' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'"
 						>
 							<span x-text="scope"></span>
 						</button>
@@ -377,15 +377,15 @@ templ IDPForm(props IDPFormProps) {
 				</template>
 				<div class="grid grid-cols-1 sm:grid-cols-4 gap-4 p-4 border border-slate-200 bg-slate-50 rounded-xl items-stretch min-h-[240px]">
 					<!-- Level 1 -->
-					<div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full">
+					<div class="bg-white p-3 rounded-lg border border-slate-200 shadow-xs flex flex-col h-full">
 						<span class="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">Map to AAL 1 (Low)</span>
 						<div class="w-full h-40 space-y-1.5 overflow-y-auto pr-0.5">
 							<template x-for="acr in getAcrValuesForLevel(1)" :key="acr">
 								<button
 									type="button"
 									@click="toggleAcr(acr)"
-									class="w-full h-7 flex items-center px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer"
-									:class="selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'"
+									class="w-full h-7 flex items-center px-2 py-1.5 rounded-sm text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer"
+									:class="selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-xs' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'"
 									:title="acr"
 								>
 									<span x-text="formatAcrLabel(acr)"></span>
@@ -398,15 +398,15 @@ templ IDPForm(props IDPFormProps) {
 					</div>
 
 					<!-- Level 2 -->
-					<div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full">
+					<div class="bg-white p-3 rounded-lg border border-slate-200 shadow-xs flex flex-col h-full">
 						<span class="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">Map to AAL 2 (Medium)</span>
 						<div class="w-full h-40 space-y-1.5 overflow-y-auto pr-0.5">
 							<template x-for="acr in getAcrValuesForLevel(2)" :key="acr">
 								<button
 									type="button"
 									@click="toggleAcr(acr)"
-									class="w-full h-7 flex items-center px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer"
-									:class="selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'"
+									class="w-full h-7 flex items-center px-2 py-1.5 rounded-sm text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer"
+									:class="selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-xs' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'"
 									:title="acr"
 								>
 									<span x-text="formatAcrLabel(acr)"></span>
@@ -419,15 +419,15 @@ templ IDPForm(props IDPFormProps) {
 					</div>
 
 					<!-- Level 3 -->
-					<div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full">
+					<div class="bg-white p-3 rounded-lg border border-slate-200 shadow-xs flex flex-col h-full">
 						<span class="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">Map to AAL 3 (High)</span>
 						<div class="w-full h-40 space-y-1.5 overflow-y-auto pr-0.5">
 							<template x-for="acr in getAcrValuesForLevel(3)" :key="acr">
 								<button
 									type="button"
 									@click="toggleAcr(acr)"
-									class="w-full h-7 flex items-center px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer"
-									:class="selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'"
+									class="w-full h-7 flex items-center px-2 py-1.5 rounded-sm text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer"
+									:class="selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-xs' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'"
 									:title="acr"
 								>
 									<span x-text="formatAcrLabel(acr)"></span>
@@ -440,15 +440,15 @@ templ IDPForm(props IDPFormProps) {
 					</div>
 
 					<!-- Unmapped -->
-					<div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col h-full">
+					<div class="bg-white p-3 rounded-lg border border-slate-200 shadow-xs flex flex-col h-full">
 						<span class="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">Unmapped</span>
 						<div class="w-full h-40 space-y-1.5 overflow-y-auto pr-0.5">
 							<template x-for="acr in getAcrValuesForLevel(0)" :key="acr">
 								<button
 									type="button"
 									@click="toggleAcr(acr)"
-									class="w-full h-7 flex items-center px-2 py-1.5 rounded text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer"
-									:class="selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'"
+									class="w-full h-7 flex items-center px-2 py-1.5 rounded-sm text-[10px] font-semibold font-mono border text-left truncate transition cursor-pointer"
+									:class="selectedAcrValues.includes(acr) ? 'bg-purple-600 border-purple-700 text-white shadow-xs' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'"
 									:title="acr"
 								>
 									<span x-text="formatAcrLabel(acr)"></span>
@@ -464,14 +464,14 @@ templ IDPForm(props IDPFormProps) {
 		</div>
 
 		<!-- Assurance Levels & Security Factor Mapping Card -->
-		<div x-show="idpType === 'oidc' && issuer" class="space-y-6 border-t border-slate-200 pt-5" style="display: none;">
+		<div x-show="idpType === 'oidc' && issuer" class="space-y-6 border-t border-slate-200 pt-5" x-cloak>
 			<h4 class="text-sm font-bold text-slate-800 uppercase tracking-wide">Assurance Levels & System Mapping</h4>
 			<p class="text-xs text-slate-500">Translate incoming external federated token contexts into internal security metrics.</p>
 
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 				<div>
 					<label class="block text-xs font-bold text-slate-500 mb-1">Fallback Authentication Assurance Level (AAL)</label>
-					<select name="aal" x-model="aal" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-xs">
+					<select name="aal" x-model="aal" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-xs">
 						<option value="1">AAL 1 (Single Factor)</option>
 						<option value="2">AAL 2 (Multi Factor)</option>
 						<option value="3">AAL 3 (High Security)</option>
@@ -479,7 +479,7 @@ templ IDPForm(props IDPFormProps) {
 				</div>
 				<div>
 					<label class="block text-xs font-bold text-slate-500 mb-1">Fallback Identity Assurance Level (IAL)</label>
-					<select name="ial" x-model="ial" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-xs">
+					<select name="ial" x-model="ial" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-xs">
 						<option value="1">IAL 1 (Self-asserted)</option>
 						<option value="2">IAL 2 (Verified)</option>
 						<option value="3">IAL 3 (High-Trust Verified)</option>
@@ -502,7 +502,7 @@ templ IDPForm(props IDPFormProps) {
 					<!-- Scrollable Row Loop Container -->
 					<div class="max-h-64 overflow-y-auto space-y-2 pr-1">
 						<template x-for="acr in selectedAcrValues" :key="acr">
-							<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-2 bg-white px-3 rounded-lg border border-slate-200/60 shadow-sm hover:border-slate-300/80 transition-colors">
+							<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-2 bg-white px-3 rounded-lg border border-slate-200/60 shadow-xs hover:border-slate-300/80 transition-colors">
 
 								<!-- Left Column: Raw clean text block -->
 								<div class="flex-1 min-w-0 flex flex-col justify-center">
@@ -511,14 +511,14 @@ templ IDPForm(props IDPFormProps) {
 								</div>
 
 								<!-- Right Configuration Dropdown Selectors Grid Row -->
-								<div class="flex items-center gap-4 flex-shrink-0">
+								<div class="flex items-center gap-4 shrink-0">
 									<!-- AAL Field -->
 									<div class="w-40">
 										<input type="hidden" :name="'acr_to_tuple[' + acr + '][aal]'" :value="acrToTuple[acr] ? acrToTuple[acr].aal : '0'" />
 										<select
 											:value="acrToTuple[acr] ? acrToTuple[acr].aal : '0'"
 											@change="if(!acrToTuple[acr]) acrToTuple[acr] = {aal:'0', ial:'0'}; acrToTuple[acr].aal = $el.value"
-											class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-md bg-white font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm cursor-pointer"
+											class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-md bg-white font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-xs cursor-pointer"
 										>
 											<option value="0">Unmapped</option>
 											<option value="1">AAL 1</option>
@@ -533,7 +533,7 @@ templ IDPForm(props IDPFormProps) {
 										<select
 											:value="acrToTuple[acr] ? acrToTuple[acr].ial : '0'"
 											@change="if(!acrToTuple[acr]) acrToTuple[acr] = {aal:'0', ial:'0'}; acrToTuple[acr].ial = $el.value"
-											class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-md bg-white font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm cursor-pointer"
+											class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-md bg-white font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-xs cursor-pointer"
 										>
 											<option value="0">Unmapped</option>
 											<option value="1">IAL 1</option>
@@ -552,9 +552,9 @@ templ IDPForm(props IDPFormProps) {
 				<h5 class="text-xs font-bold text-slate-500 mb-2">Standard AMR Mappings</h5>
 				<div class="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-slate-50 p-3 border border-slate-200 rounded-xl">
 					<template x-for="factor in ['pwd', 'mfa', 'otp', 'sms', 'hwk']" :key="factor">
-						<div class="flex flex-col gap-1 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+						<div class="flex flex-col gap-1 bg-white p-2 rounded-lg border border-slate-200 shadow-xs">
 							<span class="font-mono text-[10px] font-bold text-slate-500 uppercase" x-text="factor"></span>
-							<select :name="'amr_to_aal[' + factor + ']'" x-model="amrToAAL[factor]" class="w-full px-1.5 py-1 text-xs border border-slate-300 rounded bg-white focus:ring-2 focus:ring-blue-500">
+							<select :name="'amr_to_aal[' + factor + ']'" x-model="amrToAAL[factor]" class="w-full px-1.5 py-1 text-xs border border-slate-300 rounded-sm bg-white focus:ring-2 focus:ring-blue-500">
 								<option value="1">AAL 1</option>
 								<option value="2">AAL 2</option>
 								<option value="3">AAL 3</option>
@@ -566,7 +566,7 @@ templ IDPForm(props IDPFormProps) {
 			<div class="pt-4 border-t border-slate-100">
 				<div class="flex items-center justify-between mb-2">
 					<h5 class="text-xs font-bold text-slate-500">Custom AMR Mappings</h5>
-					<button type="button" @click="addCustomAmr()" class="px-2.5 py-1 text-xs bg-slate-900 text-white rounded-lg shadow-sm font-medium transition cursor-pointer hover:bg-slate-800">+ Add Row</button>
+					<button type="button" @click="addCustomAmr()" class="px-2.5 py-1 text-xs bg-slate-900 text-white rounded-lg shadow-xs font-medium transition cursor-pointer hover:bg-slate-800">+ Add Row</button>
 				</div>
 				<div class="space-y-2">
 					<template x-for="(item, index) in customAmrs" :key="index">
@@ -577,7 +577,7 @@ templ IDPForm(props IDPFormProps) {
 								<option value="2">AAL 2</option>
 								<option value="3">AAL 3</option>
 							</select>
-							<button type="button" @click="removeCustomAmr(index)" class="text-red-500 hover:text-red-700 font-bold px-3 py-1.5 text-sm focus:outline-none">✕</button>
+							<button type="button" @click="removeCustomAmr(index)" class="text-red-500 hover:text-red-700 font-bold px-3 py-1.5 text-sm focus:outline-hidden">✕</button>
 						</div>
 					</template>
 				</div>
@@ -585,7 +585,7 @@ templ IDPForm(props IDPFormProps) {
 		</div>
 
 		<!-- Identity Claim Resolution Card -->
-		<div x-show="idpType === 'oidc' && issuer" class="space-y-4 border-t border-slate-200 pt-5" style="display: none;">
+		<div x-show="idpType === 'oidc' && issuer" class="space-y-4 border-t border-slate-200 pt-5" x-cloak>
 			<h4 class="text-sm font-bold text-slate-800 uppercase tracking-wide">Identity Claim Resolution</h4>
 
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -596,7 +596,7 @@ templ IDPForm(props IDPFormProps) {
 						name="user_identifier_claim"
 						x-model="userIdentifierClaim"
 						placeholder="sub or email"
-						class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+						class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-sm"
 					/>
 					<p class="text-[10px] text-slate-400 mt-1">Configures which parsed ID token claim matches the unique local account (commonly 'sub' or 'email').</p>
 				</div>

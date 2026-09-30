@@ -1,0 +1,37 @@
+@import "tailwindcss" source(none);
+
+/* Class names are only read from the view templates. */
+@source "../../admin/*.templ";
+@source "../../public/*.templ";
+
+@layer base {
+	/* Tailwind v4 changed these defaults; keep the v3 look the templates were written for. */
+	*,
+	::after,
+	::before,
+	::backdrop,
+	::file-selector-button {
+		border-color: var(--color-gray-200, currentcolor);
+	}
+
+	button:not(:disabled),
+	[role="button"]:not(:disabled) {
+		cursor: pointer;
+	}
+}
+
+/* Replaces inline style="display: none" so the CSP can drop 'unsafe-inline' for styles. */
+[x-cloak] {
+	display: none !important;
+}
+
+/* htmx normally injects these rules as an inline <style>, which the CSP blocks. */
+.htmx-indicator {
+	opacity: 0;
+	transition: opacity 200ms ease-in;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+	opacity: 1;
+}

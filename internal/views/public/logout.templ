@@ -1,5 +1,7 @@
 package public
 
+import "sprezz-identity/internal/views/assets"
+
 templ Logout(iframeURIs []string, redirectURI string) {
 	<!doctype html>
 	<html lang="en" class="h-full bg-slate-50">
@@ -7,38 +9,10 @@ templ Logout(iframeURIs []string, redirectURI string) {
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Signing out - Sprezz Identity</title>
-		<script src="https://cdn.tailwindcss.com" nonce={ templ.GetNonce(ctx) }></script>
+		@assets.Styles()
 
-		<!-- Pass variables into data attributes to bypass the literal script tag interpolation bug -->
-		<script
-			id="logout-script"
-			data-redirect-uri={ redirectURI }
-			nonce={ templ.GetNonce(ctx) }
-		>
-			(function() {
-				// Safely read the dynamic back-end variable from the DOM container attributes
-				const scriptEl = document.getElementById('logout-script');
-				const targetURI = scriptEl.getAttribute('data-redirect-uri') || '/login';
-
-				let executed = false;
-				function triggerRedirect() {
-					if (!executed) {
-						executed = true;
-						window.location.href = targetURI;
-					}
-				}
-
-				// 1. Set an unconditional safety timeout of 2 seconds
-				// This guarantees the user is redirected even if some client iframes fail, block, or timeout
-				var redirectTimeout = setTimeout(triggerRedirect, 2000);
-
-				// 2. If all iframes load successfully before the 2 seconds, redirect sooner
-				window.onload = function() {
-					clearTimeout(redirectTimeout); // Cancel the safety timeout
-					setTimeout(triggerRedirect, 500); // Small 500ms visual grace period
-				};
-			})();
-		</script>
+		<!-- The redirect target travels as a data attribute so no inline script is needed. -->
+		<script defer src={ assets.URL("logout.js") } data-redirect-uri={ redirectURI } nonce={ templ.GetNonce(ctx) }></script>
 	</head>
 	<body class="h-full flex items-center justify-center p-6">
 		<div class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-8 text-center space-y-6">

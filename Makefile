@@ -12,6 +12,10 @@ SQLC_CONFIG=sqlc.yaml
 TEMPL_SOURCES=$(shell find internal/views -name "*.templ")
 TEMPL_TIMESTAMP=internal/views/.templ.gen.timestamp
 
+CSS_INPUT=internal/views/assets/src/input.css
+CSS_OUTPUT=internal/views/assets/static/app.css
+CSS_SOURCES=$(CSS_INPUT) $(TEMPL_SOURCES)
+
 MOCK_SOURCES=$(wildcard internal/domain/port/*.go) internal/domain/port/portmock/gen.go
 MOCK_TIMESTAMP=internal/domain/port/portmock/.mock.gen.go.timestamp
 
@@ -19,10 +23,10 @@ MOCK_TIMESTAMP=internal/domain/port/portmock/.mock.gen.go.timestamp
 -include .env
 export
 
-.PHONY: all tidy sqlc-check fmt lint test cover clean run build
+.PHONY: all tidy sqlc-check css-gen css-watch fmt lint test cover clean run build
 
 # Default target runs code generation and verification to guarantee a pristine repository state
-all: tidy sqlc-gen templ-gen mock-gen fmt lint test
+all: tidy sqlc-gen templ-gen css-gen mock-gen fmt lint test
 
 ## tidy: Run go mod tidy to add missing and prune unused modules
 tidy:
@@ -65,6 +69,22 @@ $(TEMPL_TIMESTAMP): $(TEMPL_SOURCES)
 
 templ-gen: $(TEMPL_TIMESTAMP)
 
+## css-gen: Compile the Tailwind stylesheet that is embedded into the binary (run whenever a template changes)
+$(CSS_OUTPUT): $(CSS_SOURCES)
+	@echo "=> Compiling Tailwind stylesheet..."
+	@if command -v tailwindcss > /dev/null; then \
+		tailwindcss -i $(CSS_INPUT) -o $(CSS_OUTPUT) --minify; \
+	else \
+		echo "ERROR: tailwindcss not found. Install it via 'brew install tailwindcss'."; \
+		exit 1; \
+	fi
+
+css-gen: $(CSS_OUTPUT)
+
+## css-watch: Rebuild the stylesheet on every template change while developing
+css-watch:
+	tailwindcss -i $(CSS_INPUT) -o $(CSS_OUTPUT) --watch
+
 ## mock-gen: Generate type-safe mocks for domain ports using minimock
 $(MOCK_TIMESTAMP): $(MOCK_SOURCES)
 	@echo "=> Generating port mocks using minimock..."
@@ -89,7 +109,7 @@ lint:
 	fi
 
 ## test: Run the entire unit and integration testing harness suite
-test: tidy sqlc-gen templ-gen mock-gen
+test: tidy sqlc-gen templ-gen css-gen mock-gen
 	@echo "=> Running all package test specifications..."
 	@if command -v gotestsum > /dev/null; then \
 		gotestsum --format-hide-empty-pkg -- ./... -count=1 -v race; \
@@ -99,7 +119,7 @@ test: tidy sqlc-gen templ-gen mock-gen
 	fi
 
 ## cover: Generate line-by-line profiling data and launch interactive HTML visual report
-cover: tidy sqlc-gen templ-gen mock-gen
+cover: tidy sqlc-gen templ-gen css-gen mock-gen
 	@echo "=> Capturing cross-package test coverage statistics..."
 	@if command -v gotestsum > /dev/null; then \
 		gotestsum --format-hide-empty-pkg -- ./... -count=1 -coverprofile=$(COVERAGE_FILE); \
@@ -115,7 +135,7 @@ cover: tidy sqlc-gen templ-gen mock-gen
 	go tool cover -html=$(COVERAGE_FILE)
 
 ## build: Compile the core program binary into a transport target
-build: tidy sqlc-gen templ-gen
+build: tidy sqlc-gen templ-gen css-gen
 	@echo "=> Building system production binary..."
 	go build -o $(BINARY_NAME) cmd/sprezz-identity/main.go
 

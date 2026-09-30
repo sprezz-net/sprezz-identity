@@ -77,7 +77,7 @@ func AdminDashboard(props AdminDashboardProps) templ.Component {
 				}
 			}
 			if props.IsAdminTenant {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden p-6 space-y-4\"><div class=\"flex items-center justify-between border-b border-gray-200 pb-3\"><h3 class=\"font-bold text-gray-800\">Administrative Lockdown Panel</h3>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden p-6 space-y-4\"><div class=\"flex items-center justify-between border-b border-gray-200 pb-3\"><h3 class=\"font-bold text-gray-800\">Administrative Lockdown Panel</h3>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -96,7 +96,7 @@ func AdminDashboard(props AdminDashboardProps) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var4 = []any{"px-4 py-2 rounded-lg font-semibold text-sm transition shadow-sm", templ.KV("bg-red-600 text-white hover:bg-red-700", props.ActiveTenant.Config.AllowSignup), templ.KV("bg-green-600 text-white hover:bg-green-700", !props.ActiveTenant.Config.AllowSignup)}
+				var templ_7745c5c3_Var4 = []any{"px-4 py-2 rounded-lg font-semibold text-sm transition shadow-xs", templ.KV("bg-red-600 text-white hover:bg-red-700", props.ActiveTenant.Config.AllowSignup), templ.KV("bg-green-600 text-white hover:bg-green-700", !props.ActiveTenant.Config.AllowSignup)}
 				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var4...)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -147,7 +147,7 @@ func AdminDashboard(props AdminDashboardProps) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<div class=\"bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden p-6 text-center space-y-2\"><h3 class=\"text-xl font-bold text-gray-800\">Welcome to Sprezz Identity</h3><p class=\"text-gray-500\">You are logged into the administration console for tenant <span class=\"font-semibold text-gray-700\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<div class=\"bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden p-6 text-center space-y-2\"><h3 class=\"text-xl font-bold text-gray-800\">Welcome to Sprezz Identity</h3><p class=\"text-gray-500\">You are logged into the administration console for tenant <span class=\"font-semibold text-gray-700\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -232,7 +232,7 @@ func TenantsContent(props TenantsPageProps) templ.Component {
 			}
 		}
 		if props.IsAdminTenant {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<div class=\"grid grid-cols-1 lg:grid-cols-2 gap-8\"><!-- Left: Tenant list --><div class=\"bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden\"><div class=\"px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between\"><button hx-get=\"/admin/tenants/new?modal=true\" hx-target=\"#modal-container\" class=\"px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm\">+ Add Tenant</button></div><div class=\"overflow-x-auto\"><table class=\"min-w-full divide-y divide-gray-200 text-sm\"><thead><tr class=\"bg-gray-50 text-gray-500 font-semibold border-b border-gray-200\"><th class=\"px-6 py-3 text-left\">Name</th><th class=\"px-6 py-3 text-left\">Domain</th><th class=\"px-6 py-3 text-left\">Status</th></tr></thead> <tbody class=\"divide-y divide-gray-200\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<div class=\"grid grid-cols-1 lg:grid-cols-2 gap-8\"><!-- Left: Tenant list --><div class=\"bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden\"><div class=\"px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between\"><button hx-get=\"/admin/tenants/new?modal=true\" hx-target=\"#modal-container\" class=\"px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-xs\">+ Add Tenant</button></div><div class=\"overflow-x-auto\"><table class=\"min-w-full divide-y divide-gray-200 text-sm\"><thead><tr class=\"bg-gray-50 text-gray-500 font-semibold border-b border-gray-200\"><th class=\"px-6 py-3 text-left\">Name</th><th class=\"px-6 py-3 text-left\">Domain</th><th class=\"px-6 py-3 text-left\">Status</th></tr></thead> <tbody class=\"divide-y divide-gray-200\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -283,7 +283,7 @@ func TenantsContent(props TenantsPageProps) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</tbody></table></div></div><!-- Right: Admin Tenant Settings --><div class=\"bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden p-6 space-y-4\"><h3 class=\"font-bold text-gray-800 border-b border-gray-200 pb-3\">Administrative Tenant Settings</h3><form hx-post=\"/admin/tenants/settings\" hx-indicator=\"#global-spinner\" class=\"space-y-4\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</tbody></table></div></div><!-- Right: Admin Tenant Settings --><div class=\"bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden p-6 space-y-4\"><h3 class=\"font-bold text-gray-800 border-b border-gray-200 pb-3\">Administrative Tenant Settings</h3><form hx-post=\"/admin/tenants/settings\" hx-indicator=\"#global-spinner\" class=\"space-y-4\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -379,12 +379,12 @@ func TenantsContent(props TenantsPageProps) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</button></div><div class=\"flex justify-end pt-4\"><button type=\"submit\" class=\"px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm\">Save Settings</button></div></form></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</button></div><div class=\"flex justify-end pt-4\"><button type=\"submit\" class=\"px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-xs\">Save Settings</button></div></form></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<!-- Normal Tenant Settings Only --> <div class=\"max-w-2xl mx-auto bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden p-6 space-y-4\"><h3 class=\"font-bold text-gray-800 border-b border-gray-200 pb-3\">Tenant Configuration Settings</h3><form hx-post=\"/admin/tenants/settings\" hx-indicator=\"#global-spinner\" class=\"space-y-4\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<!-- Normal Tenant Settings Only --> <div class=\"max-w-2xl mx-auto bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden p-6 space-y-4\"><h3 class=\"font-bold text-gray-800 border-b border-gray-200 pb-3\">Tenant Configuration Settings</h3><form hx-post=\"/admin/tenants/settings\" hx-indicator=\"#global-spinner\" class=\"space-y-4\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -480,7 +480,7 @@ func TenantsContent(props TenantsPageProps) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</button></div><div class=\"flex justify-end pt-4\"><button type=\"submit\" class=\"px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm\">Save Configuration</button></div></form></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</button></div><div class=\"flex justify-end pt-4\"><button type=\"submit\" class=\"px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-xs\">Save Configuration</button></div></form></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

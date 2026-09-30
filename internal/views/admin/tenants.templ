@@ -22,7 +22,7 @@ templ AdminDashboard(props AdminDashboardProps) {
 			}
 
 			if props.IsAdminTenant {
-				<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden p-6 space-y-4">
+				<div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden p-6 space-y-4">
 					<div class="flex items-center justify-between border-b border-gray-200 pb-3">
 						<h3 class="font-bold text-gray-800">Administrative Lockdown Panel</h3>
 						if props.ActiveTenant.Config.AllowSignup {
@@ -41,7 +41,7 @@ templ AdminDashboard(props AdminDashboardProps) {
 						<div>
 							<button
 								hx-patch={ fmt.Sprintf("/admin/tenants/%s/toggle-signup", props.ActiveTenant.ID.String()) }
-								class={ "px-4 py-2 rounded-lg font-semibold text-sm transition shadow-sm", templ.KV("bg-red-600 text-white hover:bg-red-700", props.ActiveTenant.Config.AllowSignup), templ.KV("bg-green-600 text-white hover:bg-green-700", !props.ActiveTenant.Config.AllowSignup) }
+								class={ "px-4 py-2 rounded-lg font-semibold text-sm transition shadow-xs", templ.KV("bg-red-600 text-white hover:bg-red-700", props.ActiveTenant.Config.AllowSignup), templ.KV("bg-green-600 text-white hover:bg-green-700", !props.ActiveTenant.Config.AllowSignup) }
 							>
 								if props.ActiveTenant.Config.AllowSignup {
 									Turn Off Registration
@@ -53,7 +53,7 @@ templ AdminDashboard(props AdminDashboardProps) {
 					</div>
 				</div>
 			} else {
-				<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden p-6 text-center space-y-2">
+				<div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden p-6 text-center space-y-2">
 					<h3 class="text-xl font-bold text-gray-800">Welcome to Sprezz Identity</h3>
 					<p class="text-gray-500">You are logged into the administration console for tenant <span class="font-semibold text-gray-700">{ props.ActiveTenant.Name }</span>.</p>
 				</div>
@@ -81,12 +81,12 @@ templ TenantsContent(props TenantsPageProps) {
 		if props.IsAdminTenant {
 			<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
 				<!-- Left: Tenant list -->
-				<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+				<div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
 					<div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
 						<button
 							hx-get="/admin/tenants/new?modal=true"
 							hx-target="#modal-container"
-							class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm"
+							class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-xs"
 						>
 							+ Add Tenant
 						</button>
@@ -120,7 +120,7 @@ templ TenantsContent(props TenantsPageProps) {
 				</div>
 
 				<!-- Right: Admin Tenant Settings -->
-				<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden p-6 space-y-4">
+				<div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden p-6 space-y-4">
 					<h3 class="font-bold text-gray-800 border-b border-gray-200 pb-3">Administrative Tenant Settings</h3>
 					<form hx-post="/admin/tenants/settings" hx-indicator="#global-spinner" class="space-y-4">
 						@InputField("Tenant Name", "name", "text", props.ActiveTenant.Name, props.Errors["name"])
@@ -170,7 +170,7 @@ templ TenantsContent(props TenantsPageProps) {
 						</div>
 
 						<div class="flex justify-end pt-4">
-							<button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm">
+							<button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-xs">
 								Save Settings
 							</button>
 						</div>
@@ -179,7 +179,7 @@ templ TenantsContent(props TenantsPageProps) {
 			</div>
 		} else {
 			<!-- Normal Tenant Settings Only -->
-			<div class="max-w-2xl mx-auto bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden p-6 space-y-4">
+			<div class="max-w-2xl mx-auto bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden p-6 space-y-4">
 				<h3 class="font-bold text-gray-800 border-b border-gray-200 pb-3">Tenant Configuration Settings</h3>
 				<form hx-post="/admin/tenants/settings" hx-indicator="#global-spinner" class="space-y-4">
 					@InputField("Tenant Name", "name", "text", props.ActiveTenant.Name, props.Errors["name"])
@@ -229,7 +229,7 @@ templ TenantsContent(props TenantsPageProps) {
 					</div>
 
 					<div class="flex justify-end pt-4">
-						<button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm">
+						<button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-xs">
 							Save Configuration
 						</button>
 					</div>

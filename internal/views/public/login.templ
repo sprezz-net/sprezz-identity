@@ -1,6 +1,7 @@
 package public
 
 import (
+	"sprezz-identity/internal/views/assets"
 	"fmt"
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -40,8 +41,7 @@ templ Login(props LoginProps) {
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Sign In - Sprezz Identity</title>
-		<script src="https://unpkg.com/htmx.org@1.9.12" nonce={ templ.GetNonce(ctx) }></script>
-		<script src="https://cdn.tailwindcss.com" nonce={ templ.GetNonce(ctx) }></script>
+		@assets.Head()
 	</head>
 	<body class="h-full flex items-center justify-center p-6">
 		<div class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
@@ -89,7 +89,7 @@ templ LoginForm(props LoginProps) {
 							value={ props.Username }
 							autocomplete="username"
 							required
-							class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
+							class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
 							placeholder="Enter your username"
 						/>
 						<p class="mt-1 text-xs font-medium text-red-600">{ props.FieldErrors["username"] }</p>
@@ -100,7 +100,7 @@ templ LoginForm(props LoginProps) {
 							value={ props.Username }
 							autocomplete="username"
 							required
-							class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm focus:ring-blue-500 focus:border-blue-500"
+							class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm focus:ring-blue-500 focus:border-blue-500"
 							placeholder="Enter your username"
 						/>
 					}
@@ -114,7 +114,7 @@ templ LoginForm(props LoginProps) {
 							name="password"
 							autocomplete="current-password"
 							required
-							class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
+							class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
 							placeholder="••••••••"
 						/>
 						<p class="mt-1 text-xs font-medium text-red-600">{ props.FieldErrors["password"] }</p>
@@ -124,7 +124,7 @@ templ LoginForm(props LoginProps) {
 							name="password"
 							autocomplete="current-password"
 							required
-							class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm focus:ring-blue-500 focus:border-blue-500"
+							class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm focus:ring-blue-500 focus:border-blue-500"
 							placeholder="••••••••"
 						/>
 					}
@@ -133,7 +133,7 @@ templ LoginForm(props LoginProps) {
 				<div class="pt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
 					<button
 						type="submit"
-						class="w-full sm:w-auto px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm"
+						class="w-full sm:w-auto px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-xs"
 					>
 						Sign In
 					</button>
@@ -164,7 +164,7 @@ templ LoginForm(props LoginProps) {
 					if p.IDPType != model.UsernamePasswordIDPType {
 						<a
 							href={ templ.SafeURL(getFederatedLoginURL(p.Alias, props.InteractionID)) }
-							class="w-full flex items-center justify-center px-4 py-2 border border-slate-300 rounded-lg shadow-sm text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 transition"
+							class="w-full flex items-center justify-center px-4 py-2 border border-slate-300 rounded-lg shadow-xs text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 transition"
 						>
 							if p.Name != "" {
 								{ p.Name }

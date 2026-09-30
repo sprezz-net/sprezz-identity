@@ -5,12 +5,13 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
+	"sprezz-identity/internal/views/assets"
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
@@ -75,6 +76,7 @@ func NewHttpAdapter(
 
 	h.router.Use(h.cspMiddleware)
 	h.router.Use(h.tenantMiddleware)
+	h.router.Handle(assets.Prefix+"*", assets.Handler())
 	h.registerRoutes()
 	return h
 }
@@ -133,8 +135,8 @@ func (h *HttpAdapter) registerRoutes() {
 func (h *HttpAdapter) tenantMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		// userinfo must bypass the tenant initialization gate if they resolve URLs dynamically
-		if path == "/oauth/userinfo" {
+		// Static assets and userinfo must bypass the tenant initialization gate.
+		if strings.HasPrefix(path, assets.Prefix) || path == "/oauth/userinfo" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -162,16 +164,10 @@ func (h *HttpAdapter) cspMiddleware(next http.Handler) http.Handler {
 		}
 		nonce := base64.StdEncoding.EncodeToString(nonceBytes)
 
-		csp := fmt.Sprintf(
-			"default-src 'self'; "+
-				"script-src 'self' 'nonce-%s' unpkg.com https://unpkg.com https://cdn.tailwindcss.com; "+
-				"style-src 'self' 'unsafe-inline' https://googleapis.com https://cdn.tailwindcss.com; "+
-				"font-src 'self' https://gstatic.com; "+
-				"base-uri 'self'; "+
-				"form-action 'self';",
-			nonce,
-		)
+		csp := buildCSP(nonce, r.URL.Path)
 		w.Header().Set("Content-Security-Policy", csp)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "same-origin")
 
 		ctx := templ.WithNonce(r.Context(), nonce)
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -185,4 +181,34 @@ func (h *HttpAdapter) respondJSON(w http.ResponseWriter, status int, payload any
 	w.Header().Set(model.HeaderContentType, model.ContentTypeJSON)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+// buildCSP returns the Content-Security-Policy for a request path. Every script and stylesheet is served from this
+// origin (see the assets package), so no third-party host is trusted. Scripts additionally need the per-request
+// nonce, and neither eval nor inline styles are allowed.
+func buildCSP(nonce, path string) string {
+	directives := []string{
+		"default-src 'self'",
+		"script-src 'self' 'nonce-" + nonce + "'",
+		"style-src 'self'",
+		"img-src 'self' data:",
+		"font-src 'self'",
+		"connect-src 'self'",
+		"object-src 'none'",
+		"base-uri 'self'",
+		"form-action 'self'",
+	}
+
+	switch path {
+	case port.RouteLogout, port.RouteWebLogout:
+		// Front-channel logout embeds the logout endpoints of every client application in hidden iframes.
+		directives = append(directives, "frame-src https: http:", "frame-ancestors 'none'")
+	case port.RouteAdmin + port.RouteAdminLogout:
+		// The admin console's own front-channel logout endpoint is framed by the identity provider's logout page,
+		// which may be served from another origin. It only clears a cookie, so framing it is harmless.
+	default:
+		directives = append(directives, "frame-ancestors 'none'")
+	}
+
+	return strings.Join(directives, "; ")
 }

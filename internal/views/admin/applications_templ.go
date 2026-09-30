@@ -121,7 +121,7 @@ func ApplicationsContent(props ApplicationsPageProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, ")</button></nav></div><!-- SUB-TAB 1: Applications Overview --><div x-show=\"currentTab === 'apps'\" class=\"space-y-4\"><div class=\"flex items-center justify-between\"><div class=\"inline-flex rounded-lg border border-slate-200 bg-white p-1\"><button type=\"button\" @click=\"filterType = 'all'\" class=\"px-3 py-1.5 rounded-md text-xs font-semibold transition\" :class=\"filterType === 'all' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'\">Show All</button> <button type=\"button\" @click=\"filterType = 'static'\" class=\"px-3 py-1.5 rounded-md text-xs font-semibold transition\" :class=\"filterType === 'static' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'\">Static Configs</button> <button type=\"button\" @click=\"filterType = 'dynamic'\" class=\"px-3 py-1.5 rounded-md text-xs font-semibold transition\" :class=\"filterType === 'dynamic' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'\">DCR Registrations</button></div><button hx-get=\"/admin/applications/new?modal=true\" hx-target=\"#modal-container\" class=\"px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm\">+ Add Application</button></div><div class=\"bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden\"><div class=\"overflow-x-auto\"><table class=\"min-w-full divide-y divide-gray-200 text-sm\"><thead><tr class=\"bg-gray-50 text-gray-500 font-semibold border-b border-gray-200\"><th class=\"px-6 py-3 text-left\">Client ID</th><th class=\"px-6 py-3 text-left\">Application Name</th><th class=\"px-6 py-3 text-left\">Classification</th><th class=\"px-6 py-3 text-left\">Profile</th><th class=\"px-6 py-3 text-left\">Group</th><th class=\"px-6 py-3 text-left\">Status</th><th class=\"px-6 py-3 text-right\">Actions</th></tr></thead> <tbody class=\"divide-y divide-gray-200\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, ")</button></nav></div><!-- SUB-TAB 1: Applications Overview --><div x-show=\"currentTab === 'apps'\" class=\"space-y-4\"><div class=\"flex items-center justify-between\"><div class=\"inline-flex rounded-lg border border-slate-200 bg-white p-1\"><button type=\"button\" @click=\"filterType = 'all'\" class=\"px-3 py-1.5 rounded-md text-xs font-semibold transition\" :class=\"filterType === 'all' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'\">Show All</button> <button type=\"button\" @click=\"filterType = 'static'\" class=\"px-3 py-1.5 rounded-md text-xs font-semibold transition\" :class=\"filterType === 'static' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'\">Static Configs</button> <button type=\"button\" @click=\"filterType = 'dynamic'\" class=\"px-3 py-1.5 rounded-md text-xs font-semibold transition\" :class=\"filterType === 'dynamic' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'\">DCR Registrations</button></div><button hx-get=\"/admin/applications/new?modal=true\" hx-target=\"#modal-container\" class=\"px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-xs\">+ Add Application</button></div><div class=\"bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden\"><div class=\"overflow-x-auto\"><table class=\"min-w-full divide-y divide-gray-200 text-sm\"><thead><tr class=\"bg-gray-50 text-gray-500 font-semibold border-b border-gray-200\"><th class=\"px-6 py-3 text-left\">Client ID</th><th class=\"px-6 py-3 text-left\">Application Name</th><th class=\"px-6 py-3 text-left\">Classification</th><th class=\"px-6 py-3 text-left\">Profile</th><th class=\"px-6 py-3 text-left\">Group</th><th class=\"px-6 py-3 text-left\">Status</th><th class=\"px-6 py-3 text-right\">Actions</th></tr></thead> <tbody class=\"divide-y divide-gray-200\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -323,7 +323,7 @@ func ApplicationsContent(props ApplicationsPageProps) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</tbody></table></div></div></div><!-- SUB-TAB 2: Profiles Overview --><div x-show=\"currentTab === 'profiles'\" class=\"space-y-4\"><div class=\"flex items-center justify-end\"><button hx-get=\"/admin/applications/profiles/new?modal=true\" hx-target=\"#modal-container\" class=\"px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm\">+ Add Profile Policy</button></div><div class=\"bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden\"><table class=\"min-w-full divide-y divide-gray-200 text-sm\"><thead><tr class=\"bg-gray-50 text-gray-500 font-semibold border-b border-gray-200\"><th class=\"px-6 py-3 text-left\">Profile Name</th><th class=\"px-6 py-3 text-left\">Auth Method</th><th class=\"px-6 py-3 text-left\">Signing Algorithm</th><th class=\"px-6 py-3 text-left\">RTR</th><th class=\"px-6 py-3 text-right\">Actions</th></tr></thead> <tbody class=\"divide-y divide-gray-200\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</tbody></table></div></div></div><!-- SUB-TAB 2: Profiles Overview --><div x-show=\"currentTab === 'profiles'\" class=\"space-y-4\"><div class=\"flex items-center justify-end\"><button hx-get=\"/admin/applications/profiles/new?modal=true\" hx-target=\"#modal-container\" class=\"px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-xs\">+ Add Profile Policy</button></div><div class=\"bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden\"><table class=\"min-w-full divide-y divide-gray-200 text-sm\"><thead><tr class=\"bg-gray-50 text-gray-500 font-semibold border-b border-gray-200\"><th class=\"px-6 py-3 text-left\">Profile Name</th><th class=\"px-6 py-3 text-left\">Auth Method</th><th class=\"px-6 py-3 text-left\">Signing Algorithm</th><th class=\"px-6 py-3 text-left\">RTR</th><th class=\"px-6 py-3 text-right\">Actions</th></tr></thead> <tbody class=\"divide-y divide-gray-200\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -413,7 +413,7 @@ func ApplicationsContent(props ApplicationsPageProps) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</tbody></table></div></div><!-- SUB-TAB 3: Groups Overview --><div x-show=\"currentTab === 'groups'\" class=\"space-y-4\"><div class=\"flex items-center justify-end\"><button hx-get=\"/admin/applications/groups/new?modal=true\" hx-target=\"#modal-container\" class=\"px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm\">+ Add Group Bounds</button></div><div class=\"bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden\"><table class=\"min-w-full divide-y divide-gray-200 text-sm\"><thead><tr class=\"bg-gray-50 text-gray-500 font-semibold border-b border-gray-200\"><th class=\"px-6 py-3 text-left\">Group Name</th><th class=\"px-6 py-3 text-left\">Redirect Whitelist</th><th class=\"px-6 py-3 text-left\">Logout Propagations</th><th class=\"px-6 py-3 text-right\">Actions</th></tr></thead> <tbody class=\"divide-y divide-gray-200\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</tbody></table></div></div><!-- SUB-TAB 3: Groups Overview --><div x-show=\"currentTab === 'groups'\" class=\"space-y-4\"><div class=\"flex items-center justify-end\"><button hx-get=\"/admin/applications/groups/new?modal=true\" hx-target=\"#modal-container\" class=\"px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-xs\">+ Add Group Bounds</button></div><div class=\"bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden\"><table class=\"min-w-full divide-y divide-gray-200 text-sm\"><thead><tr class=\"bg-gray-50 text-gray-500 font-semibold border-b border-gray-200\"><th class=\"px-6 py-3 text-left\">Group Name</th><th class=\"px-6 py-3 text-left\">Redirect Whitelist</th><th class=\"px-6 py-3 text-left\">Logout Propagations</th><th class=\"px-6 py-3 text-right\">Actions</th></tr></thead> <tbody class=\"divide-y divide-gray-200\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -449,14 +449,14 @@ func ApplicationsContent(props ApplicationsPageProps) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			for _, u := range grp.RedirectURIs {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<span class=\"inline-flex px-1.5 py-0.5 rounded font-mono bg-slate-100\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<span class=\"inline-flex px-1.5 py-0.5 rounded-sm font-mono bg-slate-100\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var26 string
 				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(u)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 185, Col: 85}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 185, Col: 88}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 				if templ_7745c5c3_Err != nil {
@@ -472,14 +472,14 @@ func ApplicationsContent(props ApplicationsPageProps) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if grp.FrontChannelLogoutURI != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<div>Front: <span class=\"font-mono bg-slate-50 p-0.5 rounded\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<div>Front: <span class=\"font-mono bg-slate-50 p-0.5 rounded-sm\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var27 string
 				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(grp.FrontChannelLogoutURI)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 191, Col: 99}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 191, Col: 102}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 				if templ_7745c5c3_Err != nil {
@@ -491,14 +491,14 @@ func ApplicationsContent(props ApplicationsPageProps) templ.Component {
 				}
 			}
 			if grp.BackChannelLogoutURI != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<div>Back: <span class=\"font-mono bg-slate-50 p-0.5 rounded\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<div>Back: <span class=\"font-mono bg-slate-50 p-0.5 rounded-sm\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var28 string
 				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(grp.BackChannelLogoutURI)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 194, Col: 97}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 194, Col: 100}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 				if templ_7745c5c3_Err != nil {
@@ -653,7 +653,7 @@ func ApplicationForm(props ApplicationFormProps) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4 max-w-xl mx-auto\"><h3 class=\"text-base font-bold text-gray-900 border-b pb-2 flex items-center\"><span class=\"w-2.5 h-2.5 bg-blue-600 rounded-full mr-2\"></span>Application Configurations</h3>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-xs space-y-4 max-w-xl mx-auto\"><h3 class=\"text-base font-bold text-gray-900 border-b pb-2 flex items-center\"><span class=\"w-2.5 h-2.5 bg-blue-600 rounded-full mr-2\"></span>Application Configurations</h3>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -693,12 +693,12 @@ func ApplicationForm(props ApplicationFormProps) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<div x-data=\"idSecretGenerator\" data-initial-value=\"\"><label class=\"block text-sm font-medium text-slate-700 mb-1\">Client ID</label><div class=\"flex space-x-2\"><input type=\"text\" name=\"client_id\" x-model=\"value\" placeholder=\"Enter Client ID or generate one\" pattern=\"^[a-zA-Z0-9\\-_\\.~]+$\" title=\"Only RFC 3986 unreserved characters allowed (A-Z, a-z, 0-9, -, _, ., ~)\" class=\"flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono\" required> <button type=\"button\" @click=\"generate()\" class=\"px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm font-semibold transition cursor-pointer\">Generate</button></div><p class=\"text-xs text-slate-500 mt-1\">Unique identifier. Restricted to unreserved characters (RFC 3986 Section 2.3).</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<div x-data=\"idSecretGenerator\" data-initial-value=\"\"><label class=\"block text-sm font-medium text-slate-700 mb-1\">Client ID</label><div class=\"flex space-x-2\"><input type=\"text\" name=\"client_id\" x-model=\"value\" placeholder=\"Enter Client ID or generate one\" pattern=\"^[a-zA-Z0-9\\-_\\.~]+$\" title=\"Only RFC 3986 unreserved characters allowed (A-Z, a-z, 0-9, -, _, ., ~)\" class=\"flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-sm font-mono\" required> <button type=\"button\" @click=\"generate()\" class=\"px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm font-semibold transition cursor-pointer\">Generate</button></div><p class=\"text-xs text-slate-500 mt-1\">Unique identifier. Restricted to unreserved characters (RFC 3986 Section 2.3).</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "<div><label class=\"block text-sm font-medium text-slate-700 mb-1\">Security Profile Policy</label> <select name=\"profile_id\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "<div><label class=\"block text-sm font-medium text-slate-700 mb-1\">Security Profile Policy</label> <select name=\"profile_id\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-sm\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -790,7 +790,7 @@ func ApplicationForm(props ApplicationFormProps) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "</div><div><label class=\"block text-sm font-medium text-slate-700 mb-1\">Authorization Bounds Group</label> <select name=\"group_id\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "</div><div><label class=\"block text-sm font-medium text-slate-700 mb-1\">Authorization Bounds Group</label> <select name=\"group_id\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-sm\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1001,7 +1001,7 @@ func ProfileForm(props ProfileFormProps) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 97, "<div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4 max-w-xl mx-auto\"><h3 class=\"text-base font-bold text-gray-900 border-b pb-2 flex items-center\"><span class=\"w-2.5 h-2.5 bg-purple-600 rounded-full mr-2\"></span>Security Profile Policy</h3>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 97, "<div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-xs space-y-4 max-w-xl mx-auto\"><h3 class=\"text-base font-bold text-gray-900 border-b pb-2 flex items-center\"><span class=\"w-2.5 h-2.5 bg-purple-600 rounded-full mr-2\"></span>Security Profile Policy</h3>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1009,7 +1009,7 @@ func ProfileForm(props ProfileFormProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 98, "<div><label class=\"block text-sm font-medium text-slate-700 mb-1\">Token Endpoint Auth Method</label> <select name=\"token_endpoint_auth_method\" x-model=\"authMethod\" @change=\"if($el.value === 'none') { enforceRtr = true }\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm\"><option value=\"client_secret_post\">Client Secret Post (Form Parameters)</option> <option value=\"client_secret_basic\">Client Secret Basic (HTTP Basic Auth Header)</option> <option value=\"none\">None (Public Client Auth)</option></select></div><div><label class=\"block text-sm font-medium text-slate-700 mb-1\">Token Signing Algorithm</label> <select name=\"signing_algorithm\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm\"><option value=\"RS256\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 98, "<div><label class=\"block text-sm font-medium text-slate-700 mb-1\">Token Endpoint Auth Method</label> <select name=\"token_endpoint_auth_method\" x-model=\"authMethod\" @change=\"if($el.value === 'none') { enforceRtr = true }\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-sm\"><option value=\"client_secret_post\">Client Secret Post (Form Parameters)</option> <option value=\"client_secret_basic\">Client Secret Basic (HTTP Basic Auth Header)</option> <option value=\"none\">None (Public Client Auth)</option></select></div><div><label class=\"block text-sm font-medium text-slate-700 mb-1\">Token Signing Algorithm</label> <select name=\"signing_algorithm\" class=\"w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-sm\"><option value=\"RS256\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1052,7 +1052,7 @@ func ProfileForm(props ProfileFormProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 105, "\"><input type=\"hidden\" name=\"access_token_lifetime\" :value=\"seconds\"> <label class=\"block text-sm font-medium text-slate-700 mb-1\">Access Token Lifetime</label><div class=\"flex space-x-2\"><input type=\"number\" min=\"1\" x-model=\"value\" @input=\"updateSeconds()\" class=\"w-24 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm\"> <select x-model=\"unit\" @change=\"updateSeconds()\" class=\"flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm\"><option value=\"seconds\">Seconds</option> <option value=\"minutes\">Minutes</option> <option value=\"hours\">Hours</option> <option value=\"days\">Days</option></select></div></div><div x-data=\"lifetimeCalculator\" data-initial-seconds=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 105, "\"><input type=\"hidden\" name=\"access_token_lifetime\" :value=\"seconds\"> <label class=\"block text-sm font-medium text-slate-700 mb-1\">Access Token Lifetime</label><div class=\"flex space-x-2\"><input type=\"number\" min=\"1\" x-model=\"value\" @input=\"updateSeconds()\" class=\"w-24 px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-sm\"> <select x-model=\"unit\" @change=\"updateSeconds()\" class=\"flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-xs bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-sm\"><option value=\"seconds\">Seconds</option> <option value=\"minutes\">Minutes</option> <option value=\"hours\">Hours</option> <option value=\"days\">Days</option></select></div></div><div x-data=\"lifetimeCalculator\" data-initial-seconds=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1065,7 +1065,7 @@ func ProfileForm(props ProfileFormProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 106, "\"><input type=\"hidden\" name=\"id_token_lifetime\" :value=\"seconds\"> <label class=\"block text-sm font-medium text-slate-700 mb-1\">ID Token Lifetime</label><div class=\"flex space-x-2\"><input type=\"number\" min=\"1\" x-model=\"value\" @input=\"updateSeconds()\" class=\"w-24 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm\"> <select x-model=\"unit\" @change=\"updateSeconds()\" class=\"flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm\"><option value=\"seconds\">Seconds</option> <option value=\"minutes\">Minutes</option> <option value=\"hours\">Hours</option> <option value=\"days\">Days</option></select></div></div><div x-data=\"lifetimeCalculator\" data-initial-seconds=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 106, "\"><input type=\"hidden\" name=\"id_token_lifetime\" :value=\"seconds\"> <label class=\"block text-sm font-medium text-slate-700 mb-1\">ID Token Lifetime</label><div class=\"flex space-x-2\"><input type=\"number\" min=\"1\" x-model=\"value\" @input=\"updateSeconds()\" class=\"w-24 px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-sm\"> <select x-model=\"unit\" @change=\"updateSeconds()\" class=\"flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-xs bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-sm\"><option value=\"seconds\">Seconds</option> <option value=\"minutes\">Minutes</option> <option value=\"hours\">Hours</option> <option value=\"days\">Days</option></select></div></div><div x-data=\"lifetimeCalculator\" data-initial-seconds=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1078,7 +1078,7 @@ func ProfileForm(props ProfileFormProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 107, "\"><input type=\"hidden\" name=\"refresh_token_lifetime\" :value=\"seconds\"> <label class=\"block text-sm font-medium text-slate-700 mb-1\">Refresh Token Lifetime</label><div class=\"flex space-x-2\"><input type=\"number\" min=\"1\" x-model=\"value\" @input=\"updateSeconds()\" class=\"w-24 px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm\"> <select x-model=\"unit\" @change=\"updateSeconds()\" class=\"flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm\"><option value=\"seconds\">Seconds</option> <option value=\"minutes\">Minutes</option> <option value=\"hours\">Hours</option> <option value=\"days\">Days</option></select></div></div><div class=\"flex items-center pt-2\"><input type=\"checkbox\" id=\"enforce_rtr\" name=\"enforce_rtr\" value=\"true\" x-model=\"enforceRtr\" :disabled=\"authMethod === 'none'\" class=\"w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500\"> <label for=\"enforce_rtr\" class=\"ml-2 block text-sm font-medium text-slate-700 select-none\">Enforce Refresh Token Rotation (RTR)</label></div></div><div class=\"flex justify-end space-x-3 border-t border-gray-200 pt-4 bg-gray-50 px-6 py-4 rounded-b-xl -mx-6 -mb-6\"><button type=\"button\" class=\"px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 transition-colors cursor-pointer\" @click=\"close()\">Cancel</button> <button type=\"submit\" class=\"px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition cursor-pointer\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 107, "\"><input type=\"hidden\" name=\"refresh_token_lifetime\" :value=\"seconds\"> <label class=\"block text-sm font-medium text-slate-700 mb-1\">Refresh Token Lifetime</label><div class=\"flex space-x-2\"><input type=\"number\" min=\"1\" x-model=\"value\" @input=\"updateSeconds()\" class=\"w-24 px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-sm\"> <select x-model=\"unit\" @change=\"updateSeconds()\" class=\"flex-1 px-3 py-2 border border-slate-300 rounded-lg shadow-xs bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-sm\"><option value=\"seconds\">Seconds</option> <option value=\"minutes\">Minutes</option> <option value=\"hours\">Hours</option> <option value=\"days\">Days</option></select></div></div><div class=\"flex items-center pt-2\"><input type=\"checkbox\" id=\"enforce_rtr\" name=\"enforce_rtr\" value=\"true\" x-model=\"enforceRtr\" :disabled=\"authMethod === 'none'\" class=\"w-4 h-4 text-blue-600 border-slate-300 rounded-sm focus:ring-blue-500\"> <label for=\"enforce_rtr\" class=\"ml-2 block text-sm font-medium text-slate-700 select-none\">Enforce Refresh Token Rotation (RTR)</label></div></div><div class=\"flex justify-end space-x-3 border-t border-gray-200 pt-4 bg-gray-50 px-6 py-4 rounded-b-xl -mx-6 -mb-6\"><button type=\"button\" class=\"px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 transition-colors cursor-pointer\" @click=\"close()\">Cancel</button> <button type=\"submit\" class=\"px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition cursor-pointer\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1157,7 +1157,7 @@ func GroupForm(props GroupFormProps) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 115, "<!-- CARD 1: GENERAL IDENTIFIERS (Independent) --><div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4\"><h3 class=\"text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center\"><span class=\"w-2.5 h-2.5 bg-slate-800 rounded-full mr-2\"></span> Identity Classification</h3>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 115, "<!-- CARD 1: GENERAL IDENTIFIERS (Independent) --><div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-xs space-y-4\"><h3 class=\"text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center\"><span class=\"w-2.5 h-2.5 bg-slate-800 rounded-full mr-2\"></span> Identity Classification</h3>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1165,33 +1165,46 @@ func GroupForm(props GroupFormProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 116, "</div><!-- CARD 2: NETWORK PERIMETER ROUTING (All 4 URIs Bound Together) --><div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-5\" x-data=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 116, "</div><!-- CARD 2: NETWORK PERIMETER ROUTING (All 4 URIs Bound Together) --><div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-xs space-y-5\" x-data=\"redirectUriManager\" data-initial-urls=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var54 string
-		templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("{ urls: %s, defaultUrl: '%s' }", marshalURLs(props.Group.RedirectURIs), props.Group.RedirectURI))
+		templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.ResolveAttributeValue(marshalURLs(props.Group.RedirectURIs))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 409, Col: 200}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 409, Col: 167}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var54)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 117, "\"><h3 class=\"text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center\"><span class=\"w-2.5 h-2.5 bg-green-600 rounded-full mr-2\"></span> Network Perimeter Routing</h3><!-- 1. Interactive Whitelist Redirect URIs Manager --><div class=\"space-y-2\"><label class=\"block text-sm font-semibold text-gray-700\">Allowed Whitelist Redirect URIs</label><div class=\"flex space-x-2\"><input type=\"url\" id=\"new-redirect-url\" placeholder=\"https://example.com\" class=\"flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 shadow-sm\"> <button type=\"button\" @click=\"const el = document.getElementById('new-redirect-url'); const val = el.value.trim(); if(val) { if(!urls.includes(val)) urls.push(val); if(!defaultUrl) defaultUrl = val; el.value = ''; }\" class=\"px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-slate-800 transition-colors shadow-sm shrink-0\">Add</button></div><template x-for=\"url in urls\"><input type=\"hidden\" name=\"redirect_uris\" :value=\"url\"></template><div class=\"space-y-1.5 max-h-32 overflow-y-auto border border-gray-100 p-2.5 rounded-lg bg-gray-50 mt-2\"><template x-for=\"(url, index) in urls\" :key=\"index\"><div class=\"flex items-center justify-between text-xs font-mono bg-white px-3 py-2 rounded-md border border-gray-200 shadow-sm\"><span x-text=\"url\" class=\"text-gray-700 truncate mr-2 select-all\"></span> <button type=\"button\" @click=\"urls.splice(index, 1); if(defaultUrl === url) defaultUrl = urls[0] || '';\" class=\"text-gray-400 hover:text-red-500 font-bold text-sm px-1\">✕</button></div></template></div></div><!-- 2. Default Redirect URI Selection Dropdown --><div class=\"pt-2\"><label class=\"block text-sm font-semibold text-gray-700 mb-1\">Implicit Default Redirect URI</label> <select name=\"default_redirect_uri\" x-model=\"defaultUrl\" class=\"w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm\"><option value=\"\">-- Choose fallback URL from active whitelist above --</option><template x-for=\"url in urls\" :key=\"url\"><option :value=\"url\" x-text=\"url\" :selected=\"defaultUrl === url\"></option></template></select></div><!-- 3. Post-Logout Redirect URIs Whitelist --><div x-data=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 117, "\" data-default-url=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var55 string
-		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("urlManager(%s)", marshalURLs(props.Group.PostLogoutRedirectURIs)))
+		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.ResolveAttributeValue(props.Group.RedirectURI)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 449, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 409, Col: 212}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var55)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 118, "\" class=\"space-y-2 pt-2\"><label class=\"block text-sm font-semibold text-gray-700\">Post-Logout Whitelist Redirect URIs</label><div class=\"flex space-x-2\"><input type=\"url\" x-model=\"newUrl\" placeholder=\"https://example.com\" class=\"flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 shadow-sm\" @keydown.enter.prevent=\"addUrl()\"> <button type=\"button\" @click=\"addUrl()\" class=\"px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-slate-800 transition-colors shadow-sm shrink-0\">Add</button></div><template x-for=\"url in urls\"><input type=\"hidden\" name=\"post_logout_redirect_uris\" :value=\"url\"></template><div class=\"space-y-1.5 max-h-32 overflow-y-auto border border-gray-100 p-2.5 rounded-lg bg-gray-50 mt-2\"><template x-for=\"(url, index) in urls\" :key=\"index\"><div class=\"flex items-center justify-between text-xs font-mono bg-white px-3 py-2 rounded-md border border-gray-200 shadow-sm\"><span x-text=\"url\" class=\"text-gray-700 truncate mr-2 select-all\"></span> <button type=\"button\" @click=\"removeUrl(index)\" class=\"text-gray-400 hover:text-red-500 font-bold text-sm px-1\">✕</button></div></template></div></div><!-- 4. Front-Channel and Back-Channel Logout Channels (Vertically Stacked for Width Optimization) --><div class=\"space-y-4 pt-2\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 118, "\"><h3 class=\"text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center\"><span class=\"w-2.5 h-2.5 bg-green-600 rounded-full mr-2\"></span> Network Perimeter Routing</h3><!-- 1. Interactive Whitelist Redirect URIs Manager --><div class=\"space-y-2\"><label class=\"block text-sm font-semibold text-gray-700\">Allowed Whitelist Redirect URIs</label><div class=\"flex space-x-2\"><input type=\"url\" x-model=\"newUrl\" @keydown.enter.prevent=\"addUrl()\" placeholder=\"https://example.com\" class=\"flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 shadow-xs\"> <button type=\"button\" @click=\"addUrl()\" class=\"px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-slate-800 transition-colors shadow-xs shrink-0\">Add</button></div><template x-for=\"url in urls\"><input type=\"hidden\" name=\"redirect_uris\" :value=\"url\"></template><div class=\"space-y-1.5 max-h-32 overflow-y-auto border border-gray-100 p-2.5 rounded-lg bg-gray-50 mt-2\"><template x-for=\"(url, index) in urls\" :key=\"index\"><div class=\"flex items-center justify-between text-xs font-mono bg-white px-3 py-2 rounded-md border border-gray-200 shadow-xs\"><span x-text=\"url\" class=\"text-gray-700 truncate mr-2 select-all\"></span> <button type=\"button\" @click=\"removeUrl(index)\" class=\"text-gray-400 hover:text-red-500 font-bold text-sm px-1\">✕</button></div></template></div></div><!-- 2. Default Redirect URI Selection Dropdown --><div class=\"pt-2\"><label class=\"block text-sm font-semibold text-gray-700 mb-1\">Implicit Default Redirect URI</label> <select name=\"default_redirect_uri\" x-model=\"defaultUrl\" class=\"w-full px-3 py-2 border border-gray-300 rounded-lg shadow-xs bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-sm\"><option value=\"\">-- Choose fallback URL from active whitelist above --</option><template x-for=\"url in urls\" :key=\"url\"><option :value=\"url\" x-text=\"url\" :selected=\"defaultUrl === url\"></option></template></select></div><!-- 3. Post-Logout Redirect URIs Whitelist --><div x-data=\"urlManager\" data-initial-urls=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var56 string
+		templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.ResolveAttributeValue(marshalURLs(props.Group.PostLogoutRedirectURIs))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 449, Col: 95}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var56)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 119, "\" class=\"space-y-2 pt-2\"><label class=\"block text-sm font-semibold text-gray-700\">Post-Logout Whitelist Redirect URIs</label><div class=\"flex space-x-2\"><input type=\"url\" x-model=\"newUrl\" placeholder=\"https://example.com\" class=\"flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 shadow-xs\" @keydown.enter.prevent=\"addUrl()\"> <button type=\"button\" @click=\"addUrl()\" class=\"px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-slate-800 transition-colors shadow-xs shrink-0\">Add</button></div><template x-for=\"url in urls\"><input type=\"hidden\" name=\"post_logout_redirect_uris\" :value=\"url\"></template><div class=\"space-y-1.5 max-h-32 overflow-y-auto border border-gray-100 p-2.5 rounded-lg bg-gray-50 mt-2\"><template x-for=\"(url, index) in urls\" :key=\"index\"><div class=\"flex items-center justify-between text-xs font-mono bg-white px-3 py-2 rounded-md border border-gray-200 shadow-xs\"><span x-text=\"url\" class=\"text-gray-700 truncate mr-2 select-all\"></span> <button type=\"button\" @click=\"removeUrl(index)\" class=\"text-gray-400 hover:text-red-500 font-bold text-sm px-1\">✕</button></div></template></div></div><!-- 4. Front-Channel and Back-Channel Logout Channels (Vertically Stacked for Width Optimization) --><div class=\"space-y-4 pt-2\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1203,231 +1216,231 @@ func GroupForm(props GroupFormProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 119, "</div></div><!-- CARD 3: TOKEN CAPABILITY SCOPES & SECURITY MATRIX --><div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-5\" x-data=\"{ selectedScopes: [] }\" x-init=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 120, "</div></div><!-- CARD 3: TOKEN CAPABILITY SCOPES & SECURITY MATRIX --><div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-xs space-y-5\" x-data=\"{ selectedScopes: [] }\" x-init=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var56 string
-		templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("selectedScopes = %s", marshalStringSlice(props.Group.AllowedScopes)))
+		var templ_7745c5c3_Var57 string
+		templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("selectedScopes = %s", marshalStringSlice(props.Group.AllowedScopes)))
 		if templ_7745c5c3_Err != nil {
 			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 474, Col: 204}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var56)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var57)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 120, "\"><h3 class=\"text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center\"><span class=\"w-2.5 h-2.5 bg-purple-600 rounded-full mr-2\"></span> Token Capability Scoping</h3><div class=\"space-y-2\"><label class=\"block text-sm font-semibold text-gray-700\">Permitted OIDC Authorization Scopes</label><div class=\"flex flex-wrap gap-2 p-1\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 121, "\"><h3 class=\"text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center\"><span class=\"w-2.5 h-2.5 bg-purple-600 rounded-full mr-2\"></span> Token Capability Scoping</h3><div class=\"space-y-2\"><label class=\"block text-sm font-semibold text-gray-700\">Permitted OIDC Authorization Scopes</label><div class=\"flex flex-wrap gap-2 p-1\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, b := range []string{"openid", "profile", "email", "offline_access", "phone", "address"} {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 121, "<label class=\"inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer select-none transition-all duration-150\" :class=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var57 string
-			templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("selectedScopes.includes('%s') ? 'bg-purple-600 border-purple-600 text-white shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'", b))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 484, Col: 348}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var57)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 122, "\"><input type=\"checkbox\" name=\"scopes\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 122, "<label class=\"inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer select-none transition-all duration-150\" :class=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var58 string
-			templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.ResolveAttributeValue(b)
+			templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("selectedScopes.includes('%s') ? 'bg-purple-600 border-purple-600 text-white shadow-xs' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'", b))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 485, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 484, Col: 348}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var58)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 123, "\" :checked=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 123, "\"><input type=\"checkbox\" name=\"scopes\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var59 string
-			templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("selectedScopes.includes('%s')", b))
+			templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.ResolveAttributeValue(b)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 485, Col: 114}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 485, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var59)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 124, "\" @change=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 124, "\" :checked=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var60 string
-			templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("if($el.checked) { if(!selectedScopes.includes('%s')) selectedScopes.push('%s') } else { selectedScopes = selectedScopes.filter(x => x !== '%s') }", b, b, b))
+			templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("selectedScopes.includes('%s')", b))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 485, Col: 296}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 485, Col: 114}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 125, "\" class=\"hidden\"> <span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 125, "\" @change=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var61 string
-			templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs(b)
+			templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("if($el.checked) { if(!selectedScopes.includes('%s')) selectedScopes.push('%s') } else { selectedScopes = selectedScopes.filter(x => x !== '%s') }", b, b, b))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 486, Col: 16}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 485, Col: 296}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 126, "</span></label>")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var61)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 127, "</div></div><!-- SCOPE TO ACR/AAL INTERACTIVE ENFORCEMENT MATRIX --><div class=\"pt-4 border-t border-gray-100 space-y-3\" x-show=\"selectedScopes.includes('openid')\"><div class=\"flex items-center justify-between\"><label class=\"block text-sm font-semibold text-gray-700\">Scope-to-Assurance Level Matrix Enforcement</label> <span class=\"inline-flex px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wide bg-purple-50 text-purple-700 border border-purple-100\">FAPI / NIST Compliance</span></div><p class=\"text-xs text-gray-500\">Bind explicit minimal cryptographic constraints to scope profiles, forcing prompt elevation steps if requested audiences demand hardened assurance lanes.</p><div class=\"bg-gray-50 rounded-xl p-4 border border-gray-200 overflow-x-auto\"><table class=\"min-w-full divide-y divide-gray-200 text-xs text-left font-medium\"><thead><tr class=\"text-gray-400 font-bold uppercase tracking-wider\"><th class=\"pb-2\">Scope Target</th><th class=\"pb-2 px-3\">Authenticator Level (AAL)</th><th class=\"pb-2 px-3\">Identity Level (IAL)</th></tr></thead> <tbody class=\"divide-y divide-gray-100\"><template x-for=\"scope in selectedScopes\" :key=\"scope\"><tr class=\"text-gray-700\"><td class=\"py-2.5 font-mono text-gray-900 font-bold\" x-text=\"scope\"></td><td class=\"py-2.5 px-3\"><select :name=\"'aal_mapping_' + scope\" class=\"px-2 py-1 bg-white border border-gray-300 rounded shadow-sm focus:outline-none text-xs\"><option value=\"1\">AAL1 (Single-Factor / Password Only)</option> <option value=\"2\">AAL2 (Standard Multi-Factor / Hardware OTP / SMS)</option> <option value=\"3\">AAL3 (Cryptographic Token / WebAuthn / Passkeys)</option></select></td><td class=\"py-2.5 px-3\"><select :name=\"'ial_mapping_' + scope\" class=\"px-2 py-1 bg-white border border-gray-300 rounded shadow-sm focus:outline-none text-xs\"><option value=\"1\">IAL1 (Self-Asserted Data / Unverified Profile Attributes)</option> <option value=\"2\">IAL2 (Verified Identity / Remote Document Verification Pass)</option> <option value=\"3\">IAL3 (Biometric Physical / In-Person Hard Cryptographic Check)</option></select></td></tr></template></tbody></table></div></div></div><!-- CARD 4: AUTHENTICATION ROUTING (Internal Partition IDs Hidden) --><div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4\"><h3 class=\"text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center\"><span class=\"w-2.5 h-2.5 bg-blue-600 rounded-full mr-2\"></span> Identity Routing Topologies</h3><div class=\"space-y-4 bg-gray-50 border border-gray-200 p-4 rounded-xl max-h-64 overflow-y-auto shadow-inner\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		for _, part := range props.PartitionsWithIdps {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 128, "<div class=\"space-y-2 border-b border-gray-200 pb-3 last:border-0 last:pb-0\"><div class=\"flex items-center justify-between mb-1\"><h4 class=\"text-xs font-bold text-gray-500 uppercase tracking-wider\">Partition: ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 126, "\" class=\"hidden\"> <span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var62 string
-			templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinStringErrs(string(part.PartitionName))
+			templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinStringErrs(b)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 548, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 486, Col: 16}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 129, "</h4></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 127, "</span></label>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 128, "</div></div><!-- SCOPE TO ACR/AAL INTERACTIVE ENFORCEMENT MATRIX --><div class=\"pt-4 border-t border-gray-100 space-y-3\" x-show=\"selectedScopes.includes('openid')\"><div class=\"flex items-center justify-between\"><label class=\"block text-sm font-semibold text-gray-700\">Scope-to-Assurance Level Matrix Enforcement</label> <span class=\"inline-flex px-1.5 py-0.5 rounded-sm text-[10px] uppercase font-bold tracking-wide bg-purple-50 text-purple-700 border border-purple-100\">FAPI / NIST Compliance</span></div><p class=\"text-xs text-gray-500\">Bind explicit minimal cryptographic constraints to scope profiles, forcing prompt elevation steps if requested audiences demand hardened assurance lanes.</p><div class=\"bg-gray-50 rounded-xl p-4 border border-gray-200 overflow-x-auto\"><table class=\"min-w-full divide-y divide-gray-200 text-xs text-left font-medium\"><thead><tr class=\"text-gray-400 font-bold uppercase tracking-wider\"><th class=\"pb-2\">Scope Target</th><th class=\"pb-2 px-3\">Authenticator Level (AAL)</th><th class=\"pb-2 px-3\">Identity Level (IAL)</th></tr></thead> <tbody class=\"divide-y divide-gray-100\"><template x-for=\"scope in selectedScopes\" :key=\"scope\"><tr class=\"text-gray-700\"><td class=\"py-2.5 font-mono text-gray-900 font-bold\" x-text=\"scope\"></td><td class=\"py-2.5 px-3\"><select :name=\"'aal_mapping_' + scope\" class=\"px-2 py-1 bg-white border border-gray-300 rounded-sm shadow-xs focus:outline-hidden text-xs\"><option value=\"1\">AAL1 (Single-Factor / Password Only)</option> <option value=\"2\">AAL2 (Standard Multi-Factor / Hardware OTP / SMS)</option> <option value=\"3\">AAL3 (Cryptographic Token / WebAuthn / Passkeys)</option></select></td><td class=\"py-2.5 px-3\"><select :name=\"'ial_mapping_' + scope\" class=\"px-2 py-1 bg-white border border-gray-300 rounded-sm shadow-xs focus:outline-hidden text-xs\"><option value=\"1\">IAL1 (Self-Asserted Data / Unverified Profile Attributes)</option> <option value=\"2\">IAL2 (Verified Identity / Remote Document Verification Pass)</option> <option value=\"3\">IAL3 (Biometric Physical / In-Person Hard Cryptographic Check)</option></select></td></tr></template></tbody></table></div></div></div><!-- CARD 4: AUTHENTICATION ROUTING (Internal Partition IDs Hidden) --><div class=\"bg-white p-6 border border-gray-200 rounded-xl shadow-xs space-y-4\"><h3 class=\"text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center\"><span class=\"w-2.5 h-2.5 bg-blue-600 rounded-full mr-2\"></span> Identity Routing Topologies</h3><div class=\"space-y-4 bg-gray-50 border border-gray-200 p-4 rounded-xl max-h-64 overflow-y-auto shadow-inner\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		for _, part := range props.PartitionsWithIdps {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 129, "<div class=\"space-y-2 border-b border-gray-200 pb-3 last:border-0 last:pb-0\"><div class=\"flex items-center justify-between mb-1\"><h4 class=\"text-xs font-bold text-gray-500 uppercase tracking-wider\">Partition: ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var63 string
+			templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(string(part.PartitionName))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 548, Col: 47}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 130, "</h4></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(part.Providers) > 0 {
 				for _, idp := range part.Providers {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 130, "<div class=\"flex items-center py-0.5\"><input type=\"checkbox\" id=\"")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var63 string
-					templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("idp-%s", idp.ID.String()))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 555, Col: 75}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var63)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 131, "\" name=\"allowed_idps\" value=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 131, "<div class=\"flex items-center py-0.5\"><input type=\"checkbox\" id=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var64 string
-					templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.ResolveAttributeValue(idp.ID.String())
+					templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("idp-%s", idp.ID.String()))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 555, Col: 121}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 555, Col: 75}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var64)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 132, "\"")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					if containsUUID(props.Group.AllowedIDPIDs, idp.ID) {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 133, " checked")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 134, " class=\"w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer\"> <label for=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 132, "\" name=\"allowed_idps\" value=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var65 string
-					templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("idp-%s", idp.ID.String()))
+					templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.ResolveAttributeValue(idp.ID.String())
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 556, Col: 60}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 555, Col: 121}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var65)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 135, "\" class=\"ml-2.5 text-sm font-medium text-gray-700 cursor-pointer select-none hover:text-gray-900 transition-colors\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 133, "\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					if containsUUID(props.Group.AllowedIDPIDs, idp.ID) {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 134, " checked")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 135, " class=\"w-4 h-4 text-blue-600 border-gray-300 rounded-sm focus:ring-blue-500 cursor-pointer\"> <label for=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var66 string
+					templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("idp-%s", idp.ID.String()))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 556, Col: 60}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var66)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 136, "\" class=\"ml-2.5 text-sm font-medium text-gray-700 cursor-pointer select-none hover:text-gray-900 transition-colors\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					if idp.IDPType == "username-password" {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 136, "Local Accounts")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 137, "Local Accounts")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					} else {
-						var templ_7745c5c3_Var66 string
-						templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.JoinStringErrs(idp.Alias)
+						var templ_7745c5c3_Var67 string
+						templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs(idp.Alias)
 						if templ_7745c5c3_Err != nil {
 							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 560, Col: 22}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var66))
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 137, " <span class=\"text-xs text-gray-400 font-mono\">[")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						var templ_7745c5c3_Var67 string
-						templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs(idp.IDPType)
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 560, Col: 85}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 138, "]</span>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 138, " <span class=\"text-xs text-gray-400 font-mono\">[")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						var templ_7745c5c3_Var68 string
+						templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.JoinStringErrs(idp.IDPType)
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 560, Col: 85}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 139, "]</span>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 139, "</label></div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 140, "</label></div>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 140, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 141, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 141, "</div></div><!-- FOOTER STICKY ACTIONS BAR --><div class=\"flex justify-end space-x-3 border-t border-gray-200 pt-4 bg-gray-50 px-6 py-4 rounded-b-xl -mx-6 -mb-6\"><button type=\"button\" class=\"px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 transition-colors cursor-pointer\" @click=\"close()\">Cancel</button> <button type=\"submit\" class=\"px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm cursor-pointer\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 142, "</div></div><!-- FOOTER STICKY ACTIONS BAR --><div class=\"flex justify-end space-x-3 border-t border-gray-200 pt-4 bg-gray-50 px-6 py-4 rounded-b-xl -mx-6 -mb-6\"><button type=\"button\" class=\"px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 transition-colors cursor-pointer\" @click=\"close()\">Cancel</button> <button type=\"submit\" class=\"px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-xs cursor-pointer\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if props.IsEdit {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 142, "Save Changes")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 143, "Save Changes")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 143, "Create Group")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 144, "Create Group")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 144, "</button></div></form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 145, "</button></div></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1451,18 +1464,18 @@ func StatusBadge(isEnabled bool) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var68 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var68 == nil {
-			templ_7745c5c3_Var68 = templ.NopComponent
+		templ_7745c5c3_Var69 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var69 == nil {
+			templ_7745c5c3_Var69 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		if isEnabled {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 145, "<span class=\"inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-100\">Active</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 146, "<span class=\"inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-100\">Active</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 146, "<span class=\"inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-100\">Disabled</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 147, "<span class=\"inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-100\">Disabled</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1496,38 +1509,38 @@ func ApplicationCredentialsResetPanel(clientID string, plainSecret string) templ
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var69 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var69 == nil {
-			templ_7745c5c3_Var69 = templ.NopComponent
+		templ_7745c5c3_Var70 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var70 == nil {
+			templ_7745c5c3_Var70 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 147, "<div class=\"bg-white p-6 rounded-xl shadow-xl max-w-lg mx-auto border border-yellow-200\"><div class=\"flex items-center space-x-3 text-yellow-600 mb-4\"><svg class=\"w-8 h-8\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z\"></path></svg><h3 class=\"text-lg font-bold text-gray-900\">Application Secret Generated</h3></div><p class=\"text-sm text-slate-600 mb-4\">A new client secret has been generated for application <strong class=\"font-mono\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var70 string
-		templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.JoinStringErrs(clientID)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 606, Col: 132}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var70))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 148, "</strong>. You must copy and save this secret now. <strong class=\"text-red-600\">It will never be shown again!</strong></p><div class=\"p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm font-mono text-slate-800 break-all select-all mb-6\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 148, "<div class=\"bg-white p-6 rounded-xl shadow-xl max-w-lg mx-auto border border-yellow-200\"><div class=\"flex items-center space-x-3 text-yellow-600 mb-4\"><svg class=\"w-8 h-8\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z\"></path></svg><h3 class=\"text-lg font-bold text-gray-900\">Application Secret Generated</h3></div><p class=\"text-sm text-slate-600 mb-4\">A new client secret has been generated for application <strong class=\"font-mono\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var71 string
-		templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.JoinStringErrs(plainSecret)
+		templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.JoinStringErrs(clientID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 607, Col: 140}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 606, Col: 132}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var71))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 149, "</div><div class=\"flex justify-end\"><button type=\"button\" class=\"px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-sm font-semibold transition\" @click=\"close()\">I Have Saved It</button></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 149, "</strong>. You must copy and save this secret now. <strong class=\"text-red-600\">It will never be shown again!</strong></p><div class=\"p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm font-mono text-slate-800 break-all select-all mb-6\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var72 string
+		templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.JoinStringErrs(plainSecret)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/applications.templ`, Line: 607, Col: 140}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var72))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 150, "</div><div class=\"flex justify-end\"><button type=\"button\" class=\"px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-sm font-semibold transition\" @click=\"close()\">I Have Saved It</button></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

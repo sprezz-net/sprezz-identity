@@ -1,6 +1,7 @@
 package public
 
 import (
+	"sprezz-identity/internal/views/assets"
 	"fmt"
 
 	"sprezz-identity/internal/domain/model"
@@ -15,8 +16,7 @@ templ ProfileDashboard(user model.UserProfile, identities []model.UserIdentity, 
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>My Profile - Sprezz Identity</title>
-		<script src="https://unpkg.com/htmx.org@1.9.12" nonce={ templ.GetNonce(ctx) }></script>
-		<script src="https://cdn.tailwindcss.com" nonce={ templ.GetNonce(ctx) }></script>
+		@assets.Head()
 	</head>
 	<body class="h-full flex flex-col items-center justify-start p-6 bg-slate-50">
 		<div class="w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden my-8">
@@ -90,13 +90,13 @@ templ UserDetails(user model.UserProfile, hasPasswordIdp bool) {
 
 	if hasPasswordIdp {
 		<div class="pt-4 flex flex-wrap gap-3">
-			<a href={ port.RouteWebProfile + port.RouteWebProfileName } class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm transition">
+			<a href={ port.RouteWebProfile + port.RouteWebProfileName } class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-xs transition">
 				Change Name
 			</a>
-			<a href={ port.RouteWebProfile + port.RouteWebProfileEmail } class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm transition">
+			<a href={ port.RouteWebProfile + port.RouteWebProfileEmail } class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-xs transition">
 				Change Email
 			</a>
-			<a href={ port.RouteWebProfile + port.RouteWebProfilePassword } class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm transition">
+			<a href={ port.RouteWebProfile + port.RouteWebProfilePassword } class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-xs transition">
 				Change Password
 			</a>
 		</div>
@@ -110,7 +110,7 @@ templ CoupledIdentities(identities []model.UserIdentity, providers []model.Ident
 	if len(identities) == 0 {
 		<p class="text-sm text-slate-500 pt-2">No identities connected to this profile yet.</p>
 	} else {
-		<div class="w-full overflow-x-auto border border-slate-100 rounded-xl mt-4 bg-white shadow-sm">
+		<div class="w-full overflow-x-auto border border-slate-100 rounded-xl mt-4 bg-white shadow-xs">
 			<table class="w-full text-left border-collapse text-sm">
 				<thead>
 					<tr class="bg-slate-50 border-b border-slate-100 text-xs font-semibold text-slate-400 uppercase tracking-wider">
@@ -201,8 +201,7 @@ templ ChangePasswordPage(fieldErrors map[string]string, successMsg string) {
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Change Password - Sprezz Identity</title>
-		<script src="https://unpkg.com/htmx.org@1.9.12" nonce={ templ.GetNonce(ctx) }></script>
-		<script src="https://cdn.tailwindcss.com" nonce={ templ.GetNonce(ctx) }></script>
+		@assets.Head()
 	</head>
 	<body class="h-full flex items-center justify-center p-6 bg-slate-50">
 		<div class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
@@ -249,7 +248,7 @@ templ ChangePasswordForm(fieldErrors map[string]string, successMsg string) {
 					name="current_password"
 					autocomplete="current-password"
 					required
-					class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
+					class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
 					placeholder="Enter current password"
 				/>
 				<p class="mt-1 text-xs font-medium text-red-600">{ fieldErrors["current_password"] }</p>
@@ -260,7 +259,7 @@ templ ChangePasswordForm(fieldErrors map[string]string, successMsg string) {
 					name="current_password"
 					autocomplete="current-password"
 					required
-					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
+					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
 					placeholder="Enter current password"
 				/>
 			}
@@ -277,7 +276,7 @@ templ ChangePasswordForm(fieldErrors map[string]string, successMsg string) {
 					autocomplete="new-password"
 					minlength="8"
 					required
-					class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
+					class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
 					placeholder="Minimum 8 characters"
 				/>
 				<p class="mt-1 text-xs font-medium text-red-600">{ fieldErrors["new_password"] }</p>
@@ -289,7 +288,7 @@ templ ChangePasswordForm(fieldErrors map[string]string, successMsg string) {
 					autocomplete="new-password"
 					minlength="8"
 					required
-					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
+					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
 					placeholder="Minimum 8 characters"
 				/>
 			}
@@ -306,7 +305,7 @@ templ ChangePasswordForm(fieldErrors map[string]string, successMsg string) {
 					autocomplete="new-password"
 					minlength="8"
 					required
-					class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
+					class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
 					placeholder="Confirm new password"
 				/>
 				<p class="mt-1 text-xs font-medium text-red-600">{ fieldErrors["confirm_password"] }</p>
@@ -318,7 +317,7 @@ templ ChangePasswordForm(fieldErrors map[string]string, successMsg string) {
 					autocomplete="new-password"
 					minlength="8"
 					required
-					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
+					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
 					placeholder="Confirm new password"
 				/>
 			}
@@ -327,7 +326,7 @@ templ ChangePasswordForm(fieldErrors map[string]string, successMsg string) {
 		<div class="pt-2 flex gap-3">
 			<button
 				type="submit"
-				class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition shadow-sm"
+				class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition shadow-xs"
 			>
 				Save Password
 			</button>
@@ -349,8 +348,7 @@ templ ChangeEmailPage(currentEmail string, fieldErrors map[string]string, succes
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Change Email - Sprezz Identity</title>
-		<script src="https://unpkg.com/htmx.org@1.9.12" nonce={ templ.GetNonce(ctx) }></script>
-		<script src="https://cdn.tailwindcss.com" nonce={ templ.GetNonce(ctx) }></script>
+		@assets.Head()
 	</head>
 	<body class="h-full flex items-center justify-center p-6 bg-slate-50">
 		<div class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
@@ -395,7 +393,7 @@ templ ChangeEmailForm(currentEmail, typedNewEmail, typedConfirmEmail string, fie
 				value={ currentEmail }
 				readonly
 				autocomplete="username email"
-				class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-500 shadow-sm focus:outline-none transition text-sm cursor-not-allowed"
+				class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-500 shadow-xs focus:outline-hidden transition text-sm cursor-not-allowed"
 			/>
 		</div>
 
@@ -409,7 +407,7 @@ templ ChangeEmailForm(currentEmail, typedNewEmail, typedConfirmEmail string, fie
 					name="current_password"
 					autocomplete="current-password"
 					required
-					class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
+					class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
 					placeholder="Enter current password"
 				/>
 				<p class="mt-1 text-xs font-medium text-red-600">{ fieldErrors["current_password"] }</p>
@@ -420,7 +418,7 @@ templ ChangeEmailForm(currentEmail, typedNewEmail, typedConfirmEmail string, fie
 					name="current_password"
 					autocomplete="current-password"
 					required
-					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
+					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
 					placeholder="Enter current password"
 				/>
 			}
@@ -436,7 +434,7 @@ templ ChangeEmailForm(currentEmail, typedNewEmail, typedConfirmEmail string, fie
 					name="new_email"
 					value={ typedNewEmail }
 					required
-					class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
+					class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
 					placeholder="new@domain.com"
 				/>
 				<p class="mt-1 text-xs font-medium text-red-600">{ fieldErrors["new_email"] }</p>
@@ -447,7 +445,7 @@ templ ChangeEmailForm(currentEmail, typedNewEmail, typedConfirmEmail string, fie
 					name="new_email"
 					value={ typedNewEmail }
 					required
-					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
+					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
 					placeholder="new@domain.com"
 				/>
 			}
@@ -463,7 +461,7 @@ templ ChangeEmailForm(currentEmail, typedNewEmail, typedConfirmEmail string, fie
 					name="confirm_email"
 					value={ typedConfirmEmail }
 					required
-					class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
+					class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
 					placeholder="Confirm new email"
 				/>
 				<p class="mt-1 text-xs font-medium text-red-600">{ fieldErrors["confirm_email"] }</p>
@@ -474,7 +472,7 @@ templ ChangeEmailForm(currentEmail, typedNewEmail, typedConfirmEmail string, fie
 					name="confirm_email"
 					value={ typedConfirmEmail }
 					required
-					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
+					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
 					placeholder="Confirm new email"
 				/>
 			}
@@ -483,7 +481,7 @@ templ ChangeEmailForm(currentEmail, typedNewEmail, typedConfirmEmail string, fie
 		<div class="pt-2 flex gap-3">
 			<button
 				type="submit"
-				class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition shadow-sm"
+				class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition shadow-xs"
 			>
 				Save Email
 			</button>
@@ -505,8 +503,7 @@ templ ChangeNamePage(currentName string, fieldErrors map[string]string, successM
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Change Name - Sprezz Identity</title>
-		<script src="https://unpkg.com/htmx.org@1.9.12" nonce={ templ.GetNonce(ctx) }></script>
-		<script src="https://cdn.tailwindcss.com" nonce={ templ.GetNonce(ctx) }></script>
+		@assets.Head()
 	</head>
 	<body class="h-full flex items-center justify-center p-6 bg-slate-50">
 		<div class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
@@ -550,7 +547,7 @@ templ ChangeNameForm(currentName, typedNewName string, fieldErrors map[string]st
 				name="current_name"
 				value={ currentName }
 				readonly
-				class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-500 shadow-sm focus:outline-none transition text-sm cursor-not-allowed"
+				class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-500 shadow-xs focus:outline-hidden transition text-sm cursor-not-allowed"
 			/>
 		</div>
 
@@ -564,7 +561,7 @@ templ ChangeNameForm(currentName, typedNewName string, fieldErrors map[string]st
 					name="new_name"
 					value={ typedNewName }
 					required
-					class="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
+					class="w-full px-3 py-2 border rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500"
 					placeholder="Enter new full name"
 				/>
 				<p class="mt-1 text-xs font-medium text-red-600">{ fieldErrors["new_name"] }</p>
@@ -575,7 +572,7 @@ templ ChangeNameForm(currentName, typedNewName string, fieldErrors map[string]st
 					name="new_name"
 					value={ typedNewName }
 					required
-					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition text-sm focus:ring-blue-500 focus:border-blue-500"
+					class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 transition text-sm focus:ring-blue-500 focus:border-blue-500"
 					placeholder="Enter new full name"
 				/>
 			}
@@ -584,7 +581,7 @@ templ ChangeNameForm(currentName, typedNewName string, fieldErrors map[string]st
 		<div class="pt-2 flex gap-3">
 			<button
 				type="submit"
-				class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition shadow-sm"
+				class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition shadow-xs"
 			>
 				Save Name
 			</button>

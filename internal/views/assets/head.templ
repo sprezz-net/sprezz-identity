@@ -1,0 +1,23 @@
+package assets
+
+// htmxConfig hardens htmx for a strict CSP: no eval, no injected inline styles, same-origin requests only.
+const htmxConfig = `{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false,"selfRequestsOnly":true}`
+
+// Styles links the compiled Tailwind stylesheet.
+templ Styles() {
+	<link rel="stylesheet" href={ URL("app.css") }/>
+}
+
+// Head is the common head block of every page: stylesheet, htmx configuration and htmx itself.
+templ Head() {
+	<meta name="htmx-config" content={ htmxConfig }/>
+	@Styles()
+	<script src={ URL("htmx.min.js") } nonce={ templ.GetNonce(ctx) }></script>
+}
+
+// AdminScripts adds the admin components and the CSP-compatible Alpine.js build. The admin script is deferred
+// before Alpine so its alpine:init listener is registered in time.
+templ AdminScripts() {
+	<script defer src={ URL("admin.js") } nonce={ templ.GetNonce(ctx) }></script>
+	<script defer src={ URL("alpine-csp.min.js") } nonce={ templ.GetNonce(ctx) }></script>
+}
