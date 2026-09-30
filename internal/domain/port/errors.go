@@ -76,4 +76,6 @@ var (
 	ErrSystemManaged = errors.New("this object is managed by the system and cannot be modified this way")
 	// ErrInUse is returned when an object cannot be removed because other objects still reference it.
 	ErrInUse = errors.New("object is still in use by other objects")
+	// ErrAlreadyExists is returned when a unique name or identifier is already taken.
+	ErrAlreadyExists = errors.New("an object with this name already exists")
 )

@@ -26,7 +26,7 @@ func TestApplicationService_CreateGroup_PersistsNormalizedContent(t *testing.T) 
 		return nil
 	})
 
-	err := f.svc.CreateGroup(context.Background(), port.CreateGroupCommand{
+	_, err := f.svc.CreateGroup(context.Background(), port.CreateGroupCommand{
 		TenantID:              f.tenantID,
 		GroupName:             "  partners ",
 		DefaultRedirectURI:    "https://b.example.com/cb",
@@ -44,7 +44,7 @@ func TestApplicationService_CreateGroup_RejectsInvalidContentBeforeStorage(t *te
 		return nil
 	})
 
-	err := f.svc.CreateGroup(context.Background(), port.CreateGroupCommand{
+	_, err := f.svc.CreateGroup(context.Background(), port.CreateGroupCommand{
 		TenantID:      f.tenantID,
 		GroupName:     "bad",
 		RedirectURIs:  []string{"http://app.example.com/cb", "https://*.example.com/cb"},

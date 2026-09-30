@@ -1,0 +1,126 @@
+package admin
+
+import (
+	"strconv"
+
+	"sprezz-identity/internal/domain/model"
+	"sprezz-identity/internal/domain/port"
+)
+
+// SubNavItem is one entry of the section tab strip.
+type SubNavItem struct {
+	Label string
+	URL   string
+	Key   string
+	Count int
+}
+
+func itoa(n int) string {
+	return strconv.Itoa(n)
+}
+
+func applicationsBase() string {
+	return port.RouteAdmin + port.RouteAdminApplications
+}
+
+func groupsBase() string {
+	return applicationsBase() + port.RouteAdminApplicationsGroups
+}
+
+func profilesBase() string {
+	return applicationsBase() + port.RouteAdminApplicationsProfiles
+}
+
+func applicationURL(clientID string) string {
+	return applicationsBase() + "/" + clientID
+}
+
+func groupURL(id string) string {
+	return groupsBase() + "/" + id
+}
+
+func profileURL(id string) string {
+	return profilesBase() + "/" + id
+}
+
+func applicationsSubNav(apps, groups, profiles int) []SubNavItem {
+	return []SubNavItem{
+		{Label: "Applications", URL: applicationsBase(), Key: "applications", Count: apps},
+		{Label: "Groups", URL: groupsBase(), Key: "groups", Count: groups},
+		{Label: "Profiles", URL: profilesBase(), Key: "profiles", Count: profiles},
+	}
+}
+
+// ApplicationsSubNav renders the Applications | Groups | Profiles tab strip. The active tab comes from the
+// route, so the strip works without client-side state and every tab has its own address.
+templ ApplicationsSubNav(active string, apps, groups, profiles int) {
+	<nav class="border-b border-gray-200 mb-6" aria-label="Applications sections">
+		<ul class="-mb-px flex space-x-8">
+			for _, item := range applicationsSubNav(apps, groups, profiles) {
+				<li>
+					<a
+						href={ templ.SafeURL(item.URL) }
+						hx-get={ item.URL }
+						hx-target="main"
+						hx-swap="innerHTML"
+						hx-push-url="true"
+						class={
+							"whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition inline-block",
+							templ.KV("border-blue-500 text-blue-600", item.Key == active),
+							templ.KV("border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300", item.Key != active),
+						}
+						if item.Key == active {
+							aria-current="page"
+						}
+					>
+						{ item.Label }
+						<span class="ml-1 text-xs text-gray-400">({ itoa(item.Count) })</span>
+					</a>
+				</li>
+			}
+		</ul>
+	</nav>
+}
+
+// PageHeader is the title row of a detail page: back link, name and a slot for badges and actions.
+templ PageHeader(title, backLabel, backURL string) {
+	<div class="flex items-start justify-between gap-4 mb-6">
+		<div class="min-w-0">
+			<a
+				href={ templ.SafeURL(backURL) }
+				hx-get={ backURL }
+				hx-target="main"
+				hx-swap="innerHTML"
+				hx-push-url="true"
+				class="text-xs font-medium text-gray-500 hover:text-gray-700"
+			>&larr; { backLabel }</a>
+			<h1 class="mt-1 text-2xl font-bold text-gray-900 truncate">{ title }</h1>
+		</div>
+		<div class="flex items-center gap-2 shrink-0">
+			{ children... }
+		</div>
+	</div>
+}
+
+// UsedBy lists the applications that use a group or a profile, each linking to its detail page.
+templ UsedBy(apps []model.ApplicationSummary) {
+	if len(apps) == 0 {
+		<p class="text-sm text-gray-500">No application uses this yet.</p>
+	} else {
+		<ul class="divide-y divide-gray-100 border border-gray-100 rounded-lg">
+			for _, app := range apps {
+				<li class="flex items-center justify-between px-4 py-2.5">
+					<a
+						href={ templ.SafeURL(applicationURL(app.ClientID)) }
+						hx-get={ applicationURL(app.ClientID) }
+						hx-target="main"
+						hx-swap="innerHTML"
+						hx-push-url="true"
+						class="text-sm font-medium text-blue-700 hover:text-blue-900 truncate"
+					>{ app.ApplicationName }</a>
+					<span class="ml-3 text-xs font-mono text-gray-500 truncate">{ app.ClientID }</span>
+				</li>
+			}
+		</ul>
+	}
+}

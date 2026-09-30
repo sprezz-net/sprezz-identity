@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -51,7 +52,12 @@ func TestApplicationService_UpdateProfile_PreservesEnabledState(t *testing.T) {
 	err := f.svc.UpdateProfile(context.Background(), port.UpdateProfileCommand{
 		TenantID:                f.tenantID,
 		ID:                      profileID,
+		ProfileName:             "web",
 		TokenEndpointAuthMethod: model.AuthMethodClientSecretPost,
+		SigningAlgorithm:        model.AlgRS256,
+		AccessTokenLifetime:     15 * time.Minute,
+		IDTokenLifetime:         15 * time.Minute,
+		RefreshTokenLifetime:    24 * time.Hour,
 	})
 	require.NoError(t, err)
 }

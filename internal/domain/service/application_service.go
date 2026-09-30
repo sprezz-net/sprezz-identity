@@ -293,7 +293,11 @@ func (s *ApplicationService) GetProfile(ctx context.Context, tenantID uuid.UUID,
 }
 
 // CreateProfile creates a standalone profile, programmatically enforcing RTR for public clients.
-func (s *ApplicationService) CreateProfile(ctx context.Context, cmd port.CreateProfileCommand) error {
+func (s *ApplicationService) CreateProfile(ctx context.Context, cmd port.CreateProfileCommand) (*model.ApplicationProfile, error) {
+	if verr := validateProfileCreate(cmd); verr.HasErrors() {
+		return nil, verr
+	}
+	cmd.ProfileName = strings.TrimSpace(cmd.ProfileName)
 	enforceRTR := cmd.EnforceRTR
 	if cmd.TokenEndpointAuthMethod == model.AuthMethodNone {
 		enforceRTR = true
@@ -316,7 +320,10 @@ func (s *ApplicationService) CreateProfile(ctx context.Context, cmd port.CreateP
 		UpdatedAt:               s.clock.Now(),
 	}
 
-	return s.adminStorage.CreateApplicationProfile(ctx, cmd.TenantID, profile)
+	if err := s.adminStorage.CreateApplicationProfile(ctx, cmd.TenantID, profile); err != nil {
+		return nil, err
+	}
+	return &profile, nil
 }
 
 // UpdateProfile updates an existing standalone profile, programmatically enforcing RTR for public clients.
@@ -328,6 +335,10 @@ func (s *ApplicationService) UpdateProfile(ctx context.Context, cmd port.UpdateP
 	if existing.IsSystem {
 		return port.ErrSystemManaged
 	}
+	if verr := validateProfileUpdate(cmd); verr.HasErrors() {
+		return verr
+	}
+	cmd.ProfileName = strings.TrimSpace(cmd.ProfileName)
 
 	enforceRTR := cmd.EnforceRTR
 	if cmd.TokenEndpointAuthMethod == model.AuthMethodNone {
@@ -338,7 +349,7 @@ func (s *ApplicationService) UpdateProfile(ctx context.Context, cmd port.UpdateP
 		ID:                      cmd.ID,
 		TenantID:                cmd.TenantID,
 		ProfileName:             cmd.ProfileName,
-		IsEnabled:               existing.IsEnabled,
+		IsEnabled:               enabledOrStored(cmd.IsEnabled, existing.IsEnabled),
 		TokenEndpointAuthMethod: cmd.TokenEndpointAuthMethod,
 		GrantTypes:              cmd.GrantTypes,
 		ResponseTypes:           cmd.ResponseTypes,
@@ -364,14 +375,14 @@ func (s *ApplicationService) GetGroup(ctx context.Context, tenantID uuid.UUID, i
 }
 
 // CreateGroup creates a standalone routing group after validating its routing content and sign-in methods.
-func (s *ApplicationService) CreateGroup(ctx context.Context, cmd port.CreateGroupCommand) error {
+func (s *ApplicationService) CreateGroup(ctx context.Context, cmd port.CreateGroupCommand) (*model.ApplicationGroup, error) {
 	content, verr := normalizeGroupContent(groupContentFromCreate(cmd))
 	cmd.DefaultIDPID = normalizeDefaultIDP(cmd.DefaultIDPID)
 	if verr.HasErrors() {
-		return verr
+		return nil, verr
 	}
 	if err := s.validateGroupIDPs(ctx, cmd.TenantID, cmd.AllowedIDPIDs, cmd.DefaultIDPID, false); err != nil {
-		return err
+		return nil, err
 	}
 
 	group := model.ApplicationGroup{
@@ -393,7 +404,10 @@ func (s *ApplicationService) CreateGroup(ctx context.Context, cmd port.CreateGro
 		UpdatedAt:              s.clock.Now(),
 	}
 
-	return s.adminStorage.CreateApplicationGroup(ctx, cmd.TenantID, group)
+	if err := s.adminStorage.CreateApplicationGroup(ctx, cmd.TenantID, group); err != nil {
+		return nil, err
+	}
+	return &group, nil
 }
 
 // groupContentFromCreate and groupContentFromUpdate adapt the two command types to the shared validator.
@@ -440,7 +454,7 @@ func (s *ApplicationService) UpdateGroup(ctx context.Context, cmd port.UpdateGro
 		ID:                     cmd.ID,
 		TenantID:               cmd.TenantID,
 		GroupName:              strings.TrimSpace(cmd.GroupName),
-		IsEnabled:              existing.IsEnabled,
+		IsEnabled:              enabledOrStored(cmd.IsEnabled, existing.IsEnabled),
 		RedirectURI:            content.defaultRedirectURI,
 		RedirectURIs:           content.redirectURIs,
 		PostLogoutRedirectURIs: content.postLogoutRedirectURIs,

@@ -1,0 +1,111 @@
+package admin
+
+import "sprezz-identity/internal/domain/model"
+
+// ListPageProps feeds the three list sections under Applications.
+type ListPageProps struct {
+	ActiveTenant model.Tenant
+	Counts       NavCounts
+	Msg          string
+	Applications []model.ApplicationSummary
+	Groups       []model.ApplicationGroup
+	Profiles     []model.ApplicationProfile
+	// Filter and Query narrow the applications list; both are applied on the server.
+	Filter string
+	Query  string
+}
+
+// rowLink is a link that swaps the main area and keeps the URL addressable.
+templ rowLink(url string) {
+	<a
+		href={ templ.SafeURL(url) }
+		hx-get={ url }
+		hx-target="main"
+		hx-swap="innerHTML"
+		hx-push-url="true"
+		class="font-medium text-blue-700 hover:text-blue-900"
+	>
+		{ children... }
+	</a>
+}
+
+// ListToolbar is the row above a list: a slot on the left and the add button on the right.
+templ ListToolbar(addLabel, addURL string) {
+	<div class="flex items-center justify-between gap-4 mb-4">
+		<div class="flex-1">{ children... }</div>
+		<a
+			href={ templ.SafeURL(addURL) }
+			hx-get={ addURL }
+			hx-target="main"
+			hx-swap="innerHTML"
+			hx-push-url="true"
+			class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-xs"
+		>{ addLabel }</a>
+	</div>
+}
+
+// ApplicationsListContent lists the registered applications. Filtering and search are plain GET requests, so
+// every filtered view has its own URL.
+templ ApplicationsListContent(props ListPageProps) {
+	@FlashMessage(props.Msg)
+	@ApplicationsSubNav("applications", props.Counts.Applications, props.Counts.Groups, props.Counts.Profiles)
+	@ListToolbar("+ Add application", applicationsBase()+"/new") {
+		<form hx-get={ applicationsBase() } hx-target="main" hx-swap="innerHTML" hx-push-url="true" hx-trigger="change, keyup changed delay:300ms from:find input" class="flex items-center gap-3">
+			<input type="search" name="q" value={ props.Query } placeholder="Search name or client ID" aria-label="Search applications" class="w-64 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"/>
+			<select name="type" aria-label="Filter by type" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+				<option value="" selected?={ props.Filter == "" }>All types</option>
+				<option value="static" selected?={ props.Filter == "static" }>Static</option>
+				<option value="dynamic" selected?={ props.Filter == "dynamic" }>Dynamic (DCR)</option>
+			</select>
+		</form>
+	}
+	<div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
+		if len(props.Applications) == 0 {
+			@EmptyState("No applications found", "Register an application to let it sign users in.")
+		} else {
+			<table class="min-w-full divide-y divide-gray-200 text-sm">
+				<thead>
+					<tr class="bg-gray-50 text-gray-500 font-semibold">
+						<th scope="col" class="px-6 py-3 text-left">Application</th>
+						<th scope="col" class="px-6 py-3 text-left">Client ID</th>
+						<th scope="col" class="px-6 py-3 text-left">Group</th>
+						<th scope="col" class="px-6 py-3 text-left">Profile</th>
+						<th scope="col" class="px-6 py-3 text-left">Status</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-gray-100">
+					for _, app := range props.Applications {
+						<tr class="hover:bg-gray-50">
+							<td class="px-6 py-3">
+								@rowLink(applicationURL(app.ClientID)) {
+									{ app.ApplicationName }
+								}
+								if app.IsDynamic {
+									<span class="ml-2 px-1.5 py-0.5 rounded-sm text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">DCR</span>
+								}
+							</td>
+							<td class="px-6 py-3 font-mono text-xs text-gray-600">{ app.ClientID }</td>
+							<td class="px-6 py-3">
+								@rowLink(groupURL(app.GroupID.String())) {
+									{ app.GroupName }
+								}
+							</td>
+							<td class="px-6 py-3">
+								@rowLink(profileURL(app.ProfileID.String())) {
+									{ app.ProfileName }
+								}
+							</td>
+							<td class="px-6 py-3">@StatusBadge(app.IsEnabled)</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	</div>
+}
+
+templ ApplicationsListPage(props ListPageProps) {
+	@AdminLayout(AdminLayoutProps{Title: "Applications", CurrentTab: "clients", TenantName: props.ActiveTenant.Name}) {
+		@ApplicationsListContent(props)
+	}
+}

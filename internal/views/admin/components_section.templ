@@ -1,0 +1,87 @@
+package admin
+
+// SectionCardProps configures one independently saved part of a detail page.
+type SectionCardProps struct {
+	ID          string
+	Title       string
+	Description string
+	Action      string // section endpoint, used with hx-put
+	ReadOnly    bool
+	Saved       bool
+	Error       string
+}
+
+// SectionCard wraps a group of fields in a form that posts to its own endpoint and swaps only itself, so a
+// validation error in one card never disturbs edits in another. The children are the fields.
+templ SectionCard(props SectionCardProps) {
+	<section id={ props.ID } class="bg-white border border-gray-200 rounded-xl shadow-xs scroll-mt-24">
+		<form
+			hx-put={ props.Action }
+			hx-target={ "#" + props.ID }
+			hx-swap="outerHTML"
+			hx-indicator="#global-spinner"
+			x-data="sectionForm"
+			@input="markDirty()"
+			@change="markDirty()"
+		>
+			<div class="px-6 pt-5 pb-4 border-b border-gray-100">
+				<h2 class="text-base font-bold text-gray-900">{ props.Title }</h2>
+				if props.Description != "" {
+					<p class="mt-1 text-sm text-gray-500">{ props.Description }</p>
+				}
+			</div>
+			<div class="px-6 py-5 space-y-5">
+				if props.Error != "" {
+					<div class="p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg text-sm" role="alert">{ props.Error }</div>
+				}
+				<fieldset disabled?={ props.ReadOnly } class="space-y-5 min-w-0">
+					{ children... }
+				</fieldset>
+			</div>
+			if !props.ReadOnly {
+				@SaveBar(props.Saved)
+			}
+		</form>
+	</section>
+}
+
+// SaveBar is the footer of a section card: a dirty indicator, a saved confirmation and the submit button.
+templ SaveBar(saved bool) {
+	<div class="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-100 flex items-center justify-end gap-3">
+		<span x-show="dirty" x-cloak class="text-xs font-medium text-amber-700">Unsaved changes</span>
+		if saved {
+			<span x-show="!dirty" class="text-xs font-medium text-green-700" role="status">Saved</span>
+		}
+		<button
+			type="submit"
+			class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-xs"
+		>Save</button>
+	</div>
+}
+
+// FieldError renders the message of a failed field, or nothing.
+templ FieldError(message string) {
+	if message != "" {
+		<p class="text-xs text-red-600 mt-1" role="alert">{ message }</p>
+	}
+}
+
+// ToggleRow is a labelled checkbox row used for enabling and disabling things.
+templ ToggleRow(name, value, label, hint string, checked, disabled bool) {
+	<label class="flex items-start gap-3 py-1 cursor-pointer select-none">
+		<input
+			type="checkbox"
+			name={ name }
+			value={ value }
+			checked?={ checked }
+			disabled?={ disabled }
+			class="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded-sm focus:ring-blue-500"
+		/>
+		<span>
+			<span class="block text-sm font-medium text-gray-800">{ label }</span>
+			if hint != "" {
+				<span class="block text-xs text-gray-500">{ hint }</span>
+			}
+		</span>
+	</label>
+}

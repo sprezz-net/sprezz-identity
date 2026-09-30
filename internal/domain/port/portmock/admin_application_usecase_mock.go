@@ -28,14 +28,14 @@ type AdminApplicationUseCaseMock struct {
 	beforeCreateApplicationCounter uint64
 	CreateApplicationMock          mAdminApplicationUseCaseMockCreateApplication
 
-	funcCreateGroup          func(ctx context.Context, cmd mm_port.CreateGroupCommand) (err error)
+	funcCreateGroup          func(ctx context.Context, cmd mm_port.CreateGroupCommand) (ap1 *model.ApplicationGroup, err error)
 	funcCreateGroupOrigin    string
 	inspectFuncCreateGroup   func(ctx context.Context, cmd mm_port.CreateGroupCommand)
 	afterCreateGroupCounter  uint64
 	beforeCreateGroupCounter uint64
 	CreateGroupMock          mAdminApplicationUseCaseMockCreateGroup
 
-	funcCreateProfile          func(ctx context.Context, cmd mm_port.CreateProfileCommand) (err error)
+	funcCreateProfile          func(ctx context.Context, cmd mm_port.CreateProfileCommand) (ap1 *model.ApplicationProfile, err error)
 	funcCreateProfileOrigin    string
 	inspectFuncCreateProfile   func(ctx context.Context, cmd mm_port.CreateProfileCommand)
 	afterCreateProfileCounter  uint64
@@ -126,6 +126,20 @@ type AdminApplicationUseCaseMock struct {
 	beforeListApplicationsByProfileCounter uint64
 	ListApplicationsByProfileMock          mAdminApplicationUseCaseMockListApplicationsByProfile
 
+	funcPatchGroup          func(ctx context.Context, cmd mm_port.PatchGroupCommand) (err error)
+	funcPatchGroupOrigin    string
+	inspectFuncPatchGroup   func(ctx context.Context, cmd mm_port.PatchGroupCommand)
+	afterPatchGroupCounter  uint64
+	beforePatchGroupCounter uint64
+	PatchGroupMock          mAdminApplicationUseCaseMockPatchGroup
+
+	funcPatchProfile          func(ctx context.Context, cmd mm_port.PatchProfileCommand) (err error)
+	funcPatchProfileOrigin    string
+	inspectFuncPatchProfile   func(ctx context.Context, cmd mm_port.PatchProfileCommand)
+	afterPatchProfileCounter  uint64
+	beforePatchProfileCounter uint64
+	PatchProfileMock          mAdminApplicationUseCaseMockPatchProfile
+
 	funcResetApplicationSecret          func(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand) (err error)
 	funcResetApplicationSecretOrigin    string
 	inspectFuncResetApplicationSecret   func(ctx context.Context, cmd mm_port.ResetApplicationSecretCommand)
@@ -214,6 +228,12 @@ func NewAdminApplicationUseCaseMock(t minimock.Tester) *AdminApplicationUseCaseM
 
 	m.ListApplicationsByProfileMock = mAdminApplicationUseCaseMockListApplicationsByProfile{mock: m}
 	m.ListApplicationsByProfileMock.callArgs = []*AdminApplicationUseCaseMockListApplicationsByProfileParams{}
+
+	m.PatchGroupMock = mAdminApplicationUseCaseMockPatchGroup{mock: m}
+	m.PatchGroupMock.callArgs = []*AdminApplicationUseCaseMockPatchGroupParams{}
+
+	m.PatchProfileMock = mAdminApplicationUseCaseMockPatchProfile{mock: m}
+	m.PatchProfileMock.callArgs = []*AdminApplicationUseCaseMockPatchProfileParams{}
 
 	m.ResetApplicationSecretMock = mAdminApplicationUseCaseMockResetApplicationSecret{mock: m}
 	m.ResetApplicationSecretMock.callArgs = []*AdminApplicationUseCaseMockResetApplicationSecretParams{}
@@ -616,6 +636,7 @@ type AdminApplicationUseCaseMockCreateGroupParamPtrs struct {
 
 // AdminApplicationUseCaseMockCreateGroupResults contains results of the AdminApplicationUseCase.CreateGroup
 type AdminApplicationUseCaseMockCreateGroupResults struct {
+	ap1 *model.ApplicationGroup
 	err error
 }
 
@@ -719,7 +740,7 @@ func (mmCreateGroup *mAdminApplicationUseCaseMockCreateGroup) Inspect(f func(ctx
 }
 
 // Return sets up results that will be returned by AdminApplicationUseCase.CreateGroup
-func (mmCreateGroup *mAdminApplicationUseCaseMockCreateGroup) Return(err error) *AdminApplicationUseCaseMock {
+func (mmCreateGroup *mAdminApplicationUseCaseMockCreateGroup) Return(ap1 *model.ApplicationGroup, err error) *AdminApplicationUseCaseMock {
 	if mmCreateGroup.mock.funcCreateGroup != nil {
 		mmCreateGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.CreateGroup mock is already set by Set")
 	}
@@ -727,13 +748,13 @@ func (mmCreateGroup *mAdminApplicationUseCaseMockCreateGroup) Return(err error) 
 	if mmCreateGroup.defaultExpectation == nil {
 		mmCreateGroup.defaultExpectation = &AdminApplicationUseCaseMockCreateGroupExpectation{mock: mmCreateGroup.mock}
 	}
-	mmCreateGroup.defaultExpectation.results = &AdminApplicationUseCaseMockCreateGroupResults{err}
+	mmCreateGroup.defaultExpectation.results = &AdminApplicationUseCaseMockCreateGroupResults{ap1, err}
 	mmCreateGroup.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmCreateGroup.mock
 }
 
 // Set uses given function f to mock the AdminApplicationUseCase.CreateGroup method
-func (mmCreateGroup *mAdminApplicationUseCaseMockCreateGroup) Set(f func(ctx context.Context, cmd mm_port.CreateGroupCommand) (err error)) *AdminApplicationUseCaseMock {
+func (mmCreateGroup *mAdminApplicationUseCaseMockCreateGroup) Set(f func(ctx context.Context, cmd mm_port.CreateGroupCommand) (ap1 *model.ApplicationGroup, err error)) *AdminApplicationUseCaseMock {
 	if mmCreateGroup.defaultExpectation != nil {
 		mmCreateGroup.mock.t.Fatalf("Default expectation is already set for the AdminApplicationUseCase.CreateGroup method")
 	}
@@ -764,8 +785,8 @@ func (mmCreateGroup *mAdminApplicationUseCaseMockCreateGroup) When(ctx context.C
 }
 
 // Then sets up AdminApplicationUseCase.CreateGroup return parameters for the expectation previously defined by the When method
-func (e *AdminApplicationUseCaseMockCreateGroupExpectation) Then(err error) *AdminApplicationUseCaseMock {
-	e.results = &AdminApplicationUseCaseMockCreateGroupResults{err}
+func (e *AdminApplicationUseCaseMockCreateGroupExpectation) Then(ap1 *model.ApplicationGroup, err error) *AdminApplicationUseCaseMock {
+	e.results = &AdminApplicationUseCaseMockCreateGroupResults{ap1, err}
 	return e.mock
 }
 
@@ -791,7 +812,7 @@ func (mmCreateGroup *mAdminApplicationUseCaseMockCreateGroup) invocationsDone() 
 }
 
 // CreateGroup implements mm_port.AdminApplicationUseCase
-func (mmCreateGroup *AdminApplicationUseCaseMock) CreateGroup(ctx context.Context, cmd mm_port.CreateGroupCommand) (err error) {
+func (mmCreateGroup *AdminApplicationUseCaseMock) CreateGroup(ctx context.Context, cmd mm_port.CreateGroupCommand) (ap1 *model.ApplicationGroup, err error) {
 	mm_atomic.AddUint64(&mmCreateGroup.beforeCreateGroupCounter, 1)
 	defer mm_atomic.AddUint64(&mmCreateGroup.afterCreateGroupCounter, 1)
 
@@ -811,7 +832,7 @@ func (mmCreateGroup *AdminApplicationUseCaseMock) CreateGroup(ctx context.Contex
 	for _, e := range mmCreateGroup.CreateGroupMock.expectations {
 		if minimock.Equal(*e.params, mm_params) {
 			mm_atomic.AddUint64(&e.Counter, 1)
-			return e.results.err
+			return e.results.ap1, e.results.err
 		}
 	}
 
@@ -843,7 +864,7 @@ func (mmCreateGroup *AdminApplicationUseCaseMock) CreateGroup(ctx context.Contex
 		if mm_results == nil {
 			mmCreateGroup.t.Fatal("No results are set for the AdminApplicationUseCaseMock.CreateGroup")
 		}
-		return (*mm_results).err
+		return (*mm_results).ap1, (*mm_results).err
 	}
 	if mmCreateGroup.funcCreateGroup != nil {
 		return mmCreateGroup.funcCreateGroup(ctx, cmd)
@@ -958,6 +979,7 @@ type AdminApplicationUseCaseMockCreateProfileParamPtrs struct {
 
 // AdminApplicationUseCaseMockCreateProfileResults contains results of the AdminApplicationUseCase.CreateProfile
 type AdminApplicationUseCaseMockCreateProfileResults struct {
+	ap1 *model.ApplicationProfile
 	err error
 }
 
@@ -1061,7 +1083,7 @@ func (mmCreateProfile *mAdminApplicationUseCaseMockCreateProfile) Inspect(f func
 }
 
 // Return sets up results that will be returned by AdminApplicationUseCase.CreateProfile
-func (mmCreateProfile *mAdminApplicationUseCaseMockCreateProfile) Return(err error) *AdminApplicationUseCaseMock {
+func (mmCreateProfile *mAdminApplicationUseCaseMockCreateProfile) Return(ap1 *model.ApplicationProfile, err error) *AdminApplicationUseCaseMock {
 	if mmCreateProfile.mock.funcCreateProfile != nil {
 		mmCreateProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.CreateProfile mock is already set by Set")
 	}
@@ -1069,13 +1091,13 @@ func (mmCreateProfile *mAdminApplicationUseCaseMockCreateProfile) Return(err err
 	if mmCreateProfile.defaultExpectation == nil {
 		mmCreateProfile.defaultExpectation = &AdminApplicationUseCaseMockCreateProfileExpectation{mock: mmCreateProfile.mock}
 	}
-	mmCreateProfile.defaultExpectation.results = &AdminApplicationUseCaseMockCreateProfileResults{err}
+	mmCreateProfile.defaultExpectation.results = &AdminApplicationUseCaseMockCreateProfileResults{ap1, err}
 	mmCreateProfile.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmCreateProfile.mock
 }
 
 // Set uses given function f to mock the AdminApplicationUseCase.CreateProfile method
-func (mmCreateProfile *mAdminApplicationUseCaseMockCreateProfile) Set(f func(ctx context.Context, cmd mm_port.CreateProfileCommand) (err error)) *AdminApplicationUseCaseMock {
+func (mmCreateProfile *mAdminApplicationUseCaseMockCreateProfile) Set(f func(ctx context.Context, cmd mm_port.CreateProfileCommand) (ap1 *model.ApplicationProfile, err error)) *AdminApplicationUseCaseMock {
 	if mmCreateProfile.defaultExpectation != nil {
 		mmCreateProfile.mock.t.Fatalf("Default expectation is already set for the AdminApplicationUseCase.CreateProfile method")
 	}
@@ -1106,8 +1128,8 @@ func (mmCreateProfile *mAdminApplicationUseCaseMockCreateProfile) When(ctx conte
 }
 
 // Then sets up AdminApplicationUseCase.CreateProfile return parameters for the expectation previously defined by the When method
-func (e *AdminApplicationUseCaseMockCreateProfileExpectation) Then(err error) *AdminApplicationUseCaseMock {
-	e.results = &AdminApplicationUseCaseMockCreateProfileResults{err}
+func (e *AdminApplicationUseCaseMockCreateProfileExpectation) Then(ap1 *model.ApplicationProfile, err error) *AdminApplicationUseCaseMock {
+	e.results = &AdminApplicationUseCaseMockCreateProfileResults{ap1, err}
 	return e.mock
 }
 
@@ -1133,7 +1155,7 @@ func (mmCreateProfile *mAdminApplicationUseCaseMockCreateProfile) invocationsDon
 }
 
 // CreateProfile implements mm_port.AdminApplicationUseCase
-func (mmCreateProfile *AdminApplicationUseCaseMock) CreateProfile(ctx context.Context, cmd mm_port.CreateProfileCommand) (err error) {
+func (mmCreateProfile *AdminApplicationUseCaseMock) CreateProfile(ctx context.Context, cmd mm_port.CreateProfileCommand) (ap1 *model.ApplicationProfile, err error) {
 	mm_atomic.AddUint64(&mmCreateProfile.beforeCreateProfileCounter, 1)
 	defer mm_atomic.AddUint64(&mmCreateProfile.afterCreateProfileCounter, 1)
 
@@ -1153,7 +1175,7 @@ func (mmCreateProfile *AdminApplicationUseCaseMock) CreateProfile(ctx context.Co
 	for _, e := range mmCreateProfile.CreateProfileMock.expectations {
 		if minimock.Equal(*e.params, mm_params) {
 			mm_atomic.AddUint64(&e.Counter, 1)
-			return e.results.err
+			return e.results.ap1, e.results.err
 		}
 	}
 
@@ -1185,7 +1207,7 @@ func (mmCreateProfile *AdminApplicationUseCaseMock) CreateProfile(ctx context.Co
 		if mm_results == nil {
 			mmCreateProfile.t.Fatal("No results are set for the AdminApplicationUseCaseMock.CreateProfile")
 		}
-		return (*mm_results).err
+		return (*mm_results).ap1, (*mm_results).err
 	}
 	if mmCreateProfile.funcCreateProfile != nil {
 		return mmCreateProfile.funcCreateProfile(ctx, cmd)
@@ -5656,6 +5678,690 @@ func (m *AdminApplicationUseCaseMock) MinimockListApplicationsByProfileInspect()
 	}
 }
 
+type mAdminApplicationUseCaseMockPatchGroup struct {
+	optional           bool
+	mock               *AdminApplicationUseCaseMock
+	defaultExpectation *AdminApplicationUseCaseMockPatchGroupExpectation
+	expectations       []*AdminApplicationUseCaseMockPatchGroupExpectation
+
+	callArgs []*AdminApplicationUseCaseMockPatchGroupParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AdminApplicationUseCaseMockPatchGroupExpectation specifies expectation struct of the AdminApplicationUseCase.PatchGroup
+type AdminApplicationUseCaseMockPatchGroupExpectation struct {
+	mock               *AdminApplicationUseCaseMock
+	params             *AdminApplicationUseCaseMockPatchGroupParams
+	paramPtrs          *AdminApplicationUseCaseMockPatchGroupParamPtrs
+	expectationOrigins AdminApplicationUseCaseMockPatchGroupExpectationOrigins
+	results            *AdminApplicationUseCaseMockPatchGroupResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AdminApplicationUseCaseMockPatchGroupParams contains parameters of the AdminApplicationUseCase.PatchGroup
+type AdminApplicationUseCaseMockPatchGroupParams struct {
+	ctx context.Context
+	cmd mm_port.PatchGroupCommand
+}
+
+// AdminApplicationUseCaseMockPatchGroupParamPtrs contains pointers to parameters of the AdminApplicationUseCase.PatchGroup
+type AdminApplicationUseCaseMockPatchGroupParamPtrs struct {
+	ctx *context.Context
+	cmd *mm_port.PatchGroupCommand
+}
+
+// AdminApplicationUseCaseMockPatchGroupResults contains results of the AdminApplicationUseCase.PatchGroup
+type AdminApplicationUseCaseMockPatchGroupResults struct {
+	err error
+}
+
+// AdminApplicationUseCaseMockPatchGroupOrigins contains origins of expectations of the AdminApplicationUseCase.PatchGroup
+type AdminApplicationUseCaseMockPatchGroupExpectationOrigins struct {
+	origin    string
+	originCtx string
+	originCmd string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmPatchGroup *mAdminApplicationUseCaseMockPatchGroup) Optional() *mAdminApplicationUseCaseMockPatchGroup {
+	mmPatchGroup.optional = true
+	return mmPatchGroup
+}
+
+// Expect sets up expected params for AdminApplicationUseCase.PatchGroup
+func (mmPatchGroup *mAdminApplicationUseCaseMockPatchGroup) Expect(ctx context.Context, cmd mm_port.PatchGroupCommand) *mAdminApplicationUseCaseMockPatchGroup {
+	if mmPatchGroup.mock.funcPatchGroup != nil {
+		mmPatchGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.PatchGroup mock is already set by Set")
+	}
+
+	if mmPatchGroup.defaultExpectation == nil {
+		mmPatchGroup.defaultExpectation = &AdminApplicationUseCaseMockPatchGroupExpectation{}
+	}
+
+	if mmPatchGroup.defaultExpectation.paramPtrs != nil {
+		mmPatchGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.PatchGroup mock is already set by ExpectParams functions")
+	}
+
+	mmPatchGroup.defaultExpectation.params = &AdminApplicationUseCaseMockPatchGroupParams{ctx, cmd}
+	mmPatchGroup.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmPatchGroup.expectations {
+		if minimock.Equal(e.params, mmPatchGroup.defaultExpectation.params) {
+			mmPatchGroup.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmPatchGroup.defaultExpectation.params)
+		}
+	}
+
+	return mmPatchGroup
+}
+
+// ExpectCtxParam1 sets up expected param ctx for AdminApplicationUseCase.PatchGroup
+func (mmPatchGroup *mAdminApplicationUseCaseMockPatchGroup) ExpectCtxParam1(ctx context.Context) *mAdminApplicationUseCaseMockPatchGroup {
+	if mmPatchGroup.mock.funcPatchGroup != nil {
+		mmPatchGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.PatchGroup mock is already set by Set")
+	}
+
+	if mmPatchGroup.defaultExpectation == nil {
+		mmPatchGroup.defaultExpectation = &AdminApplicationUseCaseMockPatchGroupExpectation{}
+	}
+
+	if mmPatchGroup.defaultExpectation.params != nil {
+		mmPatchGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.PatchGroup mock is already set by Expect")
+	}
+
+	if mmPatchGroup.defaultExpectation.paramPtrs == nil {
+		mmPatchGroup.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockPatchGroupParamPtrs{}
+	}
+	mmPatchGroup.defaultExpectation.paramPtrs.ctx = &ctx
+	mmPatchGroup.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmPatchGroup
+}
+
+// ExpectCmdParam2 sets up expected param cmd for AdminApplicationUseCase.PatchGroup
+func (mmPatchGroup *mAdminApplicationUseCaseMockPatchGroup) ExpectCmdParam2(cmd mm_port.PatchGroupCommand) *mAdminApplicationUseCaseMockPatchGroup {
+	if mmPatchGroup.mock.funcPatchGroup != nil {
+		mmPatchGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.PatchGroup mock is already set by Set")
+	}
+
+	if mmPatchGroup.defaultExpectation == nil {
+		mmPatchGroup.defaultExpectation = &AdminApplicationUseCaseMockPatchGroupExpectation{}
+	}
+
+	if mmPatchGroup.defaultExpectation.params != nil {
+		mmPatchGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.PatchGroup mock is already set by Expect")
+	}
+
+	if mmPatchGroup.defaultExpectation.paramPtrs == nil {
+		mmPatchGroup.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockPatchGroupParamPtrs{}
+	}
+	mmPatchGroup.defaultExpectation.paramPtrs.cmd = &cmd
+	mmPatchGroup.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
+
+	return mmPatchGroup
+}
+
+// Inspect accepts an inspector function that has same arguments as the AdminApplicationUseCase.PatchGroup
+func (mmPatchGroup *mAdminApplicationUseCaseMockPatchGroup) Inspect(f func(ctx context.Context, cmd mm_port.PatchGroupCommand)) *mAdminApplicationUseCaseMockPatchGroup {
+	if mmPatchGroup.mock.inspectFuncPatchGroup != nil {
+		mmPatchGroup.mock.t.Fatalf("Inspect function is already set for AdminApplicationUseCaseMock.PatchGroup")
+	}
+
+	mmPatchGroup.mock.inspectFuncPatchGroup = f
+
+	return mmPatchGroup
+}
+
+// Return sets up results that will be returned by AdminApplicationUseCase.PatchGroup
+func (mmPatchGroup *mAdminApplicationUseCaseMockPatchGroup) Return(err error) *AdminApplicationUseCaseMock {
+	if mmPatchGroup.mock.funcPatchGroup != nil {
+		mmPatchGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.PatchGroup mock is already set by Set")
+	}
+
+	if mmPatchGroup.defaultExpectation == nil {
+		mmPatchGroup.defaultExpectation = &AdminApplicationUseCaseMockPatchGroupExpectation{mock: mmPatchGroup.mock}
+	}
+	mmPatchGroup.defaultExpectation.results = &AdminApplicationUseCaseMockPatchGroupResults{err}
+	mmPatchGroup.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmPatchGroup.mock
+}
+
+// Set uses given function f to mock the AdminApplicationUseCase.PatchGroup method
+func (mmPatchGroup *mAdminApplicationUseCaseMockPatchGroup) Set(f func(ctx context.Context, cmd mm_port.PatchGroupCommand) (err error)) *AdminApplicationUseCaseMock {
+	if mmPatchGroup.defaultExpectation != nil {
+		mmPatchGroup.mock.t.Fatalf("Default expectation is already set for the AdminApplicationUseCase.PatchGroup method")
+	}
+
+	if len(mmPatchGroup.expectations) > 0 {
+		mmPatchGroup.mock.t.Fatalf("Some expectations are already set for the AdminApplicationUseCase.PatchGroup method")
+	}
+
+	mmPatchGroup.mock.funcPatchGroup = f
+	mmPatchGroup.mock.funcPatchGroupOrigin = minimock.CallerInfo(1)
+	return mmPatchGroup.mock
+}
+
+// When sets expectation for the AdminApplicationUseCase.PatchGroup which will trigger the result defined by the following
+// Then helper
+func (mmPatchGroup *mAdminApplicationUseCaseMockPatchGroup) When(ctx context.Context, cmd mm_port.PatchGroupCommand) *AdminApplicationUseCaseMockPatchGroupExpectation {
+	if mmPatchGroup.mock.funcPatchGroup != nil {
+		mmPatchGroup.mock.t.Fatalf("AdminApplicationUseCaseMock.PatchGroup mock is already set by Set")
+	}
+
+	expectation := &AdminApplicationUseCaseMockPatchGroupExpectation{
+		mock:               mmPatchGroup.mock,
+		params:             &AdminApplicationUseCaseMockPatchGroupParams{ctx, cmd},
+		expectationOrigins: AdminApplicationUseCaseMockPatchGroupExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmPatchGroup.expectations = append(mmPatchGroup.expectations, expectation)
+	return expectation
+}
+
+// Then sets up AdminApplicationUseCase.PatchGroup return parameters for the expectation previously defined by the When method
+func (e *AdminApplicationUseCaseMockPatchGroupExpectation) Then(err error) *AdminApplicationUseCaseMock {
+	e.results = &AdminApplicationUseCaseMockPatchGroupResults{err}
+	return e.mock
+}
+
+// Times sets number of times AdminApplicationUseCase.PatchGroup should be invoked
+func (mmPatchGroup *mAdminApplicationUseCaseMockPatchGroup) Times(n uint64) *mAdminApplicationUseCaseMockPatchGroup {
+	if n == 0 {
+		mmPatchGroup.mock.t.Fatalf("Times of AdminApplicationUseCaseMock.PatchGroup mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmPatchGroup.expectedInvocations, n)
+	mmPatchGroup.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmPatchGroup
+}
+
+func (mmPatchGroup *mAdminApplicationUseCaseMockPatchGroup) invocationsDone() bool {
+	if len(mmPatchGroup.expectations) == 0 && mmPatchGroup.defaultExpectation == nil && mmPatchGroup.mock.funcPatchGroup == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmPatchGroup.mock.afterPatchGroupCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmPatchGroup.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// PatchGroup implements mm_port.AdminApplicationUseCase
+func (mmPatchGroup *AdminApplicationUseCaseMock) PatchGroup(ctx context.Context, cmd mm_port.PatchGroupCommand) (err error) {
+	mm_atomic.AddUint64(&mmPatchGroup.beforePatchGroupCounter, 1)
+	defer mm_atomic.AddUint64(&mmPatchGroup.afterPatchGroupCounter, 1)
+
+	mmPatchGroup.t.Helper()
+
+	if mmPatchGroup.inspectFuncPatchGroup != nil {
+		mmPatchGroup.inspectFuncPatchGroup(ctx, cmd)
+	}
+
+	mm_params := AdminApplicationUseCaseMockPatchGroupParams{ctx, cmd}
+
+	// Record call args
+	mmPatchGroup.PatchGroupMock.mutex.Lock()
+	mmPatchGroup.PatchGroupMock.callArgs = append(mmPatchGroup.PatchGroupMock.callArgs, &mm_params)
+	mmPatchGroup.PatchGroupMock.mutex.Unlock()
+
+	for _, e := range mmPatchGroup.PatchGroupMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmPatchGroup.PatchGroupMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmPatchGroup.PatchGroupMock.defaultExpectation.Counter, 1)
+		mm_want := mmPatchGroup.PatchGroupMock.defaultExpectation.params
+		mm_want_ptrs := mmPatchGroup.PatchGroupMock.defaultExpectation.paramPtrs
+
+		mm_got := AdminApplicationUseCaseMockPatchGroupParams{ctx, cmd}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmPatchGroup.t.Errorf("AdminApplicationUseCaseMock.PatchGroup got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmPatchGroup.PatchGroupMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
+				mmPatchGroup.t.Errorf("AdminApplicationUseCaseMock.PatchGroup got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmPatchGroup.PatchGroupMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmPatchGroup.t.Errorf("AdminApplicationUseCaseMock.PatchGroup got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmPatchGroup.PatchGroupMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmPatchGroup.PatchGroupMock.defaultExpectation.results
+		if mm_results == nil {
+			mmPatchGroup.t.Fatal("No results are set for the AdminApplicationUseCaseMock.PatchGroup")
+		}
+		return (*mm_results).err
+	}
+	if mmPatchGroup.funcPatchGroup != nil {
+		return mmPatchGroup.funcPatchGroup(ctx, cmd)
+	}
+	mmPatchGroup.t.Fatalf("Unexpected call to AdminApplicationUseCaseMock.PatchGroup. %v %v", ctx, cmd)
+	return
+}
+
+// PatchGroupAfterCounter returns a count of finished AdminApplicationUseCaseMock.PatchGroup invocations
+func (mmPatchGroup *AdminApplicationUseCaseMock) PatchGroupAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmPatchGroup.afterPatchGroupCounter)
+}
+
+// PatchGroupBeforeCounter returns a count of AdminApplicationUseCaseMock.PatchGroup invocations
+func (mmPatchGroup *AdminApplicationUseCaseMock) PatchGroupBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmPatchGroup.beforePatchGroupCounter)
+}
+
+// Calls returns a list of arguments used in each call to AdminApplicationUseCaseMock.PatchGroup.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmPatchGroup *mAdminApplicationUseCaseMockPatchGroup) Calls() []*AdminApplicationUseCaseMockPatchGroupParams {
+	mmPatchGroup.mutex.RLock()
+
+	argCopy := make([]*AdminApplicationUseCaseMockPatchGroupParams, len(mmPatchGroup.callArgs))
+	copy(argCopy, mmPatchGroup.callArgs)
+
+	mmPatchGroup.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockPatchGroupDone returns true if the count of the PatchGroup invocations corresponds
+// the number of defined expectations
+func (m *AdminApplicationUseCaseMock) MinimockPatchGroupDone() bool {
+	if m.PatchGroupMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.PatchGroupMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.PatchGroupMock.invocationsDone()
+}
+
+// MinimockPatchGroupInspect logs each unmet expectation
+func (m *AdminApplicationUseCaseMock) MinimockPatchGroupInspect() {
+	for _, e := range m.PatchGroupMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.PatchGroup at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterPatchGroupCounter := mm_atomic.LoadUint64(&m.afterPatchGroupCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.PatchGroupMock.defaultExpectation != nil && afterPatchGroupCounter < 1 {
+		if m.PatchGroupMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.PatchGroup at\n%s", m.PatchGroupMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.PatchGroup at\n%s with params: %#v", m.PatchGroupMock.defaultExpectation.expectationOrigins.origin, *m.PatchGroupMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcPatchGroup != nil && afterPatchGroupCounter < 1 {
+		m.t.Errorf("Expected call to AdminApplicationUseCaseMock.PatchGroup at\n%s", m.funcPatchGroupOrigin)
+	}
+
+	if !m.PatchGroupMock.invocationsDone() && afterPatchGroupCounter > 0 {
+		m.t.Errorf("Expected %d calls to AdminApplicationUseCaseMock.PatchGroup at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.PatchGroupMock.expectedInvocations), m.PatchGroupMock.expectedInvocationsOrigin, afterPatchGroupCounter)
+	}
+}
+
+type mAdminApplicationUseCaseMockPatchProfile struct {
+	optional           bool
+	mock               *AdminApplicationUseCaseMock
+	defaultExpectation *AdminApplicationUseCaseMockPatchProfileExpectation
+	expectations       []*AdminApplicationUseCaseMockPatchProfileExpectation
+
+	callArgs []*AdminApplicationUseCaseMockPatchProfileParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AdminApplicationUseCaseMockPatchProfileExpectation specifies expectation struct of the AdminApplicationUseCase.PatchProfile
+type AdminApplicationUseCaseMockPatchProfileExpectation struct {
+	mock               *AdminApplicationUseCaseMock
+	params             *AdminApplicationUseCaseMockPatchProfileParams
+	paramPtrs          *AdminApplicationUseCaseMockPatchProfileParamPtrs
+	expectationOrigins AdminApplicationUseCaseMockPatchProfileExpectationOrigins
+	results            *AdminApplicationUseCaseMockPatchProfileResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AdminApplicationUseCaseMockPatchProfileParams contains parameters of the AdminApplicationUseCase.PatchProfile
+type AdminApplicationUseCaseMockPatchProfileParams struct {
+	ctx context.Context
+	cmd mm_port.PatchProfileCommand
+}
+
+// AdminApplicationUseCaseMockPatchProfileParamPtrs contains pointers to parameters of the AdminApplicationUseCase.PatchProfile
+type AdminApplicationUseCaseMockPatchProfileParamPtrs struct {
+	ctx *context.Context
+	cmd *mm_port.PatchProfileCommand
+}
+
+// AdminApplicationUseCaseMockPatchProfileResults contains results of the AdminApplicationUseCase.PatchProfile
+type AdminApplicationUseCaseMockPatchProfileResults struct {
+	err error
+}
+
+// AdminApplicationUseCaseMockPatchProfileOrigins contains origins of expectations of the AdminApplicationUseCase.PatchProfile
+type AdminApplicationUseCaseMockPatchProfileExpectationOrigins struct {
+	origin    string
+	originCtx string
+	originCmd string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmPatchProfile *mAdminApplicationUseCaseMockPatchProfile) Optional() *mAdminApplicationUseCaseMockPatchProfile {
+	mmPatchProfile.optional = true
+	return mmPatchProfile
+}
+
+// Expect sets up expected params for AdminApplicationUseCase.PatchProfile
+func (mmPatchProfile *mAdminApplicationUseCaseMockPatchProfile) Expect(ctx context.Context, cmd mm_port.PatchProfileCommand) *mAdminApplicationUseCaseMockPatchProfile {
+	if mmPatchProfile.mock.funcPatchProfile != nil {
+		mmPatchProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.PatchProfile mock is already set by Set")
+	}
+
+	if mmPatchProfile.defaultExpectation == nil {
+		mmPatchProfile.defaultExpectation = &AdminApplicationUseCaseMockPatchProfileExpectation{}
+	}
+
+	if mmPatchProfile.defaultExpectation.paramPtrs != nil {
+		mmPatchProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.PatchProfile mock is already set by ExpectParams functions")
+	}
+
+	mmPatchProfile.defaultExpectation.params = &AdminApplicationUseCaseMockPatchProfileParams{ctx, cmd}
+	mmPatchProfile.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmPatchProfile.expectations {
+		if minimock.Equal(e.params, mmPatchProfile.defaultExpectation.params) {
+			mmPatchProfile.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmPatchProfile.defaultExpectation.params)
+		}
+	}
+
+	return mmPatchProfile
+}
+
+// ExpectCtxParam1 sets up expected param ctx for AdminApplicationUseCase.PatchProfile
+func (mmPatchProfile *mAdminApplicationUseCaseMockPatchProfile) ExpectCtxParam1(ctx context.Context) *mAdminApplicationUseCaseMockPatchProfile {
+	if mmPatchProfile.mock.funcPatchProfile != nil {
+		mmPatchProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.PatchProfile mock is already set by Set")
+	}
+
+	if mmPatchProfile.defaultExpectation == nil {
+		mmPatchProfile.defaultExpectation = &AdminApplicationUseCaseMockPatchProfileExpectation{}
+	}
+
+	if mmPatchProfile.defaultExpectation.params != nil {
+		mmPatchProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.PatchProfile mock is already set by Expect")
+	}
+
+	if mmPatchProfile.defaultExpectation.paramPtrs == nil {
+		mmPatchProfile.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockPatchProfileParamPtrs{}
+	}
+	mmPatchProfile.defaultExpectation.paramPtrs.ctx = &ctx
+	mmPatchProfile.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmPatchProfile
+}
+
+// ExpectCmdParam2 sets up expected param cmd for AdminApplicationUseCase.PatchProfile
+func (mmPatchProfile *mAdminApplicationUseCaseMockPatchProfile) ExpectCmdParam2(cmd mm_port.PatchProfileCommand) *mAdminApplicationUseCaseMockPatchProfile {
+	if mmPatchProfile.mock.funcPatchProfile != nil {
+		mmPatchProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.PatchProfile mock is already set by Set")
+	}
+
+	if mmPatchProfile.defaultExpectation == nil {
+		mmPatchProfile.defaultExpectation = &AdminApplicationUseCaseMockPatchProfileExpectation{}
+	}
+
+	if mmPatchProfile.defaultExpectation.params != nil {
+		mmPatchProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.PatchProfile mock is already set by Expect")
+	}
+
+	if mmPatchProfile.defaultExpectation.paramPtrs == nil {
+		mmPatchProfile.defaultExpectation.paramPtrs = &AdminApplicationUseCaseMockPatchProfileParamPtrs{}
+	}
+	mmPatchProfile.defaultExpectation.paramPtrs.cmd = &cmd
+	mmPatchProfile.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
+
+	return mmPatchProfile
+}
+
+// Inspect accepts an inspector function that has same arguments as the AdminApplicationUseCase.PatchProfile
+func (mmPatchProfile *mAdminApplicationUseCaseMockPatchProfile) Inspect(f func(ctx context.Context, cmd mm_port.PatchProfileCommand)) *mAdminApplicationUseCaseMockPatchProfile {
+	if mmPatchProfile.mock.inspectFuncPatchProfile != nil {
+		mmPatchProfile.mock.t.Fatalf("Inspect function is already set for AdminApplicationUseCaseMock.PatchProfile")
+	}
+
+	mmPatchProfile.mock.inspectFuncPatchProfile = f
+
+	return mmPatchProfile
+}
+
+// Return sets up results that will be returned by AdminApplicationUseCase.PatchProfile
+func (mmPatchProfile *mAdminApplicationUseCaseMockPatchProfile) Return(err error) *AdminApplicationUseCaseMock {
+	if mmPatchProfile.mock.funcPatchProfile != nil {
+		mmPatchProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.PatchProfile mock is already set by Set")
+	}
+
+	if mmPatchProfile.defaultExpectation == nil {
+		mmPatchProfile.defaultExpectation = &AdminApplicationUseCaseMockPatchProfileExpectation{mock: mmPatchProfile.mock}
+	}
+	mmPatchProfile.defaultExpectation.results = &AdminApplicationUseCaseMockPatchProfileResults{err}
+	mmPatchProfile.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmPatchProfile.mock
+}
+
+// Set uses given function f to mock the AdminApplicationUseCase.PatchProfile method
+func (mmPatchProfile *mAdminApplicationUseCaseMockPatchProfile) Set(f func(ctx context.Context, cmd mm_port.PatchProfileCommand) (err error)) *AdminApplicationUseCaseMock {
+	if mmPatchProfile.defaultExpectation != nil {
+		mmPatchProfile.mock.t.Fatalf("Default expectation is already set for the AdminApplicationUseCase.PatchProfile method")
+	}
+
+	if len(mmPatchProfile.expectations) > 0 {
+		mmPatchProfile.mock.t.Fatalf("Some expectations are already set for the AdminApplicationUseCase.PatchProfile method")
+	}
+
+	mmPatchProfile.mock.funcPatchProfile = f
+	mmPatchProfile.mock.funcPatchProfileOrigin = minimock.CallerInfo(1)
+	return mmPatchProfile.mock
+}
+
+// When sets expectation for the AdminApplicationUseCase.PatchProfile which will trigger the result defined by the following
+// Then helper
+func (mmPatchProfile *mAdminApplicationUseCaseMockPatchProfile) When(ctx context.Context, cmd mm_port.PatchProfileCommand) *AdminApplicationUseCaseMockPatchProfileExpectation {
+	if mmPatchProfile.mock.funcPatchProfile != nil {
+		mmPatchProfile.mock.t.Fatalf("AdminApplicationUseCaseMock.PatchProfile mock is already set by Set")
+	}
+
+	expectation := &AdminApplicationUseCaseMockPatchProfileExpectation{
+		mock:               mmPatchProfile.mock,
+		params:             &AdminApplicationUseCaseMockPatchProfileParams{ctx, cmd},
+		expectationOrigins: AdminApplicationUseCaseMockPatchProfileExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmPatchProfile.expectations = append(mmPatchProfile.expectations, expectation)
+	return expectation
+}
+
+// Then sets up AdminApplicationUseCase.PatchProfile return parameters for the expectation previously defined by the When method
+func (e *AdminApplicationUseCaseMockPatchProfileExpectation) Then(err error) *AdminApplicationUseCaseMock {
+	e.results = &AdminApplicationUseCaseMockPatchProfileResults{err}
+	return e.mock
+}
+
+// Times sets number of times AdminApplicationUseCase.PatchProfile should be invoked
+func (mmPatchProfile *mAdminApplicationUseCaseMockPatchProfile) Times(n uint64) *mAdminApplicationUseCaseMockPatchProfile {
+	if n == 0 {
+		mmPatchProfile.mock.t.Fatalf("Times of AdminApplicationUseCaseMock.PatchProfile mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmPatchProfile.expectedInvocations, n)
+	mmPatchProfile.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmPatchProfile
+}
+
+func (mmPatchProfile *mAdminApplicationUseCaseMockPatchProfile) invocationsDone() bool {
+	if len(mmPatchProfile.expectations) == 0 && mmPatchProfile.defaultExpectation == nil && mmPatchProfile.mock.funcPatchProfile == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmPatchProfile.mock.afterPatchProfileCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmPatchProfile.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// PatchProfile implements mm_port.AdminApplicationUseCase
+func (mmPatchProfile *AdminApplicationUseCaseMock) PatchProfile(ctx context.Context, cmd mm_port.PatchProfileCommand) (err error) {
+	mm_atomic.AddUint64(&mmPatchProfile.beforePatchProfileCounter, 1)
+	defer mm_atomic.AddUint64(&mmPatchProfile.afterPatchProfileCounter, 1)
+
+	mmPatchProfile.t.Helper()
+
+	if mmPatchProfile.inspectFuncPatchProfile != nil {
+		mmPatchProfile.inspectFuncPatchProfile(ctx, cmd)
+	}
+
+	mm_params := AdminApplicationUseCaseMockPatchProfileParams{ctx, cmd}
+
+	// Record call args
+	mmPatchProfile.PatchProfileMock.mutex.Lock()
+	mmPatchProfile.PatchProfileMock.callArgs = append(mmPatchProfile.PatchProfileMock.callArgs, &mm_params)
+	mmPatchProfile.PatchProfileMock.mutex.Unlock()
+
+	for _, e := range mmPatchProfile.PatchProfileMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmPatchProfile.PatchProfileMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmPatchProfile.PatchProfileMock.defaultExpectation.Counter, 1)
+		mm_want := mmPatchProfile.PatchProfileMock.defaultExpectation.params
+		mm_want_ptrs := mmPatchProfile.PatchProfileMock.defaultExpectation.paramPtrs
+
+		mm_got := AdminApplicationUseCaseMockPatchProfileParams{ctx, cmd}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmPatchProfile.t.Errorf("AdminApplicationUseCaseMock.PatchProfile got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmPatchProfile.PatchProfileMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
+				mmPatchProfile.t.Errorf("AdminApplicationUseCaseMock.PatchProfile got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmPatchProfile.PatchProfileMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmPatchProfile.t.Errorf("AdminApplicationUseCaseMock.PatchProfile got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmPatchProfile.PatchProfileMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmPatchProfile.PatchProfileMock.defaultExpectation.results
+		if mm_results == nil {
+			mmPatchProfile.t.Fatal("No results are set for the AdminApplicationUseCaseMock.PatchProfile")
+		}
+		return (*mm_results).err
+	}
+	if mmPatchProfile.funcPatchProfile != nil {
+		return mmPatchProfile.funcPatchProfile(ctx, cmd)
+	}
+	mmPatchProfile.t.Fatalf("Unexpected call to AdminApplicationUseCaseMock.PatchProfile. %v %v", ctx, cmd)
+	return
+}
+
+// PatchProfileAfterCounter returns a count of finished AdminApplicationUseCaseMock.PatchProfile invocations
+func (mmPatchProfile *AdminApplicationUseCaseMock) PatchProfileAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmPatchProfile.afterPatchProfileCounter)
+}
+
+// PatchProfileBeforeCounter returns a count of AdminApplicationUseCaseMock.PatchProfile invocations
+func (mmPatchProfile *AdminApplicationUseCaseMock) PatchProfileBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmPatchProfile.beforePatchProfileCounter)
+}
+
+// Calls returns a list of arguments used in each call to AdminApplicationUseCaseMock.PatchProfile.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmPatchProfile *mAdminApplicationUseCaseMockPatchProfile) Calls() []*AdminApplicationUseCaseMockPatchProfileParams {
+	mmPatchProfile.mutex.RLock()
+
+	argCopy := make([]*AdminApplicationUseCaseMockPatchProfileParams, len(mmPatchProfile.callArgs))
+	copy(argCopy, mmPatchProfile.callArgs)
+
+	mmPatchProfile.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockPatchProfileDone returns true if the count of the PatchProfile invocations corresponds
+// the number of defined expectations
+func (m *AdminApplicationUseCaseMock) MinimockPatchProfileDone() bool {
+	if m.PatchProfileMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.PatchProfileMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.PatchProfileMock.invocationsDone()
+}
+
+// MinimockPatchProfileInspect logs each unmet expectation
+func (m *AdminApplicationUseCaseMock) MinimockPatchProfileInspect() {
+	for _, e := range m.PatchProfileMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.PatchProfile at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterPatchProfileCounter := mm_atomic.LoadUint64(&m.afterPatchProfileCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.PatchProfileMock.defaultExpectation != nil && afterPatchProfileCounter < 1 {
+		if m.PatchProfileMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.PatchProfile at\n%s", m.PatchProfileMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AdminApplicationUseCaseMock.PatchProfile at\n%s with params: %#v", m.PatchProfileMock.defaultExpectation.expectationOrigins.origin, *m.PatchProfileMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcPatchProfile != nil && afterPatchProfileCounter < 1 {
+		m.t.Errorf("Expected call to AdminApplicationUseCaseMock.PatchProfile at\n%s", m.funcPatchProfileOrigin)
+	}
+
+	if !m.PatchProfileMock.invocationsDone() && afterPatchProfileCounter > 0 {
+		m.t.Errorf("Expected %d calls to AdminApplicationUseCaseMock.PatchProfile at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.PatchProfileMock.expectedInvocations), m.PatchProfileMock.expectedInvocationsOrigin, afterPatchProfileCounter)
+	}
+}
+
 type mAdminApplicationUseCaseMockResetApplicationSecret struct {
 	optional           bool
 	mock               *AdminApplicationUseCaseMock
@@ -7432,6 +8138,10 @@ func (m *AdminApplicationUseCaseMock) MinimockFinish() {
 
 			m.MinimockListApplicationsByProfileInspect()
 
+			m.MinimockPatchGroupInspect()
+
+			m.MinimockPatchProfileInspect()
+
 			m.MinimockResetApplicationSecretInspect()
 
 			m.MinimockToggleApplicationStatusInspect()
@@ -7479,6 +8189,8 @@ func (m *AdminApplicationUseCaseMock) minimockDone() bool {
 		m.MinimockGetProfilesDone() &&
 		m.MinimockListApplicationsByGroupDone() &&
 		m.MinimockListApplicationsByProfileDone() &&
+		m.MinimockPatchGroupDone() &&
+		m.MinimockPatchProfileDone() &&
 		m.MinimockResetApplicationSecretDone() &&
 		m.MinimockToggleApplicationStatusDone() &&
 		m.MinimockUpdateApplicationDone() &&

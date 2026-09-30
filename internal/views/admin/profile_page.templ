@@ -1,0 +1,112 @@
+package admin
+
+import (
+	"time"
+
+	"sprezz-identity/internal/domain/model"
+)
+
+// ProfilePageProps is everything the profile detail page renders.
+type ProfilePageProps struct {
+	ActiveTenant model.Tenant
+	Profile      *model.ApplicationProfile
+	UsedBy       []model.ApplicationSummary
+	Msg          string
+	Sections     map[string]SectionResult
+}
+
+// Section returns the result for a section, or the zero value when it was not just saved.
+func (p ProfilePageProps) Section(name string) SectionResult {
+	return p.Sections[name]
+}
+
+func profileSectionAction(profileID, section string) string {
+	return profileURL(profileID) + "/" + section
+}
+
+func lifetimeSeconds(d time.Duration) string {
+	return itoa(int(d / time.Second))
+}
+
+// ProfileContent is the detail page of one security profile. Every card saves on its own.
+templ ProfileContent(props ProfilePageProps) {
+	@PageHeader(props.Profile.ProfileName, "Profiles", profilesBase()) {
+		if props.Profile.IsSystem {
+			@SystemBadge()
+		}
+		if props.Profile.IsEnabled {
+			@Badge("Active", "active")
+		} else {
+			@Badge("Disabled", "inactive")
+		}
+	}
+	@FlashMessage(props.Msg)
+	if props.Profile.IsSystem {
+		@SystemBanner("Managed by Sprezz. This profile defines how the admin console signs in and cannot be changed.")
+	}
+	<div class="space-y-6 max-w-3xl">
+		@ProfileGeneralCard(props.Profile, props.Section("general"), props.Profile.IsSystem)
+		@ProfileAuthCard(props.Profile, props.Section("authentication"), props.Profile.IsSystem)
+		@ProfileLifetimesCard(props.Profile, props.Section("lifetimes"), props.Profile.IsSystem)
+		<section class="bg-white border border-gray-200 rounded-xl shadow-xs">
+			<div class="px-6 pt-5 pb-4 border-b border-gray-100">
+				<h2 class="text-base font-bold text-gray-900">Applications</h2>
+				<p class="mt-1 text-sm text-gray-500">Applications that currently use this profile.</p>
+			</div>
+			<div class="px-6 py-5">
+				@UsedBy(props.UsedBy)
+			</div>
+		</section>
+		if !props.Profile.IsSystem {
+			@ConfirmDelete(ProfileDeleteProps(props))
+		}
+	</div>
+}
+
+templ ProfilePage(props ProfilePageProps) {
+	@AdminLayout(AdminLayoutProps{Title: props.Profile.ProfileName, CurrentTab: "clients", TenantName: props.ActiveTenant.Name}) {
+		@ProfileContent(props)
+	}
+}
+
+// ProfileDeleteProps builds the danger zone of a profile, so the handler can re-render it with an error.
+func ProfileDeleteProps(props ProfilePageProps) ConfirmDeleteProps {
+	p := ConfirmDeleteProps{
+		Action:   profileURL(props.Profile.ID.String()),
+		Expected: props.Profile.ProfileName,
+		Noun:     "profile",
+		Warning:  "Deleting a profile cannot be undone.",
+	}
+	if n := len(props.UsedBy); n > 0 {
+		p.Blocked = "This profile is used by " + itoa(n) + " application(s). Move them to another profile before deleting it."
+	}
+	return p
+}
+
+// ProfileGeneralCard edits the name and the enabled state.
+templ ProfileGeneralCard(profile *model.ApplicationProfile, result SectionResult, readOnly bool) {
+	@SectionCard(SectionCardProps{
+		ID:          "section-general",
+		Title:       "General",
+		Description: "The name admins see when choosing a profile for an application.",
+		Action:      profileSectionAction(profile.ID.String(), "general"),
+		ReadOnly:    readOnly,
+		Saved:       result.Saved,
+		Error:       result.Error,
+	}) {
+		<div>
+			<label for="profile_name" class="block text-sm font-medium text-gray-700 mb-1">Profile name</label>
+			<input
+				id="profile_name"
+				type="text"
+				name="profile_name"
+				value={ profile.ProfileName }
+				required
+				maxlength="100"
+				class={ "w-full px-3 py-2 border rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500", templ.KV("border-red-500", result.FieldErr("profile_name") != ""), templ.KV("border-gray-300", result.FieldErr("profile_name") == "") }
+			/>
+			@FieldError(result.FieldErr("profile_name"))
+		</div>
+		@ToggleRow("is_enabled", "true", "Enabled", "A disabled profile refuses every token request of the applications that use it.", profile.IsEnabled, false)
+	}
+}

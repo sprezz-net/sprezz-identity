@@ -1,0 +1,101 @@
+package admin
+
+// GroupsListContent lists the groups with their usage.
+templ GroupsListContent(props ListPageProps) {
+	@FlashMessage(props.Msg)
+	@ApplicationsSubNav("groups", props.Counts.Applications, props.Counts.Groups, props.Counts.Profiles)
+	@ListToolbar("+ Add group", groupsBase()+"/new") {
+		<p class="text-sm text-gray-500">Groups decide where applications may redirect and which sign-in methods they offer.</p>
+	}
+	<div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
+		if len(props.Groups) == 0 {
+			@EmptyState("No groups yet", "Create a group to hold redirect URIs, scopes and sign-in methods.")
+		} else {
+			<table class="min-w-full divide-y divide-gray-200 text-sm">
+				<thead>
+					<tr class="bg-gray-50 text-gray-500 font-semibold">
+						<th scope="col" class="px-6 py-3 text-left">Group</th>
+						<th scope="col" class="px-6 py-3 text-left">Redirect URIs</th>
+						<th scope="col" class="px-6 py-3 text-left">Scopes</th>
+						<th scope="col" class="px-6 py-3 text-left">Status</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-gray-100">
+					for _, g := range props.Groups {
+						<tr class="hover:bg-gray-50">
+							<td class="px-6 py-3">
+								@rowLink(groupURL(g.ID.String())) {
+									{ g.GroupName }
+								}
+								if g.IsSystem {
+									<span class="ml-2">
+										@SystemBadge()
+									</span>
+								}
+							</td>
+							<td class="px-6 py-3 text-gray-600">{ itoa(len(g.RedirectURIs)) }</td>
+							<td class="px-6 py-3 text-gray-600">{ itoa(len(g.AllowedScopes)) }</td>
+							<td class="px-6 py-3">@StatusBadge(g.IsEnabled)</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	</div>
+}
+
+templ GroupsListPage(props ListPageProps) {
+	@AdminLayout(AdminLayoutProps{Title: "Groups", CurrentTab: "clients", TenantName: props.ActiveTenant.Name}) {
+		@GroupsListContent(props)
+	}
+}
+
+// ProfilesListContent lists the security profiles.
+templ ProfilesListContent(props ListPageProps) {
+	@FlashMessage(props.Msg)
+	@ApplicationsSubNav("profiles", props.Counts.Applications, props.Counts.Groups, props.Counts.Profiles)
+	@ListToolbar("+ Add profile", profilesBase()+"/new") {
+		<p class="text-sm text-gray-500">Profiles set how applications authenticate and how long their tokens live.</p>
+	}
+	<div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
+		if len(props.Profiles) == 0 {
+			@EmptyState("No profiles yet", "Create a profile to set token lifetimes and the authentication method.")
+		} else {
+			<table class="min-w-full divide-y divide-gray-200 text-sm">
+				<thead>
+					<tr class="bg-gray-50 text-gray-500 font-semibold">
+						<th scope="col" class="px-6 py-3 text-left">Profile</th>
+						<th scope="col" class="px-6 py-3 text-left">Authentication</th>
+						<th scope="col" class="px-6 py-3 text-left">Signing</th>
+						<th scope="col" class="px-6 py-3 text-left">Status</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-gray-100">
+					for _, p := range props.Profiles {
+						<tr class="hover:bg-gray-50">
+							<td class="px-6 py-3">
+								@rowLink(profileURL(p.ID.String())) {
+									{ p.ProfileName }
+								}
+								if p.IsSystem {
+									<span class="ml-2">
+										@SystemBadge()
+									</span>
+								}
+							</td>
+							<td class="px-6 py-3 font-mono text-xs text-gray-600">{ string(p.TokenEndpointAuthMethod) }</td>
+							<td class="px-6 py-3 font-mono text-xs text-gray-600">{ string(p.SigningAlgorithm) }</td>
+							<td class="px-6 py-3">@StatusBadge(p.IsEnabled)</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	</div>
+}
+
+templ ProfilesListPage(props ListPageProps) {
+	@AdminLayout(AdminLayoutProps{Title: "Profiles", CurrentTab: "clients", TenantName: props.ActiveTenant.Name}) {
+		@ProfilesListContent(props)
+	}
+}

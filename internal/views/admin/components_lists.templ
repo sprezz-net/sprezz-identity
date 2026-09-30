@@ -1,0 +1,82 @@
+package admin
+
+// RedirectListProps configures a list of redirect URIs with one marked as the default.
+type RedirectListProps struct {
+	URIs         []string
+	Default      string
+	Error        string
+	DefaultError string
+}
+
+// RedirectList edits a whitelist of exact redirect URIs. The default is chosen with a radio button on the row,
+// so it can never point outside the list. Initial values travel as data attributes, never as script.
+templ RedirectList(props RedirectListProps) {
+	<div x-data="redirectUriManager" data-initial-urls={ marshalURLs(props.URIs) } data-default-url={ props.Default } class="space-y-3">
+		<div class="flex gap-2">
+			<input
+				type="url"
+				x-model="newUrl"
+				@keydown.enter.prevent="addUrl()"
+				placeholder="https://app.example.com/callback"
+				aria-label="New redirect URI"
+				class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+			/>
+			<button type="button" @click="addUrl()" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-sm font-semibold shrink-0">Add</button>
+		</div>
+		<template x-for="url in urls" :key="url">
+			<input type="hidden" name="redirect_uris" :value="url"/>
+		</template>
+		<div x-show="urls.length === 0" x-cloak class="p-4 text-center text-sm text-gray-500 border border-dashed border-gray-300 rounded-lg">
+			No redirect URIs yet. Sign-in requests are refused until one is added.
+		</div>
+		<ul x-show="urls.length > 0" x-cloak class="divide-y divide-gray-100 border border-gray-200 rounded-lg">
+			<template x-for="(url, index) in urls" :key="url">
+				<li class="flex items-center gap-3 px-3 py-2">
+					<input type="radio" name="default_redirect_uri" :value="url" x-model="defaultUrl" aria-label="Use as default redirect URI" class="h-4 w-4 text-blue-600"/>
+					<span x-text="url" class="flex-1 min-w-0 truncate font-mono text-xs text-gray-800 select-all"></span>
+					<span x-show="defaultUrl === url" x-cloak class="text-[10px] font-bold uppercase tracking-wide text-blue-700 bg-blue-50 border border-blue-100 rounded-sm px-1.5 py-0.5">Default</span>
+					<button type="button" @click="removeUrl(index)" class="text-gray-400 hover:text-red-600 text-sm px-1" aria-label="Remove redirect URI">&times;</button>
+				</li>
+			</template>
+		</ul>
+		@FieldError(props.Error)
+		@FieldError(props.DefaultError)
+		<p class="text-xs text-gray-500">Exact URLs only. The default is used when a client does not send a redirect URI. Plain http is only accepted for localhost.</p>
+	</div>
+}
+
+// URLList edits a plain list of URLs under one form field name.
+templ URLList(label, name string, urls []string, errorStr, hint string) {
+	<div>
+		<label class="block text-sm font-medium text-gray-700 mb-1">{ label }</label>
+		<div x-data="urlManager" data-initial-urls={ marshalURLs(urls) } class="space-y-2">
+			<template x-for="url in urls" :key="url">
+				<input type="hidden" name={ name } :value="url"/>
+			</template>
+			<ul x-show="urls.length > 0" x-cloak class="divide-y divide-gray-100 border border-gray-200 rounded-lg">
+				<template x-for="(url, index) in urls" :key="url">
+					<li class="flex items-center gap-3 px-3 py-2">
+						<span x-text="url" class="flex-1 min-w-0 truncate font-mono text-xs text-gray-800"></span>
+						<button type="button" @click="removeUrl(index)" class="text-gray-400 hover:text-red-600 text-sm px-1" aria-label="Remove URL">&times;</button>
+					</li>
+				</template>
+			</ul>
+			<div class="flex gap-2">
+				<input
+					type="url"
+					x-model="newUrl"
+					@keydown.enter.prevent="addUrl()"
+					placeholder="https://app.example.com/logged-out"
+					aria-label={ label }
+					class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+				/>
+				<button type="button" @click="addUrl()" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-sm font-semibold shrink-0">Add</button>
+			</div>
+			<p x-show="error" x-cloak x-text="error" class="text-xs text-red-600"></p>
+		</div>
+		@FieldError(errorStr)
+		if hint != "" {
+			<p class="mt-1 text-xs text-gray-500">{ hint }</p>
+		}
+	</div>
+}

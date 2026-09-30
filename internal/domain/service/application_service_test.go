@@ -40,9 +40,12 @@ func TestApplicationService_CreateProfile_PublicEnforcement(t *testing.T) {
 		SigningAlgorithm:        model.AlgRS256,
 		GrantTypes:              []model.GrantType{model.GrantTypeAuthorizationCode},
 		ResponseTypes:           []model.ResponseType{model.ResponseTypeCode},
+		AccessTokenLifetime:     15 * time.Minute,
+		IDTokenLifetime:         15 * time.Minute,
+		RefreshTokenLifetime:    24 * time.Hour,
 	}
 
-	err := svc.CreateProfile(context.Background(), cmd)
+	_, err := svc.CreateProfile(context.Background(), cmd)
 	assert.NoError(t, err)
 }
 

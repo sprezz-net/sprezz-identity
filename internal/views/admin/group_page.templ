@@ -1,0 +1,118 @@
+package admin
+
+import "sprezz-identity/internal/domain/model"
+
+// GroupContent is the detail page of one application group. Every card saves on its own.
+templ GroupContent(props GroupPageProps) {
+	@PageHeader(props.Group.GroupName, "Groups", groupsBase()) {
+		if props.Group.IsSystem {
+			@SystemBadge()
+		}
+		if props.Group.IsEnabled {
+			@Badge("Active", "active")
+		} else {
+			@Badge("Disabled", "inactive")
+		}
+	}
+	@FlashMessage(props.Msg)
+	if props.Group.IsSystem {
+		@SystemBanner(systemGroupMessage(props.Group))
+	}
+	<div class="grid grid-cols-1 lg:grid-cols-[14rem_minmax(0,1fr)] gap-8 items-start">
+		@groupRail(props)
+		<div class="space-y-6 min-w-0">
+			if props.Group.IsSystem {
+				@GroupReadOnly(props.Group)
+				if isAdminGroup(props.Group) {
+					@SignInCard(SignInCardProps{Group: props.Group, Partitions: props.Partitions, Result: props.Section("signin"), FederatedOnly: true})
+				}
+			} else {
+				@GroupGeneralCard(props.Group, props.Section("general"))
+				@GroupRedirectsCard(props.Group, props.Section("redirects"))
+				@GroupLogoutCard(props.Group, props.Section("logout"))
+				@GroupScopesCard(props.Group, props.Section("scopes"))
+				@SignInCard(SignInCardProps{Group: props.Group, Partitions: props.Partitions, Result: props.Section("signin")})
+			}
+			<section id="section-applications" class="bg-white border border-gray-200 rounded-xl shadow-xs scroll-mt-24">
+				<div class="px-6 pt-5 pb-4 border-b border-gray-100">
+					<h2 class="text-base font-bold text-gray-900">Applications</h2>
+					<p class="mt-1 text-sm text-gray-500">Applications that currently use this group.</p>
+				</div>
+				<div class="px-6 py-5">
+					@UsedBy(props.UsedBy)
+				</div>
+			</section>
+			if !props.Group.IsSystem {
+				@ConfirmDelete(GroupDeleteProps(props))
+			}
+		</div>
+	</div>
+}
+
+templ GroupPage(props GroupPageProps) {
+	@AdminLayout(AdminLayoutProps{Title: props.Group.GroupName, CurrentTab: "clients", TenantName: props.ActiveTenant.Name}) {
+		@GroupContent(props)
+	}
+}
+
+func isAdminGroup(group *model.ApplicationGroup) bool {
+	return group.GroupName == model.AdminUIGroupName
+}
+
+func systemGroupMessage(group *model.ApplicationGroup) string {
+	if isAdminGroup(group) {
+		return "Managed by Sprezz. Only the federated sign-in methods can be changed, for example to allow your own single sign-on for administrators."
+	}
+	return "Managed by Sprezz. This group provides the local break-glass sign-in for the admin console and cannot be changed."
+}
+
+// GroupDeleteProps builds the danger zone of a group, so the handler can re-render it with an error.
+func GroupDeleteProps(props GroupPageProps) ConfirmDeleteProps {
+	p := ConfirmDeleteProps{
+		Action:   groupURL(props.Group.ID.String()),
+		Expected: props.Group.GroupName,
+		Noun:     "group",
+		Warning:  "Deleting a group cannot be undone.",
+	}
+	if n := len(props.UsedBy); n > 0 {
+		p.Blocked = "This group is used by " + itoa(n) + " application(s). Move them to another group before deleting it."
+	}
+	return p
+}
+
+// groupRail is the section anchor list on the left of the page.
+templ groupRail(props GroupPageProps) {
+	<nav class="lg:sticky lg:top-24 text-sm" aria-label="Sections">
+		<ul class="space-y-1">
+			if !props.Group.IsSystem {
+				<li><a href="#section-general" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">General</a></li>
+				<li><a href="#section-redirects" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Redirect URIs</a></li>
+				<li><a href="#section-logout" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Sign-out</a></li>
+				<li><a href="#section-scopes" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Scopes and audiences</a></li>
+			}
+			<li><a href="#section-signin" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Sign-in methods</a></li>
+			<li><a href="#section-applications" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Applications</a></li>
+		</ul>
+	</nav>
+}
+
+// GroupReadOnly summarizes a system group that cannot be edited.
+templ GroupReadOnly(group *model.ApplicationGroup) {
+	<section class="bg-white border border-gray-200 rounded-xl shadow-xs">
+		<div class="px-6 pt-5 pb-4 border-b border-gray-100"><h2 class="text-base font-bold text-gray-900">Configuration</h2></div>
+		<dl class="px-6 py-5 grid grid-cols-1 sm:grid-cols-[10rem_minmax(0,1fr)] gap-x-6 gap-y-3 text-sm">
+			<dt class="font-medium text-gray-500">Redirect URIs</dt>
+			<dd class="font-mono text-xs text-gray-800 break-all">
+				for _, u := range group.RedirectURIs {
+					<div>{ u }</div>
+				}
+			</dd>
+			<dt class="font-medium text-gray-500">Scopes</dt>
+			<dd class="font-mono text-xs text-gray-800">
+				for _, s := range group.AllowedScopes {
+					<span class="inline-block mr-2">{ s }</span>
+				}
+			</dd>
+		</dl>
+	</section>
+}

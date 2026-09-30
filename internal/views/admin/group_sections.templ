@@ -1,0 +1,107 @@
+package admin
+
+import "sprezz-identity/internal/domain/model"
+
+func groupSectionAction(groupID, section string) string {
+	return groupURL(groupID) + "/" + section
+}
+
+// GroupGeneralCard edits the name and the enabled state of a group.
+templ GroupGeneralCard(group *model.ApplicationGroup, result SectionResult) {
+	@SectionCard(SectionCardProps{
+		ID:          "section-general",
+		Title:       "General",
+		Description: "The name admins see when choosing a group for an application.",
+		Action:      groupSectionAction(group.ID.String(), "general"),
+		Saved:       result.Saved,
+		Error:       result.Error,
+	}) {
+		<div>
+			<label for="group_name" class="block text-sm font-medium text-gray-700 mb-1">Group name</label>
+			<input
+				id="group_name"
+				type="text"
+				name="group_name"
+				value={ group.GroupName }
+				required
+				maxlength="100"
+				class={ "w-full px-3 py-2 border rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500", templ.KV("border-red-500", result.FieldErr("group_name") != ""), templ.KV("border-gray-300", result.FieldErr("group_name") == "") }
+			/>
+			@FieldError(result.FieldErr("group_name"))
+		</div>
+		@ToggleRow("is_enabled", "true", "Enabled", "A disabled group refuses every sign-in request of the applications that use it.", group.IsEnabled, false)
+	}
+}
+
+// GroupRedirectsCard edits the redirect URI whitelist and its default.
+templ GroupRedirectsCard(group *model.ApplicationGroup, result SectionResult) {
+	@SectionCard(SectionCardProps{
+		ID:          "section-redirects",
+		Title:       "Redirect URIs",
+		Description: "Where applications of this group may send users after sign-in.",
+		Action:      groupSectionAction(group.ID.String(), "redirects"),
+		Saved:       result.Saved,
+		Error:       result.Error,
+	}) {
+		@RedirectList(RedirectListProps{
+			URIs:         group.RedirectURIs,
+			Default:      group.RedirectURI,
+			Error:        result.FieldErr("redirect_uris"),
+			DefaultError: result.FieldErr("default_redirect_uri"),
+		})
+	}
+}
+
+// GroupLogoutCard edits post-logout redirects and the front and back channel logout endpoints.
+templ GroupLogoutCard(group *model.ApplicationGroup, result SectionResult) {
+	@SectionCard(SectionCardProps{
+		ID:          "section-logout",
+		Title:       "Sign-out",
+		Description: "Where users land after signing out, and how applications are told about it.",
+		Action:      groupSectionAction(group.ID.String(), "logout"),
+		Saved:       result.Saved,
+		Error:       result.Error,
+	}) {
+		@URLList("Post-logout redirect URIs", "post_logout_redirect_uris", group.PostLogoutRedirectURIs, result.FieldErr("post_logout_redirect_uris"), "")
+		<div>
+			<label for="front_channel_logout_uri" class="block text-sm font-medium text-gray-700 mb-1">Front-channel logout URI</label>
+			<input id="front_channel_logout_uri" type="url" name="front_channel_logout_uri" value={ group.FrontChannelLogoutURI } class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"/>
+			@FieldError(result.FieldErr("front_channel_logout_uri"))
+			<p class="mt-1 text-xs text-gray-500">Loaded in a hidden frame in the user's browser when they sign out.</p>
+		</div>
+		<div>
+			<label for="back_channel_logout_uri" class="block text-sm font-medium text-gray-700 mb-1">Back-channel logout URI</label>
+			<input id="back_channel_logout_uri" type="url" name="back_channel_logout_uri" value={ group.BackChannelLogoutURI } class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"/>
+			@FieldError(result.FieldErr("back_channel_logout_uri"))
+			<p class="mt-1 text-xs text-gray-500">Called server to server with a signed logout token.</p>
+		</div>
+	}
+}
+
+// GroupScopesCard edits allowed scopes, which of them are default, and the allowed audiences.
+templ GroupScopesCard(group *model.ApplicationGroup, result SectionResult) {
+	@SectionCard(SectionCardProps{
+		ID:          "section-scopes",
+		Title:       "Scopes and audiences",
+		Description: "What applications of this group may ask for.",
+		Action:      groupSectionAction(group.ID.String(), "scopes"),
+		Saved:       result.Saved,
+		Error:       result.Error,
+	}) {
+		@ScopePicker(ScopePickerProps{
+			Allowed:     group.AllowedScopes,
+			Defaults:    group.DefaultScopes,
+			Suggestions: StandardScopes,
+			Error:       result.FieldErr("allowed_scopes"),
+			DefaultsErr: result.FieldErr("default_scopes"),
+		})
+		@TagListManager(TagManagerProps{
+			Label:       "Allowed audiences",
+			InputName:   "allowed_audiences",
+			InitialTags: group.AllowedAudiences,
+			Placeholder: "Audience identifier, e.g. https://api.example.com",
+			ErrorStr:    result.FieldErr("allowed_audiences"),
+			IsAudience:  true,
+		})
+	}
+}

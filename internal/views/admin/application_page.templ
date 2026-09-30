@@ -1,0 +1,92 @@
+package admin
+
+import "sprezz-identity/internal/domain/model"
+
+// ApplicationPageProps is everything the application detail page renders.
+type ApplicationPageProps struct {
+	ActiveTenant model.Tenant
+	Application  *model.Application
+	Profile      *model.ApplicationProfile
+	Group        *model.ApplicationGroup
+	Profiles     []model.ApplicationProfile
+	Groups       []model.ApplicationGroup
+	Msg          string
+	Sections     map[string]SectionResult
+}
+
+// Section returns the result for a section, or the zero value when it was not just saved.
+func (p ApplicationPageProps) Section(name string) SectionResult {
+	return p.Sections[name]
+}
+
+func applicationSectionAction(clientID, section string) string {
+	return applicationURL(clientID) + "/" + section
+}
+
+// ApplicationContent is the detail page of one application. Every card saves on its own.
+templ ApplicationContent(props ApplicationPageProps) {
+	@PageHeader(props.Application.ApplicationName, "Applications", applicationsBase()) {
+		if props.Application.IsSystem {
+			@SystemBadge()
+		}
+		if props.Application.IsDynamic {
+			<span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">Dynamic registration</span>
+		}
+		@StatusBadge(props.Application.IsEnabled)
+	}
+	@FlashMessage(props.Msg)
+	if props.Application.IsSystem {
+		@SystemBanner("Managed by Sprezz. This application is the admin console itself and cannot be changed.")
+	}
+	<div class="space-y-6 max-w-3xl">
+		@ApplicationGeneralCard(props, props.Section("general"))
+		@ApplicationPolicyCard(props, props.Section("policy"))
+		if !props.Application.IsSystem {
+			@ApplicationCredentialsCard(props)
+			@ConfirmDelete(ConfirmDeleteProps{
+				Action:   applicationURL(props.Application.ClientID),
+				Expected: props.Application.ClientID,
+				Noun:     "application",
+				Warning:  "Deleting an application signs out its users and cannot be undone.",
+			})
+		}
+	</div>
+}
+
+templ ApplicationPage(props ApplicationPageProps) {
+	@AdminLayout(AdminLayoutProps{Title: props.Application.ApplicationName, CurrentTab: "clients", TenantName: props.ActiveTenant.Name}) {
+		@ApplicationContent(props)
+	}
+}
+
+// ApplicationGeneralCard edits the display name and the enabled state. The client ID is fixed after creation.
+templ ApplicationGeneralCard(props ApplicationPageProps, result SectionResult) {
+	@SectionCard(SectionCardProps{
+		ID:          "section-general",
+		Title:       "General",
+		Description: "How the application is named in this console.",
+		Action:      applicationSectionAction(props.Application.ClientID, "general"),
+		ReadOnly:    props.Application.IsSystem,
+		Saved:       result.Saved,
+		Error:       result.Error,
+	}) {
+		<div>
+			<label for="application_name" class="block text-sm font-medium text-gray-700 mb-1">Application name</label>
+			<input
+				id="application_name"
+				type="text"
+				name="application_name"
+				value={ props.Application.ApplicationName }
+				required
+				maxlength="255"
+				class={ "w-full px-3 py-2 border rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500", templ.KV("border-red-500", result.FieldErr("application_name") != ""), templ.KV("border-gray-300", result.FieldErr("application_name") == "") }
+			/>
+			@FieldError(result.FieldErr("application_name"))
+		</div>
+		<div>
+			<span class="block text-sm font-medium text-gray-700 mb-1">Client ID</span>
+			<div class="font-mono text-sm text-gray-800 bg-gray-50 px-3 py-2 border border-gray-200 rounded-lg select-all">{ props.Application.ClientID }</div>
+		</div>
+		@ToggleRow("is_enabled", "true", "Enabled", "A disabled application cannot sign anyone in.", props.Application.IsEnabled, false)
+	}
+}

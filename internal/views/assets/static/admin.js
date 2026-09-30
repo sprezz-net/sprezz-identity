@@ -14,9 +14,11 @@ document.addEventListener('DOMContentLoaded', () => {
 		}
 	});
 
-	// Hypermedia Semantic Error Status Compliance (§14.4 / §9.4)
-	document.body.addEventListener('htmx:beforeOnLoad', function (evt) {
-		if (evt.detail.xhr.status === 422) {
+	// Hypermedia semantic error statuses: htmx discards non-2xx responses unless told otherwise, and the decision
+	// lives in htmx:beforeSwap. Validation failures (422) and section fragments flagged by the server are swapped in.
+	document.body.addEventListener('htmx:beforeSwap', function (evt) {
+		const xhr = evt.detail.xhr;
+		if (xhr.status === 422 || xhr.getResponseHeader('X-Admin-Fragment') === 'true') {
 			evt.detail.shouldSwap = true;
 			evt.detail.isError = false;
 		}
@@ -45,12 +47,14 @@ document.addEventListener('alpine:init', () => {
 					this.urls.push(trimmed);
 				}
 				this.newUrl = '';
+				this.$dispatch('input');
 			} catch (e) {
 				this.error = 'Invalid URL format (must include protocol like http:// or https://)';
 			}
 		},
 		removeUrl(index) {
 			this.urls.splice(index, 1);
+			this.$dispatch('input');
 		}
 	}));
 
@@ -78,6 +82,7 @@ document.addEventListener('alpine:init', () => {
 				this.defaultUrl = value;
 			}
 			this.newUrl = '';
+			this.$dispatch('input');
 		},
 		removeUrl(index) {
 			const removed = this.urls[index];
@@ -85,6 +90,7 @@ document.addEventListener('alpine:init', () => {
 			if (this.defaultUrl === removed) {
 				this.defaultUrl = this.urls[0] || '';
 			}
+			this.$dispatch('input');
 		}
 	}));
 
@@ -147,9 +153,11 @@ document.addEventListener('alpine:init', () => {
 			}
 			this.tags.push(trimmed);
 			this.newTag = '';
+			this.$dispatch('input');
 		},
 		removeTag(index) {
 			this.tags.splice(index, 1);
+			this.$dispatch('input');
 		}
 	}));
 
@@ -682,6 +690,88 @@ document.addEventListener('alpine:init', () => {
 		currentTab: '',
 		init() {
 			this.currentTab = this.$el.dataset.currentTab || '';
+		}
+	}));
+
+	// Tracks whether a section form has unsaved edits. List editors dispatch a bubbling 'input' event.
+	Alpine.data('sectionForm', () => ({
+		dirty: false,
+		markDirty() {
+			this.dirty = true;
+		}
+	}));
+
+	// Allowed scopes with a per-scope default flag. Values arrive as data attributes.
+	Alpine.data('scopePicker', () => ({
+		allowed: [],
+		defaults: [],
+		suggestions: [],
+		newScope: '',
+		error: '',
+		init() {
+			this.allowed = this.readList('allowed');
+			this.defaults = this.readList('defaults');
+			this.suggestions = this.readList('suggestions');
+		},
+		readList(name) {
+			try {
+				return JSON.parse(this.$el.dataset[name] || '[]') || [];
+			} catch (e) {
+				return [];
+			}
+		},
+		isDefault(scope) {
+			return this.defaults.includes(scope);
+		},
+		toggleDefault(scope) {
+			if (this.defaults.includes(scope)) {
+				this.defaults = this.defaults.filter(s => s !== scope);
+			} else {
+				this.defaults.push(scope);
+			}
+			this.$dispatch('input');
+		},
+		addScope() {
+			this.error = '';
+			const value = this.newScope.trim();
+			if (!value) return;
+			if (/\s/.test(value)) {
+				this.error = 'A scope cannot contain spaces';
+				return;
+			}
+			if (this.allowed.includes(value)) {
+				this.error = 'Scope already added';
+				return;
+			}
+			this.allowed.push(value);
+			this.newScope = '';
+			this.$dispatch('input');
+		},
+		addSuggestion(scope) {
+			if (!this.allowed.includes(scope)) {
+				this.allowed.push(scope);
+				this.$dispatch('input');
+			}
+		},
+		removeScope(scope) {
+			this.allowed = this.allowed.filter(s => s !== scope);
+			this.defaults = this.defaults.filter(s => s !== scope);
+			this.$dispatch('input');
+		},
+		get unusedSuggestions() {
+			return this.suggestions.filter(s => !this.allowed.includes(s));
+		}
+	}));
+
+	// Enables a destructive button only while the typed text equals the expected value (server re-checks it).
+	Alpine.data('typedConfirm', () => ({
+		expected: '',
+		typed: '',
+		init() {
+			this.expected = this.$el.dataset.expected || '';
+		},
+		get matches() {
+			return this.expected !== '' && this.typed === this.expected;
 		}
 	}));
 

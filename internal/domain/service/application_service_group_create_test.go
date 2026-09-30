@@ -63,7 +63,7 @@ func TestApplicationService_CreateGroup_Validation(t *testing.T) {
 				f.stubProviders(model.IdentityProvider{ID: knownID, IDPType: model.OpenIDConnectIDPType})
 			}
 
-			err := f.svc.CreateGroup(context.Background(), port.CreateGroupCommand{
+			_, err := f.svc.CreateGroup(context.Background(), port.CreateGroupCommand{
 				TenantID:      f.tenantID,
 				GroupName:     "new-group",
 				AllowedIDPIDs: tt.allowed,
@@ -88,7 +88,7 @@ func TestApplicationService_CreateGroup_NilUUIDDefaultIsDropped(t *testing.T) {
 		return nil
 	})
 
-	err := f.svc.CreateGroup(context.Background(), port.CreateGroupCommand{
+	_, err := f.svc.CreateGroup(context.Background(), port.CreateGroupCommand{
 		TenantID:      f.tenantID,
 		GroupName:     "new-group",
 		AllowedIDPIDs: []uuid.UUID{knownID},

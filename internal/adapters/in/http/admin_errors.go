@@ -20,6 +20,8 @@ func adminErrorStatus(err error) (int, string) {
 		return http.StatusForbidden, port.ErrSystemManaged.Error()
 	case errors.Is(err, port.ErrInUse):
 		return http.StatusConflict, port.ErrInUse.Error()
+	case errors.Is(err, port.ErrAlreadyExists):
+		return http.StatusConflict, port.ErrAlreadyExists.Error()
 	case errors.Is(err, port.ErrApplicationNotFound):
 		return http.StatusNotFound, port.ErrApplicationNotFound.Error()
 	case errors.Is(err, port.ErrGroupNotFound):
