@@ -44,13 +44,11 @@ func TestHttpAdapter_AdminOIDC_Initiation_Success(t *testing.T) {
 		return tenant, nil
 	})
 
-	storage.GetPartitionsMock.Expect(minimock.AnyContext, tenantID).Return([]model.Partition{
-		{
-			ID:        1,
-			TenantID:  tenantID,
-			Name:      "Sprezz Admin",
-			AliasName: model.AdminPartitionAliasName,
-		},
+	storage.GetPartitionByAliasMock.Expect(minimock.AnyContext, tenantID, model.AdminPartitionAliasName).Return(&model.Partition{
+		ID:        1,
+		TenantID:  tenantID,
+		Name:      "Sprezz Admin",
+		AliasName: model.AdminPartitionAliasName,
 	}, nil)
 
 	suc.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
@@ -113,14 +111,16 @@ func TestHttpAdapter_AdminDashboard_AuthorizedSession_Success(t *testing.T) {
 		return tenant, nil
 	})
 
-	storage.GetPartitionsMock.Expect(minimock.AnyContext, tenantID).Return([]model.Partition{
-		{
-			ID:        adminPartitionID,
-			TenantID:  tenantID,
-			Name:      "Sprezz Admin",
-			AliasName: model.AdminPartitionAliasName,
-		},
+	storage.GetPartitionByAliasMock.Expect(minimock.AnyContext, tenantID, model.AdminPartitionAliasName).Return(&model.Partition{
+		ID:        adminPartitionID,
+		TenantID:  tenantID,
+		Name:      "Sprezz Admin",
+		AliasName: model.AdminPartitionAliasName,
 	}, nil)
+
+	ssoMock.ParseSessionCookieMock.Set(func(ctx context.Context, value string) (string, string, error) {
+		return "bearer", strings.TrimPrefix(value, "bearer:"), nil
+	})
 
 	ssoMock.BuildSessionCookieMock.Expect(minimock.AnyContext, port.CookieIntentCommand{
 		TenantID:       tenantID,
@@ -131,7 +131,7 @@ func TestHttpAdapter_AdminDashboard_AuthorizedSession_Success(t *testing.T) {
 		CookieName: "spz_session_" + model.AdminPartitionAliasName,
 	}, nil)
 
-	storage.GetUserProfileByIDMock.Expect(minimock.AnyContext, tenantID, adminPartitionID, userUUID).Return(&model.UserProfile{
+	storage.GetUserProfileByIDAndPartitionAliasMock.Expect(minimock.AnyContext, tenantID, model.AdminPartitionAliasName, userUUID).Return(&model.UserProfile{
 		ID:                userUUID,
 		TenantID:          tenantID,
 		PartitionID:       adminPartitionID,
