@@ -74,6 +74,12 @@ var (
 	// Administrative Console Errors
 	// ErrSystemManaged is returned when an operation targets an object provisioned and protected by the bootstrap service.
 	ErrSystemManaged = errors.New("this object is managed by the system and cannot be modified this way")
+	// ErrLastAdministrator is returned when an action would leave the admin console without a usable administrator.
+	ErrLastAdministrator = errors.New("this would remove the last administrator who can sign in")
+	// ErrOwnAccount is returned when an administrator tries to block, deactivate or delete their own account.
+	ErrOwnAccount = errors.New("you cannot do this to your own account")
+	// ErrLastSignInMethod is returned when removing a link would leave a user without any way to sign in.
+	ErrLastSignInMethod = errors.New("a user must keep at least one sign-in method")
 	// ErrInUse is returned when an object cannot be removed because other objects still reference it.
 	ErrInUse = errors.New("object is still in use by other objects")
 	// ErrAlreadyExists is returned when a unique name or identifier is already taken.

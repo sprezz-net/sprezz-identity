@@ -41,6 +41,7 @@ type Storage interface {
 	GetUserProfileByID(ctx context.Context, tenantID uuid.UUID, partitionID int64, id uuid.UUID) (*model.UserProfile, error)
 	GetUserProfileByIDAndPartitionAlias(ctx context.Context, tenantID uuid.UUID, partitionAlias string, id uuid.UUID) (*model.UserProfile, error)
 	FindProfileByEmail(ctx context.Context, tenantID uuid.UUID, partitionID int64, email string) (*model.UserProfile, error)
+	GetUserProfileByPreferredUsername(ctx context.Context, tenantID uuid.UUID, partitionID int64, username string) (*model.UserProfile, error)
 	SaveUserProfile(ctx context.Context, tenantID uuid.UUID, partitionID int64, profile model.UserProfile) error
 
 	// Identity Handling and Security Brute-Force lockout ports

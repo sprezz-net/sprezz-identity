@@ -18,6 +18,18 @@ func adminErrorStatus(err error) (int, string) {
 		return http.StatusUnprocessableEntity, validationErr.Error()
 	case errors.Is(err, port.ErrSystemManaged):
 		return http.StatusForbidden, port.ErrSystemManaged.Error()
+	case errors.Is(err, port.ErrLastAdministrator):
+		return http.StatusConflict, port.ErrLastAdministrator.Error()
+	case errors.Is(err, port.ErrOwnAccount):
+		return http.StatusConflict, port.ErrOwnAccount.Error()
+	case errors.Is(err, port.ErrLastSignInMethod):
+		return http.StatusConflict, port.ErrLastSignInMethod.Error()
+	case errors.Is(err, port.ErrUserProfileNotFound):
+		return http.StatusNotFound, port.ErrUserProfileNotFound.Error()
+	case errors.Is(err, port.ErrUsernameAlreadyExists):
+		return http.StatusConflict, port.ErrUsernameAlreadyExists.Error()
+	case errors.Is(err, port.ErrEmailAlreadyExists):
+		return http.StatusConflict, port.ErrEmailAlreadyExists.Error()
 	case errors.Is(err, port.ErrInUse):
 		return http.StatusConflict, port.ErrInUse.Error()
 	case errors.Is(err, port.ErrAlreadyExists):

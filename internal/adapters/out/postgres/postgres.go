@@ -2308,7 +2308,7 @@ func (s *PostgresStorage) GetUserProfileByEmail(ctx context.Context, tenantID uu
 	}, nil
 }
 
-// GetUserProfileByID fetches a user profile strictly using its numeric partition ID and tenant isolation context [5.7].
+// GetUserProfileByID fetches one user profile by its ID, scoped to the tenant and the partition.
 func (s *PostgresStorage) GetUserProfileByID(
 	ctx context.Context,
 	tenantUUID uuid.UUID,
@@ -2316,11 +2316,10 @@ func (s *PostgresStorage) GetUserProfileByID(
 	profileID uuid.UUID,
 ) (*model.UserProfile, error) {
 
-	// Note: Your compiled sqlc model (GetUserProfileByIDParams) does not feature an explicit @id parameter.
-	// It uses the primary sequential composite unique key combination (tenant_id, partition_id) to return the head row [5.7].
 	arg := sqlcdb.GetUserProfileByIDParams{
 		TenantUuid:  toPGUUID(tenantUUID),
 		PartitionID: partitionID,
+		ID:          toPGUUID(profileID),
 	}
 
 	row, err := s.queries.GetUserProfileByID(ctx, arg)
@@ -2343,6 +2342,8 @@ func (s *PostgresStorage) GetUserProfileByID(
 		EmailVerified:     row.EmailVerified,
 		Blocked:           row.Blocked,
 		LifecycleState:    model.ProfileLifecycleState(row.LifecycleState),
+		CreatedAt:         pgTimestamptzToTimeOrZero(row.CreatedAt),
+		UpdatedAt:         pgTimestamptzToTimeOrZero(row.UpdatedAt),
 	}, nil
 }
 
@@ -3144,13 +3145,16 @@ func (s *PostgresStorage) GetUserProfilesByTenant(ctx context.Context, tenantID 
 
 // DeleteUserProfile drops user entries explicitly validating both the target uuid and partitionID layout blocks.
 func (s *PostgresStorage) DeleteUserProfile(ctx context.Context, tenantID uuid.UUID, partitionID int64, userID uuid.UUID) error {
-	err := s.queries.DeleteUserProfile(ctx, sqlcdb.DeleteUserProfileParams{
+	rows, err := s.queries.DeleteUserProfile(ctx, sqlcdb.DeleteUserProfileParams{
 		TenantUuid:  toPGUUID(tenantID),
 		PartitionID: partitionID,
 		ID:          toPGUUID(userID),
 	})
 	if err != nil {
 		return fmt.Errorf("delete user profile transaction block: %w", err)
+	}
+	if rows == 0 {
+		return port.ErrUserProfileNotFound
 	}
 	return nil
 }

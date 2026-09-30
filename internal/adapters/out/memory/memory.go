@@ -1252,6 +1252,20 @@ func (s *Storage) GetUserIdentityByProviderAndExternalID(ctx context.Context, te
 	return nil, port.ErrIdentityNotFound
 }
 
+// GetUserProfileByPreferredUsername finds a user of the partition by its username.
+func (s *Storage) GetUserProfileByPreferredUsername(ctx context.Context, tenantID uuid.UUID, partitionID int64, username string) (*model.UserProfile, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, profile := range s.userProfiles {
+		if profile.TenantID == tenantID && profile.PartitionID == partitionID && profile.PreferredUsername == username {
+			clone := *profile
+			return &clone, nil
+		}
+	}
+	return nil, port.ErrUserProfileNotFound
+}
+
 func (s *Storage) FindProfileByEmail(ctx context.Context, tenantID uuid.UUID, partitionID int64, email string) (*model.UserProfile, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

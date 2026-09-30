@@ -51,6 +51,7 @@ SELECT
 FROM user_profiles up, tenant
 WHERE up.tenant_id = tenant.id
   AND up.partition_id = @partition_id
+  AND up.id = @id::uuid
 LIMIT 1;
 
 -- name: GetUserProfileByPreferredUsername :one
@@ -164,7 +165,7 @@ WHERE up.tenant_id = tenant.id
   AND up.partition_id = @partition_id
 ORDER BY up.preferred_username ASC;
 
--- name: DeleteUserProfile :exec
+-- name: DeleteUserProfile :execrows
 WITH tenant AS (
     SELECT id
     FROM tenants

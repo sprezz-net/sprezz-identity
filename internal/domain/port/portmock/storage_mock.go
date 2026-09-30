@@ -253,6 +253,13 @@ type StorageMock struct {
 	beforeGetUserProfileByIdentifierCounter uint64
 	GetUserProfileByIdentifierMock          mStorageMockGetUserProfileByIdentifier
 
+	funcGetUserProfileByPreferredUsername          func(ctx context.Context, tenantID uuid.UUID, partitionID int64, username string) (up1 *model.UserProfile, err error)
+	funcGetUserProfileByPreferredUsernameOrigin    string
+	inspectFuncGetUserProfileByPreferredUsername   func(ctx context.Context, tenantID uuid.UUID, partitionID int64, username string)
+	afterGetUserProfileByPreferredUsernameCounter  uint64
+	beforeGetUserProfileByPreferredUsernameCounter uint64
+	GetUserProfileByPreferredUsernameMock          mStorageMockGetUserProfileByPreferredUsername
+
 	funcInTransaction          func(ctx context.Context, fn func(txRepo mm_port.Storage) error) (err error)
 	funcInTransactionOrigin    string
 	inspectFuncInTransaction   func(ctx context.Context, fn func(txRepo mm_port.Storage) error)
@@ -549,6 +556,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 
 	m.GetUserProfileByIdentifierMock = mStorageMockGetUserProfileByIdentifier{mock: m}
 	m.GetUserProfileByIdentifierMock.callArgs = []*StorageMockGetUserProfileByIdentifierParams{}
+
+	m.GetUserProfileByPreferredUsernameMock = mStorageMockGetUserProfileByPreferredUsername{mock: m}
+	m.GetUserProfileByPreferredUsernameMock.callArgs = []*StorageMockGetUserProfileByPreferredUsernameParams{}
 
 	m.InTransactionMock = mStorageMockInTransaction{mock: m}
 	m.InTransactionMock.callArgs = []*StorageMockInTransactionParams{}
@@ -13320,6 +13330,411 @@ func (m *StorageMock) MinimockGetUserProfileByIdentifierInspect() {
 	}
 }
 
+type mStorageMockGetUserProfileByPreferredUsername struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockGetUserProfileByPreferredUsernameExpectation
+	expectations       []*StorageMockGetUserProfileByPreferredUsernameExpectation
+
+	callArgs []*StorageMockGetUserProfileByPreferredUsernameParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockGetUserProfileByPreferredUsernameExpectation specifies expectation struct of the Storage.GetUserProfileByPreferredUsername
+type StorageMockGetUserProfileByPreferredUsernameExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockGetUserProfileByPreferredUsernameParams
+	paramPtrs          *StorageMockGetUserProfileByPreferredUsernameParamPtrs
+	expectationOrigins StorageMockGetUserProfileByPreferredUsernameExpectationOrigins
+	results            *StorageMockGetUserProfileByPreferredUsernameResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockGetUserProfileByPreferredUsernameParams contains parameters of the Storage.GetUserProfileByPreferredUsername
+type StorageMockGetUserProfileByPreferredUsernameParams struct {
+	ctx         context.Context
+	tenantID    uuid.UUID
+	partitionID int64
+	username    string
+}
+
+// StorageMockGetUserProfileByPreferredUsernameParamPtrs contains pointers to parameters of the Storage.GetUserProfileByPreferredUsername
+type StorageMockGetUserProfileByPreferredUsernameParamPtrs struct {
+	ctx         *context.Context
+	tenantID    *uuid.UUID
+	partitionID *int64
+	username    *string
+}
+
+// StorageMockGetUserProfileByPreferredUsernameResults contains results of the Storage.GetUserProfileByPreferredUsername
+type StorageMockGetUserProfileByPreferredUsernameResults struct {
+	up1 *model.UserProfile
+	err error
+}
+
+// StorageMockGetUserProfileByPreferredUsernameOrigins contains origins of expectations of the Storage.GetUserProfileByPreferredUsername
+type StorageMockGetUserProfileByPreferredUsernameExpectationOrigins struct {
+	origin            string
+	originCtx         string
+	originTenantID    string
+	originPartitionID string
+	originUsername    string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetUserProfileByPreferredUsername *mStorageMockGetUserProfileByPreferredUsername) Optional() *mStorageMockGetUserProfileByPreferredUsername {
+	mmGetUserProfileByPreferredUsername.optional = true
+	return mmGetUserProfileByPreferredUsername
+}
+
+// Expect sets up expected params for Storage.GetUserProfileByPreferredUsername
+func (mmGetUserProfileByPreferredUsername *mStorageMockGetUserProfileByPreferredUsername) Expect(ctx context.Context, tenantID uuid.UUID, partitionID int64, username string) *mStorageMockGetUserProfileByPreferredUsername {
+	if mmGetUserProfileByPreferredUsername.mock.funcGetUserProfileByPreferredUsername != nil {
+		mmGetUserProfileByPreferredUsername.mock.t.Fatalf("StorageMock.GetUserProfileByPreferredUsername mock is already set by Set")
+	}
+
+	if mmGetUserProfileByPreferredUsername.defaultExpectation == nil {
+		mmGetUserProfileByPreferredUsername.defaultExpectation = &StorageMockGetUserProfileByPreferredUsernameExpectation{}
+	}
+
+	if mmGetUserProfileByPreferredUsername.defaultExpectation.paramPtrs != nil {
+		mmGetUserProfileByPreferredUsername.mock.t.Fatalf("StorageMock.GetUserProfileByPreferredUsername mock is already set by ExpectParams functions")
+	}
+
+	mmGetUserProfileByPreferredUsername.defaultExpectation.params = &StorageMockGetUserProfileByPreferredUsernameParams{ctx, tenantID, partitionID, username}
+	mmGetUserProfileByPreferredUsername.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetUserProfileByPreferredUsername.expectations {
+		if minimock.Equal(e.params, mmGetUserProfileByPreferredUsername.defaultExpectation.params) {
+			mmGetUserProfileByPreferredUsername.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetUserProfileByPreferredUsername.defaultExpectation.params)
+		}
+	}
+
+	return mmGetUserProfileByPreferredUsername
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.GetUserProfileByPreferredUsername
+func (mmGetUserProfileByPreferredUsername *mStorageMockGetUserProfileByPreferredUsername) ExpectCtxParam1(ctx context.Context) *mStorageMockGetUserProfileByPreferredUsername {
+	if mmGetUserProfileByPreferredUsername.mock.funcGetUserProfileByPreferredUsername != nil {
+		mmGetUserProfileByPreferredUsername.mock.t.Fatalf("StorageMock.GetUserProfileByPreferredUsername mock is already set by Set")
+	}
+
+	if mmGetUserProfileByPreferredUsername.defaultExpectation == nil {
+		mmGetUserProfileByPreferredUsername.defaultExpectation = &StorageMockGetUserProfileByPreferredUsernameExpectation{}
+	}
+
+	if mmGetUserProfileByPreferredUsername.defaultExpectation.params != nil {
+		mmGetUserProfileByPreferredUsername.mock.t.Fatalf("StorageMock.GetUserProfileByPreferredUsername mock is already set by Expect")
+	}
+
+	if mmGetUserProfileByPreferredUsername.defaultExpectation.paramPtrs == nil {
+		mmGetUserProfileByPreferredUsername.defaultExpectation.paramPtrs = &StorageMockGetUserProfileByPreferredUsernameParamPtrs{}
+	}
+	mmGetUserProfileByPreferredUsername.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetUserProfileByPreferredUsername.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetUserProfileByPreferredUsername
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.GetUserProfileByPreferredUsername
+func (mmGetUserProfileByPreferredUsername *mStorageMockGetUserProfileByPreferredUsername) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockGetUserProfileByPreferredUsername {
+	if mmGetUserProfileByPreferredUsername.mock.funcGetUserProfileByPreferredUsername != nil {
+		mmGetUserProfileByPreferredUsername.mock.t.Fatalf("StorageMock.GetUserProfileByPreferredUsername mock is already set by Set")
+	}
+
+	if mmGetUserProfileByPreferredUsername.defaultExpectation == nil {
+		mmGetUserProfileByPreferredUsername.defaultExpectation = &StorageMockGetUserProfileByPreferredUsernameExpectation{}
+	}
+
+	if mmGetUserProfileByPreferredUsername.defaultExpectation.params != nil {
+		mmGetUserProfileByPreferredUsername.mock.t.Fatalf("StorageMock.GetUserProfileByPreferredUsername mock is already set by Expect")
+	}
+
+	if mmGetUserProfileByPreferredUsername.defaultExpectation.paramPtrs == nil {
+		mmGetUserProfileByPreferredUsername.defaultExpectation.paramPtrs = &StorageMockGetUserProfileByPreferredUsernameParamPtrs{}
+	}
+	mmGetUserProfileByPreferredUsername.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetUserProfileByPreferredUsername.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetUserProfileByPreferredUsername
+}
+
+// ExpectPartitionIDParam3 sets up expected param partitionID for Storage.GetUserProfileByPreferredUsername
+func (mmGetUserProfileByPreferredUsername *mStorageMockGetUserProfileByPreferredUsername) ExpectPartitionIDParam3(partitionID int64) *mStorageMockGetUserProfileByPreferredUsername {
+	if mmGetUserProfileByPreferredUsername.mock.funcGetUserProfileByPreferredUsername != nil {
+		mmGetUserProfileByPreferredUsername.mock.t.Fatalf("StorageMock.GetUserProfileByPreferredUsername mock is already set by Set")
+	}
+
+	if mmGetUserProfileByPreferredUsername.defaultExpectation == nil {
+		mmGetUserProfileByPreferredUsername.defaultExpectation = &StorageMockGetUserProfileByPreferredUsernameExpectation{}
+	}
+
+	if mmGetUserProfileByPreferredUsername.defaultExpectation.params != nil {
+		mmGetUserProfileByPreferredUsername.mock.t.Fatalf("StorageMock.GetUserProfileByPreferredUsername mock is already set by Expect")
+	}
+
+	if mmGetUserProfileByPreferredUsername.defaultExpectation.paramPtrs == nil {
+		mmGetUserProfileByPreferredUsername.defaultExpectation.paramPtrs = &StorageMockGetUserProfileByPreferredUsernameParamPtrs{}
+	}
+	mmGetUserProfileByPreferredUsername.defaultExpectation.paramPtrs.partitionID = &partitionID
+	mmGetUserProfileByPreferredUsername.defaultExpectation.expectationOrigins.originPartitionID = minimock.CallerInfo(1)
+
+	return mmGetUserProfileByPreferredUsername
+}
+
+// ExpectUsernameParam4 sets up expected param username for Storage.GetUserProfileByPreferredUsername
+func (mmGetUserProfileByPreferredUsername *mStorageMockGetUserProfileByPreferredUsername) ExpectUsernameParam4(username string) *mStorageMockGetUserProfileByPreferredUsername {
+	if mmGetUserProfileByPreferredUsername.mock.funcGetUserProfileByPreferredUsername != nil {
+		mmGetUserProfileByPreferredUsername.mock.t.Fatalf("StorageMock.GetUserProfileByPreferredUsername mock is already set by Set")
+	}
+
+	if mmGetUserProfileByPreferredUsername.defaultExpectation == nil {
+		mmGetUserProfileByPreferredUsername.defaultExpectation = &StorageMockGetUserProfileByPreferredUsernameExpectation{}
+	}
+
+	if mmGetUserProfileByPreferredUsername.defaultExpectation.params != nil {
+		mmGetUserProfileByPreferredUsername.mock.t.Fatalf("StorageMock.GetUserProfileByPreferredUsername mock is already set by Expect")
+	}
+
+	if mmGetUserProfileByPreferredUsername.defaultExpectation.paramPtrs == nil {
+		mmGetUserProfileByPreferredUsername.defaultExpectation.paramPtrs = &StorageMockGetUserProfileByPreferredUsernameParamPtrs{}
+	}
+	mmGetUserProfileByPreferredUsername.defaultExpectation.paramPtrs.username = &username
+	mmGetUserProfileByPreferredUsername.defaultExpectation.expectationOrigins.originUsername = minimock.CallerInfo(1)
+
+	return mmGetUserProfileByPreferredUsername
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.GetUserProfileByPreferredUsername
+func (mmGetUserProfileByPreferredUsername *mStorageMockGetUserProfileByPreferredUsername) Inspect(f func(ctx context.Context, tenantID uuid.UUID, partitionID int64, username string)) *mStorageMockGetUserProfileByPreferredUsername {
+	if mmGetUserProfileByPreferredUsername.mock.inspectFuncGetUserProfileByPreferredUsername != nil {
+		mmGetUserProfileByPreferredUsername.mock.t.Fatalf("Inspect function is already set for StorageMock.GetUserProfileByPreferredUsername")
+	}
+
+	mmGetUserProfileByPreferredUsername.mock.inspectFuncGetUserProfileByPreferredUsername = f
+
+	return mmGetUserProfileByPreferredUsername
+}
+
+// Return sets up results that will be returned by Storage.GetUserProfileByPreferredUsername
+func (mmGetUserProfileByPreferredUsername *mStorageMockGetUserProfileByPreferredUsername) Return(up1 *model.UserProfile, err error) *StorageMock {
+	if mmGetUserProfileByPreferredUsername.mock.funcGetUserProfileByPreferredUsername != nil {
+		mmGetUserProfileByPreferredUsername.mock.t.Fatalf("StorageMock.GetUserProfileByPreferredUsername mock is already set by Set")
+	}
+
+	if mmGetUserProfileByPreferredUsername.defaultExpectation == nil {
+		mmGetUserProfileByPreferredUsername.defaultExpectation = &StorageMockGetUserProfileByPreferredUsernameExpectation{mock: mmGetUserProfileByPreferredUsername.mock}
+	}
+	mmGetUserProfileByPreferredUsername.defaultExpectation.results = &StorageMockGetUserProfileByPreferredUsernameResults{up1, err}
+	mmGetUserProfileByPreferredUsername.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetUserProfileByPreferredUsername.mock
+}
+
+// Set uses given function f to mock the Storage.GetUserProfileByPreferredUsername method
+func (mmGetUserProfileByPreferredUsername *mStorageMockGetUserProfileByPreferredUsername) Set(f func(ctx context.Context, tenantID uuid.UUID, partitionID int64, username string) (up1 *model.UserProfile, err error)) *StorageMock {
+	if mmGetUserProfileByPreferredUsername.defaultExpectation != nil {
+		mmGetUserProfileByPreferredUsername.mock.t.Fatalf("Default expectation is already set for the Storage.GetUserProfileByPreferredUsername method")
+	}
+
+	if len(mmGetUserProfileByPreferredUsername.expectations) > 0 {
+		mmGetUserProfileByPreferredUsername.mock.t.Fatalf("Some expectations are already set for the Storage.GetUserProfileByPreferredUsername method")
+	}
+
+	mmGetUserProfileByPreferredUsername.mock.funcGetUserProfileByPreferredUsername = f
+	mmGetUserProfileByPreferredUsername.mock.funcGetUserProfileByPreferredUsernameOrigin = minimock.CallerInfo(1)
+	return mmGetUserProfileByPreferredUsername.mock
+}
+
+// When sets expectation for the Storage.GetUserProfileByPreferredUsername which will trigger the result defined by the following
+// Then helper
+func (mmGetUserProfileByPreferredUsername *mStorageMockGetUserProfileByPreferredUsername) When(ctx context.Context, tenantID uuid.UUID, partitionID int64, username string) *StorageMockGetUserProfileByPreferredUsernameExpectation {
+	if mmGetUserProfileByPreferredUsername.mock.funcGetUserProfileByPreferredUsername != nil {
+		mmGetUserProfileByPreferredUsername.mock.t.Fatalf("StorageMock.GetUserProfileByPreferredUsername mock is already set by Set")
+	}
+
+	expectation := &StorageMockGetUserProfileByPreferredUsernameExpectation{
+		mock:               mmGetUserProfileByPreferredUsername.mock,
+		params:             &StorageMockGetUserProfileByPreferredUsernameParams{ctx, tenantID, partitionID, username},
+		expectationOrigins: StorageMockGetUserProfileByPreferredUsernameExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetUserProfileByPreferredUsername.expectations = append(mmGetUserProfileByPreferredUsername.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.GetUserProfileByPreferredUsername return parameters for the expectation previously defined by the When method
+func (e *StorageMockGetUserProfileByPreferredUsernameExpectation) Then(up1 *model.UserProfile, err error) *StorageMock {
+	e.results = &StorageMockGetUserProfileByPreferredUsernameResults{up1, err}
+	return e.mock
+}
+
+// Times sets number of times Storage.GetUserProfileByPreferredUsername should be invoked
+func (mmGetUserProfileByPreferredUsername *mStorageMockGetUserProfileByPreferredUsername) Times(n uint64) *mStorageMockGetUserProfileByPreferredUsername {
+	if n == 0 {
+		mmGetUserProfileByPreferredUsername.mock.t.Fatalf("Times of StorageMock.GetUserProfileByPreferredUsername mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetUserProfileByPreferredUsername.expectedInvocations, n)
+	mmGetUserProfileByPreferredUsername.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetUserProfileByPreferredUsername
+}
+
+func (mmGetUserProfileByPreferredUsername *mStorageMockGetUserProfileByPreferredUsername) invocationsDone() bool {
+	if len(mmGetUserProfileByPreferredUsername.expectations) == 0 && mmGetUserProfileByPreferredUsername.defaultExpectation == nil && mmGetUserProfileByPreferredUsername.mock.funcGetUserProfileByPreferredUsername == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetUserProfileByPreferredUsername.mock.afterGetUserProfileByPreferredUsernameCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetUserProfileByPreferredUsername.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetUserProfileByPreferredUsername implements mm_port.Storage
+func (mmGetUserProfileByPreferredUsername *StorageMock) GetUserProfileByPreferredUsername(ctx context.Context, tenantID uuid.UUID, partitionID int64, username string) (up1 *model.UserProfile, err error) {
+	mm_atomic.AddUint64(&mmGetUserProfileByPreferredUsername.beforeGetUserProfileByPreferredUsernameCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetUserProfileByPreferredUsername.afterGetUserProfileByPreferredUsernameCounter, 1)
+
+	mmGetUserProfileByPreferredUsername.t.Helper()
+
+	if mmGetUserProfileByPreferredUsername.inspectFuncGetUserProfileByPreferredUsername != nil {
+		mmGetUserProfileByPreferredUsername.inspectFuncGetUserProfileByPreferredUsername(ctx, tenantID, partitionID, username)
+	}
+
+	mm_params := StorageMockGetUserProfileByPreferredUsernameParams{ctx, tenantID, partitionID, username}
+
+	// Record call args
+	mmGetUserProfileByPreferredUsername.GetUserProfileByPreferredUsernameMock.mutex.Lock()
+	mmGetUserProfileByPreferredUsername.GetUserProfileByPreferredUsernameMock.callArgs = append(mmGetUserProfileByPreferredUsername.GetUserProfileByPreferredUsernameMock.callArgs, &mm_params)
+	mmGetUserProfileByPreferredUsername.GetUserProfileByPreferredUsernameMock.mutex.Unlock()
+
+	for _, e := range mmGetUserProfileByPreferredUsername.GetUserProfileByPreferredUsernameMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.up1, e.results.err
+		}
+	}
+
+	if mmGetUserProfileByPreferredUsername.GetUserProfileByPreferredUsernameMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetUserProfileByPreferredUsername.GetUserProfileByPreferredUsernameMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetUserProfileByPreferredUsername.GetUserProfileByPreferredUsernameMock.defaultExpectation.params
+		mm_want_ptrs := mmGetUserProfileByPreferredUsername.GetUserProfileByPreferredUsernameMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockGetUserProfileByPreferredUsernameParams{ctx, tenantID, partitionID, username}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetUserProfileByPreferredUsername.t.Errorf("StorageMock.GetUserProfileByPreferredUsername got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetUserProfileByPreferredUsername.GetUserProfileByPreferredUsernameMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetUserProfileByPreferredUsername.t.Errorf("StorageMock.GetUserProfileByPreferredUsername got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetUserProfileByPreferredUsername.GetUserProfileByPreferredUsernameMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.partitionID != nil && !minimock.Equal(*mm_want_ptrs.partitionID, mm_got.partitionID) {
+				mmGetUserProfileByPreferredUsername.t.Errorf("StorageMock.GetUserProfileByPreferredUsername got unexpected parameter partitionID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetUserProfileByPreferredUsername.GetUserProfileByPreferredUsernameMock.defaultExpectation.expectationOrigins.originPartitionID, *mm_want_ptrs.partitionID, mm_got.partitionID, minimock.Diff(*mm_want_ptrs.partitionID, mm_got.partitionID))
+			}
+
+			if mm_want_ptrs.username != nil && !minimock.Equal(*mm_want_ptrs.username, mm_got.username) {
+				mmGetUserProfileByPreferredUsername.t.Errorf("StorageMock.GetUserProfileByPreferredUsername got unexpected parameter username, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetUserProfileByPreferredUsername.GetUserProfileByPreferredUsernameMock.defaultExpectation.expectationOrigins.originUsername, *mm_want_ptrs.username, mm_got.username, minimock.Diff(*mm_want_ptrs.username, mm_got.username))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetUserProfileByPreferredUsername.t.Errorf("StorageMock.GetUserProfileByPreferredUsername got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetUserProfileByPreferredUsername.GetUserProfileByPreferredUsernameMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetUserProfileByPreferredUsername.GetUserProfileByPreferredUsernameMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetUserProfileByPreferredUsername.t.Fatal("No results are set for the StorageMock.GetUserProfileByPreferredUsername")
+		}
+		return (*mm_results).up1, (*mm_results).err
+	}
+	if mmGetUserProfileByPreferredUsername.funcGetUserProfileByPreferredUsername != nil {
+		return mmGetUserProfileByPreferredUsername.funcGetUserProfileByPreferredUsername(ctx, tenantID, partitionID, username)
+	}
+	mmGetUserProfileByPreferredUsername.t.Fatalf("Unexpected call to StorageMock.GetUserProfileByPreferredUsername. %v %v %v %v", ctx, tenantID, partitionID, username)
+	return
+}
+
+// GetUserProfileByPreferredUsernameAfterCounter returns a count of finished StorageMock.GetUserProfileByPreferredUsername invocations
+func (mmGetUserProfileByPreferredUsername *StorageMock) GetUserProfileByPreferredUsernameAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetUserProfileByPreferredUsername.afterGetUserProfileByPreferredUsernameCounter)
+}
+
+// GetUserProfileByPreferredUsernameBeforeCounter returns a count of StorageMock.GetUserProfileByPreferredUsername invocations
+func (mmGetUserProfileByPreferredUsername *StorageMock) GetUserProfileByPreferredUsernameBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetUserProfileByPreferredUsername.beforeGetUserProfileByPreferredUsernameCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.GetUserProfileByPreferredUsername.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetUserProfileByPreferredUsername *mStorageMockGetUserProfileByPreferredUsername) Calls() []*StorageMockGetUserProfileByPreferredUsernameParams {
+	mmGetUserProfileByPreferredUsername.mutex.RLock()
+
+	argCopy := make([]*StorageMockGetUserProfileByPreferredUsernameParams, len(mmGetUserProfileByPreferredUsername.callArgs))
+	copy(argCopy, mmGetUserProfileByPreferredUsername.callArgs)
+
+	mmGetUserProfileByPreferredUsername.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetUserProfileByPreferredUsernameDone returns true if the count of the GetUserProfileByPreferredUsername invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockGetUserProfileByPreferredUsernameDone() bool {
+	if m.GetUserProfileByPreferredUsernameMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetUserProfileByPreferredUsernameMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetUserProfileByPreferredUsernameMock.invocationsDone()
+}
+
+// MinimockGetUserProfileByPreferredUsernameInspect logs each unmet expectation
+func (m *StorageMock) MinimockGetUserProfileByPreferredUsernameInspect() {
+	for _, e := range m.GetUserProfileByPreferredUsernameMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.GetUserProfileByPreferredUsername at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetUserProfileByPreferredUsernameCounter := mm_atomic.LoadUint64(&m.afterGetUserProfileByPreferredUsernameCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetUserProfileByPreferredUsernameMock.defaultExpectation != nil && afterGetUserProfileByPreferredUsernameCounter < 1 {
+		if m.GetUserProfileByPreferredUsernameMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.GetUserProfileByPreferredUsername at\n%s", m.GetUserProfileByPreferredUsernameMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.GetUserProfileByPreferredUsername at\n%s with params: %#v", m.GetUserProfileByPreferredUsernameMock.defaultExpectation.expectationOrigins.origin, *m.GetUserProfileByPreferredUsernameMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetUserProfileByPreferredUsername != nil && afterGetUserProfileByPreferredUsernameCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.GetUserProfileByPreferredUsername at\n%s", m.funcGetUserProfileByPreferredUsernameOrigin)
+	}
+
+	if !m.GetUserProfileByPreferredUsernameMock.invocationsDone() && afterGetUserProfileByPreferredUsernameCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.GetUserProfileByPreferredUsername at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetUserProfileByPreferredUsernameMock.expectedInvocations), m.GetUserProfileByPreferredUsernameMock.expectedInvocationsOrigin, afterGetUserProfileByPreferredUsernameCounter)
+	}
+}
+
 type mStorageMockInTransaction struct {
 	optional           bool
 	mock               *StorageMock
@@ -23373,6 +23788,8 @@ func (m *StorageMock) MinimockFinish() {
 
 			m.MinimockGetUserProfileByIdentifierInspect()
 
+			m.MinimockGetUserProfileByPreferredUsernameInspect()
+
 			m.MinimockInTransactionInspect()
 
 			m.MinimockIsDPoPProofUsedInspect()
@@ -23482,6 +23899,7 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockGetUserProfileByIDDone() &&
 		m.MinimockGetUserProfileByIDAndPartitionAliasDone() &&
 		m.MinimockGetUserProfileByIdentifierDone() &&
+		m.MinimockGetUserProfileByPreferredUsernameDone() &&
 		m.MinimockInTransactionDone() &&
 		m.MinimockIsDPoPProofUsedDone() &&
 		m.MinimockIsTokenRevokedDone() &&

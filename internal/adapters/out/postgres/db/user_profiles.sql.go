@@ -71,7 +71,7 @@ func (q *Queries) CheckUserProfileCollision(ctx context.Context, arg CheckUserPr
 	return exists, err
 }
 
-const deleteUserProfile = `-- name: DeleteUserProfile :exec
+const deleteUserProfile = `-- name: DeleteUserProfile :execrows
 WITH tenant AS (
     SELECT id
     FROM tenants
@@ -91,9 +91,12 @@ type DeleteUserProfileParams struct {
 	TenantUuid  pgtype.UUID `json:"tenant_uuid"`
 }
 
-func (q *Queries) DeleteUserProfile(ctx context.Context, arg DeleteUserProfileParams) error {
-	_, err := q.db.Exec(ctx, deleteUserProfile, arg.PartitionID, arg.ID, arg.TenantUuid)
-	return err
+func (q *Queries) DeleteUserProfile(ctx context.Context, arg DeleteUserProfileParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUserProfile, arg.PartitionID, arg.ID, arg.TenantUuid)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const findProfileByEmail = `-- name: FindProfileByEmail :one
@@ -248,12 +251,14 @@ SELECT
 FROM user_profiles up, tenant
 WHERE up.tenant_id = tenant.id
   AND up.partition_id = $2
+  AND up.id = $3::uuid
 LIMIT 1
 `
 
 type GetUserProfileByIDParams struct {
 	TenantUuid  pgtype.UUID `json:"tenant_uuid"`
 	PartitionID int64       `json:"partition_id"`
+	ID          pgtype.UUID `json:"id"`
 }
 
 type GetUserProfileByIDRow struct {
@@ -273,7 +278,7 @@ type GetUserProfileByIDRow struct {
 }
 
 func (q *Queries) GetUserProfileByID(ctx context.Context, arg GetUserProfileByIDParams) (GetUserProfileByIDRow, error) {
-	row := q.db.QueryRow(ctx, getUserProfileByID, arg.TenantUuid, arg.PartitionID)
+	row := q.db.QueryRow(ctx, getUserProfileByID, arg.TenantUuid, arg.PartitionID, arg.ID)
 	var i GetUserProfileByIDRow
 	err := row.Scan(
 		&i.ID,
