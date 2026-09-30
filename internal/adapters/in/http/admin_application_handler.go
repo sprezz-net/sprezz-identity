@@ -3,6 +3,7 @@ package http
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -356,9 +357,11 @@ func (h *AdminApplicationHandler) adminSaveGroup(w http.ResponseWriter, r *http.
 	}
 
 	if len(errs) > 0 {
-		providers, _ := h.storagePort.GetIdentityProviders(r.Context(), tenant.ID)
-		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-		w.WriteHeader(http.StatusUnprocessableEntity) // Explicit 422 for form error targeting
+		// Re-hydrating partition shards directly from the optimized storage query pass
+		partitionsWithIdps, errMatrix := h.idpService.GetPartitionsWithProviders(r.Context(), tenant.ID)
+		if errMatrix != nil {
+			partitionsWithIdps = []model.PartitionWithProviders{} // Safe baseline placeholder
+		}
 
 		var parsedID uuid.UUID
 		if isEdit {
@@ -378,10 +381,12 @@ func (h *AdminApplicationHandler) adminSaveGroup(w http.ResponseWriter, r *http.
 				AllowedIDPIDs:          allowedIDPIDs,
 				DefaultIDPID:           defaultIDPID,
 			},
-			Errors:    errs,
-			IsEdit:    isEdit,
-			Providers: providers,
+			Errors:             errs,
+			IsEdit:             isEdit,
+			PartitionsWithIdps: partitionsWithIdps,
 		})
+		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
+		w.WriteHeader(http.StatusUnprocessableEntity) // Explicit 422 for form error targeting
 		_ = component.Render(r.Context(), w)
 		return
 	}
@@ -707,30 +712,32 @@ func (h *AdminApplicationHandler) adminEditProfileForm(w http.ResponseWriter, r 
 
 func (h *AdminApplicationHandler) adminNewGroupForm(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
-	providers, err := h.storagePort.GetIdentityProviders(r.Context(), tenant.ID)
+
+	partitionsWithIdps, err := h.idpService.GetPartitionsWithProviders(r.Context(), tenant.ID)
 	if err != nil {
 		h.renderError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	if r.URL.Query().Get("modal") == "true" {
-		component := admin.Modal("Add Authorization Group", port.RouteAdmin+port.RouteAdminApplications+port.RouteAdminApplicationsGroups+"/new")
-		_ = component.Render(r.Context(), w)
-		return
-	}
-
 	component := admin.GroupForm(admin.GroupFormProps{
-		Group:     &model.ApplicationGroup{},
-		Errors:    make(map[string]string),
-		Providers: providers,
+		Group:              &model.ApplicationGroup{},
+		Errors:             make(map[string]string),
+		IsEdit:             false,
+		PartitionsWithIdps: partitionsWithIdps,
 	})
+
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 	_ = component.Render(r.Context(), w)
 }
 
 func (h *AdminApplicationHandler) adminEditGroupForm(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
 	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		h.renderError(w, r, http.StatusBadRequest, "Missing mandatory 'id' parameter.")
+		return
+	}
+
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		h.renderError(w, r, http.StatusBadRequest, "invalid group id")
@@ -743,25 +750,31 @@ func (h *AdminApplicationHandler) adminEditGroupForm(w http.ResponseWriter, r *h
 		return
 	}
 
-	providers, err := h.storagePort.GetIdentityProviders(r.Context(), tenant.ID)
+	partitionsWithIdps, err := h.idpService.GetPartitionsWithProviders(r.Context(), tenant.ID)
 	if err != nil {
 		h.renderError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
 
+	props := admin.GroupFormProps{
+		Group:              group,
+		Errors:             make(map[string]string),
+		IsEdit:             true,
+		PartitionsWithIdps: partitionsWithIdps,
+	}
+
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	if r.URL.Query().Get("modal") == "true" {
-		component := admin.Modal("Edit Authorization Group", port.RouteAdmin+port.RouteAdminApplications+port.RouteAdminApplicationsGroups+"/edit?id="+idStr)
-		_ = component.Render(r.Context(), w)
+	// If HTMX is calling this endpoint via the inner modal body load-trigger,
+	// stream the fully hydrated GroupForm layout using our props variable!
+	if r.URL.Query().Get("render_body") == "true" {
+		_ = admin.GroupForm(props).Render(r.Context(), w)
 		return
 	}
 
-	component := admin.GroupForm(admin.GroupFormProps{
-		Group:     group,
-		Errors:    make(map[string]string),
-		IsEdit:    true,
-		Providers: providers,
-	})
+	// When the user clicks the Edit button in the main table list row, return the outer modal layout container.
+	// This tells the modal wrapper to execute a back-fetch hitting 'render_body=true' right above.
+	modalFetchURL := fmt.Sprintf("/admin/applications/groups/edit?id=%s&render_body=true", idStr)
+	component := admin.Modal("Edit Authorization Group", modalFetchURL)
 	_ = component.Render(r.Context(), w)
 }
 

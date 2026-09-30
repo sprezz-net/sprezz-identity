@@ -926,6 +926,34 @@ func (s *Storage) GetIdentityProviders(ctx context.Context, tenantID uuid.UUID) 
 	return res, nil
 }
 
+func (s *Storage) GetPartitionsWithProviders(ctx context.Context, tenantID uuid.UUID) ([]model.PartitionWithProviders, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	partsMap, exists := s.partitions[tenantID.String()]
+	if !exists {
+		return []model.PartitionWithProviders{}, nil
+	}
+
+	result := make([]model.PartitionWithProviders, 0, len(partsMap))
+	tenantProviders := s.providers[tenantID.String()]
+
+	for _, p := range partsMap {
+		var matched []model.IdentityProvider
+		for _, idp := range tenantProviders {
+			if idp.PartitionID == p.ID && idp.Enabled {
+				matched = append(matched, idp)
+			}
+		}
+		result = append(result, model.PartitionWithProviders{
+			PartitionID:   p.ID,
+			PartitionName: p.AliasName,
+			Providers:     matched,
+		})
+	}
+	return result, nil
+}
+
 // GetUserProfilesByTenant lists all administrative user profile entries
 // registered under a specific tenant context boundary.
 func (s *Storage) GetUserProfilesByTenant(ctx context.Context, tenantID uuid.UUID, partitionID int64) ([]model.UserProfile, error) {

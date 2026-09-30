@@ -183,6 +183,13 @@ type StorageMock struct {
 	beforeGetPartitionsCounter uint64
 	GetPartitionsMock          mStorageMockGetPartitions
 
+	funcGetPartitionsWithProviders          func(ctx context.Context, tenantID uuid.UUID) (pa1 []model.PartitionWithProviders, err error)
+	funcGetPartitionsWithProvidersOrigin    string
+	inspectFuncGetPartitionsWithProviders   func(ctx context.Context, tenantID uuid.UUID)
+	afterGetPartitionsWithProvidersCounter  uint64
+	beforeGetPartitionsWithProvidersCounter uint64
+	GetPartitionsWithProvidersMock          mStorageMockGetPartitionsWithProviders
+
 	funcGetPasswordCredentialByProfileID          func(ctx context.Context, tenantID uuid.UUID, partitionID int64, userProfileID uuid.UUID, providerID uuid.UUID) (pp1 *model.PasswordCredential, err error)
 	funcGetPasswordCredentialByProfileIDOrigin    string
 	inspectFuncGetPasswordCredentialByProfileID   func(ctx context.Context, tenantID uuid.UUID, partitionID int64, userProfileID uuid.UUID, providerID uuid.UUID)
@@ -512,6 +519,9 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 
 	m.GetPartitionsMock = mStorageMockGetPartitions{mock: m}
 	m.GetPartitionsMock.callArgs = []*StorageMockGetPartitionsParams{}
+
+	m.GetPartitionsWithProvidersMock = mStorageMockGetPartitionsWithProviders{mock: m}
+	m.GetPartitionsWithProvidersMock.callArgs = []*StorageMockGetPartitionsWithProvidersParams{}
 
 	m.GetPasswordCredentialByProfileIDMock = mStorageMockGetPasswordCredentialByProfileID{mock: m}
 	m.GetPasswordCredentialByProfileIDMock.callArgs = []*StorageMockGetPasswordCredentialByProfileIDParams{}
@@ -9288,6 +9298,349 @@ func (m *StorageMock) MinimockGetPartitionsInspect() {
 	if !m.GetPartitionsMock.invocationsDone() && afterGetPartitionsCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageMock.GetPartitions at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.GetPartitionsMock.expectedInvocations), m.GetPartitionsMock.expectedInvocationsOrigin, afterGetPartitionsCounter)
+	}
+}
+
+type mStorageMockGetPartitionsWithProviders struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockGetPartitionsWithProvidersExpectation
+	expectations       []*StorageMockGetPartitionsWithProvidersExpectation
+
+	callArgs []*StorageMockGetPartitionsWithProvidersParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockGetPartitionsWithProvidersExpectation specifies expectation struct of the Storage.GetPartitionsWithProviders
+type StorageMockGetPartitionsWithProvidersExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockGetPartitionsWithProvidersParams
+	paramPtrs          *StorageMockGetPartitionsWithProvidersParamPtrs
+	expectationOrigins StorageMockGetPartitionsWithProvidersExpectationOrigins
+	results            *StorageMockGetPartitionsWithProvidersResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockGetPartitionsWithProvidersParams contains parameters of the Storage.GetPartitionsWithProviders
+type StorageMockGetPartitionsWithProvidersParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+}
+
+// StorageMockGetPartitionsWithProvidersParamPtrs contains pointers to parameters of the Storage.GetPartitionsWithProviders
+type StorageMockGetPartitionsWithProvidersParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+}
+
+// StorageMockGetPartitionsWithProvidersResults contains results of the Storage.GetPartitionsWithProviders
+type StorageMockGetPartitionsWithProvidersResults struct {
+	pa1 []model.PartitionWithProviders
+	err error
+}
+
+// StorageMockGetPartitionsWithProvidersOrigins contains origins of expectations of the Storage.GetPartitionsWithProviders
+type StorageMockGetPartitionsWithProvidersExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetPartitionsWithProviders *mStorageMockGetPartitionsWithProviders) Optional() *mStorageMockGetPartitionsWithProviders {
+	mmGetPartitionsWithProviders.optional = true
+	return mmGetPartitionsWithProviders
+}
+
+// Expect sets up expected params for Storage.GetPartitionsWithProviders
+func (mmGetPartitionsWithProviders *mStorageMockGetPartitionsWithProviders) Expect(ctx context.Context, tenantID uuid.UUID) *mStorageMockGetPartitionsWithProviders {
+	if mmGetPartitionsWithProviders.mock.funcGetPartitionsWithProviders != nil {
+		mmGetPartitionsWithProviders.mock.t.Fatalf("StorageMock.GetPartitionsWithProviders mock is already set by Set")
+	}
+
+	if mmGetPartitionsWithProviders.defaultExpectation == nil {
+		mmGetPartitionsWithProviders.defaultExpectation = &StorageMockGetPartitionsWithProvidersExpectation{}
+	}
+
+	if mmGetPartitionsWithProviders.defaultExpectation.paramPtrs != nil {
+		mmGetPartitionsWithProviders.mock.t.Fatalf("StorageMock.GetPartitionsWithProviders mock is already set by ExpectParams functions")
+	}
+
+	mmGetPartitionsWithProviders.defaultExpectation.params = &StorageMockGetPartitionsWithProvidersParams{ctx, tenantID}
+	mmGetPartitionsWithProviders.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetPartitionsWithProviders.expectations {
+		if minimock.Equal(e.params, mmGetPartitionsWithProviders.defaultExpectation.params) {
+			mmGetPartitionsWithProviders.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetPartitionsWithProviders.defaultExpectation.params)
+		}
+	}
+
+	return mmGetPartitionsWithProviders
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.GetPartitionsWithProviders
+func (mmGetPartitionsWithProviders *mStorageMockGetPartitionsWithProviders) ExpectCtxParam1(ctx context.Context) *mStorageMockGetPartitionsWithProviders {
+	if mmGetPartitionsWithProviders.mock.funcGetPartitionsWithProviders != nil {
+		mmGetPartitionsWithProviders.mock.t.Fatalf("StorageMock.GetPartitionsWithProviders mock is already set by Set")
+	}
+
+	if mmGetPartitionsWithProviders.defaultExpectation == nil {
+		mmGetPartitionsWithProviders.defaultExpectation = &StorageMockGetPartitionsWithProvidersExpectation{}
+	}
+
+	if mmGetPartitionsWithProviders.defaultExpectation.params != nil {
+		mmGetPartitionsWithProviders.mock.t.Fatalf("StorageMock.GetPartitionsWithProviders mock is already set by Expect")
+	}
+
+	if mmGetPartitionsWithProviders.defaultExpectation.paramPtrs == nil {
+		mmGetPartitionsWithProviders.defaultExpectation.paramPtrs = &StorageMockGetPartitionsWithProvidersParamPtrs{}
+	}
+	mmGetPartitionsWithProviders.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetPartitionsWithProviders.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetPartitionsWithProviders
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.GetPartitionsWithProviders
+func (mmGetPartitionsWithProviders *mStorageMockGetPartitionsWithProviders) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockGetPartitionsWithProviders {
+	if mmGetPartitionsWithProviders.mock.funcGetPartitionsWithProviders != nil {
+		mmGetPartitionsWithProviders.mock.t.Fatalf("StorageMock.GetPartitionsWithProviders mock is already set by Set")
+	}
+
+	if mmGetPartitionsWithProviders.defaultExpectation == nil {
+		mmGetPartitionsWithProviders.defaultExpectation = &StorageMockGetPartitionsWithProvidersExpectation{}
+	}
+
+	if mmGetPartitionsWithProviders.defaultExpectation.params != nil {
+		mmGetPartitionsWithProviders.mock.t.Fatalf("StorageMock.GetPartitionsWithProviders mock is already set by Expect")
+	}
+
+	if mmGetPartitionsWithProviders.defaultExpectation.paramPtrs == nil {
+		mmGetPartitionsWithProviders.defaultExpectation.paramPtrs = &StorageMockGetPartitionsWithProvidersParamPtrs{}
+	}
+	mmGetPartitionsWithProviders.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetPartitionsWithProviders.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetPartitionsWithProviders
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.GetPartitionsWithProviders
+func (mmGetPartitionsWithProviders *mStorageMockGetPartitionsWithProviders) Inspect(f func(ctx context.Context, tenantID uuid.UUID)) *mStorageMockGetPartitionsWithProviders {
+	if mmGetPartitionsWithProviders.mock.inspectFuncGetPartitionsWithProviders != nil {
+		mmGetPartitionsWithProviders.mock.t.Fatalf("Inspect function is already set for StorageMock.GetPartitionsWithProviders")
+	}
+
+	mmGetPartitionsWithProviders.mock.inspectFuncGetPartitionsWithProviders = f
+
+	return mmGetPartitionsWithProviders
+}
+
+// Return sets up results that will be returned by Storage.GetPartitionsWithProviders
+func (mmGetPartitionsWithProviders *mStorageMockGetPartitionsWithProviders) Return(pa1 []model.PartitionWithProviders, err error) *StorageMock {
+	if mmGetPartitionsWithProviders.mock.funcGetPartitionsWithProviders != nil {
+		mmGetPartitionsWithProviders.mock.t.Fatalf("StorageMock.GetPartitionsWithProviders mock is already set by Set")
+	}
+
+	if mmGetPartitionsWithProviders.defaultExpectation == nil {
+		mmGetPartitionsWithProviders.defaultExpectation = &StorageMockGetPartitionsWithProvidersExpectation{mock: mmGetPartitionsWithProviders.mock}
+	}
+	mmGetPartitionsWithProviders.defaultExpectation.results = &StorageMockGetPartitionsWithProvidersResults{pa1, err}
+	mmGetPartitionsWithProviders.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetPartitionsWithProviders.mock
+}
+
+// Set uses given function f to mock the Storage.GetPartitionsWithProviders method
+func (mmGetPartitionsWithProviders *mStorageMockGetPartitionsWithProviders) Set(f func(ctx context.Context, tenantID uuid.UUID) (pa1 []model.PartitionWithProviders, err error)) *StorageMock {
+	if mmGetPartitionsWithProviders.defaultExpectation != nil {
+		mmGetPartitionsWithProviders.mock.t.Fatalf("Default expectation is already set for the Storage.GetPartitionsWithProviders method")
+	}
+
+	if len(mmGetPartitionsWithProviders.expectations) > 0 {
+		mmGetPartitionsWithProviders.mock.t.Fatalf("Some expectations are already set for the Storage.GetPartitionsWithProviders method")
+	}
+
+	mmGetPartitionsWithProviders.mock.funcGetPartitionsWithProviders = f
+	mmGetPartitionsWithProviders.mock.funcGetPartitionsWithProvidersOrigin = minimock.CallerInfo(1)
+	return mmGetPartitionsWithProviders.mock
+}
+
+// When sets expectation for the Storage.GetPartitionsWithProviders which will trigger the result defined by the following
+// Then helper
+func (mmGetPartitionsWithProviders *mStorageMockGetPartitionsWithProviders) When(ctx context.Context, tenantID uuid.UUID) *StorageMockGetPartitionsWithProvidersExpectation {
+	if mmGetPartitionsWithProviders.mock.funcGetPartitionsWithProviders != nil {
+		mmGetPartitionsWithProviders.mock.t.Fatalf("StorageMock.GetPartitionsWithProviders mock is already set by Set")
+	}
+
+	expectation := &StorageMockGetPartitionsWithProvidersExpectation{
+		mock:               mmGetPartitionsWithProviders.mock,
+		params:             &StorageMockGetPartitionsWithProvidersParams{ctx, tenantID},
+		expectationOrigins: StorageMockGetPartitionsWithProvidersExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetPartitionsWithProviders.expectations = append(mmGetPartitionsWithProviders.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.GetPartitionsWithProviders return parameters for the expectation previously defined by the When method
+func (e *StorageMockGetPartitionsWithProvidersExpectation) Then(pa1 []model.PartitionWithProviders, err error) *StorageMock {
+	e.results = &StorageMockGetPartitionsWithProvidersResults{pa1, err}
+	return e.mock
+}
+
+// Times sets number of times Storage.GetPartitionsWithProviders should be invoked
+func (mmGetPartitionsWithProviders *mStorageMockGetPartitionsWithProviders) Times(n uint64) *mStorageMockGetPartitionsWithProviders {
+	if n == 0 {
+		mmGetPartitionsWithProviders.mock.t.Fatalf("Times of StorageMock.GetPartitionsWithProviders mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetPartitionsWithProviders.expectedInvocations, n)
+	mmGetPartitionsWithProviders.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetPartitionsWithProviders
+}
+
+func (mmGetPartitionsWithProviders *mStorageMockGetPartitionsWithProviders) invocationsDone() bool {
+	if len(mmGetPartitionsWithProviders.expectations) == 0 && mmGetPartitionsWithProviders.defaultExpectation == nil && mmGetPartitionsWithProviders.mock.funcGetPartitionsWithProviders == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetPartitionsWithProviders.mock.afterGetPartitionsWithProvidersCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetPartitionsWithProviders.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetPartitionsWithProviders implements mm_port.Storage
+func (mmGetPartitionsWithProviders *StorageMock) GetPartitionsWithProviders(ctx context.Context, tenantID uuid.UUID) (pa1 []model.PartitionWithProviders, err error) {
+	mm_atomic.AddUint64(&mmGetPartitionsWithProviders.beforeGetPartitionsWithProvidersCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetPartitionsWithProviders.afterGetPartitionsWithProvidersCounter, 1)
+
+	mmGetPartitionsWithProviders.t.Helper()
+
+	if mmGetPartitionsWithProviders.inspectFuncGetPartitionsWithProviders != nil {
+		mmGetPartitionsWithProviders.inspectFuncGetPartitionsWithProviders(ctx, tenantID)
+	}
+
+	mm_params := StorageMockGetPartitionsWithProvidersParams{ctx, tenantID}
+
+	// Record call args
+	mmGetPartitionsWithProviders.GetPartitionsWithProvidersMock.mutex.Lock()
+	mmGetPartitionsWithProviders.GetPartitionsWithProvidersMock.callArgs = append(mmGetPartitionsWithProviders.GetPartitionsWithProvidersMock.callArgs, &mm_params)
+	mmGetPartitionsWithProviders.GetPartitionsWithProvidersMock.mutex.Unlock()
+
+	for _, e := range mmGetPartitionsWithProviders.GetPartitionsWithProvidersMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.pa1, e.results.err
+		}
+	}
+
+	if mmGetPartitionsWithProviders.GetPartitionsWithProvidersMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetPartitionsWithProviders.GetPartitionsWithProvidersMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetPartitionsWithProviders.GetPartitionsWithProvidersMock.defaultExpectation.params
+		mm_want_ptrs := mmGetPartitionsWithProviders.GetPartitionsWithProvidersMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockGetPartitionsWithProvidersParams{ctx, tenantID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetPartitionsWithProviders.t.Errorf("StorageMock.GetPartitionsWithProviders got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetPartitionsWithProviders.GetPartitionsWithProvidersMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetPartitionsWithProviders.t.Errorf("StorageMock.GetPartitionsWithProviders got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetPartitionsWithProviders.GetPartitionsWithProvidersMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetPartitionsWithProviders.t.Errorf("StorageMock.GetPartitionsWithProviders got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetPartitionsWithProviders.GetPartitionsWithProvidersMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetPartitionsWithProviders.GetPartitionsWithProvidersMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetPartitionsWithProviders.t.Fatal("No results are set for the StorageMock.GetPartitionsWithProviders")
+		}
+		return (*mm_results).pa1, (*mm_results).err
+	}
+	if mmGetPartitionsWithProviders.funcGetPartitionsWithProviders != nil {
+		return mmGetPartitionsWithProviders.funcGetPartitionsWithProviders(ctx, tenantID)
+	}
+	mmGetPartitionsWithProviders.t.Fatalf("Unexpected call to StorageMock.GetPartitionsWithProviders. %v %v", ctx, tenantID)
+	return
+}
+
+// GetPartitionsWithProvidersAfterCounter returns a count of finished StorageMock.GetPartitionsWithProviders invocations
+func (mmGetPartitionsWithProviders *StorageMock) GetPartitionsWithProvidersAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetPartitionsWithProviders.afterGetPartitionsWithProvidersCounter)
+}
+
+// GetPartitionsWithProvidersBeforeCounter returns a count of StorageMock.GetPartitionsWithProviders invocations
+func (mmGetPartitionsWithProviders *StorageMock) GetPartitionsWithProvidersBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetPartitionsWithProviders.beforeGetPartitionsWithProvidersCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.GetPartitionsWithProviders.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetPartitionsWithProviders *mStorageMockGetPartitionsWithProviders) Calls() []*StorageMockGetPartitionsWithProvidersParams {
+	mmGetPartitionsWithProviders.mutex.RLock()
+
+	argCopy := make([]*StorageMockGetPartitionsWithProvidersParams, len(mmGetPartitionsWithProviders.callArgs))
+	copy(argCopy, mmGetPartitionsWithProviders.callArgs)
+
+	mmGetPartitionsWithProviders.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetPartitionsWithProvidersDone returns true if the count of the GetPartitionsWithProviders invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockGetPartitionsWithProvidersDone() bool {
+	if m.GetPartitionsWithProvidersMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetPartitionsWithProvidersMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetPartitionsWithProvidersMock.invocationsDone()
+}
+
+// MinimockGetPartitionsWithProvidersInspect logs each unmet expectation
+func (m *StorageMock) MinimockGetPartitionsWithProvidersInspect() {
+	for _, e := range m.GetPartitionsWithProvidersMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.GetPartitionsWithProviders at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetPartitionsWithProvidersCounter := mm_atomic.LoadUint64(&m.afterGetPartitionsWithProvidersCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetPartitionsWithProvidersMock.defaultExpectation != nil && afterGetPartitionsWithProvidersCounter < 1 {
+		if m.GetPartitionsWithProvidersMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.GetPartitionsWithProviders at\n%s", m.GetPartitionsWithProvidersMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.GetPartitionsWithProviders at\n%s with params: %#v", m.GetPartitionsWithProvidersMock.defaultExpectation.expectationOrigins.origin, *m.GetPartitionsWithProvidersMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetPartitionsWithProviders != nil && afterGetPartitionsWithProvidersCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.GetPartitionsWithProviders at\n%s", m.funcGetPartitionsWithProvidersOrigin)
+	}
+
+	if !m.GetPartitionsWithProvidersMock.invocationsDone() && afterGetPartitionsWithProvidersCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.GetPartitionsWithProviders at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetPartitionsWithProvidersMock.expectedInvocations), m.GetPartitionsWithProvidersMock.expectedInvocationsOrigin, afterGetPartitionsWithProvidersCounter)
 	}
 }
 
@@ -23000,6 +23353,8 @@ func (m *StorageMock) MinimockFinish() {
 
 			m.MinimockGetPartitionsInspect()
 
+			m.MinimockGetPartitionsWithProvidersInspect()
+
 			m.MinimockGetPasswordCredentialByProfileIDInspect()
 
 			m.MinimockGetProfileByNameInspect()
@@ -23117,6 +23472,7 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockGetPartitionByAliasDone() &&
 		m.MinimockGetPartitionByIDDone() &&
 		m.MinimockGetPartitionsDone() &&
+		m.MinimockGetPartitionsWithProvidersDone() &&
 		m.MinimockGetPasswordCredentialByProfileIDDone() &&
 		m.MinimockGetProfileByNameDone() &&
 		m.MinimockGetRefreshTokenDone() &&

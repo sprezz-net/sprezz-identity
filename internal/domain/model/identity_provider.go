@@ -19,6 +19,14 @@ type Partition struct {
 	AliasName string
 }
 
+// PartitionWithProviders groups active identity provider profiles under their
+// specific physical multi-tenant compliance sharding data partition.
+type PartitionWithProviders struct {
+	PartitionID   int64              `json:"partition_id"`
+	PartitionName string             `json:"partition_name"`
+	Providers     []IdentityProvider `json:"providers,omitempty"`
+}
+
 type IdentityProvider struct {
 	ID          uuid.UUID
 	TenantID    uuid.UUID

@@ -46,6 +46,34 @@ FROM identity_providers
 WHERE tenant_id = (SELECT id FROM tenant)
   AND id = ANY(@idp_uuids::uuid[]);
 
+-- name: GetPartitionsWithProviders :many
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = @tenant_uuid::uuid
+    LIMIT 1
+)
+SELECT
+    p.id AS partition_id,
+    p.alias_name AS partition_name,
+    COALESCE(
+        json_agg(
+            json_build_object(
+                'id', idp.id,
+                'alias', idp.alias_name,
+                'idp_type', idp.idp_type,
+                'enabled', idp.enabled,
+                'partition_id', idp.partition_id
+            )
+        ) FILTER (WHERE idp.id IS NOT NULL),
+        '[]'::json
+    )::json AS providers_json
+FROM partitions p
+INNER JOIN tenant t ON p.tenant_id = t.id
+LEFT JOIN identity_providers idp ON p.id = idp.partition_id AND idp.enabled = TRUE
+GROUP BY p.id, p.alias_name
+ORDER BY p.alias_name ASC;
+
 -- name: GetIdentityProvidersByTypeAndPartition :many
 -- Resolves all identity provider configuration records assigned to a target partition sandbox.
 -- This accurately accounts for partitions hosting multiple simultaneous external OIDC providers.

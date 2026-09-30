@@ -32,6 +32,9 @@ type Storage interface {
 	GetIdentityProvidersByTypeAndPartition(ctx context.Context, tenantID uuid.UUID, partitionID int64, idpType string) ([]model.IdentityProvider, error)
 	GetIdentityProviderByAlias(ctx context.Context, tenantID uuid.UUID, alias string) (*model.IdentityProvider, error)
 	GetIdentityProviderByUUID(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) (*model.IdentityProvider, error)
+	// GetPartitionsWithProviders interrogates the database cluster using atomic JSON
+	// aggregation blocks to fetch all partitions alongside their pre-grouped identity provider lists.
+	GetPartitionsWithProviders(ctx context.Context, tenantID uuid.UUID) ([]model.PartitionWithProviders, error)
 
 	// Refactored User Profile and Identity Storage Methods to enforce strict multi-tenant boundaries
 	GetUserProfileByIdentifier(ctx context.Context, tenantID uuid.UUID, partitionID int64, providerID uuid.UUID, identifier string) (*model.UserProfile, error)

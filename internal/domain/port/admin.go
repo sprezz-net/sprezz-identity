@@ -128,6 +128,7 @@ type AdminApplicationUseCase interface {
 // IdentityProviderUseCase defines the driving ports for identity provider operations.
 type IdentityProviderUseCase interface {
 	GetIdentityProviders(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProvider, error)
+	GetPartitionsWithProviders(ctx context.Context, tenantID uuid.UUID) ([]model.PartitionWithProviders, error)
 	DiscoverOIDC(ctx context.Context, endpoint string) (string, error)
 	CreateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) (*model.IdentityProvider, error)
 	UpdateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) (*model.IdentityProvider, error)

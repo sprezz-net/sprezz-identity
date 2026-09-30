@@ -2024,6 +2024,51 @@ func (s *PostgresStorage) GetIdentityProviderByUUID(ctx context.Context, tenantI
 	}, nil
 }
 
+func (s *PostgresStorage) GetPartitionsWithProviders(ctx context.Context, tenantID uuid.UUID) ([]model.PartitionWithProviders, error) {
+	rows, err := s.queries.GetPartitionsWithProviders(ctx, toPGUUID(tenantID))
+	if err != nil {
+		return nil, fmt.Errorf("storage: failed executing aggregated partitions query: %w", err)
+	}
+
+	result := make([]model.PartitionWithProviders, len(rows))
+	for i, row := range rows {
+		var mappedProviders []model.IdentityProvider
+
+		// Unmarshal the pre-compiled JSON payload array straight out of the database column wire
+		if len(row.ProvidersJson) > 0 && string(row.ProvidersJson) != "[]" {
+			// Intermediate helper struct to cleanly decode database JSON strings
+			type idpJSONRow struct {
+				ID          string `json:"id"`
+				Alias       string `json:"alias"`
+				IDPType     string `json:"idp_type"`
+				Enabled     bool   `json:"enabled"`
+				PartitionID int64  `json:"partition_id"`
+			}
+			var jsonRows []idpJSONRow
+			if errUnmarshal := json.Unmarshal(row.ProvidersJson, &jsonRows); errUnmarshal == nil {
+				for _, jr := range jsonRows {
+					parsedID, _ := uuid.Parse(jr.ID)
+					mappedProviders = append(mappedProviders, model.IdentityProvider{
+						ID:          parsedID,
+						Alias:       jr.Alias,
+						IDPType:     jr.IDPType,
+						Enabled:     jr.Enabled,
+						PartitionID: jr.PartitionID,
+					})
+				}
+			}
+		}
+
+		result[i] = model.PartitionWithProviders{
+			PartitionID:   row.PartitionID,
+			PartitionName: row.PartitionName,
+			Providers:     mappedProviders,
+		}
+	}
+
+	return result, nil
+}
+
 func (s *PostgresStorage) GetEnabledIdentityProviders(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProvider, error) {
 	rows, err := s.queries.GetEnabledIdentityProviders(ctx, toPGUUID(tenantID))
 	if err != nil {

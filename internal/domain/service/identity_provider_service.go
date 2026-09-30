@@ -114,6 +114,10 @@ func (s *IdentityProviderService) GetIdentityProviders(ctx context.Context, tena
 	return s.storage.GetIdentityProviders(ctx, tenantID)
 }
 
+func (s *IdentityProviderService) GetPartitionsWithProviders(ctx context.Context, tenantID uuid.UUID) ([]model.PartitionWithProviders, error) {
+	return s.storage.GetPartitionsWithProviders(ctx, tenantID)
+}
+
 func (s *IdentityProviderService) resolveUserPartitionProvider(ctx context.Context, tenantID uuid.UUID, profile *model.UserProfile) (*model.IdentityProvider, error) {
 	providers, err := s.storage.GetIdentityProviders(ctx, tenantID)
 	if err != nil {

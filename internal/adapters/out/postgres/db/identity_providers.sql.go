@@ -500,3 +500,58 @@ func (q *Queries) GetIdentityProvidersByUUIDs(ctx context.Context, arg GetIdenti
 	}
 	return items, nil
 }
+
+const getPartitionsWithProviders = `-- name: GetPartitionsWithProviders :many
+WITH tenant AS (
+    SELECT id
+    FROM tenants
+    WHERE tenant_uuid = $1::uuid
+    LIMIT 1
+)
+SELECT
+    p.id AS partition_id,
+    p.alias_name AS partition_name,
+    COALESCE(
+        json_agg(
+            json_build_object(
+                'id', idp.id,
+                'alias', idp.alias_name,
+                'idp_type', idp.idp_type,
+                'enabled', idp.enabled,
+                'partition_id', idp.partition_id
+            )
+        ) FILTER (WHERE idp.id IS NOT NULL),
+        '[]'::json
+    )::json AS providers_json
+FROM partitions p
+INNER JOIN tenant t ON p.tenant_id = t.id
+LEFT JOIN identity_providers idp ON p.id = idp.partition_id AND idp.enabled = TRUE
+GROUP BY p.id, p.alias_name
+ORDER BY p.alias_name ASC
+`
+
+type GetPartitionsWithProvidersRow struct {
+	PartitionID   int64  `json:"partition_id"`
+	PartitionName string `json:"partition_name"`
+	ProvidersJson []byte `json:"providers_json"`
+}
+
+func (q *Queries) GetPartitionsWithProviders(ctx context.Context, tenantUuid pgtype.UUID) ([]GetPartitionsWithProvidersRow, error) {
+	rows, err := q.db.Query(ctx, getPartitionsWithProviders, tenantUuid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetPartitionsWithProvidersRow{}
+	for rows.Next() {
+		var i GetPartitionsWithProvidersRow
+		if err := rows.Scan(&i.PartitionID, &i.PartitionName, &i.ProvidersJson); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
