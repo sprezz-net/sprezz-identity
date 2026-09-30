@@ -329,11 +329,11 @@ To maintain architectural purity, separation of concerns, and clean views:
 
 To mitigate Cross-Site Scripting (XSS) and injection vectors on server-rendered pages (e.g., login and logout forms):
 
-- **Strict CSP Header**: Every user-facing UI route serves a strict `Content-Security-Policy` header:
-  `default-src 'self'; script-src 'self' 'nonce-[nonce]' https://unpkg.com; style-src 'self' 'unsafe-inline'; frame-src 'self' *`
-  *(Note: Transitioning static assets to ahead-of-time (AOT) compiled Tailwind CSS via standard CLI builds allows dropping the `'unsafe-inline'` directive entirely, hardening the boundary to strictly source-locked styles).*
+- **Strict CSP Header**: Every response serves a `Content-Security-Policy` header built by `buildCSP`:
+  `default-src 'self'; script-src 'self' 'nonce-[nonce]'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`
+  Styles come from the ahead-of-time compiled Tailwind stylesheet and scripts from embedded files served under `/assets/`, so there is no `unsafe-inline`, no `unsafe-eval` and no third-party host. The logout pages additionally allow `frame-src https: http:` for front-channel logout frames.
 - **Secure Per-Request Nonce Generation**: A dedicated HTTP middleware generates a secure, high-entropy 16-byte cryptographically random value (using `crypto/rand` and base64-encoded) for every request.
-- **Contextual Nonce Injection**: The middleware injects this unique nonce into the request context via `templ.WithNonce(ctx, nonce)`. The `a-h/templ` rendering system automatically extracts this nonce and applies the `nonce="..."` attribute to all `<script>` blocks (such as those in `login.templ` and `logout.templ`), satisfying the browser's strict script execution safety checks.
+- **Contextual Nonce Injection**: The middleware injects this unique nonce into the request context via `templ.WithNonce(ctx, nonce)`. The `a-h/templ` rendering system automatically extracts this nonce and applies the `nonce="..."` attribute to all `<script>` blocks (the `<script src>` tags of the shared asset head), satisfying the browser's strict script execution safety checks.
 
 ### 4.3 User Profile Dashboard & Custom Trust Verification
 

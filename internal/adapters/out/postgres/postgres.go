@@ -2983,10 +2983,12 @@ func (s *PostgresStorage) DeleteApplicationProfile(ctx context.Context, tenantUU
 	return nil
 }
 
-// mapReferenceViolation translates a PostgreSQL foreign key violation (SQLSTATE 23503) into port.ErrInUse.
+// mapReferenceViolation translates a PostgreSQL referential integrity violation into port.ErrInUse. A foreign key
+// declared ON DELETE RESTRICT reports SQLSTATE 23001 (restrict_violation), while a plain NO ACTION key reports
+// 23503 (foreign_key_violation); both mean that another row still references the object.
 func mapReferenceViolation(err error, kind string) error {
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+	if errors.As(err, &pgErr) && (pgErr.Code == "23001" || pgErr.Code == "23503") {
 		return fmt.Errorf("storage: %s is still referenced: %w", kind, port.ErrInUse)
 	}
 	return fmt.Errorf("storage: failed to delete %s: %w", kind, err)
@@ -2994,6 +2996,7 @@ func mapReferenceViolation(err error, kind string) error {
 
 // DeleteTenant permanently removes a tenant. Every tenant-owned table cascades (migration 00028),
 // so this also deletes the tenant's audit trail, keys, sessions, applications and users.
+// System tenants are refused by the WHERE clause as a second guard behind the domain service.
 func (s *PostgresStorage) DeleteTenant(ctx context.Context, tenantUUID uuid.UUID) error {
 	tag, err := s.pool.Exec(ctx, `DELETE FROM tenants WHERE tenant_uuid = $1 AND is_system = FALSE`, toPGUUID(tenantUUID))
 	if err != nil {

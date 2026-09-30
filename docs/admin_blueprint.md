@@ -83,55 +83,83 @@ The implementation strictly honors the hexagonal domain boundaries.
 ```text
 internal/
 ├── domain/
-│   ├── model/
-│   │   ├── tenant.go                  # Added AllowSignup bool to TenantConfig
-│   │   └── client_application.go      # Added ClientType enum ('public', 'confidential', 'internal_ephemeral')
+│   ├── model/                         # tenant.go, application.go (IsSystem on every tier), federation.go
 │   ├── port/
-│   │   └── admin_state.go             # Contract representing runtime ephemeral admin state
+│   │   ├── admin.go                   # AdminApplicationUseCase, section Patch* commands, Create/Update/Delete commands
+│   │   ├── errors.go                  # ErrSystemManaged, ErrInUse, ErrAlreadyExists, ValidationError
+│   │   └── tenant.go                  # TenantUseCase incl. DeleteTenant
 │   └── service/
-│       ├── tenant_bootstrap_service.go # Seeding and first-boot logic
-│       ├── tenant_service.go          # Core Tenant CRUD & update operations
-│       ├── client_service.go          # Core Client CRUD & update operations
-│       ├── user_profile_service.go    # User Profile management & decoupling
-│       ├── identity_provider_service.go # Identity Provider CRUD & update operations
-│       └── oauth_validator.go         # Token/Client credentials validator updated
-└── adapters/
-    ├── in/
-    │   └── http/
-    │       ├── admin_handler.go       # Admin UI views and HTMX action processing (GET/PATCH/POST)
-    │       └── handler.go             # Route wiring and credential validator injection
-    └── out/
-        └── state/
-            └── ephemeral_store.go     # Thread-safe in-memory store for the ephemeral secret
+│       ├── application_service.go     # Applications, profiles and groups; system guards; transactional secrets
+│       ├── application_patch.go       # PatchGroup / PatchProfile: overlay one section, then the full validated update
+│       ├── group_validation.go        # Redirect URI, scope and default rules
+│       ├── profile_validation.go      # Lifetime, algorithm, auth method and grant rules
+│       ├── tenant_bootstrap_service.go # Seeds the admin tenant, profile, groups and application (all is_system)
+│       ├── tenant_service.go          # Tenant CRUD and guarded DeleteTenant
+│       └── identity_provider_service.go
+├── adapters/
+│   ├── in/http/
+│   │   ├── admin_middleware.go        # requireAdminSession guard for every /admin route
+│   │   ├── admin_session.go           # Session resolution and cross-site request rejection
+│   │   ├── admin_pages.go             # Fragment vs full page, section result mapping, parseBodyForm
+│   │   ├── admin_errors.go            # Domain error to status and safe message
+│   │   ├── admin_application_*.go     # Application list, detail, create, secret, delete
+│   │   ├── admin_group_*.go           # Group list, detail, sections, delete
+│   │   └── admin_profile_*.go         # Profile list, detail, sections, delete
+│   └── out/ (postgres, memory, federation, crypto)
+└── views/
+    ├── admin/                         # templ pages and components
+    ├── public/                        # login, signup, profile, logout, error
+    └── assets/                        # Embedded, versioned static files (see section 5.3)
 ```
 
 ## 5. Reusable UI Component Library (`/views/admin/`)
 
-Using type-safe `templ` components, Tailwind CSS, and Alpine.js, we construct the Admin UI layout and widgets:
+The admin UI is built from type-safe `templ` components, compiled Tailwind and CSP-safe Alpine.js components.
 
-- **`AdminLayout(title string)`**: Responsive side-nav layout in `slate-900`/`slate-300`, global profile actions, dynamic modals, and container slots. Refactored to utilize a declarative struct slice (`[]NavItem`) looping over uniform navigation definitions cleanly, and featuring HTMX targeted routing.
-- **`InputField(label, name, type, value, error string)`**: Form inputs styled with focus rings (`focus:ring-2 focus:ring-blue-500`) and standard error displays.
-- **`StatusBadge(isActive bool)`**: Dynamic visual indicators utilizing `templ.KV` Tailwind mapping to reflect active (green) and inactive (red) configurations.
-- **`Modal(title, fetchUrl string)`**: Alpine.js managed modal overlay (`x-data="{ isOpen: true }"`) incorporating HTMX lazy-loading (`hx-get`) to fetch administrative sub-forms dynamically into a `#modal-body` container. It resolves DOM accumulation and ID collisions by utilizing a CSP-compliant `setTimeout(purgeModal, 200, $root)` handler to cleanly remove the stale modal wrapper from `#modal-container` after transitions finish.
+- **`AdminLayout`**: side navigation from a `[]NavItem` slice, a global spinner and a modal container. The Tenants, Identity Providers and Users pages still use modals.
+- **`ApplicationsSubNav`**: the Applications | Groups | Profiles tab strip. Active state comes from the route, so each tab has its own address and needs no client state.
+- **`PageHeader`, `SystemBadge`, `SystemBanner`, `FlashMessage`, `EmptyState`**: page chrome. System objects always show the badge and a banner explaining why the page is read-only.
+- **`SectionCard` and `SaveBar`**: one independently saved part of a detail page. Each card is its own form (`hx-put` to `.../{section}`) that swaps only itself, with "Unsaved changes" and "Saved" indicators.
+- **`RedirectList`, `URLList`, `ScopePicker`, `TagListManager`, `ToggleRow`, `FieldError`**: field editors. The default redirect URI is a radio on its row and every allowed scope has a default checkbox, so a default can never point outside its list.
+- **`ConfirmDelete`**: a danger zone whose button stays disabled until the typed name matches. The server checks the confirmation again. A used object shows why it cannot be deleted instead of a button.
+- **`UsedBy`**: links from a group or profile to the applications that use it.
+- **`StatusBadge`, `Badge`, `InputField`**: small display helpers.
 
-## 5.2 Strict Content Security Policy & Global Nonced Helpers
+### 5.1 Routes
 
-Because the server runs under a strict Content Security Policy (CSP), we utilize the CSP-friendly build of Alpine (`@alpinejs/csp`). This build uses a customized, lightweight parser that blocks closures (`() => {}`), watches, and arrow functions inside HTML attributes to prevent execution of unvalidated inline scripts.
+```text
+/admin/applications                      list (search q, filter type=static|dynamic)
+/admin/applications/new                  create
+/admin/applications/{clientID}           detail: general, policy, credentials, danger zone
+/admin/applications/{clientID}/{section} PUT general | policy
+/admin/applications/{clientID}/reset-secret  POST
+/admin/applications/groups               list, /new, /{id}, PUT /{id}/{general|redirects|logout|scopes|signin}, DELETE /{id}
+/admin/applications/profiles             list, /new, /{id}, PUT /{id}/{general|authentication|lifetimes}, DELETE /{id}
+```
 
-To support complex UI lifecycles (like modal transition fades followed by node removal) under these constraints, the system implements the **Global Nonced Helper Pattern**:
+Static routes (`new`, `groups`, `profiles`, `generate-secret`) are registered before `/{clientID}`.
 
-1. **Secure Execution**: A secure helper script block is rendered in the `<head>` of `@AdminLayout`, locked to a cryptographically secure, per-request `nonce`:
+## 5.2 Strict Content Security Policy
 
-   ```html
-   <script nonce={ templ.GetNonce(ctx) }>
-       function purgeModal(el) {
-           el.dispatchEvent(new CustomEvent('modal-close', { bubbles: true }));
-           el.remove();
-       }
-   </script>
-   ```
+Every script and stylesheet is served from this origin, so no third-party host is trusted. The policy (built in `buildCSP`):
 
-2. **Standard parameterization**: Inside elements, rather than utilizing arrow functions, standard function pointers are forwarded to the browser's native `setTimeout` utility (e.g., `setTimeout(purgeModal, 200, $root)`). The CSP parser permits this flat method execution, resulting in safe, zero-eval lifecycle management.
+```text
+default-src 'self'; script-src 'self' 'nonce-<per request>'; style-src 'self'; img-src 'self' data:;
+font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+```
+
+There is no `unsafe-inline` and no `unsafe-eval`. Two deliberate exceptions exist:
+
+- `/oauth/logout` and `/logout` add `frame-src https: http:`, because the logout page embeds every client's front-channel logout URL in hidden frames.
+- `/admin/logout` omits `frame-ancestors`, because the identity provider's logout page frames it. It only clears a cookie.
+
+Responses also carry `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin`, and admin responses send `Cache-Control: no-store`.
+
+Because of this policy the UI follows these rules, which are enforced by template tests:
+
+- No inline `<script>`, `style=""` attribute, `<style>` element or inline event handler. Behavior lives in `admin.js` and `logout.js`; hiding uses `x-cloak` and the stylesheet.
+- Alpine runs in its CSP build, so attribute expressions stay simple: no arrow functions, template literals, globals or property assignments.
+- Values reach components through `data-*` attributes read in `init()`, never through interpolated `x-data` expressions, so a value containing a quote cannot break out.
 
 ### 5.2.1 Scope Inheritance and Flat Callback Pattern
 
@@ -249,15 +277,19 @@ To generate safe randomized entity identifiers asynchronously:
     }));
     ```
 
-## 5.1 HTMX Partial Render Loop & SPA Architecture
+### 5.3 Static Assets
 
-To minimize network payload sizes and prevent high-friction layout repaints on desktop transitions, the administration portal employs a hypermedia partial render design:
+The `assets` package embeds `app.css` (compiled Tailwind v4), `htmx.min.js` (1.9.12), `alpine-csp.min.js`, `admin.js` and `logout.js`, and serves them under `/assets/`. URLs carry a content hash (`?v=`) for one-year immutable caching. The route skips tenant resolution. `make css-gen` rebuilds the stylesheet from the templates, and the compiled file is committed so `go build` works without Tailwind installed.
 
-1. **Stateful Navigation**: Sidebar navigation links utilize `hx-get` targeting the main `<main>` container, coupled with `hx-swap="innerHTML"` and `hx-push-url="true"` to dynamically alter browser history cleanly.
-2. **Tab Highlighting**: Selected tab states are tracked entirely on the client side via Alpine's CSP-friendly `currentTab` reactive string parameter, updating visually in real-time.
-3. **Hypermedia Detection**: Route handlers check for the presence of the `HX-Request == "true"` request header:
-   - If present, the handler bypasses `@AdminLayout` wrapping and returns only the core page fragment component (`TenantsContent`, `ApplicationsContent`, `IDPsContent`, or `UsersContent`).
-   - If absent (direct hit / browser refresh), the handler wraps the fragment inside the full layout block to ensure independent addressability.
+htmx is configured in the page head with `allowEval`, `allowScriptTags` and `includeIndicatorStyles` off and `selfRequestsOnly` on. Delete confirmations rely on htmx 1.x sending DELETE form data in the body, and a test fails if htmx is upgraded past that assumption.
+
+### 5.4 Hypermedia Render Loop
+
+1. **Navigation**: sidebar, tab and list links use `hx-get` with `hx-target="main"`, `hx-swap="innerHTML"` and `hx-push-url="true"`, and keep a real `href`, so links also work without JavaScript and can be opened in a new tab.
+2. **Tab highlighting**: the active Applications | Groups | Profiles tab is rendered by the server from the route (`aria-current="page"`). Only the layout's sidebar uses a small Alpine component (`adminShell`).
+3. **Fragment or page**: `renderAdminPage` returns the content fragment for an htmx navigation and the complete layout for any other request, so every URL can be refreshed and bookmarked. History restores from htmx get the full page. Responses carry `Vary: HX-Request`.
+4. **Section saves**: a card answers `PUT .../{section}` with that card only (`hx-target="#section-..."`, `hx-swap="outerHTML"`). Validation failures keep what the admin typed.
+5. **Redirects after success**: create and delete answer with `HX-Redirect` (a full navigation) and a flash message. There is never an injected script.
 
 ## 6. Terminology Layer Adjustments (Clients to Applications)
 
@@ -306,8 +338,9 @@ This section maps out how the Inbound HTTP Adapter and the frontend views interf
 
 ### 9.4 Hypermedia Semantic Validation Error Swapping
 
-- **Semantic Error Delivery**: In compliance with Section 13.4, any form validation failure on the backend (e.g., an invalid URI or scope entry) rejects the transaction with an HTTP Status Code of `422 Unprocessable Entity`.
-- **HTMX Listener Binding**: To ensure HTMX does not drop the 4xx error block and safely swaps the validation component highlights into the view layout, the master global layout shell (`@AdminLayout`) embeds the strict, nonced event listener established in Section 13.4.
+- **Semantic status codes**: a failed validation answers `422 Unprocessable Entity`, a system-managed object `403`, a missing object `404`, and a blocked delete or duplicate `409`. Unknown failures answer `500` with a generic message; the real error is only logged.
+- **Swap listener**: htmx drops non-2xx responses by default. `admin.js` (loaded by `AdminLayout`) listens to `htmx:beforeSwap` and swaps a response when its status is `422` or when the server marked it with `X-Admin-Fragment: true`. The marker is set by `renderFragment` for every card or form fragment that is not a 200.
+- **Field errors**: the domain returns a `ValidationError` keyed by form field name, and the handlers merge it into the card or form that failed. The key must equal the input's `name` attribute.
 
 ## 10. Multi-Partition User and Provider Isolation
 
@@ -331,12 +364,16 @@ The system segregates application logic across three distinct, independent domai
 2. **`ApplicationProfile` (Security Lifetimes Policy)**: Encapsulates all transport-layer and credential validation rules, including token expiration durations (`AccessTokenLifetime`, `IDTokenLifetime`, `RefreshTokenLifetime`), signature algorithms, and authentication schemes (`TokenEndpointAuthMethod`).
 3. **`ApplicationGroup` (Access Bounds Whitelisting)**: Manages routing and security constraints, including allowed OIDC scopes, upstream identity provider routings, front/back-channel single-sign-out targets, and client redirection whitelists (`RedirectURIs`).
 
-### 11.2 Atomic Consolidated Commands (Transactional Safety)
+### 11.2 Commands, Sections and Transactions
 
-To prevent database corruption and half-saved states across disjointed tables:
+- **Separate commands per tier**: `Create/Update/Delete` commands exist for applications, profiles and groups. Each tier is edited on its own page, so no command spans tiers.
+- **Section patches**: `PatchGroupCommand` and `PatchProfileCommand` name one section (`general`, `redirects`, `logout`, `scopes`, `signin` for groups; `general`, `authentication`, `lifetimes` for profiles). The service re-reads the stored object, overlays only that section and runs the same validated update as a full save. Two admins editing different cards therefore do not overwrite each other, although two edits of the same card are still last-write-wins.
+- **Secrets**: creating an application and resetting its secret run inside a database transaction. The plaintext secret is written to the response from a delivery callback before the commit, and a failed write rolls the change back.
+- **Enabled state**: `UpdateApplicationCommand.IsEnabled`, `UpdateGroupCommand.IsEnabled` and `UpdateProfileCommand.IsEnabled` are pointers. `nil` keeps the stored state, so an edit never re-enables a disabled object.
 
-- Multi-tier mutations are executed atomically. The inbound adapters compile parameters into unified command envelopes: `CreateApplicationStructureCommand` and `UpdateApplicationStructureCommand`.
-- The domain use-case layer maps these commands into single, isolated database transactions. If any check or sub-insert (such as updating redirect uri arrays) fails mid-flight, the entire database transaction is rolled back cleanly.
+### 11.5 System-Managed Objects and Deletion
+
+Bootstrap objects carry `is_system` (see the architecture blueprint, section 2.4). The services return `ErrSystemManaged` for edits, toggles, secret resets and deletes, except that the admin group accepts federated sign-in changes. Groups and profiles that applications still use return `ErrInUse`, and the database foreign key repeats that check for a concurrent change. Every delete requires the object's name (the client ID for applications) to be typed back.
 
 ### 11.3 Defensive Struct Hydration (Preventing Nil-Pointer Panics)
 
