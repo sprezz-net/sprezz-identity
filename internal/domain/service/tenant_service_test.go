@@ -21,7 +21,7 @@ func TestTenantService_CreateTenant(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock, nil)
 
 	svc := NewTenantService(storage, adminStorage, clock, idpService, "unittest", "admin-domain.com")
 
@@ -69,7 +69,7 @@ func TestTenantService_GetTenant(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock, nil)
 
 	svc := NewTenantService(storage, adminStorage, clock, idpService, "unittest", "admin-domain.com")
 
@@ -93,7 +93,7 @@ func TestTenantService_ToggleSignup(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock, nil)
 
 	svc := NewTenantService(storage, adminStorage, clock, idpService, "unittest", "admin-domain.com")
 
@@ -127,7 +127,7 @@ func TestTenantService_UpdateTenant(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock, nil)
 
 	svc := NewTenantService(storage, adminStorage, clock, idpService, "unittest", "admin-domain.com")
 

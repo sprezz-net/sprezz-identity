@@ -186,6 +186,7 @@ func (s *PostgresStorage) ResolveTenantByDomain(ctx context.Context, domain stri
 		Name:             row.Name,
 		Domain:           row.DomainName,
 		IsActive:         row.IsActive,
+		IsSystem:         row.IsSystem,
 		CreatedAt:        createdAt,
 		Config:           cfg,
 		DefaultPartition: row.DefaultPartition,
@@ -235,6 +236,7 @@ func (s *PostgresStorage) ResolveTenantByUUID(ctx context.Context, tenantID uuid
 		Name:             row.Name,
 		Domain:           row.DomainName,
 		IsActive:         row.IsActive,
+		IsSystem:         row.IsSystem,
 		CreatedAt:        createdAt,
 		Config:           cfg,
 		DefaultPartition: row.DefaultPartition,
@@ -315,6 +317,7 @@ func (s *PostgresStorage) GetApplicationByClientID(ctx context.Context, tenantUU
 		ClientID:         row.ClientID,
 		ClientSecretHash: row.ClientSecretHash,
 		IsEnabled:        row.AppEnabled,
+		IsSystem:         row.AppSystem,
 		IsDynamic:        row.IsDynamic,
 		CreatedAt:        appCreatedAt,
 		UpdatedAt:        appUpdatedAt,
@@ -355,6 +358,7 @@ func (s *PostgresStorage) GetApplicationByClientID(ctx context.Context, tenantUU
 		TenantID:                tenantUUID,
 		ProfileName:             row.ProfileName,
 		IsEnabled:               row.ProfileEnabled,
+		IsSystem:                row.ProfileSystem,
 		TokenEndpointAuthMethod: model.TokenEndpointAuthMethod(row.TokenEndpointAuthMethod),
 		GrantTypes:              profileGrantTypes,
 		ResponseTypes:           profileResponseTypes,
@@ -388,6 +392,7 @@ func (s *PostgresStorage) GetApplicationByClientID(ctx context.Context, tenantUU
 		TenantID:               tenantUUID,
 		GroupName:              row.GroupName,
 		IsEnabled:              row.GroupEnabled,
+		IsSystem:               row.GroupSystem,
 		RedirectURI:            row.RedirectUri,
 		RedirectURIs:           row.RedirectUris,
 		PostLogoutRedirectURIs: row.PostLogoutRedirectUris,
@@ -459,6 +464,7 @@ func (s *PostgresStorage) GetProfileByName(ctx context.Context, tenantUUID uuid.
 		TenantID:                tenantUUID,
 		ProfileName:             row.ProfileName,
 		IsEnabled:               row.IsEnabled,
+		IsSystem:                row.IsSystem,
 		TokenEndpointAuthMethod: model.TokenEndpointAuthMethod(row.TokenEndpointAuthMethod),
 		GrantTypes:              profileGrantTypes,
 		ResponseTypes:           profileResponseTypes,
@@ -514,6 +520,7 @@ func (s *PostgresStorage) GetGroupByName(ctx context.Context, tenantUUID uuid.UU
 		TenantID:               tenantUUID,
 		GroupName:              row.GroupName,
 		IsEnabled:              row.IsEnabled,
+		IsSystem:               row.IsSystem,
 		RedirectURI:            row.RedirectUri,
 		RedirectURIs:           row.RedirectUris,
 		PostLogoutRedirectURIs: row.PostLogoutRedirectUris,
@@ -1381,7 +1388,7 @@ func (s *PostgresStorage) PruneExpiredFederatedSessions(ctx context.Context, now
 // GetApplicationProfiles retrieves all standalone security policies for a tenant.
 func (s *PostgresStorage) GetApplicationProfiles(ctx context.Context, tenantUUID uuid.UUID) ([]model.ApplicationProfile, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, profile_name, is_enabled, token_endpoint_auth_method, grant_types, response_types,
+		SELECT id, profile_name, is_enabled, is_system, token_endpoint_auth_method, grant_types, response_types,
 		       access_token_lifetime, refresh_token_lifetime, id_token_lifetime, enforce_rtr, signing_algorithm, updated_at
 		FROM application_profiles
 		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1 LIMIT 1)
@@ -1402,7 +1409,7 @@ func (s *PostgresStorage) GetApplicationProfiles(ctx context.Context, tenantUUID
 		var signingAlg string
 		var updatedAt pgtype.Timestamptz
 
-		if err := rows.Scan(&pgID, &p.ProfileName, &p.IsEnabled, &authMethod, &grantTypes, &responseTypes,
+		if err := rows.Scan(&pgID, &p.ProfileName, &p.IsEnabled, &p.IsSystem, &authMethod, &grantTypes, &responseTypes,
 			&accessInterval, &refreshInterval, &idInterval, &p.EnforceRTR, &signingAlg, &updatedAt); err != nil {
 			return nil, fmt.Errorf("storage: scan profile row: %w", err)
 		}
@@ -1433,7 +1440,7 @@ func (s *PostgresStorage) GetApplicationProfiles(ctx context.Context, tenantUUID
 // GetApplicationGroups retrieves all standalone routing / authorization groups for a tenant.
 func (s *PostgresStorage) GetApplicationGroups(ctx context.Context, tenantUUID uuid.UUID) ([]model.ApplicationGroup, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, group_name, is_enabled, redirect_uris, post_logout_redirect_uris,
+		SELECT id, group_name, is_enabled, is_system, redirect_uris, post_logout_redirect_uris,
 		       front_channel_logout_uri, back_channel_logout_uri, allowed_scopes, default_scopes, allowed_audiences, default_idp_id, updated_at
 		FROM application_groups
 		WHERE tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $1 LIMIT 1)
@@ -1451,7 +1458,7 @@ func (s *PostgresStorage) GetApplicationGroups(ctx context.Context, tenantUUID u
 		var defaultIdpID pgtype.UUID
 		var updatedAt pgtype.Timestamptz
 
-		if err := rows.Scan(&pgID, &g.GroupName, &g.IsEnabled, &g.RedirectURIs, &g.PostLogoutRedirectURIs,
+		if err := rows.Scan(&pgID, &g.GroupName, &g.IsEnabled, &g.IsSystem, &g.RedirectURIs, &g.PostLogoutRedirectURIs,
 			&g.FrontChannelLogoutURI, &g.BackChannelLogoutURI, &g.AllowedScopes, &g.DefaultScopes, &g.AllowedAudiences, &defaultIdpID, &updatedAt); err != nil {
 			return nil, fmt.Errorf("storage: scan group row: %w", err)
 		}
@@ -1496,15 +1503,15 @@ func (s *PostgresStorage) GetApplicationProfileByID(ctx context.Context, tenantU
 	var updatedAt pgtype.Timestamptz
 
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, profile_name, is_enabled, token_endpoint_auth_method, grant_types, response_types,
+		SELECT id, profile_name, is_enabled, is_system, token_endpoint_auth_method, grant_types, response_types,
 		       access_token_lifetime, refresh_token_lifetime, id_token_lifetime, enforce_rtr, signing_algorithm, updated_at
 		FROM application_profiles
 		WHERE id = $1 AND tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $2 LIMIT 1)
-	`, toPGUUID(id), toPGUUID(tenantUUID)).Scan(&pgID, &p.ProfileName, &p.IsEnabled, &authMethod, &grantTypes, &responseTypes,
+	`, toPGUUID(id), toPGUUID(tenantUUID)).Scan(&pgID, &p.ProfileName, &p.IsEnabled, &p.IsSystem, &authMethod, &grantTypes, &responseTypes,
 		&accessInterval, &refreshInterval, &idInterval, &p.EnforceRTR, &signingAlg, &updatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("profile not found")
+			return nil, port.ErrProfileNotFound
 		}
 		return nil, fmt.Errorf("storage: get profile by id: %w", err)
 	}
@@ -1538,15 +1545,15 @@ func (s *PostgresStorage) GetApplicationGroupByID(ctx context.Context, tenantUUI
 	var updatedAt pgtype.Timestamptz
 
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, group_name, is_enabled, redirect_uris, post_logout_redirect_uris,
+		SELECT id, group_name, is_enabled, is_system, redirect_uris, post_logout_redirect_uris,
 		       front_channel_logout_uri, back_channel_logout_uri, allowed_scopes, default_scopes, allowed_audiences, default_idp_id, updated_at
 		FROM application_groups
 		WHERE id = $1 AND tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $2 LIMIT 1)
-	`, toPGUUID(id), toPGUUID(tenantUUID)).Scan(&pgID, &g.GroupName, &g.IsEnabled, &g.RedirectURIs, &g.PostLogoutRedirectURIs,
+	`, toPGUUID(id), toPGUUID(tenantUUID)).Scan(&pgID, &g.GroupName, &g.IsEnabled, &g.IsSystem, &g.RedirectURIs, &g.PostLogoutRedirectURIs,
 		&g.FrontChannelLogoutURI, &g.BackChannelLogoutURI, &g.AllowedScopes, &g.DefaultScopes, &g.AllowedAudiences, &defaultIdpID, &updatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("group not found")
+			return nil, port.ErrGroupNotFound
 		}
 		return nil, fmt.Errorf("storage: get group by id: %w", err)
 	}
@@ -1603,12 +1610,13 @@ func scanTenantRow(row pgx.Row) (model.Tenant, error) {
 	var name string
 	var domainName string
 	var isActive bool
+	var isSystem bool
 	var createdAt pgtype.Timestamptz
 	var configJSON []byte
 	var defaultPartition *int64
 	var updatedAt pgtype.Timestamptz
 
-	err := row.Scan(&tenantUUID, &name, &domainName, &isActive, &createdAt, &configJSON, &defaultPartition, &updatedAt)
+	err := row.Scan(&tenantUUID, &name, &domainName, &isActive, &isSystem, &createdAt, &configJSON, &defaultPartition, &updatedAt)
 	if err != nil {
 		return model.Tenant{}, fmt.Errorf("scan tenant: %w", err)
 	}
@@ -1640,6 +1648,7 @@ func scanTenantRow(row pgx.Row) (model.Tenant, error) {
 		Name:             name,
 		Domain:           domainName,
 		IsActive:         isActive,
+		IsSystem:         isSystem,
 		CreatedAt:        parsedCreatedAt,
 		Config:           cfg,
 		DefaultPartition: defaultPartition,
@@ -1649,7 +1658,7 @@ func scanTenantRow(row pgx.Row) (model.Tenant, error) {
 
 func (s *PostgresStorage) GetAllTenants(ctx context.Context) ([]model.Tenant, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT tenant_uuid, name, domain_name, is_active, created_at, config, default_partition, updated_at
+		SELECT tenant_uuid, name, domain_name, is_active, is_system, created_at, config, default_partition, updated_at
 		FROM tenants
 		ORDER BY name ASC
 	`)
@@ -1712,6 +1721,7 @@ func (s *PostgresStorage) CreateTenant(ctx context.Context, tenant model.Tenant)
 		Name:             tenant.Name,
 		DomainName:       tenant.Domain,
 		IsActive:         tenant.IsActive,
+		IsSystem:         tenant.IsSystem,
 		CreatedAt:        toPGTimestamptz(tenant.CreatedAt),
 		Config:           configBytes,
 		DefaultPartition: defaultPartitionID, // Passed cleanly as a primitive int64
@@ -2762,6 +2772,7 @@ func (s *PostgresStorage) CreateApplicationProfile(ctx context.Context, tenantUU
 		ID:                      toPGUUID(profile.ID),
 		ProfileName:             profile.ProfileName,
 		IsEnabled:               profile.IsEnabled,
+		IsSystem:                profile.IsSystem,
 		TokenEndpointAuthMethod: string(profile.TokenEndpointAuthMethod),
 		GrantTypes:              grantTypes,
 		ResponseTypes:           responseTypes,
@@ -2800,6 +2811,7 @@ func (s *PostgresStorage) CreateApplicationGroup(ctx context.Context, tenantUUID
 		ID:                     toPGUUID(group.ID),
 		GroupName:              group.GroupName,
 		IsEnabled:              group.IsEnabled,
+		IsSystem:               group.IsSystem,
 		AllowedScopes:          group.AllowedScopes,
 		DefaultScopes:          group.DefaultScopes,
 		AllowedAudiences:       group.AllowedAudiences,
@@ -2857,6 +2869,7 @@ func (s *PostgresStorage) CreateApplication(ctx context.Context, tenantUUID uuid
 		ClientID:         app.ClientID,
 		ClientSecretHash: app.ClientSecretHash,
 		ApplicationName:  app.ApplicationName,
+		IsSystem:         app.IsSystem,
 		TenantUuid:       toPGUUID(tenantUUID),
 	})
 	if err != nil {
@@ -2877,6 +2890,19 @@ func (s *PostgresStorage) DeleteApplication(ctx context.Context, tenantUUID uuid
 	})
 	if err != nil {
 		return fmt.Errorf("storage: failed to remove application record: %w", err)
+	}
+	return nil
+}
+
+// DeleteTenant permanently removes a tenant. Every tenant-owned table cascades (migration 00028),
+// so this also deletes the tenant's audit trail, keys, sessions, applications and users.
+func (s *PostgresStorage) DeleteTenant(ctx context.Context, tenantUUID uuid.UUID) error {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM tenants WHERE tenant_uuid = $1 AND is_system = FALSE`, toPGUUID(tenantUUID))
+	if err != nil {
+		return fmt.Errorf("storage: failed to delete tenant: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return port.ErrTenantNotFound
 	}
 	return nil
 }

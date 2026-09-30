@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"slices"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -79,6 +81,10 @@ func (s *ApplicationService) GetApplicationDetails(ctx context.Context, tenantID
 
 // CreateApplication creates a standalone application entity linking to standalones profiles and groups.
 func (s *ApplicationService) CreateApplication(ctx context.Context, cmd port.CreateApplicationCommand) (*model.Application, error) {
+	if cmd.OnDelivery == nil {
+		return nil, errors.New("application_service: delivery callback is required for application creation")
+	}
+
 	profile, err := s.adminStorage.GetApplicationProfileByID(ctx, cmd.TenantID, cmd.ProfileID)
 	if err != nil {
 		return nil, fmt.Errorf("failed resolving application profile: %w", err)
@@ -149,6 +155,15 @@ func (s *ApplicationService) UpdateApplication(ctx context.Context, cmd port.Upd
 	if err != nil {
 		return fmt.Errorf("failed locating existing application: %w", err)
 	}
+	if existingApp.IsSystem {
+		return port.ErrSystemManaged
+	}
+
+	// A nil enabled flag preserves the stored state so a plain edit never re-enables a disabled application.
+	isEnabled := existingApp.IsEnabled
+	if cmd.IsEnabled != nil {
+		isEnabled = *cmd.IsEnabled
+	}
 
 	app := model.Application{
 		ID:               existingApp.ID,
@@ -156,7 +171,7 @@ func (s *ApplicationService) UpdateApplication(ctx context.Context, cmd port.Upd
 		ProfileID:        cmd.ProfileID,
 		GroupID:          cmd.GroupID,
 		ApplicationName:  cmd.ApplicationName,
-		IsEnabled:        cmd.IsEnabled,
+		IsEnabled:        isEnabled,
 		ClientID:         cmd.ClientID,
 		ClientSecretHash: existingApp.ClientSecretHash,
 		IsDynamic:        existingApp.IsDynamic,
@@ -172,6 +187,14 @@ func (s *ApplicationService) UpdateApplication(ctx context.Context, cmd port.Upd
 
 // DeleteApplication deletes a standalone application.
 func (s *ApplicationService) DeleteApplication(ctx context.Context, tenantID uuid.UUID, clientID string) error {
+	app, _, _, err := s.storage.GetApplicationByClientID(ctx, tenantID, clientID)
+	if err != nil {
+		return fmt.Errorf("failed locating application for removal: %w", err)
+	}
+	if app.IsSystem {
+		return port.ErrSystemManaged
+	}
+
 	if err := s.adminStorage.DeleteApplication(ctx, tenantID, clientID); err != nil {
 		return fmt.Errorf("failed executing application removal: %w", err)
 	}
@@ -183,6 +206,9 @@ func (s *ApplicationService) ToggleApplicationStatus(ctx context.Context, tenant
 	app, _, _, err := s.storage.GetApplicationByClientID(ctx, tenantID, clientID)
 	if err != nil {
 		return nil, fmt.Errorf("failed retrieving application for status toggle: %w", err)
+	}
+	if app.IsSystem {
+		return nil, port.ErrSystemManaged
 	}
 
 	app.IsEnabled = !app.IsEnabled
@@ -197,10 +223,17 @@ func (s *ApplicationService) ToggleApplicationStatus(ctx context.Context, tenant
 
 // ResetApplicationSecret rotates credentials for confidential applications inside an open transaction loop.
 func (s *ApplicationService) ResetApplicationSecret(ctx context.Context, cmd port.ResetApplicationSecretCommand) error {
+	if cmd.OnDelivery == nil {
+		return errors.New("application_service: delivery callback is required for secret rotation")
+	}
+
 	// 1. Interrogate core state records via the pre-compiled command properties
 	app, profile, _, err := s.storage.GetApplicationByClientID(ctx, cmd.TenantID, cmd.ClientID)
 	if err != nil {
 		return fmt.Errorf("failed retrieving target application: %w", err)
+	}
+	if app.IsSystem {
+		return port.ErrSystemManaged
 	}
 
 	// 2. Protocol Validation Gate: Public clients (TokenEndpointAuthMethod == none) cannot possess secrets
@@ -287,6 +320,14 @@ func (s *ApplicationService) CreateProfile(ctx context.Context, cmd port.CreateP
 
 // UpdateProfile updates an existing standalone profile, programmatically enforcing RTR for public clients.
 func (s *ApplicationService) UpdateProfile(ctx context.Context, cmd port.UpdateProfileCommand) error {
+	existing, err := s.adminStorage.GetApplicationProfileByID(ctx, cmd.TenantID, cmd.ID)
+	if err != nil {
+		return fmt.Errorf("failed locating existing profile: %w", err)
+	}
+	if existing.IsSystem {
+		return port.ErrSystemManaged
+	}
+
 	enforceRTR := cmd.EnforceRTR
 	if cmd.TokenEndpointAuthMethod == model.AuthMethodNone {
 		enforceRTR = true
@@ -296,7 +337,7 @@ func (s *ApplicationService) UpdateProfile(ctx context.Context, cmd port.UpdateP
 		ID:                      cmd.ID,
 		TenantID:                cmd.TenantID,
 		ProfileName:             cmd.ProfileName,
-		IsEnabled:               true,
+		IsEnabled:               existing.IsEnabled,
 		TokenEndpointAuthMethod: cmd.TokenEndpointAuthMethod,
 		GrantTypes:              cmd.GrantTypes,
 		ResponseTypes:           cmd.ResponseTypes,
@@ -323,6 +364,11 @@ func (s *ApplicationService) GetGroup(ctx context.Context, tenantID uuid.UUID, i
 
 // CreateGroup creates a standalone routing group.
 func (s *ApplicationService) CreateGroup(ctx context.Context, cmd port.CreateGroupCommand) error {
+	cmd.DefaultIDPID = normalizeDefaultIDP(cmd.DefaultIDPID)
+	if err := s.validateGroupIDPs(ctx, cmd.TenantID, cmd.AllowedIDPIDs, cmd.DefaultIDPID, false); err != nil {
+		return err
+	}
+
 	group := model.ApplicationGroup{
 		ID:                     uuid.New(),
 		TenantID:               cmd.TenantID,
@@ -345,12 +391,29 @@ func (s *ApplicationService) CreateGroup(ctx context.Context, cmd port.CreateGro
 }
 
 // UpdateGroup updates an existing standalone routing group.
+// System-managed groups are read-only, except that the federated identity providers of the
+// admin UI group may be extended so external SSO can be granted administrative access.
 func (s *ApplicationService) UpdateGroup(ctx context.Context, cmd port.UpdateGroupCommand) error {
+	existing, err := s.adminStorage.GetApplicationGroupByID(ctx, cmd.TenantID, cmd.ID)
+	if err != nil {
+		return fmt.Errorf("failed locating existing group: %w", err)
+	}
+
+	cmd.DefaultIDPID = normalizeDefaultIDP(cmd.DefaultIDPID)
+
+	if existing.IsSystem {
+		return s.updateSystemGroupIDPs(ctx, existing, cmd)
+	}
+
+	if err := s.validateGroupIDPs(ctx, cmd.TenantID, cmd.AllowedIDPIDs, cmd.DefaultIDPID, false); err != nil {
+		return err
+	}
+
 	group := model.ApplicationGroup{
 		ID:                     cmd.ID,
 		TenantID:               cmd.TenantID,
 		GroupName:              cmd.GroupName,
-		IsEnabled:              true,
+		IsEnabled:              existing.IsEnabled,
 		RedirectURIs:           cmd.RedirectURIs,
 		PostLogoutRedirectURIs: cmd.PostLogoutRedirectURIs,
 		FrontChannelLogoutURI:  cmd.FrontChannelLogoutURI,
@@ -364,4 +427,78 @@ func (s *ApplicationService) UpdateGroup(ctx context.Context, cmd port.UpdateGro
 	}
 
 	return s.adminStorage.UpdateApplicationGroup(ctx, cmd.TenantID, group)
+}
+
+// updateSystemGroupIDPs applies only the sign-in method changes to the admin UI group.
+// Every other system group (including the local break-glass group) stays fully locked.
+func (s *ApplicationService) updateSystemGroupIDPs(ctx context.Context, existing *model.ApplicationGroup, cmd port.UpdateGroupCommand) error {
+	if existing.GroupName != model.AdminUIGroupName {
+		return port.ErrSystemManaged
+	}
+
+	// Local accounts are never permitted on this group: local login is served by the break-glass group.
+	if err := s.validateGroupIDPs(ctx, cmd.TenantID, cmd.AllowedIDPIDs, cmd.DefaultIDPID, true); err != nil {
+		return err
+	}
+
+	updated := *existing
+	updated.AllowedIDPIDs = cmd.AllowedIDPIDs
+	updated.DefaultIDPID = cmd.DefaultIDPID
+	updated.UpdatedAt = s.clock.Now()
+
+	return s.adminStorage.UpdateApplicationGroup(ctx, cmd.TenantID, updated)
+}
+
+// normalizeDefaultIDP drops a nil-UUID default so an unset selection is never persisted as a bogus reference.
+func normalizeDefaultIDP(id *uuid.UUID) *uuid.UUID {
+	if id == nil || *id == uuid.Nil {
+		return nil
+	}
+	return id
+}
+
+// validateGroupIDPs guarantees a group always keeps at least one sign-in method, that every referenced
+// identity provider exists within the tenant, and that the default is one of the allowed providers.
+func (s *ApplicationService) validateGroupIDPs(ctx context.Context, tenantID uuid.UUID, allowed []uuid.UUID, def *uuid.UUID, federatedOnly bool) error {
+	verr := port.NewValidationError()
+	if len(allowed) == 0 {
+		verr.Add("allowed_idps", "at least one sign-in method is required")
+		return verr
+	}
+
+	providers, err := s.storage.GetIdentityProvidersByUUIDs(ctx, tenantID, allowed)
+	if err != nil {
+		return fmt.Errorf("failed resolving group identity providers: %w", err)
+	}
+
+	if msg := checkGroupProviders(allowed, providers, federatedOnly); msg != "" {
+		verr.Add("allowed_idps", msg)
+	}
+	if def != nil && !slices.Contains(allowed, *def) {
+		verr.Add("default_idp_id", "the default sign-in method must be one of the allowed sign-in methods")
+	}
+
+	if verr.HasErrors() {
+		return verr
+	}
+	return nil
+}
+
+// checkGroupProviders returns a human-readable violation for the first invalid provider reference, or an empty string.
+func checkGroupProviders(allowed []uuid.UUID, providers []model.IdentityProvider, federatedOnly bool) string {
+	byID := make(map[uuid.UUID]model.IdentityProvider, len(providers))
+	for _, p := range providers {
+		byID[p.ID] = p
+	}
+
+	for _, id := range allowed {
+		p, ok := byID[id]
+		if !ok {
+			return fmt.Sprintf("unknown identity provider %s", id)
+		}
+		if federatedOnly && p.IDPType == model.UsernamePasswordIDPType {
+			return "local accounts cannot be enabled for this group"
+		}
+	}
+	return ""
 }

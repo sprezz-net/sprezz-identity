@@ -13,6 +13,7 @@ SELECT
     a.client_secret_hash,
     a.application_name,
     a.is_enabled AS app_enabled,
+    a.is_system AS app_system,
     a.is_dynamic,
     a.created_at AS app_created_at,
     a.updated_at AS app_updated_at,
@@ -20,6 +21,7 @@ SELECT
     p.id AS profile_id,
     p.profile_name,
     p.is_enabled AS profile_enabled,
+    p.is_system AS profile_system,
     p.token_endpoint_auth_method,
     p.grant_types,
     p.response_types,
@@ -32,6 +34,7 @@ SELECT
     g.id AS group_id,
     g.group_name,
     g.is_enabled AS group_enabled,
+    g.is_system AS group_system,
     g.redirect_uri,
     g.redirect_uris,
     g.post_logout_redirect_uris,
@@ -120,7 +123,7 @@ WITH tenant AS (
     WHERE tenant_uuid = @tenant_uuid::uuid
     LIMIT 1
 )
-SELECT ap.id, ap.tenant_id, ap.profile_name, ap.is_enabled, ap.token_endpoint_auth_method, ap.grant_types, ap.response_types, ap.access_token_lifetime, ap.refresh_token_lifetime, ap.id_token_lifetime, ap.enforce_rtr, ap.signing_algorithm, ap.created_at, ap.updated_at
+SELECT ap.id, ap.tenant_id, ap.profile_name, ap.is_enabled, ap.is_system, ap.token_endpoint_auth_method, ap.grant_types, ap.response_types, ap.access_token_lifetime, ap.refresh_token_lifetime, ap.id_token_lifetime, ap.enforce_rtr, ap.signing_algorithm, ap.created_at, ap.updated_at
 FROM application_profiles ap, tenant
 WHERE ap.profile_name = @profile_name AND ap.tenant_id = tenant.id
 LIMIT 1;
@@ -138,6 +141,7 @@ SELECT
     g.tenant_id,
     g.group_name,
     g.is_enabled,
+    g.is_system,
     g.redirect_uri,
     g.redirect_uris,
     g.post_logout_redirect_uris,
@@ -194,6 +198,7 @@ INSERT INTO application_profiles (
     tenant_id,
     profile_name,
     is_enabled,
+    is_system,
     token_endpoint_auth_method,
     grant_types,
     response_types,
@@ -208,6 +213,7 @@ SELECT
     tenant.id,
     @profile_name,
     @is_enabled,
+    @is_system,
     @token_endpoint_auth_method,
     @grant_types,
     @response_types,
@@ -231,6 +237,7 @@ INSERT INTO application_groups (
     tenant_id,
     group_name,
     is_enabled,
+    is_system,
     allowed_scopes,
     default_scopes,
     allowed_audiences,
@@ -243,6 +250,7 @@ SELECT
     tenant.id,
     @group_name,
     @is_enabled,
+    @is_system,
     @allowed_scopes,
     @default_scopes,
     @allowed_audiences,
@@ -266,7 +274,8 @@ INSERT INTO applications (
     group_id,
     client_id,
     client_secret_hash,
-    application_name
+    application_name,
+    is_system
 )
 SELECT
     @id::uuid,
@@ -275,7 +284,8 @@ SELECT
     @group_id::uuid,
     @client_id,
     @client_secret_hash,
-    @application_name
+    @application_name,
+    @is_system
 FROM tenant;
 
 -- name: DeleteApplication :exec

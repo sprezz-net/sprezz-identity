@@ -9,7 +9,7 @@ LIMIT 1;
 -- name: ResolveTenantByDomain :one
 -- ResolveTenantByDomain loads the complete operational context metadata
 -- record for a tenant using its unique canonical host domain string.
-SELECT tenant_uuid, name, domain_name, is_active, created_at, config, default_partition, updated_at, encrypted_dek, dek_nonce
+SELECT tenant_uuid, name, domain_name, is_active, is_system, created_at, config, default_partition, updated_at, encrypted_dek, dek_nonce
 FROM tenants
 WHERE domain_name = @domain_name
 LIMIT 1;
@@ -17,7 +17,7 @@ LIMIT 1;
 -- name: ResolveTenantByUUID :one
 -- ResolveTenantByUUID loads the complete operational context metadata
 -- record for a tenant using its public tracking UUID boundary.
-SELECT tenant_uuid, name, domain_name, is_active, created_at, config, default_partition, updated_at, encrypted_dek, dek_nonce
+SELECT tenant_uuid, name, domain_name, is_active, is_system, created_at, config, default_partition, updated_at, encrypted_dek, dek_nonce
 FROM tenants
 WHERE tenant_uuid = @tenant_uuid::uuid
 LIMIT 1;
@@ -30,6 +30,7 @@ INSERT INTO tenants (
     name,
     domain_name,
     is_active,
+    is_system,
     created_at,
     config,
     default_partition,
@@ -41,6 +42,7 @@ VALUES (
     @name,
     @domain_name,
     @is_active,
+    @is_system,
     @created_at::timestamptz,
     @config,
     NULLIF(@default_partition::bigint, 0),
@@ -51,6 +53,8 @@ ON CONFLICT (tenant_uuid) DO UPDATE SET
     name = EXCLUDED.name,
     domain_name = EXCLUDED.domain_name,
     is_active = EXCLUDED.is_active,
+    -- One-way ratchet: an upsert can flag a tenant as system-managed but never clear the flag.
+    is_system = tenants.is_system OR EXCLUDED.is_system,
     config = EXCLUDED.config,
     default_partition = EXCLUDED.default_partition,
     encrypted_dek = COALESCE(EXCLUDED.encrypted_dek, tenants.encrypted_dek),

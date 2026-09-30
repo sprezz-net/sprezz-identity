@@ -1048,6 +1048,21 @@ func (s *Storage) GetAllTenants(ctx context.Context) ([]model.Tenant, error) {
 	return result, nil
 }
 
+// DeleteTenant removes a non-system tenant. System tenants are never deleted.
+func (s *Storage) DeleteTenant(ctx context.Context, tenantUUID uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for domain, t := range s.tenants {
+		if t.ID != tenantUUID || t.IsSystem {
+			continue
+		}
+		delete(s.tenants, domain)
+		return nil
+	}
+	return port.ErrTenantNotFound
+}
+
 // GetUserIdentities lists all linked third-party or federated identity mappings
 // that belong to a single, specific internal user profile UUID.
 func (s *Storage) GetUserIdentities(ctx context.Context, userProfileID uuid.UUID) ([]model.UserIdentity, error) {

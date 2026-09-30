@@ -38,6 +38,9 @@ type OIDCDiscoveryMetadata struct {
 	JwksURI                            string   `json:"jwks_uri"`
 	PushedAuthorizationRequestEndpoint string   `json:"pushed_authorization_request_endpoint,omitempty"`
 	CodeChallengeMethodsSupported      []string `json:"code_challenge_methods_supported,omitempty"`
+	ScopesSupported                    []string `json:"scopes_supported,omitempty"`
+	ACRValuesSupported                 []string `json:"acr_values_supported,omitempty"`
+	TokenEndpointAuthMethodsSupported  []string `json:"token_endpoint_auth_methods_supported,omitempty"`
 }
 
 // FederatedSession represents an active upstream identity provider session state.

@@ -28,6 +28,13 @@ type TenantUseCaseMock struct {
 	beforeCreateTenantCounter uint64
 	CreateTenantMock          mTenantUseCaseMockCreateTenant
 
+	funcDeleteTenant          func(ctx context.Context, cmd mm_port.DeleteTenantCommand) (err error)
+	funcDeleteTenantOrigin    string
+	inspectFuncDeleteTenant   func(ctx context.Context, cmd mm_port.DeleteTenantCommand)
+	afterDeleteTenantCounter  uint64
+	beforeDeleteTenantCounter uint64
+	DeleteTenantMock          mTenantUseCaseMockDeleteTenant
+
 	funcResolveTenantContext          func(ctx context.Context, host string) (tp1 *model.Tenant, err error)
 	funcResolveTenantContextOrigin    string
 	inspectFuncResolveTenantContext   func(ctx context.Context, host string)
@@ -60,6 +67,9 @@ func NewTenantUseCaseMock(t minimock.Tester) *TenantUseCaseMock {
 
 	m.CreateTenantMock = mTenantUseCaseMockCreateTenant{mock: m}
 	m.CreateTenantMock.callArgs = []*TenantUseCaseMockCreateTenantParams{}
+
+	m.DeleteTenantMock = mTenantUseCaseMockDeleteTenant{mock: m}
+	m.DeleteTenantMock.callArgs = []*TenantUseCaseMockDeleteTenantParams{}
 
 	m.ResolveTenantContextMock = mTenantUseCaseMockResolveTenantContext{mock: m}
 	m.ResolveTenantContextMock.callArgs = []*TenantUseCaseMockResolveTenantContextParams{}
@@ -415,6 +425,348 @@ func (m *TenantUseCaseMock) MinimockCreateTenantInspect() {
 	if !m.CreateTenantMock.invocationsDone() && afterCreateTenantCounter > 0 {
 		m.t.Errorf("Expected %d calls to TenantUseCaseMock.CreateTenant at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.CreateTenantMock.expectedInvocations), m.CreateTenantMock.expectedInvocationsOrigin, afterCreateTenantCounter)
+	}
+}
+
+type mTenantUseCaseMockDeleteTenant struct {
+	optional           bool
+	mock               *TenantUseCaseMock
+	defaultExpectation *TenantUseCaseMockDeleteTenantExpectation
+	expectations       []*TenantUseCaseMockDeleteTenantExpectation
+
+	callArgs []*TenantUseCaseMockDeleteTenantParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// TenantUseCaseMockDeleteTenantExpectation specifies expectation struct of the TenantUseCase.DeleteTenant
+type TenantUseCaseMockDeleteTenantExpectation struct {
+	mock               *TenantUseCaseMock
+	params             *TenantUseCaseMockDeleteTenantParams
+	paramPtrs          *TenantUseCaseMockDeleteTenantParamPtrs
+	expectationOrigins TenantUseCaseMockDeleteTenantExpectationOrigins
+	results            *TenantUseCaseMockDeleteTenantResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// TenantUseCaseMockDeleteTenantParams contains parameters of the TenantUseCase.DeleteTenant
+type TenantUseCaseMockDeleteTenantParams struct {
+	ctx context.Context
+	cmd mm_port.DeleteTenantCommand
+}
+
+// TenantUseCaseMockDeleteTenantParamPtrs contains pointers to parameters of the TenantUseCase.DeleteTenant
+type TenantUseCaseMockDeleteTenantParamPtrs struct {
+	ctx *context.Context
+	cmd *mm_port.DeleteTenantCommand
+}
+
+// TenantUseCaseMockDeleteTenantResults contains results of the TenantUseCase.DeleteTenant
+type TenantUseCaseMockDeleteTenantResults struct {
+	err error
+}
+
+// TenantUseCaseMockDeleteTenantOrigins contains origins of expectations of the TenantUseCase.DeleteTenant
+type TenantUseCaseMockDeleteTenantExpectationOrigins struct {
+	origin    string
+	originCtx string
+	originCmd string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmDeleteTenant *mTenantUseCaseMockDeleteTenant) Optional() *mTenantUseCaseMockDeleteTenant {
+	mmDeleteTenant.optional = true
+	return mmDeleteTenant
+}
+
+// Expect sets up expected params for TenantUseCase.DeleteTenant
+func (mmDeleteTenant *mTenantUseCaseMockDeleteTenant) Expect(ctx context.Context, cmd mm_port.DeleteTenantCommand) *mTenantUseCaseMockDeleteTenant {
+	if mmDeleteTenant.mock.funcDeleteTenant != nil {
+		mmDeleteTenant.mock.t.Fatalf("TenantUseCaseMock.DeleteTenant mock is already set by Set")
+	}
+
+	if mmDeleteTenant.defaultExpectation == nil {
+		mmDeleteTenant.defaultExpectation = &TenantUseCaseMockDeleteTenantExpectation{}
+	}
+
+	if mmDeleteTenant.defaultExpectation.paramPtrs != nil {
+		mmDeleteTenant.mock.t.Fatalf("TenantUseCaseMock.DeleteTenant mock is already set by ExpectParams functions")
+	}
+
+	mmDeleteTenant.defaultExpectation.params = &TenantUseCaseMockDeleteTenantParams{ctx, cmd}
+	mmDeleteTenant.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmDeleteTenant.expectations {
+		if minimock.Equal(e.params, mmDeleteTenant.defaultExpectation.params) {
+			mmDeleteTenant.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmDeleteTenant.defaultExpectation.params)
+		}
+	}
+
+	return mmDeleteTenant
+}
+
+// ExpectCtxParam1 sets up expected param ctx for TenantUseCase.DeleteTenant
+func (mmDeleteTenant *mTenantUseCaseMockDeleteTenant) ExpectCtxParam1(ctx context.Context) *mTenantUseCaseMockDeleteTenant {
+	if mmDeleteTenant.mock.funcDeleteTenant != nil {
+		mmDeleteTenant.mock.t.Fatalf("TenantUseCaseMock.DeleteTenant mock is already set by Set")
+	}
+
+	if mmDeleteTenant.defaultExpectation == nil {
+		mmDeleteTenant.defaultExpectation = &TenantUseCaseMockDeleteTenantExpectation{}
+	}
+
+	if mmDeleteTenant.defaultExpectation.params != nil {
+		mmDeleteTenant.mock.t.Fatalf("TenantUseCaseMock.DeleteTenant mock is already set by Expect")
+	}
+
+	if mmDeleteTenant.defaultExpectation.paramPtrs == nil {
+		mmDeleteTenant.defaultExpectation.paramPtrs = &TenantUseCaseMockDeleteTenantParamPtrs{}
+	}
+	mmDeleteTenant.defaultExpectation.paramPtrs.ctx = &ctx
+	mmDeleteTenant.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmDeleteTenant
+}
+
+// ExpectCmdParam2 sets up expected param cmd for TenantUseCase.DeleteTenant
+func (mmDeleteTenant *mTenantUseCaseMockDeleteTenant) ExpectCmdParam2(cmd mm_port.DeleteTenantCommand) *mTenantUseCaseMockDeleteTenant {
+	if mmDeleteTenant.mock.funcDeleteTenant != nil {
+		mmDeleteTenant.mock.t.Fatalf("TenantUseCaseMock.DeleteTenant mock is already set by Set")
+	}
+
+	if mmDeleteTenant.defaultExpectation == nil {
+		mmDeleteTenant.defaultExpectation = &TenantUseCaseMockDeleteTenantExpectation{}
+	}
+
+	if mmDeleteTenant.defaultExpectation.params != nil {
+		mmDeleteTenant.mock.t.Fatalf("TenantUseCaseMock.DeleteTenant mock is already set by Expect")
+	}
+
+	if mmDeleteTenant.defaultExpectation.paramPtrs == nil {
+		mmDeleteTenant.defaultExpectation.paramPtrs = &TenantUseCaseMockDeleteTenantParamPtrs{}
+	}
+	mmDeleteTenant.defaultExpectation.paramPtrs.cmd = &cmd
+	mmDeleteTenant.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
+
+	return mmDeleteTenant
+}
+
+// Inspect accepts an inspector function that has same arguments as the TenantUseCase.DeleteTenant
+func (mmDeleteTenant *mTenantUseCaseMockDeleteTenant) Inspect(f func(ctx context.Context, cmd mm_port.DeleteTenantCommand)) *mTenantUseCaseMockDeleteTenant {
+	if mmDeleteTenant.mock.inspectFuncDeleteTenant != nil {
+		mmDeleteTenant.mock.t.Fatalf("Inspect function is already set for TenantUseCaseMock.DeleteTenant")
+	}
+
+	mmDeleteTenant.mock.inspectFuncDeleteTenant = f
+
+	return mmDeleteTenant
+}
+
+// Return sets up results that will be returned by TenantUseCase.DeleteTenant
+func (mmDeleteTenant *mTenantUseCaseMockDeleteTenant) Return(err error) *TenantUseCaseMock {
+	if mmDeleteTenant.mock.funcDeleteTenant != nil {
+		mmDeleteTenant.mock.t.Fatalf("TenantUseCaseMock.DeleteTenant mock is already set by Set")
+	}
+
+	if mmDeleteTenant.defaultExpectation == nil {
+		mmDeleteTenant.defaultExpectation = &TenantUseCaseMockDeleteTenantExpectation{mock: mmDeleteTenant.mock}
+	}
+	mmDeleteTenant.defaultExpectation.results = &TenantUseCaseMockDeleteTenantResults{err}
+	mmDeleteTenant.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmDeleteTenant.mock
+}
+
+// Set uses given function f to mock the TenantUseCase.DeleteTenant method
+func (mmDeleteTenant *mTenantUseCaseMockDeleteTenant) Set(f func(ctx context.Context, cmd mm_port.DeleteTenantCommand) (err error)) *TenantUseCaseMock {
+	if mmDeleteTenant.defaultExpectation != nil {
+		mmDeleteTenant.mock.t.Fatalf("Default expectation is already set for the TenantUseCase.DeleteTenant method")
+	}
+
+	if len(mmDeleteTenant.expectations) > 0 {
+		mmDeleteTenant.mock.t.Fatalf("Some expectations are already set for the TenantUseCase.DeleteTenant method")
+	}
+
+	mmDeleteTenant.mock.funcDeleteTenant = f
+	mmDeleteTenant.mock.funcDeleteTenantOrigin = minimock.CallerInfo(1)
+	return mmDeleteTenant.mock
+}
+
+// When sets expectation for the TenantUseCase.DeleteTenant which will trigger the result defined by the following
+// Then helper
+func (mmDeleteTenant *mTenantUseCaseMockDeleteTenant) When(ctx context.Context, cmd mm_port.DeleteTenantCommand) *TenantUseCaseMockDeleteTenantExpectation {
+	if mmDeleteTenant.mock.funcDeleteTenant != nil {
+		mmDeleteTenant.mock.t.Fatalf("TenantUseCaseMock.DeleteTenant mock is already set by Set")
+	}
+
+	expectation := &TenantUseCaseMockDeleteTenantExpectation{
+		mock:               mmDeleteTenant.mock,
+		params:             &TenantUseCaseMockDeleteTenantParams{ctx, cmd},
+		expectationOrigins: TenantUseCaseMockDeleteTenantExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmDeleteTenant.expectations = append(mmDeleteTenant.expectations, expectation)
+	return expectation
+}
+
+// Then sets up TenantUseCase.DeleteTenant return parameters for the expectation previously defined by the When method
+func (e *TenantUseCaseMockDeleteTenantExpectation) Then(err error) *TenantUseCaseMock {
+	e.results = &TenantUseCaseMockDeleteTenantResults{err}
+	return e.mock
+}
+
+// Times sets number of times TenantUseCase.DeleteTenant should be invoked
+func (mmDeleteTenant *mTenantUseCaseMockDeleteTenant) Times(n uint64) *mTenantUseCaseMockDeleteTenant {
+	if n == 0 {
+		mmDeleteTenant.mock.t.Fatalf("Times of TenantUseCaseMock.DeleteTenant mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmDeleteTenant.expectedInvocations, n)
+	mmDeleteTenant.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmDeleteTenant
+}
+
+func (mmDeleteTenant *mTenantUseCaseMockDeleteTenant) invocationsDone() bool {
+	if len(mmDeleteTenant.expectations) == 0 && mmDeleteTenant.defaultExpectation == nil && mmDeleteTenant.mock.funcDeleteTenant == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmDeleteTenant.mock.afterDeleteTenantCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmDeleteTenant.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// DeleteTenant implements mm_port.TenantUseCase
+func (mmDeleteTenant *TenantUseCaseMock) DeleteTenant(ctx context.Context, cmd mm_port.DeleteTenantCommand) (err error) {
+	mm_atomic.AddUint64(&mmDeleteTenant.beforeDeleteTenantCounter, 1)
+	defer mm_atomic.AddUint64(&mmDeleteTenant.afterDeleteTenantCounter, 1)
+
+	mmDeleteTenant.t.Helper()
+
+	if mmDeleteTenant.inspectFuncDeleteTenant != nil {
+		mmDeleteTenant.inspectFuncDeleteTenant(ctx, cmd)
+	}
+
+	mm_params := TenantUseCaseMockDeleteTenantParams{ctx, cmd}
+
+	// Record call args
+	mmDeleteTenant.DeleteTenantMock.mutex.Lock()
+	mmDeleteTenant.DeleteTenantMock.callArgs = append(mmDeleteTenant.DeleteTenantMock.callArgs, &mm_params)
+	mmDeleteTenant.DeleteTenantMock.mutex.Unlock()
+
+	for _, e := range mmDeleteTenant.DeleteTenantMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmDeleteTenant.DeleteTenantMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmDeleteTenant.DeleteTenantMock.defaultExpectation.Counter, 1)
+		mm_want := mmDeleteTenant.DeleteTenantMock.defaultExpectation.params
+		mm_want_ptrs := mmDeleteTenant.DeleteTenantMock.defaultExpectation.paramPtrs
+
+		mm_got := TenantUseCaseMockDeleteTenantParams{ctx, cmd}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmDeleteTenant.t.Errorf("TenantUseCaseMock.DeleteTenant got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteTenant.DeleteTenantMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
+				mmDeleteTenant.t.Errorf("TenantUseCaseMock.DeleteTenant got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteTenant.DeleteTenantMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmDeleteTenant.t.Errorf("TenantUseCaseMock.DeleteTenant got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmDeleteTenant.DeleteTenantMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmDeleteTenant.DeleteTenantMock.defaultExpectation.results
+		if mm_results == nil {
+			mmDeleteTenant.t.Fatal("No results are set for the TenantUseCaseMock.DeleteTenant")
+		}
+		return (*mm_results).err
+	}
+	if mmDeleteTenant.funcDeleteTenant != nil {
+		return mmDeleteTenant.funcDeleteTenant(ctx, cmd)
+	}
+	mmDeleteTenant.t.Fatalf("Unexpected call to TenantUseCaseMock.DeleteTenant. %v %v", ctx, cmd)
+	return
+}
+
+// DeleteTenantAfterCounter returns a count of finished TenantUseCaseMock.DeleteTenant invocations
+func (mmDeleteTenant *TenantUseCaseMock) DeleteTenantAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteTenant.afterDeleteTenantCounter)
+}
+
+// DeleteTenantBeforeCounter returns a count of TenantUseCaseMock.DeleteTenant invocations
+func (mmDeleteTenant *TenantUseCaseMock) DeleteTenantBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteTenant.beforeDeleteTenantCounter)
+}
+
+// Calls returns a list of arguments used in each call to TenantUseCaseMock.DeleteTenant.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmDeleteTenant *mTenantUseCaseMockDeleteTenant) Calls() []*TenantUseCaseMockDeleteTenantParams {
+	mmDeleteTenant.mutex.RLock()
+
+	argCopy := make([]*TenantUseCaseMockDeleteTenantParams, len(mmDeleteTenant.callArgs))
+	copy(argCopy, mmDeleteTenant.callArgs)
+
+	mmDeleteTenant.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockDeleteTenantDone returns true if the count of the DeleteTenant invocations corresponds
+// the number of defined expectations
+func (m *TenantUseCaseMock) MinimockDeleteTenantDone() bool {
+	if m.DeleteTenantMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.DeleteTenantMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.DeleteTenantMock.invocationsDone()
+}
+
+// MinimockDeleteTenantInspect logs each unmet expectation
+func (m *TenantUseCaseMock) MinimockDeleteTenantInspect() {
+	for _, e := range m.DeleteTenantMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to TenantUseCaseMock.DeleteTenant at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterDeleteTenantCounter := mm_atomic.LoadUint64(&m.afterDeleteTenantCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.DeleteTenantMock.defaultExpectation != nil && afterDeleteTenantCounter < 1 {
+		if m.DeleteTenantMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to TenantUseCaseMock.DeleteTenant at\n%s", m.DeleteTenantMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to TenantUseCaseMock.DeleteTenant at\n%s with params: %#v", m.DeleteTenantMock.defaultExpectation.expectationOrigins.origin, *m.DeleteTenantMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcDeleteTenant != nil && afterDeleteTenantCounter < 1 {
+		m.t.Errorf("Expected call to TenantUseCaseMock.DeleteTenant at\n%s", m.funcDeleteTenantOrigin)
+	}
+
+	if !m.DeleteTenantMock.invocationsDone() && afterDeleteTenantCounter > 0 {
+		m.t.Errorf("Expected %d calls to TenantUseCaseMock.DeleteTenant at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.DeleteTenantMock.expectedInvocations), m.DeleteTenantMock.expectedInvocationsOrigin, afterDeleteTenantCounter)
 	}
 }
 
@@ -1577,6 +1929,8 @@ func (m *TenantUseCaseMock) MinimockFinish() {
 		if !m.minimockDone() {
 			m.MinimockCreateTenantInspect()
 
+			m.MinimockDeleteTenantInspect()
+
 			m.MinimockResolveTenantContextInspect()
 
 			m.MinimockToggleSignupInspect()
@@ -1606,6 +1960,7 @@ func (m *TenantUseCaseMock) minimockDone() bool {
 	done := true
 	return done &&
 		m.MinimockCreateTenantDone() &&
+		m.MinimockDeleteTenantDone() &&
 		m.MinimockResolveTenantContextDone() &&
 		m.MinimockToggleSignupDone() &&
 		m.MinimockUpdateTenantDone()

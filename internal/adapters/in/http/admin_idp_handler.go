@@ -2,6 +2,7 @@ package http
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -141,7 +142,9 @@ func (h *AdminIDPHandler) adminDiscoverIDP(w http.ResponseWriter, r *http.Reques
 
 	meta, err := h.idpService.DiscoverOIDC(r.Context(), urlStr)
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		// Discovery failures (unreachable host, blocked address, bad scheme) are caused by the submitted URL.
+		slog.Warn("oidc discovery failed", "url", urlStr, "err", err)
+		h.renderError(w, r, http.StatusBadGateway, "unable to retrieve discovery metadata from the provided endpoint")
 		return
 	}
 

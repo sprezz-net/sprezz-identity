@@ -20,6 +20,7 @@ type Tenant struct {
 	Name             string
 	Domain           string
 	IsActive         bool
+	IsSystem         bool
 	CreatedAt        time.Time
 	Config           TenantConfig
 	DefaultPartition *int64

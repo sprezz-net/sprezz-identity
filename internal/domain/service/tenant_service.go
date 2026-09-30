@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -171,13 +172,53 @@ func (s *TenantService) ToggleSignup(ctx context.Context, id uuid.UUID, allow bo
 
 	// 4. Conditional Side-Effect: Only purge tokens if this is the Administrative Tenant
 	// and signup is being closed (e.g., initial setup is complete).
-	if tenant.Name == "Administrative Tenant" && previousAllowSignup && !allow {
+	if tenant.IsSystem && previousAllowSignup && !allow {
 		if err := s.storage.PurgeTenantSessionsAndTokens(ctx, tenant.ID); err != nil {
 			return tenant, fmt.Errorf("tenant updated, but failed to purge admin sessions: %w", err)
 		}
 	}
 
 	return tenant, nil
+}
+
+// DeleteTenant permanently removes a tenant together with everything it owns.
+// The administrative (system) tenant can never be deleted, and every other tenant requires the caller to
+// type its domain name back as confirmation. The rules live here so every caller is covered, not just the UI.
+func (s *TenantService) DeleteTenant(ctx context.Context, cmd port.DeleteTenantCommand) error {
+	tenant, err := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
+	if err != nil {
+		return err
+	}
+
+	// The system check comes first and has no override, even with a correct confirmation.
+	if tenant.IsSystem {
+		return port.ErrSystemManaged
+	}
+
+	if cmd.TenantID == cmd.ActingTenantID {
+		verr := port.NewValidationError()
+		verr.Add("confirmation", "a tenant cannot be deleted from its own session")
+		return verr
+	}
+
+	if cmd.Confirmation != tenant.Domain {
+		verr := port.NewValidationError()
+		verr.Add("confirmation", "type the tenant's domain name exactly to confirm deletion")
+		return verr
+	}
+
+	// The database audit trail is deleted together with the tenant, so leave a final record in the application log.
+	slog.Warn("deleting tenant",
+		"tenant_id", tenant.ID,
+		"tenant_name", tenant.Name,
+		"tenant_domain", tenant.Domain,
+		"acting_user", cmd.ActingUserID,
+	)
+
+	if err := s.adminStorage.DeleteTenant(ctx, cmd.TenantID); err != nil {
+		return fmt.Errorf("tenant_service: failed to delete tenant: %w", err)
+	}
+	return nil
 }
 
 func (s *TenantService) UpdateTenant(ctx context.Context, id uuid.UUID, name, domain string, config model.TenantConfig) (*model.Tenant, error) {

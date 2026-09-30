@@ -58,10 +58,21 @@ func (s *TenantBootstrapService) BootstrapAdminTenant(ctx context.Context, domai
 func (s *TenantBootstrapService) bootstrapExistingTenant(ctx context.Context, tenant *model.Tenant, domain string) (*model.Tenant, error) {
 	baseURL := tenant.GetBaseURI()
 
+	// The bootstrapped administrative tenant is always system-managed.
+	needsSave := false
+	if !tenant.IsSystem {
+		tenant.IsSystem = true
+		needsSave = true
+	}
+
 	expectedRedirect := baseURL + port.RouteAdmin
 	if tenant.Config.DefaultRedirectURI != expectedRedirect {
+		needsSave = true
 		tenant.Config.DefaultRedirectURI = expectedRedirect
 		tenant.Config.RedirectWhitelist = []string{baseURL + port.RouteAdmin, baseURL + port.RouteFederationCallback}
+	}
+
+	if needsSave {
 		if err := s.adminStorage.CreateTenant(ctx, *tenant); err != nil {
 			return nil, err
 		}
@@ -105,6 +116,7 @@ func (s *TenantBootstrapService) bootstrapNewTenant(ctx context.Context, domain 
 	}
 
 	// 2. STAGE 2: Apply master-tenant specific configurations overriding standard business ceilings [5.7]
+	createdTenant.IsSystem = true
 	createdTenant.Config.AllowSignup = true
 	createdTenant.Config.DefaultRedirectURI = createdTenant.GetBaseURI() + port.RouteAdmin
 	createdTenant.Config.RedirectWhitelist = []string{
@@ -222,6 +234,7 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 		TenantID:                tenantID,
 		ProfileName:             model.AdminUIProfileName,
 		IsEnabled:               true,
+		IsSystem:                true,
 		TokenEndpointAuthMethod: model.AuthMethodNone, // Public SPA Frontend
 		GrantTypes:              []model.GrantType{model.GrantTypeAuthorizationCode, model.GrantTypeRefreshToken},
 		ResponseTypes:           []model.ResponseType{model.ResponseTypeCode},
@@ -233,20 +246,26 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 	}
 
 	// 4. Build the Federated OIDC Application Authorization Group for Dynamic Registrations
-	var allowedAdminIDPs []uuid.UUID
+	allowedAdminIDPs := []uuid.UUID{}
 	if adminSsoProviderUUID != uuid.Nil {
 		allowedAdminIDPs = []uuid.UUID{adminSsoProviderUUID}
+	}
+	// Never reference uuid.Nil as a default: without an admin SSO provider the group has no default.
+	var adminDefaultIDP *uuid.UUID
+	if adminSsoProviderUUID != uuid.Nil {
+		adminDefaultIDP = &adminSsoProviderUUID
 	}
 	adminGroup := model.ApplicationGroup{
 		ID:                     adminGroupID,
 		TenantID:               tenantID,
 		GroupName:              model.AdminUIGroupName,
 		IsEnabled:              true,
+		IsSystem:               true,
 		AllowedScopes:          []string{"openid", "profile", "email", "offline_access"},
 		DefaultScopes:          []string{"openid", "profile", "email"},
 		AllowedAudiences:       []string{},
 		AllowedIDPIDs:          allowedAdminIDPs,
-		DefaultIDPID:           &adminSsoProviderUUID,
+		DefaultIDPID:           adminDefaultIDP,
 		RedirectURIs:           []string{scheme + "://" + domain + port.RouteFederationCallback},
 		PostLogoutRedirectURIs: []string{scheme + "://" + domain + port.RouteAdmin},
 		FrontChannelLogoutURI:  scheme + "://" + domain + port.RouteAdmin + port.RouteAdminLogout,
@@ -258,6 +277,7 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 		TenantID:               tenantID,
 		GroupName:              model.LocalAdminUIGroupName,
 		IsEnabled:              true,
+		IsSystem:               true,
 		AllowedScopes:          []string{"openid", "profile", "email", "offline_access"},
 		DefaultScopes:          []string{"openid", "profile", "email"},
 		AllowedAudiences:       []string{},
@@ -278,6 +298,7 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 		ClientSecretHash: nil, // Public client mapping
 		ApplicationName:  "Admin Interface",
 		IsEnabled:        true,
+		IsSystem:         true,
 	}
 
 	// 6. Commit everything cleanly through the explicit tenant-bounded signatures

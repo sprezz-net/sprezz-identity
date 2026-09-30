@@ -136,6 +136,7 @@ type AdminStorage interface {
 
 	CreateTenant(ctx context.Context, tenant model.Tenant) error
 	GetAllTenants(ctx context.Context) ([]model.Tenant, error)
+	DeleteTenant(ctx context.Context, tenantUUID uuid.UUID) error
 
 	CreateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) error
 	DeleteIdentityProvider(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) error

@@ -83,6 +83,13 @@ type AdminStorageMock struct {
 	beforeDeleteIdentityProviderCounter uint64
 	DeleteIdentityProviderMock          mAdminStorageMockDeleteIdentityProvider
 
+	funcDeleteTenant          func(ctx context.Context, tenantUUID uuid.UUID) (err error)
+	funcDeleteTenantOrigin    string
+	inspectFuncDeleteTenant   func(ctx context.Context, tenantUUID uuid.UUID)
+	afterDeleteTenantCounter  uint64
+	beforeDeleteTenantCounter uint64
+	DeleteTenantMock          mAdminStorageMockDeleteTenant
+
 	funcDeleteUserProfile          func(ctx context.Context, tenantID uuid.UUID, partitionID int64, userID uuid.UUID) (err error)
 	funcDeleteUserProfileOrigin    string
 	inspectFuncDeleteUserProfile   func(ctx context.Context, tenantID uuid.UUID, partitionID int64, userID uuid.UUID)
@@ -216,6 +223,9 @@ func NewAdminStorageMock(t minimock.Tester) *AdminStorageMock {
 
 	m.DeleteIdentityProviderMock = mAdminStorageMockDeleteIdentityProvider{mock: m}
 	m.DeleteIdentityProviderMock.callArgs = []*AdminStorageMockDeleteIdentityProviderParams{}
+
+	m.DeleteTenantMock = mAdminStorageMockDeleteTenant{mock: m}
+	m.DeleteTenantMock.callArgs = []*AdminStorageMockDeleteTenantParams{}
 
 	m.DeleteUserProfileMock = mAdminStorageMockDeleteUserProfile{mock: m}
 	m.DeleteUserProfileMock.callArgs = []*AdminStorageMockDeleteUserProfileParams{}
@@ -3619,6 +3629,348 @@ func (m *AdminStorageMock) MinimockDeleteIdentityProviderInspect() {
 	if !m.DeleteIdentityProviderMock.invocationsDone() && afterDeleteIdentityProviderCounter > 0 {
 		m.t.Errorf("Expected %d calls to AdminStorageMock.DeleteIdentityProvider at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.DeleteIdentityProviderMock.expectedInvocations), m.DeleteIdentityProviderMock.expectedInvocationsOrigin, afterDeleteIdentityProviderCounter)
+	}
+}
+
+type mAdminStorageMockDeleteTenant struct {
+	optional           bool
+	mock               *AdminStorageMock
+	defaultExpectation *AdminStorageMockDeleteTenantExpectation
+	expectations       []*AdminStorageMockDeleteTenantExpectation
+
+	callArgs []*AdminStorageMockDeleteTenantParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AdminStorageMockDeleteTenantExpectation specifies expectation struct of the AdminStorage.DeleteTenant
+type AdminStorageMockDeleteTenantExpectation struct {
+	mock               *AdminStorageMock
+	params             *AdminStorageMockDeleteTenantParams
+	paramPtrs          *AdminStorageMockDeleteTenantParamPtrs
+	expectationOrigins AdminStorageMockDeleteTenantExpectationOrigins
+	results            *AdminStorageMockDeleteTenantResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AdminStorageMockDeleteTenantParams contains parameters of the AdminStorage.DeleteTenant
+type AdminStorageMockDeleteTenantParams struct {
+	ctx        context.Context
+	tenantUUID uuid.UUID
+}
+
+// AdminStorageMockDeleteTenantParamPtrs contains pointers to parameters of the AdminStorage.DeleteTenant
+type AdminStorageMockDeleteTenantParamPtrs struct {
+	ctx        *context.Context
+	tenantUUID *uuid.UUID
+}
+
+// AdminStorageMockDeleteTenantResults contains results of the AdminStorage.DeleteTenant
+type AdminStorageMockDeleteTenantResults struct {
+	err error
+}
+
+// AdminStorageMockDeleteTenantOrigins contains origins of expectations of the AdminStorage.DeleteTenant
+type AdminStorageMockDeleteTenantExpectationOrigins struct {
+	origin           string
+	originCtx        string
+	originTenantUUID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmDeleteTenant *mAdminStorageMockDeleteTenant) Optional() *mAdminStorageMockDeleteTenant {
+	mmDeleteTenant.optional = true
+	return mmDeleteTenant
+}
+
+// Expect sets up expected params for AdminStorage.DeleteTenant
+func (mmDeleteTenant *mAdminStorageMockDeleteTenant) Expect(ctx context.Context, tenantUUID uuid.UUID) *mAdminStorageMockDeleteTenant {
+	if mmDeleteTenant.mock.funcDeleteTenant != nil {
+		mmDeleteTenant.mock.t.Fatalf("AdminStorageMock.DeleteTenant mock is already set by Set")
+	}
+
+	if mmDeleteTenant.defaultExpectation == nil {
+		mmDeleteTenant.defaultExpectation = &AdminStorageMockDeleteTenantExpectation{}
+	}
+
+	if mmDeleteTenant.defaultExpectation.paramPtrs != nil {
+		mmDeleteTenant.mock.t.Fatalf("AdminStorageMock.DeleteTenant mock is already set by ExpectParams functions")
+	}
+
+	mmDeleteTenant.defaultExpectation.params = &AdminStorageMockDeleteTenantParams{ctx, tenantUUID}
+	mmDeleteTenant.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmDeleteTenant.expectations {
+		if minimock.Equal(e.params, mmDeleteTenant.defaultExpectation.params) {
+			mmDeleteTenant.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmDeleteTenant.defaultExpectation.params)
+		}
+	}
+
+	return mmDeleteTenant
+}
+
+// ExpectCtxParam1 sets up expected param ctx for AdminStorage.DeleteTenant
+func (mmDeleteTenant *mAdminStorageMockDeleteTenant) ExpectCtxParam1(ctx context.Context) *mAdminStorageMockDeleteTenant {
+	if mmDeleteTenant.mock.funcDeleteTenant != nil {
+		mmDeleteTenant.mock.t.Fatalf("AdminStorageMock.DeleteTenant mock is already set by Set")
+	}
+
+	if mmDeleteTenant.defaultExpectation == nil {
+		mmDeleteTenant.defaultExpectation = &AdminStorageMockDeleteTenantExpectation{}
+	}
+
+	if mmDeleteTenant.defaultExpectation.params != nil {
+		mmDeleteTenant.mock.t.Fatalf("AdminStorageMock.DeleteTenant mock is already set by Expect")
+	}
+
+	if mmDeleteTenant.defaultExpectation.paramPtrs == nil {
+		mmDeleteTenant.defaultExpectation.paramPtrs = &AdminStorageMockDeleteTenantParamPtrs{}
+	}
+	mmDeleteTenant.defaultExpectation.paramPtrs.ctx = &ctx
+	mmDeleteTenant.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmDeleteTenant
+}
+
+// ExpectTenantUUIDParam2 sets up expected param tenantUUID for AdminStorage.DeleteTenant
+func (mmDeleteTenant *mAdminStorageMockDeleteTenant) ExpectTenantUUIDParam2(tenantUUID uuid.UUID) *mAdminStorageMockDeleteTenant {
+	if mmDeleteTenant.mock.funcDeleteTenant != nil {
+		mmDeleteTenant.mock.t.Fatalf("AdminStorageMock.DeleteTenant mock is already set by Set")
+	}
+
+	if mmDeleteTenant.defaultExpectation == nil {
+		mmDeleteTenant.defaultExpectation = &AdminStorageMockDeleteTenantExpectation{}
+	}
+
+	if mmDeleteTenant.defaultExpectation.params != nil {
+		mmDeleteTenant.mock.t.Fatalf("AdminStorageMock.DeleteTenant mock is already set by Expect")
+	}
+
+	if mmDeleteTenant.defaultExpectation.paramPtrs == nil {
+		mmDeleteTenant.defaultExpectation.paramPtrs = &AdminStorageMockDeleteTenantParamPtrs{}
+	}
+	mmDeleteTenant.defaultExpectation.paramPtrs.tenantUUID = &tenantUUID
+	mmDeleteTenant.defaultExpectation.expectationOrigins.originTenantUUID = minimock.CallerInfo(1)
+
+	return mmDeleteTenant
+}
+
+// Inspect accepts an inspector function that has same arguments as the AdminStorage.DeleteTenant
+func (mmDeleteTenant *mAdminStorageMockDeleteTenant) Inspect(f func(ctx context.Context, tenantUUID uuid.UUID)) *mAdminStorageMockDeleteTenant {
+	if mmDeleteTenant.mock.inspectFuncDeleteTenant != nil {
+		mmDeleteTenant.mock.t.Fatalf("Inspect function is already set for AdminStorageMock.DeleteTenant")
+	}
+
+	mmDeleteTenant.mock.inspectFuncDeleteTenant = f
+
+	return mmDeleteTenant
+}
+
+// Return sets up results that will be returned by AdminStorage.DeleteTenant
+func (mmDeleteTenant *mAdminStorageMockDeleteTenant) Return(err error) *AdminStorageMock {
+	if mmDeleteTenant.mock.funcDeleteTenant != nil {
+		mmDeleteTenant.mock.t.Fatalf("AdminStorageMock.DeleteTenant mock is already set by Set")
+	}
+
+	if mmDeleteTenant.defaultExpectation == nil {
+		mmDeleteTenant.defaultExpectation = &AdminStorageMockDeleteTenantExpectation{mock: mmDeleteTenant.mock}
+	}
+	mmDeleteTenant.defaultExpectation.results = &AdminStorageMockDeleteTenantResults{err}
+	mmDeleteTenant.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmDeleteTenant.mock
+}
+
+// Set uses given function f to mock the AdminStorage.DeleteTenant method
+func (mmDeleteTenant *mAdminStorageMockDeleteTenant) Set(f func(ctx context.Context, tenantUUID uuid.UUID) (err error)) *AdminStorageMock {
+	if mmDeleteTenant.defaultExpectation != nil {
+		mmDeleteTenant.mock.t.Fatalf("Default expectation is already set for the AdminStorage.DeleteTenant method")
+	}
+
+	if len(mmDeleteTenant.expectations) > 0 {
+		mmDeleteTenant.mock.t.Fatalf("Some expectations are already set for the AdminStorage.DeleteTenant method")
+	}
+
+	mmDeleteTenant.mock.funcDeleteTenant = f
+	mmDeleteTenant.mock.funcDeleteTenantOrigin = minimock.CallerInfo(1)
+	return mmDeleteTenant.mock
+}
+
+// When sets expectation for the AdminStorage.DeleteTenant which will trigger the result defined by the following
+// Then helper
+func (mmDeleteTenant *mAdminStorageMockDeleteTenant) When(ctx context.Context, tenantUUID uuid.UUID) *AdminStorageMockDeleteTenantExpectation {
+	if mmDeleteTenant.mock.funcDeleteTenant != nil {
+		mmDeleteTenant.mock.t.Fatalf("AdminStorageMock.DeleteTenant mock is already set by Set")
+	}
+
+	expectation := &AdminStorageMockDeleteTenantExpectation{
+		mock:               mmDeleteTenant.mock,
+		params:             &AdminStorageMockDeleteTenantParams{ctx, tenantUUID},
+		expectationOrigins: AdminStorageMockDeleteTenantExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmDeleteTenant.expectations = append(mmDeleteTenant.expectations, expectation)
+	return expectation
+}
+
+// Then sets up AdminStorage.DeleteTenant return parameters for the expectation previously defined by the When method
+func (e *AdminStorageMockDeleteTenantExpectation) Then(err error) *AdminStorageMock {
+	e.results = &AdminStorageMockDeleteTenantResults{err}
+	return e.mock
+}
+
+// Times sets number of times AdminStorage.DeleteTenant should be invoked
+func (mmDeleteTenant *mAdminStorageMockDeleteTenant) Times(n uint64) *mAdminStorageMockDeleteTenant {
+	if n == 0 {
+		mmDeleteTenant.mock.t.Fatalf("Times of AdminStorageMock.DeleteTenant mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmDeleteTenant.expectedInvocations, n)
+	mmDeleteTenant.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmDeleteTenant
+}
+
+func (mmDeleteTenant *mAdminStorageMockDeleteTenant) invocationsDone() bool {
+	if len(mmDeleteTenant.expectations) == 0 && mmDeleteTenant.defaultExpectation == nil && mmDeleteTenant.mock.funcDeleteTenant == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmDeleteTenant.mock.afterDeleteTenantCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmDeleteTenant.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// DeleteTenant implements mm_port.AdminStorage
+func (mmDeleteTenant *AdminStorageMock) DeleteTenant(ctx context.Context, tenantUUID uuid.UUID) (err error) {
+	mm_atomic.AddUint64(&mmDeleteTenant.beforeDeleteTenantCounter, 1)
+	defer mm_atomic.AddUint64(&mmDeleteTenant.afterDeleteTenantCounter, 1)
+
+	mmDeleteTenant.t.Helper()
+
+	if mmDeleteTenant.inspectFuncDeleteTenant != nil {
+		mmDeleteTenant.inspectFuncDeleteTenant(ctx, tenantUUID)
+	}
+
+	mm_params := AdminStorageMockDeleteTenantParams{ctx, tenantUUID}
+
+	// Record call args
+	mmDeleteTenant.DeleteTenantMock.mutex.Lock()
+	mmDeleteTenant.DeleteTenantMock.callArgs = append(mmDeleteTenant.DeleteTenantMock.callArgs, &mm_params)
+	mmDeleteTenant.DeleteTenantMock.mutex.Unlock()
+
+	for _, e := range mmDeleteTenant.DeleteTenantMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmDeleteTenant.DeleteTenantMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmDeleteTenant.DeleteTenantMock.defaultExpectation.Counter, 1)
+		mm_want := mmDeleteTenant.DeleteTenantMock.defaultExpectation.params
+		mm_want_ptrs := mmDeleteTenant.DeleteTenantMock.defaultExpectation.paramPtrs
+
+		mm_got := AdminStorageMockDeleteTenantParams{ctx, tenantUUID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmDeleteTenant.t.Errorf("AdminStorageMock.DeleteTenant got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteTenant.DeleteTenantMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantUUID != nil && !minimock.Equal(*mm_want_ptrs.tenantUUID, mm_got.tenantUUID) {
+				mmDeleteTenant.t.Errorf("AdminStorageMock.DeleteTenant got unexpected parameter tenantUUID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteTenant.DeleteTenantMock.defaultExpectation.expectationOrigins.originTenantUUID, *mm_want_ptrs.tenantUUID, mm_got.tenantUUID, minimock.Diff(*mm_want_ptrs.tenantUUID, mm_got.tenantUUID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmDeleteTenant.t.Errorf("AdminStorageMock.DeleteTenant got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmDeleteTenant.DeleteTenantMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmDeleteTenant.DeleteTenantMock.defaultExpectation.results
+		if mm_results == nil {
+			mmDeleteTenant.t.Fatal("No results are set for the AdminStorageMock.DeleteTenant")
+		}
+		return (*mm_results).err
+	}
+	if mmDeleteTenant.funcDeleteTenant != nil {
+		return mmDeleteTenant.funcDeleteTenant(ctx, tenantUUID)
+	}
+	mmDeleteTenant.t.Fatalf("Unexpected call to AdminStorageMock.DeleteTenant. %v %v", ctx, tenantUUID)
+	return
+}
+
+// DeleteTenantAfterCounter returns a count of finished AdminStorageMock.DeleteTenant invocations
+func (mmDeleteTenant *AdminStorageMock) DeleteTenantAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteTenant.afterDeleteTenantCounter)
+}
+
+// DeleteTenantBeforeCounter returns a count of AdminStorageMock.DeleteTenant invocations
+func (mmDeleteTenant *AdminStorageMock) DeleteTenantBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteTenant.beforeDeleteTenantCounter)
+}
+
+// Calls returns a list of arguments used in each call to AdminStorageMock.DeleteTenant.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmDeleteTenant *mAdminStorageMockDeleteTenant) Calls() []*AdminStorageMockDeleteTenantParams {
+	mmDeleteTenant.mutex.RLock()
+
+	argCopy := make([]*AdminStorageMockDeleteTenantParams, len(mmDeleteTenant.callArgs))
+	copy(argCopy, mmDeleteTenant.callArgs)
+
+	mmDeleteTenant.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockDeleteTenantDone returns true if the count of the DeleteTenant invocations corresponds
+// the number of defined expectations
+func (m *AdminStorageMock) MinimockDeleteTenantDone() bool {
+	if m.DeleteTenantMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.DeleteTenantMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.DeleteTenantMock.invocationsDone()
+}
+
+// MinimockDeleteTenantInspect logs each unmet expectation
+func (m *AdminStorageMock) MinimockDeleteTenantInspect() {
+	for _, e := range m.DeleteTenantMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AdminStorageMock.DeleteTenant at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterDeleteTenantCounter := mm_atomic.LoadUint64(&m.afterDeleteTenantCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.DeleteTenantMock.defaultExpectation != nil && afterDeleteTenantCounter < 1 {
+		if m.DeleteTenantMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AdminStorageMock.DeleteTenant at\n%s", m.DeleteTenantMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AdminStorageMock.DeleteTenant at\n%s with params: %#v", m.DeleteTenantMock.defaultExpectation.expectationOrigins.origin, *m.DeleteTenantMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcDeleteTenant != nil && afterDeleteTenantCounter < 1 {
+		m.t.Errorf("Expected call to AdminStorageMock.DeleteTenant at\n%s", m.funcDeleteTenantOrigin)
+	}
+
+	if !m.DeleteTenantMock.invocationsDone() && afterDeleteTenantCounter > 0 {
+		m.t.Errorf("Expected %d calls to AdminStorageMock.DeleteTenant at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.DeleteTenantMock.expectedInvocations), m.DeleteTenantMock.expectedInvocationsOrigin, afterDeleteTenantCounter)
 	}
 }
 
@@ -8751,6 +9103,8 @@ func (m *AdminStorageMock) MinimockFinish() {
 
 			m.MinimockDeleteIdentityProviderInspect()
 
+			m.MinimockDeleteTenantInspect()
+
 			m.MinimockDeleteUserProfileInspect()
 
 			m.MinimockGetAllTenantsInspect()
@@ -8810,6 +9164,7 @@ func (m *AdminStorageMock) minimockDone() bool {
 		m.MinimockDecoupleIdentityDone() &&
 		m.MinimockDeleteApplicationDone() &&
 		m.MinimockDeleteIdentityProviderDone() &&
+		m.MinimockDeleteTenantDone() &&
 		m.MinimockDeleteUserProfileDone() &&
 		m.MinimockGetAllTenantsDone() &&
 		m.MinimockGetApplicationGroupByIDDone() &&

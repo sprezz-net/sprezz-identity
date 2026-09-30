@@ -2,34 +2,32 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
-	"sprezz-identity/internal/pkg/httpclient"
 
 	"github.com/google/uuid"
 )
 
 type IdentityProviderService struct {
-	storage      port.Storage
-	adminStorage port.AdminStorage
-	crypto       port.Crypto
-	clock        port.Clock
+	storage          port.Storage
+	adminStorage     port.AdminStorage
+	crypto           port.Crypto
+	clock            port.Clock
+	federationClient port.FederationClient
 }
 
-func NewIdentityProviderService(storage port.Storage, adminStorage port.AdminStorage, crypto port.Crypto, cl port.Clock) *IdentityProviderService {
+func NewIdentityProviderService(storage port.Storage, adminStorage port.AdminStorage, crypto port.Crypto, cl port.Clock, fc port.FederationClient) *IdentityProviderService {
 	return &IdentityProviderService{
-		storage:      storage,
-		adminStorage: adminStorage,
-		crypto:       crypto,
-		clock:        cl,
+		storage:          storage,
+		adminStorage:     adminStorage,
+		crypto:           crypto,
+		clock:            cl,
+		federationClient: fc,
 	}
 }
 
@@ -285,36 +283,11 @@ func (s *IdentityProviderService) UpdateIdentityProvider(ctx context.Context, te
 	return &provider, nil
 }
 
-func (s *IdentityProviderService) DiscoverOIDC(ctx context.Context, endpoint string) (string, error) {
+func (s *IdentityProviderService) DiscoverOIDC(ctx context.Context, endpoint string) (*model.OIDCDiscoveryMetadata, error) {
 	if endpoint == "" {
-		return "", errors.New("discovery endpoint is required")
+		return nil, errors.New("discovery endpoint is required")
 	}
-	client := httpclient.New("sprezz-identity")
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("execute request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("discovery endpoint returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("read response: %w", err)
-	}
-
-	var parsed map[string]any
-	if err := json.Unmarshal(body, &parsed); err != nil {
-		return "", fmt.Errorf("invalid json response from discovery endpoint: %w", err)
-	}
-
-	return string(body), nil
+	return s.federationClient.FetchOIDCDiscoveryMetadata(ctx, endpoint)
 }
 
 func (s *IdentityProviderService) ResolveFederatedLevels(config model.IdentityProviderConfig, externalAcr string, externalAmrs []string) model.ResolvedAssurance {

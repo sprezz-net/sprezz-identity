@@ -42,6 +42,7 @@ type ApplicationProfile struct {
 	TenantID                uuid.UUID               `json:"tenant_id"`
 	ProfileName             string                  `json:"profile_name"`
 	IsEnabled               bool                    `json:"is_enabled"`
+	IsSystem                bool                    `json:"is_system"`
 	TokenEndpointAuthMethod TokenEndpointAuthMethod `json:"token_endpoint_auth_method"`
 	GrantTypes              []GrantType             `json:"grant_types"`
 	ResponseTypes           []ResponseType          `json:"response_types"`
@@ -60,6 +61,7 @@ type ApplicationGroup struct {
 	TenantID               uuid.UUID   `json:"tenant_id"`
 	GroupName              string      `json:"group_name"`
 	IsEnabled              bool        `json:"is_enabled"`
+	IsSystem               bool        `json:"is_system"`
 	RedirectURI            string      `json:"redirect_uri"`
 	RedirectURIs           []string    `json:"redirect_uris"`
 	PostLogoutRedirectURIs []string    `json:"post_logout_redirect_uris"`
@@ -82,6 +84,7 @@ type Application struct {
 	GroupID          uuid.UUID `json:"group_id"`
 	ApplicationName  string    `json:"application_name"`
 	IsEnabled        bool      `json:"is_enabled"`
+	IsSystem         bool      `json:"is_system"`
 	ClientID         string    `json:"client_id"`
 	ClientSecretHash *string   `json:"client_secret_hash,omitempty"`
 	IsDynamic        bool      `json:"is_dynamic"`

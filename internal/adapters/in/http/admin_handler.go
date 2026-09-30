@@ -202,7 +202,7 @@ func (h *AdminHandler) adminDashboardView(w http.ResponseWriter, r *http.Request
 	msg := r.URL.Query().Get("msg")
 	component := admin.AdminDashboard(admin.AdminDashboardProps{
 		ActiveTenant:  *tenant,
-		IsAdminTenant: tenant.Name == AdminTenantName,
+		IsAdminTenant: tenant.IsSystem,
 		Msg:           msg,
 	})
 	_ = component.Render(r.Context(), w)

@@ -19,7 +19,7 @@ func TestVerifyPassword_Success(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now().Truncate(time.Second)
 	clock := portmock.NewMockClock(now)
-	service := NewIdentityProviderService(storage, adminStorage, crypto, clock)
+	service := NewIdentityProviderService(storage, adminStorage, crypto, clock, nil)
 
 	tenantID := uuid.New()
 	userID := uuid.New()
@@ -70,7 +70,7 @@ func TestVerifyPassword_FailureAndBlocking(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now().Truncate(time.Second)
 	clock := portmock.NewMockClock(now)
-	service := NewIdentityProviderService(storage, adminStorage, crypto, clock)
+	service := NewIdentityProviderService(storage, adminStorage, crypto, clock, nil)
 
 	tenantID := uuid.New()
 	userID := uuid.New()
@@ -122,7 +122,7 @@ func TestVerifyPassword_Blocked_RejectsWithinBlockedTime(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now().Truncate(time.Second)
 	clock := portmock.NewMockClock(now)
-	service := NewIdentityProviderService(storage, adminStorage, crypto, clock)
+	service := NewIdentityProviderService(storage, adminStorage, crypto, clock, nil)
 
 	tenantID := uuid.New()
 	userID := uuid.New()
@@ -168,7 +168,7 @@ func TestVerifyPassword_Blocked_Expires_UnblocksWithCorrectPassword(t *testing.T
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now().Truncate(time.Second)
 	clock := portmock.NewMockClock(now)
-	service := NewIdentityProviderService(storage, adminStorage, crypto, clock)
+	service := NewIdentityProviderService(storage, adminStorage, crypto, clock, nil)
 
 	tenantID := uuid.New()
 	userID := uuid.New()

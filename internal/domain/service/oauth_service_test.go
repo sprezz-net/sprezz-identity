@@ -83,7 +83,7 @@ func TestOAuthService_ProcessAuthorizeRequest_StrictPartitionIsolation(t *testin
 	ssoUseCase := portmock.NewSSOSessionUseCaseMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock, nil)
 	validator := NewOAuthValidatorService(idpService)
 
 	svc := NewOAuthService(storage, nil, nil, nil, clock, ssoUseCase, validator)
@@ -171,7 +171,7 @@ func TestOAuthService_ProcessAuthorizeRequest_MatchingPartitionAllowed(t *testin
 	ssoUseCase := portmock.NewSSOSessionUseCaseMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock, nil)
 	validator := NewOAuthValidatorService(idpService)
 
 	svc := NewOAuthService(storage, nil, nil, nil, clock, ssoUseCase, validator)
@@ -250,7 +250,7 @@ func TestOAuthService_ProcessAuthorizeRequest_PersistsRequestedScopes(t *testing
 	ssoUseCase := portmock.NewSSOSessionUseCaseMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
-	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock, nil)
 	validator := NewOAuthValidatorService(idpService)
 
 	svc := NewOAuthService(storage, nil, nil, nil, clock, ssoUseCase, validator)
@@ -327,7 +327,7 @@ func TestOAuthService_ProcessLogoutRequest_UnwhitelistedRedirectFallback(t *test
 	clock := portmock.NewMockClock(now)
 
 	// Initialize standard internal dependency validation layer
-	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock, nil)
 	validator := NewOAuthValidatorService(idpService)
 
 	svc := NewOAuthService(storage, nil, nil, nil, clock, ssoUseCase, validator)
@@ -396,7 +396,7 @@ func TestOAuthService_ProcessLogoutRequest_JITFrontChannelValidation_DropsMalici
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
 
-	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock, nil)
 	validator := NewOAuthValidatorService(idpService)
 
 	svc := NewOAuthService(storage, nil, nil, nil, clock, ssoUseCase, validator)
@@ -460,7 +460,7 @@ func TestOAuthService_ProcessLogoutRequest_JITBackChannelValidation_DropsMalicio
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
 
-	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock)
+	idpService := NewIdentityProviderService(storage, adminStorage, crypto, clock, nil)
 	validator := NewOAuthValidatorService(idpService)
 
 	svc := NewOAuthService(storage, crypto, nil, nil, clock, ssoUseCase, validator)

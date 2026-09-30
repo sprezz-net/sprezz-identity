@@ -37,7 +37,7 @@ const createApplication = `-- name: CreateApplication :exec
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $7::uuid
+    WHERE tenant_uuid = $8::uuid
     LIMIT 1
 )
 INSERT INTO applications (
@@ -47,7 +47,8 @@ INSERT INTO applications (
     group_id,
     client_id,
     client_secret_hash,
-    application_name
+    application_name,
+    is_system
 )
 SELECT
     $1::uuid,
@@ -56,7 +57,8 @@ SELECT
     $3::uuid,
     $4,
     $5,
-    $6
+    $6,
+    $7
 FROM tenant
 `
 
@@ -67,6 +69,7 @@ type CreateApplicationParams struct {
 	ClientID         string      `json:"client_id"`
 	ClientSecretHash *string     `json:"client_secret_hash"`
 	ApplicationName  string      `json:"application_name"`
+	IsSystem         bool        `json:"is_system"`
 	TenantUuid       pgtype.UUID `json:"tenant_uuid"`
 }
 
@@ -79,6 +82,7 @@ func (q *Queries) CreateApplication(ctx context.Context, arg CreateApplicationPa
 		arg.ClientID,
 		arg.ClientSecretHash,
 		arg.ApplicationName,
+		arg.IsSystem,
 		arg.TenantUuid,
 	)
 	return err
@@ -88,7 +92,7 @@ const createApplicationGroup = `-- name: CreateApplicationGroup :exec
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $10::uuid
+    WHERE tenant_uuid = $11::uuid
     LIMIT 1
 )
 INSERT INTO application_groups (
@@ -96,6 +100,7 @@ INSERT INTO application_groups (
     tenant_id,
     group_name,
     is_enabled,
+    is_system,
     allowed_scopes,
     default_scopes,
     allowed_audiences,
@@ -111,9 +116,10 @@ SELECT
     $4,
     $5,
     $6,
-    $7::uuid, -- Type-safe UUID input parameter mapping
-    $8,
-    $9
+    $7,
+    $8::uuid, -- Type-safe UUID input parameter mapping
+    $9,
+    $10
 FROM tenant
 `
 
@@ -121,6 +127,7 @@ type CreateApplicationGroupParams struct {
 	ID                     pgtype.UUID `json:"id"`
 	GroupName              string      `json:"group_name"`
 	IsEnabled              bool        `json:"is_enabled"`
+	IsSystem               bool        `json:"is_system"`
 	AllowedScopes          []string    `json:"allowed_scopes"`
 	DefaultScopes          []string    `json:"default_scopes"`
 	AllowedAudiences       []string    `json:"allowed_audiences"`
@@ -136,6 +143,7 @@ func (q *Queries) CreateApplicationGroup(ctx context.Context, arg CreateApplicat
 		arg.ID,
 		arg.GroupName,
 		arg.IsEnabled,
+		arg.IsSystem,
 		arg.AllowedScopes,
 		arg.DefaultScopes,
 		arg.AllowedAudiences,
@@ -151,7 +159,7 @@ const createApplicationProfile = `-- name: CreateApplicationProfile :exec
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $12::uuid
+    WHERE tenant_uuid = $13::uuid
     LIMIT 1
 )
 INSERT INTO application_profiles (
@@ -159,6 +167,7 @@ INSERT INTO application_profiles (
     tenant_id,
     profile_name,
     is_enabled,
+    is_system,
     token_endpoint_auth_method,
     grant_types,
     response_types,
@@ -176,11 +185,12 @@ SELECT
     $4,
     $5,
     $6,
-    ($7::integer || ' seconds')::interval,
+    $7,
     ($8::integer || ' seconds')::interval,
     ($9::integer || ' seconds')::interval,
-    $10,
-    $11
+    ($10::integer || ' seconds')::interval,
+    $11,
+    $12
 FROM tenant
 `
 
@@ -188,6 +198,7 @@ type CreateApplicationProfileParams struct {
 	ID                      pgtype.UUID `json:"id"`
 	ProfileName             string      `json:"profile_name"`
 	IsEnabled               bool        `json:"is_enabled"`
+	IsSystem                bool        `json:"is_system"`
 	TokenEndpointAuthMethod string      `json:"token_endpoint_auth_method"`
 	GrantTypes              []string    `json:"grant_types"`
 	ResponseTypes           []string    `json:"response_types"`
@@ -205,6 +216,7 @@ func (q *Queries) CreateApplicationProfile(ctx context.Context, arg CreateApplic
 		arg.ID,
 		arg.ProfileName,
 		arg.IsEnabled,
+		arg.IsSystem,
 		arg.TokenEndpointAuthMethod,
 		arg.GrantTypes,
 		arg.ResponseTypes,
@@ -255,6 +267,7 @@ SELECT
     a.client_secret_hash,
     a.application_name,
     a.is_enabled AS app_enabled,
+    a.is_system AS app_system,
     a.is_dynamic,
     a.created_at AS app_created_at,
     a.updated_at AS app_updated_at,
@@ -262,6 +275,7 @@ SELECT
     p.id AS profile_id,
     p.profile_name,
     p.is_enabled AS profile_enabled,
+    p.is_system AS profile_system,
     p.token_endpoint_auth_method,
     p.grant_types,
     p.response_types,
@@ -274,6 +288,7 @@ SELECT
     g.id AS group_id,
     g.group_name,
     g.is_enabled AS group_enabled,
+    g.is_system AS group_system,
     g.redirect_uri,
     g.redirect_uris,
     g.post_logout_redirect_uris,
@@ -311,6 +326,7 @@ type GetApplicationByClientIDRow struct {
 	ClientSecretHash        *string            `json:"client_secret_hash"`
 	ApplicationName         string             `json:"application_name"`
 	AppEnabled              bool               `json:"app_enabled"`
+	AppSystem               bool               `json:"app_system"`
 	IsDynamic               bool               `json:"is_dynamic"`
 	AppCreatedAt            pgtype.Timestamptz `json:"app_created_at"`
 	AppUpdatedAt            pgtype.Timestamptz `json:"app_updated_at"`
@@ -318,6 +334,7 @@ type GetApplicationByClientIDRow struct {
 	ProfileID               pgtype.UUID        `json:"profile_id"`
 	ProfileName             string             `json:"profile_name"`
 	ProfileEnabled          bool               `json:"profile_enabled"`
+	ProfileSystem           bool               `json:"profile_system"`
 	TokenEndpointAuthMethod string             `json:"token_endpoint_auth_method"`
 	GrantTypes              []string           `json:"grant_types"`
 	ResponseTypes           []string           `json:"response_types"`
@@ -330,6 +347,7 @@ type GetApplicationByClientIDRow struct {
 	GroupID                 pgtype.UUID        `json:"group_id"`
 	GroupName               string             `json:"group_name"`
 	GroupEnabled            bool               `json:"group_enabled"`
+	GroupSystem             bool               `json:"group_system"`
 	RedirectUri             string             `json:"redirect_uri"`
 	RedirectUris            []string           `json:"redirect_uris"`
 	PostLogoutRedirectUris  []string           `json:"post_logout_redirect_uris"`
@@ -354,6 +372,7 @@ func (q *Queries) GetApplicationByClientID(ctx context.Context, arg GetApplicati
 		&i.ClientSecretHash,
 		&i.ApplicationName,
 		&i.AppEnabled,
+		&i.AppSystem,
 		&i.IsDynamic,
 		&i.AppCreatedAt,
 		&i.AppUpdatedAt,
@@ -361,6 +380,7 @@ func (q *Queries) GetApplicationByClientID(ctx context.Context, arg GetApplicati
 		&i.ProfileID,
 		&i.ProfileName,
 		&i.ProfileEnabled,
+		&i.ProfileSystem,
 		&i.TokenEndpointAuthMethod,
 		&i.GrantTypes,
 		&i.ResponseTypes,
@@ -373,6 +393,7 @@ func (q *Queries) GetApplicationByClientID(ctx context.Context, arg GetApplicati
 		&i.GroupID,
 		&i.GroupName,
 		&i.GroupEnabled,
+		&i.GroupSystem,
 		&i.RedirectUri,
 		&i.RedirectUris,
 		&i.PostLogoutRedirectUris,
@@ -457,6 +478,7 @@ SELECT
     g.tenant_id,
     g.group_name,
     g.is_enabled,
+    g.is_system,
     g.redirect_uri,
     g.redirect_uris,
     g.post_logout_redirect_uris,
@@ -489,6 +511,7 @@ type GetGroupByNameRow struct {
 	TenantID               int32              `json:"tenant_id"`
 	GroupName              string             `json:"group_name"`
 	IsEnabled              bool               `json:"is_enabled"`
+	IsSystem               bool               `json:"is_system"`
 	RedirectUri            string             `json:"redirect_uri"`
 	RedirectUris           []string           `json:"redirect_uris"`
 	PostLogoutRedirectUris []string           `json:"post_logout_redirect_uris"`
@@ -512,6 +535,7 @@ func (q *Queries) GetGroupByName(ctx context.Context, arg GetGroupByNameParams) 
 		&i.TenantID,
 		&i.GroupName,
 		&i.IsEnabled,
+		&i.IsSystem,
 		&i.RedirectUri,
 		&i.RedirectUris,
 		&i.PostLogoutRedirectUris,
@@ -535,7 +559,7 @@ WITH tenant AS (
     WHERE tenant_uuid = $2::uuid
     LIMIT 1
 )
-SELECT ap.id, ap.tenant_id, ap.profile_name, ap.is_enabled, ap.token_endpoint_auth_method, ap.grant_types, ap.response_types, ap.access_token_lifetime, ap.refresh_token_lifetime, ap.id_token_lifetime, ap.enforce_rtr, ap.signing_algorithm, ap.created_at, ap.updated_at
+SELECT ap.id, ap.tenant_id, ap.profile_name, ap.is_enabled, ap.is_system, ap.token_endpoint_auth_method, ap.grant_types, ap.response_types, ap.access_token_lifetime, ap.refresh_token_lifetime, ap.id_token_lifetime, ap.enforce_rtr, ap.signing_algorithm, ap.created_at, ap.updated_at
 FROM application_profiles ap, tenant
 WHERE ap.profile_name = $1 AND ap.tenant_id = tenant.id
 LIMIT 1
@@ -546,15 +570,34 @@ type GetProfileByNameParams struct {
 	TenantUuid  pgtype.UUID `json:"tenant_uuid"`
 }
 
+type GetProfileByNameRow struct {
+	ID                      pgtype.UUID        `json:"id"`
+	TenantID                int32              `json:"tenant_id"`
+	ProfileName             string             `json:"profile_name"`
+	IsEnabled               bool               `json:"is_enabled"`
+	IsSystem                bool               `json:"is_system"`
+	TokenEndpointAuthMethod string             `json:"token_endpoint_auth_method"`
+	GrantTypes              []string           `json:"grant_types"`
+	ResponseTypes           []string           `json:"response_types"`
+	AccessTokenLifetime     pgtype.Interval    `json:"access_token_lifetime"`
+	RefreshTokenLifetime    pgtype.Interval    `json:"refresh_token_lifetime"`
+	IDTokenLifetime         pgtype.Interval    `json:"id_token_lifetime"`
+	EnforceRtr              bool               `json:"enforce_rtr"`
+	SigningAlgorithm        string             `json:"signing_algorithm"`
+	CreatedAt               pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
+}
+
 // GetProfileByName evaluates targeted token lifecycle thresholds assigned to an execution layout.
-func (q *Queries) GetProfileByName(ctx context.Context, arg GetProfileByNameParams) (ApplicationProfile, error) {
+func (q *Queries) GetProfileByName(ctx context.Context, arg GetProfileByNameParams) (GetProfileByNameRow, error) {
 	row := q.db.QueryRow(ctx, getProfileByName, arg.ProfileName, arg.TenantUuid)
-	var i ApplicationProfile
+	var i GetProfileByNameRow
 	err := row.Scan(
 		&i.ID,
 		&i.TenantID,
 		&i.ProfileName,
 		&i.IsEnabled,
+		&i.IsSystem,
 		&i.TokenEndpointAuthMethod,
 		&i.GrantTypes,
 		&i.ResponseTypes,

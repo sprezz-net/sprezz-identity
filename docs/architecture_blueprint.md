@@ -113,13 +113,30 @@ The persistence architecture isolates records by forcing a primary composite mul
 
 Internally a tenant is represented by an integer, externally (inside tokens for example) by a UUIDv4.
 
-### 2.3 Accidental Cascade Delete Prevention (The Cascade Delete Trap)
+### 2.3 Tenant Deletion & Referential Integrity
 
-To safeguard critical security audit trails and history files against accidental tenant deletion, Sprezz Identity implements strict database-level referential integrity checks:
+Hard-deleting a tenant removes everything that belongs to it. Database-level referential integrity is configured accordingly:
 
-- **Strict Constraint Enforcement**: The `audit_event_log` table references the `tenants` table with an `ON DELETE RESTRICT` constraint instead of `ON DELETE CASCADE`.
-- **Security & Auditing Protection**: Physical tenant hard-deletion is blocked by the engine if the tenant has associated audit log records, ensuring that historical security trails can never be deleted or purged as an unintended cascade side-effect.
-- **Soft-Deletions**: Rather than hard-deleting tenant schemas, deactivation is performed by setting the soft-delete marker `is_active = FALSE`. This preserves all underlying logs, client records, and blacklists.
+- **Cascading Deletes**: `audit_event_log`, `tenant_signing_keys`, `outbound_handshake_sessions` and `federated_sessions` reference their tenant (or partition) with `ON DELETE CASCADE`. Deleting a tenant permanently deletes its audit trail together with the rest of its data.
+- **Deliberate Decision**: An earlier revision used `ON DELETE RESTRICT` on `audit_event_log` so that history could never be purged as a side effect. That safeguard was intentionally relaxed: tenant deletion is an explicit, privileged administrative action, and it must be able to remove all tenant-owned data.
+- **System Tenant Protection**: The administrative tenant is flagged `is_system` by the bootstrap service and can never be deleted, by any caller. Enforcement lives in the domain service layer, not only in the UI.
+- **Typed Confirmation**: Deleting any other tenant requires the administrator to type the tenant's domain name. The domain service verifies the confirmation, so every caller is covered. The confirmation dialog states that audit logs, signing keys, sessions, applications, identity providers and users are deleted with the tenant.
+- **Final Record**: Because the database audit trail is removed with the tenant, the service writes a final structured log record (tenant ID, name, domain, acting administrator) before the delete executes.
+- **Soft-Deletion**: Deactivation by setting `is_active = FALSE` remains available and preserves all data, client records and blacklists.
+
+### 2.4 System-Managed Objects
+
+Objects provisioned by the bootstrap service carry an `is_system` flag on `tenants`, `application_profiles`, `application_groups` and `applications`:
+
+| Object | Editable | Locked |
+| :--- | :--- | :--- |
+| Admin profile (`sprezz_admin_ui_profile`) | nothing | fully read-only |
+| Admin application (`admin_ui`) | nothing | no edit, delete, toggle or secret reset |
+| Admin group (`sprezz_admin_ui_group`) | federated identity providers and their default | name, URIs, scopes, audiences, local accounts, delete |
+| Local admin group (`sprezz_local_admin_group`) | nothing | fully read-only (break-glass path) |
+| Administrative tenant | nothing | cannot be deleted |
+
+The domain services return `ErrSystemManaged` (HTTP 403) for blocked operations. The admin group must always keep at least one sign-in method, its default must be one of the allowed providers, and `uuid.Nil` is never stored as a default.
 
 ## 3. Identity Providers, User Profiles & Authentication
 

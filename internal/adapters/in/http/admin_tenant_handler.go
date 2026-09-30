@@ -145,7 +145,7 @@ func (h *AdminTenantHandler) adminToggleSignup(w http.ResponseWriter, r *http.Re
 
 func (h *AdminTenantHandler) adminTenantsPage(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
-	isAdminTenant := tenant.Name == AdminTenantName
+	isAdminTenant := tenant.IsSystem
 
 	allTenants := []model.Tenant{}
 	if isAdminTenant {
@@ -236,7 +236,7 @@ func (h *AdminTenantHandler) adminSaveTenantSettings(w http.ResponseWriter, r *h
 	if len(errs) > 0 {
 		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 		w.WriteHeader(http.StatusUnprocessableEntity)
-		isAdminTenant := tenant.Name == AdminTenantName
+		isAdminTenant := tenant.IsSystem
 		allTenants := []model.Tenant{}
 		if isAdminTenant {
 			allTenants, _ = h.adminStorage.GetAllTenants(r.Context())

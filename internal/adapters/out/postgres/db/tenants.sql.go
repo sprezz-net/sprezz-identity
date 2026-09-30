@@ -17,6 +17,7 @@ INSERT INTO tenants (
     name,
     domain_name,
     is_active,
+    is_system,
     created_at,
     config,
     default_partition,
@@ -28,16 +29,19 @@ VALUES (
     $2,
     $3,
     $4,
-    $5::timestamptz,
-    $6,
-    NULLIF($7::bigint, 0),
-    $8,
-    $9
+    $5,
+    $6::timestamptz,
+    $7,
+    NULLIF($8::bigint, 0),
+    $9,
+    $10
 )
 ON CONFLICT (tenant_uuid) DO UPDATE SET
     name = EXCLUDED.name,
     domain_name = EXCLUDED.domain_name,
     is_active = EXCLUDED.is_active,
+    -- One-way ratchet: an upsert can flag a tenant as system-managed but never clear the flag.
+    is_system = tenants.is_system OR EXCLUDED.is_system,
     config = EXCLUDED.config,
     default_partition = EXCLUDED.default_partition,
     encrypted_dek = COALESCE(EXCLUDED.encrypted_dek, tenants.encrypted_dek),
@@ -50,6 +54,7 @@ type CreateTenantParams struct {
 	Name             string             `json:"name"`
 	DomainName       string             `json:"domain_name"`
 	IsActive         bool               `json:"is_active"`
+	IsSystem         bool               `json:"is_system"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	Config           []byte             `json:"config"`
 	DefaultPartition int64              `json:"default_partition"`
@@ -65,6 +70,7 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (int
 		arg.Name,
 		arg.DomainName,
 		arg.IsActive,
+		arg.IsSystem,
 		arg.CreatedAt,
 		arg.Config,
 		arg.DefaultPartition,
@@ -93,7 +99,7 @@ func (q *Queries) GetTenantIDByUUID(ctx context.Context, tenantUuid pgtype.UUID)
 }
 
 const resolveTenantByDomain = `-- name: ResolveTenantByDomain :one
-SELECT tenant_uuid, name, domain_name, is_active, created_at, config, default_partition, updated_at, encrypted_dek, dek_nonce
+SELECT tenant_uuid, name, domain_name, is_active, is_system, created_at, config, default_partition, updated_at, encrypted_dek, dek_nonce
 FROM tenants
 WHERE domain_name = $1
 LIMIT 1
@@ -104,6 +110,7 @@ type ResolveTenantByDomainRow struct {
 	Name             string             `json:"name"`
 	DomainName       string             `json:"domain_name"`
 	IsActive         bool               `json:"is_active"`
+	IsSystem         bool               `json:"is_system"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	Config           []byte             `json:"config"`
 	DefaultPartition *int64             `json:"default_partition"`
@@ -122,6 +129,7 @@ func (q *Queries) ResolveTenantByDomain(ctx context.Context, domainName string) 
 		&i.Name,
 		&i.DomainName,
 		&i.IsActive,
+		&i.IsSystem,
 		&i.CreatedAt,
 		&i.Config,
 		&i.DefaultPartition,
@@ -133,7 +141,7 @@ func (q *Queries) ResolveTenantByDomain(ctx context.Context, domainName string) 
 }
 
 const resolveTenantByUUID = `-- name: ResolveTenantByUUID :one
-SELECT tenant_uuid, name, domain_name, is_active, created_at, config, default_partition, updated_at, encrypted_dek, dek_nonce
+SELECT tenant_uuid, name, domain_name, is_active, is_system, created_at, config, default_partition, updated_at, encrypted_dek, dek_nonce
 FROM tenants
 WHERE tenant_uuid = $1::uuid
 LIMIT 1
@@ -144,6 +152,7 @@ type ResolveTenantByUUIDRow struct {
 	Name             string             `json:"name"`
 	DomainName       string             `json:"domain_name"`
 	IsActive         bool               `json:"is_active"`
+	IsSystem         bool               `json:"is_system"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	Config           []byte             `json:"config"`
 	DefaultPartition *int64             `json:"default_partition"`
@@ -162,6 +171,7 @@ func (q *Queries) ResolveTenantByUUID(ctx context.Context, tenantUuid pgtype.UUI
 		&i.Name,
 		&i.DomainName,
 		&i.IsActive,
+		&i.IsSystem,
 		&i.CreatedAt,
 		&i.Config,
 		&i.DefaultPartition,

@@ -69,6 +69,7 @@ type Application struct {
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
+	IsSystem         bool               `json:"is_system"`
 }
 
 type ApplicationGroup struct {
@@ -87,6 +88,7 @@ type ApplicationGroup struct {
 	CreatedAt              pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
 	DefaultIdpID           pgtype.UUID        `json:"default_idp_id"`
+	IsSystem               bool               `json:"is_system"`
 }
 
 type ApplicationGroupIdp struct {
@@ -111,6 +113,7 @@ type ApplicationProfile struct {
 	SigningAlgorithm        string             `json:"signing_algorithm"`
 	CreatedAt               pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
+	IsSystem                bool               `json:"is_system"`
 }
 
 type AuditEventLog struct {
@@ -273,6 +276,7 @@ type Tenant struct {
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 	EncryptedDek     []byte             `json:"encrypted_dek"`
 	DekNonce         []byte             `json:"dek_nonce"`
+	IsSystem         bool               `json:"is_system"`
 }
 
 type TenantSigningKey struct {

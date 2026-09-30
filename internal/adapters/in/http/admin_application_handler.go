@@ -3,6 +3,7 @@ package http
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -73,8 +74,16 @@ func (h *AdminApplicationHandler) adminSaveApplication(w http.ResponseWriter, r 
 	profileID, groupID, errs := payload.Validate()
 
 	if len(errs) > 0 {
-		profiles, _ := h.adminApplicationUseCase.GetProfiles(r.Context(), tenant.ID)
-		groups, _ := h.adminApplicationUseCase.GetGroups(r.Context(), tenant.ID)
+		profiles, errProfiles := h.adminApplicationUseCase.GetProfiles(r.Context(), tenant.ID)
+		if errProfiles != nil {
+			h.renderDomainError(w, r, errProfiles)
+			return
+		}
+		groups, errGroups := h.adminApplicationUseCase.GetGroups(r.Context(), tenant.ID)
+		if errGroups != nil {
+			h.renderDomainError(w, r, errGroups)
+			return
+		}
 
 		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 		w.WriteHeader(http.StatusUnprocessableEntity) // Rigid 422 hypermedia compliance invariant
@@ -102,10 +111,9 @@ func (h *AdminApplicationHandler) adminSaveApplication(w http.ResponseWriter, r 
 			ApplicationName: payload.ApplicationName,
 			ProfileID:       profileID,
 			GroupID:         groupID,
-			IsEnabled:       true,
 		}
 		if err := h.adminApplicationUseCase.UpdateApplication(r.Context(), cmd); err != nil {
-			h.renderError(w, r, http.StatusInternalServerError, err.Error())
+			h.renderDomainError(w, r, err)
 			return
 		}
 		w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+port.RouteAdminApplications+"?msg=Application+updated+successfully")
@@ -120,7 +128,11 @@ func (h *AdminApplicationHandler) adminSaveApplication(w http.ResponseWriter, r 
 		ProfileID:       profileID,
 		GroupID:         groupID,
 		OnDelivery: func(plaintextSecret string) error {
-			profile, _ := h.adminApplicationUseCase.GetProfile(r.Context(), tenant.ID, profileID)
+			profile, errProfile := h.adminApplicationUseCase.GetProfile(r.Context(), tenant.ID, profileID)
+			if errProfile != nil {
+				// Returning an error here forces the domain layer to roll back the pending application row.
+				return fmt.Errorf("resolve profile for delivery: %w", errProfile)
+			}
 			w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
 
 			// Track A: Public Client application requires zero back-channel secret generation
@@ -268,7 +280,7 @@ func (h *AdminApplicationHandler) adminSaveProfile(w http.ResponseWriter, r *htt
 			SigningAlgorithm:        model.SignatureAlgorithm(payload.SigningAlg),
 		}
 		if err := h.adminApplicationUseCase.UpdateProfile(r.Context(), cmd); err != nil {
-			h.renderError(w, r, http.StatusInternalServerError, err.Error())
+			h.renderDomainError(w, r, err)
 			return
 		}
 		w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+port.RouteAdminApplications+"?msg=Security+profile+updated+successfully")
@@ -288,7 +300,7 @@ func (h *AdminApplicationHandler) adminSaveProfile(w http.ResponseWriter, r *htt
 		SigningAlgorithm:        model.SignatureAlgorithm(payload.SigningAlg),
 	}
 	if err := h.adminApplicationUseCase.CreateProfile(r.Context(), cmd); err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		h.renderDomainError(w, r, err)
 		return
 	}
 
@@ -327,10 +339,70 @@ func NewSaveGroupPayload(r *http.Request) *SaveGroupPayload {
 	}
 }
 
+// parseGroupIDPs converts the submitted sign-in method identifiers into typed UUIDs.
+// Malformed identifiers are reported as validation errors instead of being silently dropped.
+func parseGroupIDPs(payload *SaveGroupPayload, errs map[string]string) ([]uuid.UUID, *uuid.UUID) {
+	allowed := []uuid.UUID{}
+	for _, rawID := range payload.AllowedIDPsRaw {
+		parsed, err := uuid.Parse(rawID)
+		if err != nil {
+			errs["allowed_idps"] = "one or more selected sign-in methods are invalid"
+			continue
+		}
+		allowed = append(allowed, parsed)
+	}
+
+	if payload.DefaultIDPRaw == "" {
+		return allowed, nil
+	}
+	parsedDefault, err := uuid.Parse(payload.DefaultIDPRaw)
+	if err != nil {
+		errs["default_idp_id"] = "the default sign-in method is invalid"
+		return allowed, nil
+	}
+	return allowed, &parsedDefault
+}
+
+// groupFromPayload builds the view model used to re-render the form with the submitted values.
+func groupFromPayload(payload *SaveGroupPayload, allowed []uuid.UUID, def *uuid.UUID) *model.ApplicationGroup {
+	id, _ := uuid.Parse(payload.IDStr)
+	return &model.ApplicationGroup{
+		ID:                     id,
+		GroupName:              payload.GroupName,
+		RedirectURIs:           payload.RedirectURIs,
+		PostLogoutRedirectURIs: payload.PostLogoutURIs,
+		FrontChannelLogoutURI:  payload.FrontChannelLogoutURI,
+		BackChannelLogoutURI:   payload.BackChannelLogoutURI,
+		AllowedScopes:          payload.Scopes,
+		AllowedAudiences:       payload.Audiences,
+		AllowedIDPIDs:          allowed,
+		DefaultIDPID:           def,
+	}
+}
+
+// renderGroupFormErrors re-renders the group form with field errors and the semantic 422 status.
+func (h *AdminApplicationHandler) renderGroupFormErrors(w http.ResponseWriter, r *http.Request, tenantID uuid.UUID, group *model.ApplicationGroup, errs map[string]string, isEdit bool) {
+	partitionsWithIdps, err := h.idpService.GetPartitionsWithProviders(r.Context(), tenantID)
+	if err != nil {
+		h.renderDomainError(w, r, err)
+		return
+	}
+
+	component := admin.GroupForm(admin.GroupFormProps{
+		Group:              group,
+		Errors:             errs,
+		IsEdit:             isEdit,
+		PartitionsWithIdps: partitionsWithIdps,
+	})
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
+	w.WriteHeader(http.StatusUnprocessableEntity) // Explicit 422 for form error targeting
+	_ = component.Render(r.Context(), w)
+}
+
 func (h *AdminApplicationHandler) adminSaveGroup(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
 	if err := r.ParseForm(); err != nil {
-		h.renderError(w, r, http.StatusBadRequest, "malformed payload parameters submitted")
+		h.renderError(w, r, http.StatusBadRequest, ErrMalformedPayload)
 		return
 	}
 
@@ -341,61 +413,21 @@ func (h *AdminApplicationHandler) adminSaveGroup(w http.ResponseWriter, r *http.
 	if payload.GroupName == "" {
 		errs["group_name"] = "authorization gateway routing group label is required"
 	}
-
-	var allowedIDPIDs []uuid.UUID
-	for _, rawID := range payload.AllowedIDPsRaw {
-		if parsed, err := uuid.Parse(rawID); err == nil {
-			allowedIDPIDs = append(allowedIDPIDs, parsed)
-		}
-	}
-
-	var defaultIDPID *uuid.UUID
-	if payload.DefaultIDPRaw != "" {
-		if parsed, err := uuid.Parse(payload.DefaultIDPRaw); err == nil {
-			defaultIDPID = &parsed
-		}
-	}
+	allowedIDPIDs, defaultIDPID := parseGroupIDPs(payload, errs)
+	view := groupFromPayload(payload, allowedIDPIDs, defaultIDPID)
 
 	if len(errs) > 0 {
-		// Re-hydrating partition shards directly from the optimized storage query pass
-		partitionsWithIdps, errMatrix := h.idpService.GetPartitionsWithProviders(r.Context(), tenant.ID)
-		if errMatrix != nil {
-			partitionsWithIdps = []model.PartitionWithProviders{} // Safe baseline placeholder
-		}
-
-		var parsedID uuid.UUID
-		if isEdit {
-			parsedID, _ = uuid.Parse(payload.IDStr)
-		}
-
-		component := admin.GroupForm(admin.GroupFormProps{
-			Group: &model.ApplicationGroup{
-				ID:                     parsedID,
-				GroupName:              payload.GroupName,
-				RedirectURIs:           payload.RedirectURIs,
-				PostLogoutRedirectURIs: payload.PostLogoutURIs,
-				FrontChannelLogoutURI:  payload.FrontChannelLogoutURI,
-				BackChannelLogoutURI:   payload.BackChannelLogoutURI,
-				AllowedScopes:          payload.Scopes,
-				AllowedAudiences:       payload.Audiences,
-				AllowedIDPIDs:          allowedIDPIDs,
-				DefaultIDPID:           defaultIDPID,
-			},
-			Errors:             errs,
-			IsEdit:             isEdit,
-			PartitionsWithIdps: partitionsWithIdps,
-		})
-		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-		w.WriteHeader(http.StatusUnprocessableEntity) // Explicit 422 for form error targeting
-		_ = component.Render(r.Context(), w)
+		h.renderGroupFormErrors(w, r, tenant.ID, view, errs, isEdit)
 		return
 	}
 
+	var err error
+	msg := "Authorization+group+created+successfully"
 	if isEdit {
-		id, _ := uuid.Parse(payload.IDStr)
-		cmd := port.UpdateGroupCommand{
+		msg = "Authorization+group+updated+successfully"
+		err = h.adminApplicationUseCase.UpdateGroup(r.Context(), port.UpdateGroupCommand{
 			TenantID:               tenant.ID,
-			ID:                     id,
+			ID:                     view.ID,
 			GroupName:              payload.GroupName,
 			RedirectURIs:           payload.RedirectURIs,
 			PostLogoutRedirectURIs: payload.PostLogoutURIs,
@@ -406,35 +438,34 @@ func (h *AdminApplicationHandler) adminSaveGroup(w http.ResponseWriter, r *http.
 			AllowedAudiences:       payload.Audiences,
 			AllowedIDPIDs:          allowedIDPIDs,
 			DefaultIDPID:           defaultIDPID,
-		}
-		if err := h.adminApplicationUseCase.UpdateGroup(r.Context(), cmd); err != nil {
-			h.renderError(w, r, http.StatusInternalServerError, err.Error())
-			return
-		}
-		w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+port.RouteAdminApplications+"?msg=Authorization+group+updated+successfully")
-		w.WriteHeader(http.StatusOK)
+		})
+	} else {
+		err = h.adminApplicationUseCase.CreateGroup(r.Context(), port.CreateGroupCommand{
+			TenantID:               tenant.ID,
+			GroupName:              payload.GroupName,
+			RedirectURIs:           payload.RedirectURIs,
+			PostLogoutRedirectURIs: payload.PostLogoutURIs,
+			FrontChannelLogoutURI:  payload.FrontChannelLogoutURI,
+			BackChannelLogoutURI:   payload.BackChannelLogoutURI,
+			AllowedScopes:          payload.Scopes,
+			DefaultScopes:          payload.Scopes,
+			AllowedAudiences:       payload.Audiences,
+			AllowedIDPIDs:          allowedIDPIDs,
+			DefaultIDPID:           defaultIDPID,
+		})
+	}
+
+	var validationErr *port.ValidationError
+	if errors.As(err, &validationErr) {
+		h.renderGroupFormErrors(w, r, tenant.ID, view, validationErr.Fields, isEdit)
+		return
+	}
+	if err != nil {
+		h.renderDomainError(w, r, err)
 		return
 	}
 
-	cmd := port.CreateGroupCommand{
-		TenantID:               tenant.ID,
-		GroupName:              payload.GroupName,
-		RedirectURIs:           payload.RedirectURIs,
-		PostLogoutRedirectURIs: payload.PostLogoutURIs,
-		FrontChannelLogoutURI:  payload.FrontChannelLogoutURI,
-		BackChannelLogoutURI:   payload.BackChannelLogoutURI,
-		AllowedScopes:          payload.Scopes,
-		DefaultScopes:          payload.Scopes,
-		AllowedAudiences:       payload.Audiences,
-		AllowedIDPIDs:          allowedIDPIDs,
-		DefaultIDPID:           defaultIDPID,
-	}
-	if err := h.adminApplicationUseCase.CreateGroup(r.Context(), cmd); err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+port.RouteAdminApplications+"?msg=Authorization+group+created+successfully")
+	w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+port.RouteAdminApplications+"?msg="+msg)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -480,7 +511,7 @@ func (h *AdminApplicationHandler) adminApplicationsPage(w http.ResponseWriter, r
 	tenant, _ := TenantFromContext(r.Context())
 	summaries, profiles, groups, err := h.adminApplicationUseCase.GetApplicationDashboard(r.Context(), tenant.ID)
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		h.renderDomainError(w, r, err)
 		return
 	}
 
@@ -511,12 +542,12 @@ func (h *AdminApplicationHandler) adminNewApplicationForm(w http.ResponseWriter,
 	tenant, _ := TenantFromContext(r.Context())
 	profiles, err := h.adminApplicationUseCase.GetProfiles(r.Context(), tenant.ID)
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		h.renderDomainError(w, r, err)
 		return
 	}
 	groups, err := h.adminApplicationUseCase.GetGroups(r.Context(), tenant.ID)
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		h.renderDomainError(w, r, err)
 		return
 	}
 
@@ -542,18 +573,18 @@ func (h *AdminApplicationHandler) adminEditApplicationForm(w http.ResponseWriter
 
 	details, err := h.adminApplicationUseCase.GetApplicationDetails(r.Context(), tenant.ID, clientID)
 	if err != nil {
-		h.renderError(w, r, http.StatusNotFound, err.Error())
+		h.renderDomainError(w, r, err)
 		return
 	}
 
 	profiles, err := h.adminApplicationUseCase.GetProfiles(r.Context(), tenant.ID)
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		h.renderDomainError(w, r, err)
 		return
 	}
 	groups, err := h.adminApplicationUseCase.GetGroups(r.Context(), tenant.ID)
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		h.renderDomainError(w, r, err)
 		return
 	}
 
@@ -580,7 +611,7 @@ func (h *AdminApplicationHandler) adminViewApplication(w http.ResponseWriter, r 
 
 	details, err := h.adminApplicationUseCase.GetApplicationDetails(r.Context(), tenant.ID, clientID)
 	if err != nil {
-		h.renderError(w, r, http.StatusNotFound, err.Error())
+		h.renderDomainError(w, r, err)
 		return
 	}
 
@@ -608,7 +639,7 @@ func (h *AdminApplicationHandler) adminToggleApplicationStatus(w http.ResponseWr
 
 	app, err := h.adminApplicationUseCase.ToggleApplicationStatus(r.Context(), tenant.ID, clientID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.renderDomainError(w, r, err)
 		return
 	}
 
@@ -652,7 +683,7 @@ func (h *AdminApplicationHandler) adminDeleteApplication(w http.ResponseWriter, 
 	clientID := chi.URLParam(r, "id")
 
 	if err := h.adminApplicationUseCase.DeleteApplication(r.Context(), tenant.ID, clientID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.renderDomainError(w, r, err)
 		return
 	}
 
@@ -691,7 +722,7 @@ func (h *AdminApplicationHandler) adminEditProfileForm(w http.ResponseWriter, r 
 
 	profile, err := h.adminApplicationUseCase.GetProfile(r.Context(), tenant.ID, id)
 	if err != nil {
-		h.renderError(w, r, http.StatusNotFound, err.Error())
+		h.renderDomainError(w, r, err)
 		return
 	}
 
@@ -715,7 +746,7 @@ func (h *AdminApplicationHandler) adminNewGroupForm(w http.ResponseWriter, r *ht
 
 	partitionsWithIdps, err := h.idpService.GetPartitionsWithProviders(r.Context(), tenant.ID)
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		h.renderDomainError(w, r, err)
 		return
 	}
 
@@ -746,13 +777,13 @@ func (h *AdminApplicationHandler) adminEditGroupForm(w http.ResponseWriter, r *h
 
 	group, err := h.adminApplicationUseCase.GetGroup(r.Context(), tenant.ID, id)
 	if err != nil {
-		h.renderError(w, r, http.StatusNotFound, err.Error())
+		h.renderDomainError(w, r, err)
 		return
 	}
 
 	partitionsWithIdps, err := h.idpService.GetPartitionsWithProviders(r.Context(), tenant.ID)
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		h.renderDomainError(w, r, err)
 		return
 	}
 

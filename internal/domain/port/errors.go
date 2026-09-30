@@ -70,4 +70,10 @@ var (
 	ErrEmailAlreadyExists         = errors.New("email address already in use")
 	ErrUsernameAlreadyExists      = errors.New("username already in use")
 	ErrExternalEmailNotVerified   = errors.New("external email not verified")
+
+	// Administrative Console Errors
+	// ErrSystemManaged is returned when an operation targets an object provisioned and protected by the bootstrap service.
+	ErrSystemManaged = errors.New("this object is managed by the system and cannot be modified this way")
+	// ErrInUse is returned when an object cannot be removed because other objects still reference it.
+	ErrInUse = errors.New("object is still in use by other objects")
 )

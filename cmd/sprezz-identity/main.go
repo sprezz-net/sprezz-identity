@@ -19,6 +19,7 @@ import (
 	"sprezz-identity/internal/config"
 	"sprezz-identity/internal/domain/port"
 	"sprezz-identity/internal/domain/service"
+	"sprezz-identity/internal/pkg/httpclient"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -154,8 +155,11 @@ func initDependencies(ctx context.Context) *dependencies {
 		log.Fatalf("Failed to initialize cryptographic boundaries: %v", err)
 	}
 
+	// Outbound federation traffic (discovery, PAR, token exchange) must go through the SSRF and DNS-rebinding guarded client.
+	fedClient := federation.NewFederationHTTPAdapter(httpclient.New(cfg.AppEnv), cfg.AppEnv)
+
 	// Needed for resolution and cross-layered bootstrapping references
-	idpService := service.NewIdentityProviderService(storage, storage, cryptoSigner, sysClock)
+	idpService := service.NewIdentityProviderService(storage, storage, cryptoSigner, sysClock, fedClient)
 	tenantUseCase := service.NewTenantService(storage, storage, sysClock, idpService, cfg.AppEnv, cfg.IdentityServer.AdminTenantDomain)
 
 	// 6. Execute system master data bootstrapping scripts
@@ -178,7 +182,6 @@ func initDependencies(ctx context.Context) *dependencies {
 
 	ssoService := service.NewSSOSessionService(storage, cfg.AppEnv)
 
-	fedClient := federation.NewFederationHTTPAdapter(http.DefaultClient, cfg.AppEnv)
 	federatedLoginService := service.NewFederationService(
 		storage,
 		fedClient,

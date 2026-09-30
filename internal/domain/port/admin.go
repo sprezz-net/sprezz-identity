@@ -30,7 +30,7 @@ type UpdateApplicationCommand struct {
 	ApplicationName string
 	ProfileID       uuid.UUID
 	GroupID         uuid.UUID
-	IsEnabled       bool
+	IsEnabled       *bool // nil preserves the current enabled state
 }
 
 // ResetApplicationSecretCommand encapsulates parameters for transaction-locked credential rotation.
@@ -129,7 +129,7 @@ type AdminApplicationUseCase interface {
 type IdentityProviderUseCase interface {
 	GetIdentityProviders(ctx context.Context, tenantID uuid.UUID) ([]model.IdentityProvider, error)
 	GetPartitionsWithProviders(ctx context.Context, tenantID uuid.UUID) ([]model.PartitionWithProviders, error)
-	DiscoverOIDC(ctx context.Context, endpoint string) (string, error)
+	DiscoverOIDC(ctx context.Context, endpoint string) (*model.OIDCDiscoveryMetadata, error)
 	CreateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) (*model.IdentityProvider, error)
 	UpdateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) (*model.IdentityProvider, error)
 	DeleteIdentityProvider(ctx context.Context, tenantID uuid.UUID, idpID uuid.UUID) error
