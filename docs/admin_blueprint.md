@@ -116,7 +116,7 @@ internal/
 
 The admin UI is built from type-safe `templ` components, compiled Tailwind and CSP-safe Alpine.js components.
 
-- **`AdminLayout`**: side navigation from a `[]NavItem` slice, a global spinner and a modal container. The Tenants and Users pages still use modals.
+- **`AdminLayout`**: side navigation from a `[]NavItem` slice, a global spinner and a modal container. Only the Tenants page still uses modals.
 - **`ApplicationsSubNav`**: the Applications | Groups | Profiles tab strip. Active state comes from the route, so each tab has its own address and needs no client state.
 - **`PageHeader`, `SystemBadge`, `SystemBanner`, `FlashMessage`, `EmptyState`**: page chrome. System objects always show the badge and a banner explaining why the page is read-only.
 - **`SectionCard` and `SaveBar`**: one independently saved part of a detail page. Each card is its own form (`hx-put` to `.../{section}`) that swaps only itself, with "Unsaved changes" and "Saved" indicators.
@@ -412,3 +412,25 @@ Rules the pages rely on, all enforced in the domain service:
 - The client secret is write-only. The field is always empty; an empty submission keeps the stored secret.
 - System providers (the admin tenant's local accounts and every tenant's `admin-sso`, flag `is_system`) are read-only and cannot be deleted. Only `CreateSystemIdentityProvider`, which is not on the admin use case port, can create one.
 - A provider that an application group allows cannot be deleted. Deleting one that users have signed in with removes their link, and the danger zone says how many users that is.
+
+
+## Users
+
+| Route | Purpose |
+| --- | --- |
+| `GET /admin/users` | List with search (`q`), `partition_id` and `status` filters, in a stable order |
+| `GET /admin/users/new` | Add form |
+| `POST /admin/users` | Create, then redirect to the user page |
+| `GET /admin/users/{partition}/{id}` | Detail page with one card per section |
+| `PUT /admin/users/{partition}/{id}/{section}` | Save one section (`profile`, `status`, `password`); answers with that card only |
+| `POST /admin/users/{partition}/{id}/unlock` | Clear a password lockout |
+| `DELETE /admin/users/{partition}/{id}/identities/{idp}` | Remove one sign-in method |
+| `DELETE /admin/users/{partition}/{id}` | Delete after the username is typed |
+
+Rules, enforced in `AdminUserService` so every caller is covered:
+
+- A user is always loaded by partition **and** ID. (Until this change the Postgres lookup ignored the ID and returned the first user of the partition, so an edit could overwrite the wrong user.)
+- An administrator cannot block, deactivate or delete their own account, nor the last administrator who can sign in. A blocked administrator does not count as a remaining one.
+- The last sign-in method of a user cannot be removed.
+- The password is write-only: the field is never prefilled and the hash is never rendered. Setting a password also clears a lockout, and a failed save is reported to the administrator.
+- Username and email are unique per partition and are reported against the field that caused the conflict.

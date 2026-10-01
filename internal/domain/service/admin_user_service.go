@@ -19,12 +19,13 @@ type AdminUserService struct {
 	adminStorage port.AdminStorage
 	crypto       port.Crypto
 	clock        port.Clock
+	profiles     port.UserProfileUseCase
 }
 
 var _ port.AdminUserUseCase = (*AdminUserService)(nil)
 
-func NewAdminUserService(s port.Storage, as port.AdminStorage, c port.Crypto, cl port.Clock) *AdminUserService {
-	return &AdminUserService{storage: s, adminStorage: as, crypto: c, clock: cl}
+func NewAdminUserService(s port.Storage, as port.AdminStorage, c port.Crypto, cl port.Clock, profiles port.UserProfileUseCase) *AdminUserService {
+	return &AdminUserService{storage: s, adminStorage: as, crypto: c, clock: cl, profiles: profiles}
 }
 
 // ListUsers returns users ordered by username, then partition, so pages are stable between requests.

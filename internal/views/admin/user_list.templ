@@ -1,0 +1,83 @@
+package admin
+
+import (
+	"strconv"
+
+	"sprezz-identity/internal/domain/model"
+)
+
+// UsersContent lists the users. Search and filters are plain GET requests, so every view has a URL.
+templ UsersContent(props UserListProps) {
+	@FlashMessage(props.Msg)
+	@ListToolbar("+ Add user", usersBase()+"/new") {
+		<form hx-get={ usersBase() } hx-target="main" hx-swap="innerHTML" hx-push-url="true" hx-trigger="change, keyup changed delay:300ms from:find input" class="flex flex-wrap items-center gap-3">
+			<input type="search" name="q" value={ props.Query } placeholder="Search name, username or email" aria-label="Search users" class="w-72 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"/>
+			<select name="partition_id" aria-label="Filter by partition" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+				<option value="">All partitions</option>
+				for _, part := range props.Partitions {
+					<option value={ strconv.FormatInt(part.ID, 10) } selected?={ props.PartitionID == part.ID }>{ partitionLabel(part) }</option>
+				}
+			</select>
+			<select name="status" aria-label="Filter by status" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+				<option value="" selected?={ props.Status == "" }>Any status</option>
+				<option value="active" selected?={ props.Status == "active" }>Active</option>
+				<option value="pending" selected?={ props.Status == "pending" }>Awaiting approval</option>
+				<option value="blocked" selected?={ props.Status == "blocked" }>Blocked</option>
+				<option value="inactive" selected?={ props.Status == "inactive" }>Not active</option>
+			</select>
+		</form>
+	}
+	<div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
+		if len(props.Rows) == 0 {
+			@EmptyState("No users found", "Change the filters or add a user.")
+		} else {
+			<table class="min-w-full divide-y divide-gray-200 text-sm">
+				<thead>
+					<tr class="bg-gray-50 text-gray-500 font-semibold">
+						<th scope="col" class="px-6 py-3 text-left">User</th>
+						<th scope="col" class="px-6 py-3 text-left">Email</th>
+						<th scope="col" class="px-6 py-3 text-left">Partition</th>
+						<th scope="col" class="px-6 py-3 text-left">Status</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-gray-100">
+					for _, row := range props.Rows {
+						@userRow(row)
+					}
+				</tbody>
+			</table>
+		}
+	</div>
+}
+
+templ userRow(row UserRow) {
+	<tr class="hover:bg-gray-50">
+		<td class="px-6 py-3">
+			@rowLink(userURL(row.User.PartitionID, row.User.ID.String())) {
+				{ row.User.PreferredUsername }
+			}
+			if row.User.Name != "" {
+				<span class="block text-xs text-gray-500">{ row.User.Name }</span>
+			}
+		</td>
+		<td class="px-6 py-3 text-gray-600">
+			{ row.User.Email }
+			if !row.User.EmailVerified {
+				<span class="ml-1 text-xs text-amber-700">(unverified)</span>
+			}
+		</td>
+		<td class="px-6 py-3 text-gray-600">{ row.PartitionName }</td>
+		<td class="px-6 py-3">@userStatusBadge(row.User)</td>
+	</tr>
+}
+
+templ userStatusBadge(u model.UserProfile) {
+	{{ label, severity := userStatusLabel(u) }}
+	@Badge(label, severity)
+}
+
+templ UsersPage(props UserListProps) {
+	@AdminLayout(AdminLayoutProps{Title: "Users", CurrentTab: "users", TenantName: props.ActiveTenant.Name}) {
+		@UsersContent(props)
+	}
+}

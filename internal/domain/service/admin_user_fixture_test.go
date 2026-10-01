@@ -27,6 +27,7 @@ type userFixture struct {
 	storage  *portmock.StorageMock
 	admin    *portmock.AdminStorageMock
 	crypto   *portmock.CryptoMock
+	profiles *portmock.UserProfileUseCaseMock
 	tenantID uuid.UUID
 }
 
@@ -34,11 +35,13 @@ func newUserFixture(t *testing.T) *userFixture {
 	t.Helper()
 	mc := minimock.NewController(t)
 	storage, admin, crypto := portmock.NewStorageMock(mc), portmock.NewAdminStorageMock(mc), portmock.NewCryptoMock(mc)
+	profiles := portmock.NewUserProfileUseCaseMock(mc)
 	f := &userFixture{
-		svc:      service.NewAdminUserService(storage, admin, crypto, portmock.NewMockClock(time.Now())),
+		svc:      service.NewAdminUserService(storage, admin, crypto, portmock.NewMockClock(time.Now()), profiles),
 		storage:  storage,
 		admin:    admin,
 		crypto:   crypto,
+		profiles: profiles,
 		tenantID: uuid.New(),
 	}
 	storage.GetPartitionsMock.Optional().Return([]model.Partition{

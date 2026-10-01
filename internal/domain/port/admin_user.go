@@ -41,6 +41,19 @@ type PatchUserCommand struct {
 	NewPassword string
 }
 
+// CreateUserCommand adds a user from the admin console. Without a password the user is created but cannot sign in
+// until one is set.
+type CreateUserCommand struct {
+	TenantID      uuid.UUID
+	PartitionID   int64
+	Username      string
+	FirstName     string
+	LastName      string
+	Email         string
+	EmailVerified bool
+	Password      string
+}
+
 // DeleteUserCommand removes a user after the typed username matches.
 type DeleteUserCommand struct {
 	TenantID     uuid.UUID
@@ -80,6 +93,7 @@ type AdminUserUseCase interface {
 	// ListUsers returns the users of one partition, or of every partition when partitionID is zero, in a stable order.
 	ListUsers(ctx context.Context, tenantID uuid.UUID, partitionID int64) ([]model.UserProfile, error)
 	GetUser(ctx context.Context, tenantID uuid.UUID, partitionID int64, id uuid.UUID) (*UserDetail, error)
+	CreateUser(ctx context.Context, cmd CreateUserCommand) (*model.UserProfile, error)
 	PatchUser(ctx context.Context, cmd PatchUserCommand) error
 	// UnlockUser clears the failed-password counters and the temporary lockout of a user.
 	UnlockUser(ctx context.Context, tenantID uuid.UUID, partitionID int64, id uuid.UUID) error

@@ -21,6 +21,13 @@ type AdminUserUseCaseMock struct {
 	t          minimock.Tester
 	finishOnce sync.Once
 
+	funcCreateUser          func(ctx context.Context, cmd mm_port.CreateUserCommand) (up1 *model.UserProfile, err error)
+	funcCreateUserOrigin    string
+	inspectFuncCreateUser   func(ctx context.Context, cmd mm_port.CreateUserCommand)
+	afterCreateUserCounter  uint64
+	beforeCreateUserCounter uint64
+	CreateUserMock          mAdminUserUseCaseMockCreateUser
+
 	funcDeleteUser          func(ctx context.Context, cmd mm_port.DeleteUserCommand) (err error)
 	funcDeleteUserOrigin    string
 	inspectFuncDeleteUser   func(ctx context.Context, cmd mm_port.DeleteUserCommand)
@@ -72,6 +79,9 @@ func NewAdminUserUseCaseMock(t minimock.Tester) *AdminUserUseCaseMock {
 		controller.RegisterMocker(m)
 	}
 
+	m.CreateUserMock = mAdminUserUseCaseMockCreateUser{mock: m}
+	m.CreateUserMock.callArgs = []*AdminUserUseCaseMockCreateUserParams{}
+
 	m.DeleteUserMock = mAdminUserUseCaseMockDeleteUser{mock: m}
 	m.DeleteUserMock.callArgs = []*AdminUserUseCaseMockDeleteUserParams{}
 
@@ -93,6 +103,349 @@ func NewAdminUserUseCaseMock(t minimock.Tester) *AdminUserUseCaseMock {
 	t.Cleanup(m.MinimockFinish)
 
 	return m
+}
+
+type mAdminUserUseCaseMockCreateUser struct {
+	optional           bool
+	mock               *AdminUserUseCaseMock
+	defaultExpectation *AdminUserUseCaseMockCreateUserExpectation
+	expectations       []*AdminUserUseCaseMockCreateUserExpectation
+
+	callArgs []*AdminUserUseCaseMockCreateUserParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AdminUserUseCaseMockCreateUserExpectation specifies expectation struct of the AdminUserUseCase.CreateUser
+type AdminUserUseCaseMockCreateUserExpectation struct {
+	mock               *AdminUserUseCaseMock
+	params             *AdminUserUseCaseMockCreateUserParams
+	paramPtrs          *AdminUserUseCaseMockCreateUserParamPtrs
+	expectationOrigins AdminUserUseCaseMockCreateUserExpectationOrigins
+	results            *AdminUserUseCaseMockCreateUserResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AdminUserUseCaseMockCreateUserParams contains parameters of the AdminUserUseCase.CreateUser
+type AdminUserUseCaseMockCreateUserParams struct {
+	ctx context.Context
+	cmd mm_port.CreateUserCommand
+}
+
+// AdminUserUseCaseMockCreateUserParamPtrs contains pointers to parameters of the AdminUserUseCase.CreateUser
+type AdminUserUseCaseMockCreateUserParamPtrs struct {
+	ctx *context.Context
+	cmd *mm_port.CreateUserCommand
+}
+
+// AdminUserUseCaseMockCreateUserResults contains results of the AdminUserUseCase.CreateUser
+type AdminUserUseCaseMockCreateUserResults struct {
+	up1 *model.UserProfile
+	err error
+}
+
+// AdminUserUseCaseMockCreateUserOrigins contains origins of expectations of the AdminUserUseCase.CreateUser
+type AdminUserUseCaseMockCreateUserExpectationOrigins struct {
+	origin    string
+	originCtx string
+	originCmd string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmCreateUser *mAdminUserUseCaseMockCreateUser) Optional() *mAdminUserUseCaseMockCreateUser {
+	mmCreateUser.optional = true
+	return mmCreateUser
+}
+
+// Expect sets up expected params for AdminUserUseCase.CreateUser
+func (mmCreateUser *mAdminUserUseCaseMockCreateUser) Expect(ctx context.Context, cmd mm_port.CreateUserCommand) *mAdminUserUseCaseMockCreateUser {
+	if mmCreateUser.mock.funcCreateUser != nil {
+		mmCreateUser.mock.t.Fatalf("AdminUserUseCaseMock.CreateUser mock is already set by Set")
+	}
+
+	if mmCreateUser.defaultExpectation == nil {
+		mmCreateUser.defaultExpectation = &AdminUserUseCaseMockCreateUserExpectation{}
+	}
+
+	if mmCreateUser.defaultExpectation.paramPtrs != nil {
+		mmCreateUser.mock.t.Fatalf("AdminUserUseCaseMock.CreateUser mock is already set by ExpectParams functions")
+	}
+
+	mmCreateUser.defaultExpectation.params = &AdminUserUseCaseMockCreateUserParams{ctx, cmd}
+	mmCreateUser.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmCreateUser.expectations {
+		if minimock.Equal(e.params, mmCreateUser.defaultExpectation.params) {
+			mmCreateUser.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmCreateUser.defaultExpectation.params)
+		}
+	}
+
+	return mmCreateUser
+}
+
+// ExpectCtxParam1 sets up expected param ctx for AdminUserUseCase.CreateUser
+func (mmCreateUser *mAdminUserUseCaseMockCreateUser) ExpectCtxParam1(ctx context.Context) *mAdminUserUseCaseMockCreateUser {
+	if mmCreateUser.mock.funcCreateUser != nil {
+		mmCreateUser.mock.t.Fatalf("AdminUserUseCaseMock.CreateUser mock is already set by Set")
+	}
+
+	if mmCreateUser.defaultExpectation == nil {
+		mmCreateUser.defaultExpectation = &AdminUserUseCaseMockCreateUserExpectation{}
+	}
+
+	if mmCreateUser.defaultExpectation.params != nil {
+		mmCreateUser.mock.t.Fatalf("AdminUserUseCaseMock.CreateUser mock is already set by Expect")
+	}
+
+	if mmCreateUser.defaultExpectation.paramPtrs == nil {
+		mmCreateUser.defaultExpectation.paramPtrs = &AdminUserUseCaseMockCreateUserParamPtrs{}
+	}
+	mmCreateUser.defaultExpectation.paramPtrs.ctx = &ctx
+	mmCreateUser.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmCreateUser
+}
+
+// ExpectCmdParam2 sets up expected param cmd for AdminUserUseCase.CreateUser
+func (mmCreateUser *mAdminUserUseCaseMockCreateUser) ExpectCmdParam2(cmd mm_port.CreateUserCommand) *mAdminUserUseCaseMockCreateUser {
+	if mmCreateUser.mock.funcCreateUser != nil {
+		mmCreateUser.mock.t.Fatalf("AdminUserUseCaseMock.CreateUser mock is already set by Set")
+	}
+
+	if mmCreateUser.defaultExpectation == nil {
+		mmCreateUser.defaultExpectation = &AdminUserUseCaseMockCreateUserExpectation{}
+	}
+
+	if mmCreateUser.defaultExpectation.params != nil {
+		mmCreateUser.mock.t.Fatalf("AdminUserUseCaseMock.CreateUser mock is already set by Expect")
+	}
+
+	if mmCreateUser.defaultExpectation.paramPtrs == nil {
+		mmCreateUser.defaultExpectation.paramPtrs = &AdminUserUseCaseMockCreateUserParamPtrs{}
+	}
+	mmCreateUser.defaultExpectation.paramPtrs.cmd = &cmd
+	mmCreateUser.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
+
+	return mmCreateUser
+}
+
+// Inspect accepts an inspector function that has same arguments as the AdminUserUseCase.CreateUser
+func (mmCreateUser *mAdminUserUseCaseMockCreateUser) Inspect(f func(ctx context.Context, cmd mm_port.CreateUserCommand)) *mAdminUserUseCaseMockCreateUser {
+	if mmCreateUser.mock.inspectFuncCreateUser != nil {
+		mmCreateUser.mock.t.Fatalf("Inspect function is already set for AdminUserUseCaseMock.CreateUser")
+	}
+
+	mmCreateUser.mock.inspectFuncCreateUser = f
+
+	return mmCreateUser
+}
+
+// Return sets up results that will be returned by AdminUserUseCase.CreateUser
+func (mmCreateUser *mAdminUserUseCaseMockCreateUser) Return(up1 *model.UserProfile, err error) *AdminUserUseCaseMock {
+	if mmCreateUser.mock.funcCreateUser != nil {
+		mmCreateUser.mock.t.Fatalf("AdminUserUseCaseMock.CreateUser mock is already set by Set")
+	}
+
+	if mmCreateUser.defaultExpectation == nil {
+		mmCreateUser.defaultExpectation = &AdminUserUseCaseMockCreateUserExpectation{mock: mmCreateUser.mock}
+	}
+	mmCreateUser.defaultExpectation.results = &AdminUserUseCaseMockCreateUserResults{up1, err}
+	mmCreateUser.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmCreateUser.mock
+}
+
+// Set uses given function f to mock the AdminUserUseCase.CreateUser method
+func (mmCreateUser *mAdminUserUseCaseMockCreateUser) Set(f func(ctx context.Context, cmd mm_port.CreateUserCommand) (up1 *model.UserProfile, err error)) *AdminUserUseCaseMock {
+	if mmCreateUser.defaultExpectation != nil {
+		mmCreateUser.mock.t.Fatalf("Default expectation is already set for the AdminUserUseCase.CreateUser method")
+	}
+
+	if len(mmCreateUser.expectations) > 0 {
+		mmCreateUser.mock.t.Fatalf("Some expectations are already set for the AdminUserUseCase.CreateUser method")
+	}
+
+	mmCreateUser.mock.funcCreateUser = f
+	mmCreateUser.mock.funcCreateUserOrigin = minimock.CallerInfo(1)
+	return mmCreateUser.mock
+}
+
+// When sets expectation for the AdminUserUseCase.CreateUser which will trigger the result defined by the following
+// Then helper
+func (mmCreateUser *mAdminUserUseCaseMockCreateUser) When(ctx context.Context, cmd mm_port.CreateUserCommand) *AdminUserUseCaseMockCreateUserExpectation {
+	if mmCreateUser.mock.funcCreateUser != nil {
+		mmCreateUser.mock.t.Fatalf("AdminUserUseCaseMock.CreateUser mock is already set by Set")
+	}
+
+	expectation := &AdminUserUseCaseMockCreateUserExpectation{
+		mock:               mmCreateUser.mock,
+		params:             &AdminUserUseCaseMockCreateUserParams{ctx, cmd},
+		expectationOrigins: AdminUserUseCaseMockCreateUserExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmCreateUser.expectations = append(mmCreateUser.expectations, expectation)
+	return expectation
+}
+
+// Then sets up AdminUserUseCase.CreateUser return parameters for the expectation previously defined by the When method
+func (e *AdminUserUseCaseMockCreateUserExpectation) Then(up1 *model.UserProfile, err error) *AdminUserUseCaseMock {
+	e.results = &AdminUserUseCaseMockCreateUserResults{up1, err}
+	return e.mock
+}
+
+// Times sets number of times AdminUserUseCase.CreateUser should be invoked
+func (mmCreateUser *mAdminUserUseCaseMockCreateUser) Times(n uint64) *mAdminUserUseCaseMockCreateUser {
+	if n == 0 {
+		mmCreateUser.mock.t.Fatalf("Times of AdminUserUseCaseMock.CreateUser mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmCreateUser.expectedInvocations, n)
+	mmCreateUser.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmCreateUser
+}
+
+func (mmCreateUser *mAdminUserUseCaseMockCreateUser) invocationsDone() bool {
+	if len(mmCreateUser.expectations) == 0 && mmCreateUser.defaultExpectation == nil && mmCreateUser.mock.funcCreateUser == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmCreateUser.mock.afterCreateUserCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmCreateUser.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// CreateUser implements mm_port.AdminUserUseCase
+func (mmCreateUser *AdminUserUseCaseMock) CreateUser(ctx context.Context, cmd mm_port.CreateUserCommand) (up1 *model.UserProfile, err error) {
+	mm_atomic.AddUint64(&mmCreateUser.beforeCreateUserCounter, 1)
+	defer mm_atomic.AddUint64(&mmCreateUser.afterCreateUserCounter, 1)
+
+	mmCreateUser.t.Helper()
+
+	if mmCreateUser.inspectFuncCreateUser != nil {
+		mmCreateUser.inspectFuncCreateUser(ctx, cmd)
+	}
+
+	mm_params := AdminUserUseCaseMockCreateUserParams{ctx, cmd}
+
+	// Record call args
+	mmCreateUser.CreateUserMock.mutex.Lock()
+	mmCreateUser.CreateUserMock.callArgs = append(mmCreateUser.CreateUserMock.callArgs, &mm_params)
+	mmCreateUser.CreateUserMock.mutex.Unlock()
+
+	for _, e := range mmCreateUser.CreateUserMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.up1, e.results.err
+		}
+	}
+
+	if mmCreateUser.CreateUserMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmCreateUser.CreateUserMock.defaultExpectation.Counter, 1)
+		mm_want := mmCreateUser.CreateUserMock.defaultExpectation.params
+		mm_want_ptrs := mmCreateUser.CreateUserMock.defaultExpectation.paramPtrs
+
+		mm_got := AdminUserUseCaseMockCreateUserParams{ctx, cmd}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmCreateUser.t.Errorf("AdminUserUseCaseMock.CreateUser got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmCreateUser.CreateUserMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
+				mmCreateUser.t.Errorf("AdminUserUseCaseMock.CreateUser got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmCreateUser.CreateUserMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmCreateUser.t.Errorf("AdminUserUseCaseMock.CreateUser got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmCreateUser.CreateUserMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmCreateUser.CreateUserMock.defaultExpectation.results
+		if mm_results == nil {
+			mmCreateUser.t.Fatal("No results are set for the AdminUserUseCaseMock.CreateUser")
+		}
+		return (*mm_results).up1, (*mm_results).err
+	}
+	if mmCreateUser.funcCreateUser != nil {
+		return mmCreateUser.funcCreateUser(ctx, cmd)
+	}
+	mmCreateUser.t.Fatalf("Unexpected call to AdminUserUseCaseMock.CreateUser. %v %v", ctx, cmd)
+	return
+}
+
+// CreateUserAfterCounter returns a count of finished AdminUserUseCaseMock.CreateUser invocations
+func (mmCreateUser *AdminUserUseCaseMock) CreateUserAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmCreateUser.afterCreateUserCounter)
+}
+
+// CreateUserBeforeCounter returns a count of AdminUserUseCaseMock.CreateUser invocations
+func (mmCreateUser *AdminUserUseCaseMock) CreateUserBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmCreateUser.beforeCreateUserCounter)
+}
+
+// Calls returns a list of arguments used in each call to AdminUserUseCaseMock.CreateUser.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmCreateUser *mAdminUserUseCaseMockCreateUser) Calls() []*AdminUserUseCaseMockCreateUserParams {
+	mmCreateUser.mutex.RLock()
+
+	argCopy := make([]*AdminUserUseCaseMockCreateUserParams, len(mmCreateUser.callArgs))
+	copy(argCopy, mmCreateUser.callArgs)
+
+	mmCreateUser.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockCreateUserDone returns true if the count of the CreateUser invocations corresponds
+// the number of defined expectations
+func (m *AdminUserUseCaseMock) MinimockCreateUserDone() bool {
+	if m.CreateUserMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.CreateUserMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.CreateUserMock.invocationsDone()
+}
+
+// MinimockCreateUserInspect logs each unmet expectation
+func (m *AdminUserUseCaseMock) MinimockCreateUserInspect() {
+	for _, e := range m.CreateUserMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AdminUserUseCaseMock.CreateUser at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterCreateUserCounter := mm_atomic.LoadUint64(&m.afterCreateUserCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.CreateUserMock.defaultExpectation != nil && afterCreateUserCounter < 1 {
+		if m.CreateUserMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AdminUserUseCaseMock.CreateUser at\n%s", m.CreateUserMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AdminUserUseCaseMock.CreateUser at\n%s with params: %#v", m.CreateUserMock.defaultExpectation.expectationOrigins.origin, *m.CreateUserMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcCreateUser != nil && afterCreateUserCounter < 1 {
+		m.t.Errorf("Expected call to AdminUserUseCaseMock.CreateUser at\n%s", m.funcCreateUserOrigin)
+	}
+
+	if !m.CreateUserMock.invocationsDone() && afterCreateUserCounter > 0 {
+		m.t.Errorf("Expected %d calls to AdminUserUseCaseMock.CreateUser at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.CreateUserMock.expectedInvocations), m.CreateUserMock.expectedInvocationsOrigin, afterCreateUserCounter)
+	}
 }
 
 type mAdminUserUseCaseMockDeleteUser struct {
@@ -2308,6 +2661,8 @@ func (m *AdminUserUseCaseMock) MinimockUnlockUserInspect() {
 func (m *AdminUserUseCaseMock) MinimockFinish() {
 	m.finishOnce.Do(func() {
 		if !m.minimockDone() {
+			m.MinimockCreateUserInspect()
+
 			m.MinimockDeleteUserInspect()
 
 			m.MinimockGetUserInspect()
@@ -2342,6 +2697,7 @@ func (m *AdminUserUseCaseMock) MinimockWait(timeout mm_time.Duration) {
 func (m *AdminUserUseCaseMock) minimockDone() bool {
 	done := true
 	return done &&
+		m.MinimockCreateUserDone() &&
 		m.MinimockDeleteUserDone() &&
 		m.MinimockGetUserDone() &&
 		m.MinimockListUsersDone() &&

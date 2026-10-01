@@ -39,6 +39,7 @@ type dependencies struct {
 	userRegistrationUseCase port.UserRegistrationUseCase
 	localAuthUseCase        port.LocalAuthUseCase
 	adminApplicationUseCase port.AdminApplicationUseCase
+	adminUserUseCase        port.AdminUserUseCase
 	idpService              port.IdentityProviderUseCase
 }
 
@@ -69,7 +70,7 @@ func main() {
 		deps.crypto,
 		deps.cfg.AppEnv,
 		deps.cfg.IdentityServer.AdminTenantDomain,
-	)
+	).WithAdminUserUseCase(deps.adminUserUseCase)
 
 	server := &http.Server{
 		Addr:    ":" + deps.cfg.Port,
@@ -231,6 +232,7 @@ func initDependencies(ctx context.Context) *dependencies {
 		userRegistrationUseCase: userRegistrationUseCase,
 		localAuthUseCase:        localAuthService,
 		adminApplicationUseCase: appService,
+		adminUserUseCase:        service.NewAdminUserService(storage, storage, cryptoSigner, sysClock, userProfileUseCase),
 		idpService:              idpService,
 	}
 }

@@ -28,6 +28,7 @@ type HttpAdapter struct {
 	userRegistrationUseCase port.UserRegistrationUseCase
 	localAuthUseCase        port.LocalAuthUseCase
 	adminApplicationUseCase port.AdminApplicationUseCase
+	adminUserUseCase        port.AdminUserUseCase
 	adminStorage            port.AdminStorage
 	idpService              port.IdentityProviderUseCase
 	storagePort             port.Storage
@@ -35,6 +36,13 @@ type HttpAdapter struct {
 	router                  chi.Router
 	appEnv                  string
 	adminDomain             string
+}
+
+// WithAdminUserUseCase wires the use case behind the admin Users pages. It is a separate call so the constructor
+// signature, which every test and the composition root use, stays unchanged.
+func (h *HttpAdapter) WithAdminUserUseCase(uc port.AdminUserUseCase) *HttpAdapter {
+	h.adminUserUseCase = uc
+	return h
 }
 
 func NewHttpAdapter(

@@ -1,10 +1,9 @@
 package http
 
 import (
-	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
+	"strings"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -14,6 +13,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// AdminUserHandler serves the user pages under /admin/users. A user is addressed by partition and ID, so a lookup
+// is always scoped to the partition named in the path.
 type AdminUserHandler struct {
 	*HttpAdapter
 }
@@ -22,312 +23,135 @@ func NewAdminUserHandler(adapter *HttpAdapter) *AdminUserHandler {
 	return &AdminUserHandler{HttpAdapter: adapter}
 }
 
+// Routes mounts the user routes. The static "new" route is registered before the parameterized ones.
 func (h *AdminUserHandler) Routes(r chi.Router) {
 	r.Route(port.RouteAdminUsers, func(r chi.Router) {
-		r.Get("/", h.adminUsersPage)
-		r.Get("/view", h.adminViewUser)
-		r.Get("/edit", h.adminEditUserForm)
-		r.Post("/", h.adminSaveUser)
-		r.Delete("/{id}", h.adminDeleteUser)
-		r.Delete("/{id}/"+port.RouteAdminUsersIdentities+"/{idp}", h.adminDecoupleIdentity)
+		r.Get("/", h.list)
+		r.Get("/new", h.newForm)
+		r.Post("/", h.create)
+		r.Get("/{partition}/{id}", h.detail)
+		r.Delete("/{partition}/{id}", h.delete)
+		r.Put("/{partition}/{id}/{section}", h.saveSection)
+		r.Post("/{partition}/{id}/unlock", h.unlock)
+		r.Delete("/{partition}/{id}"+port.RouteAdminUsersIdentities+"/{idp}", h.unlink)
 	})
 }
 
-func (h *AdminUserHandler) adminUsersPage(w http.ResponseWriter, r *http.Request) {
-	tenant, _ := TenantFromContext(r.Context())
-
-	var filterPartitionID int64
-	if pStr := r.URL.Query().Get("partition_id"); pStr != "" {
-		filterPartitionID, _ = strconv.ParseInt(pStr, 10, 64)
+// target reads the partition and user from the path. A malformed value is reported as an unknown user.
+func (h *AdminUserHandler) target(w http.ResponseWriter, r *http.Request) (int64, uuid.UUID, bool) {
+	partition, perr := strconv.ParseInt(chi.URLParam(r, "partition"), 10, 64)
+	id, uerr := uuid.Parse(chi.URLParam(r, "id"))
+	if perr != nil || uerr != nil || partition <= 0 {
+		h.renderError(w, r, http.StatusNotFound, port.ErrUserProfileNotFound.Error())
+		return 0, uuid.Nil, false
 	}
+	return partition, id, true
+}
+
+// list shows the users. Search and filters run on the server.
+func (h *AdminUserHandler) list(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := TenantFromContext(r.Context())
+	q := r.URL.Query()
+	partitionID, _ := strconv.ParseInt(q.Get("partition_id"), 10, 64)
 
 	partitions, err := h.storagePort.GetPartitions(r.Context(), tenant.ID)
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		h.renderDomainError(w, r, err)
+		return
+	}
+	users, err := h.adminUserUseCase.ListUsers(r.Context(), tenant.ID, partitionID)
+	if err != nil {
+		h.renderDomainError(w, r, err)
 		return
 	}
 
-	var users []model.UserProfile
-	if filterPartitionID > 0 {
-		usrs, err := h.adminStorage.GetUserProfilesByTenant(r.Context(), tenant.ID, filterPartitionID)
-		if err != nil {
-			h.renderError(w, r, http.StatusInternalServerError, err.Error())
-			return
-		}
-		users = usrs
-	} else {
-		for _, p := range partitions {
-			usrs, err := h.adminStorage.GetUserProfilesByTenant(r.Context(), tenant.ID, p.ID)
-			if err == nil {
-				users = append(users, usrs...)
-			}
-		}
+	props := admin.UserListProps{
+		ActiveTenant: *tenant, Partitions: partitions, Msg: q.Get("msg"),
+		Query: strings.TrimSpace(q.Get("q")), Status: q.Get("status"), PartitionID: partitionID,
 	}
+	props.Rows = filterUserRows(users, partitions, props)
+	h.renderAdminPage(w, r, admin.UsersContent(props), admin.UsersPage(props))
+}
 
-	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	msg := r.URL.Query().Get("msg")
-	props := admin.UsersPageProps{
-		ActiveTenant:      *tenant,
-		Users:             users,
-		Partitions:        partitions,
-		FilterPartitionID: filterPartitionID,
-		Msg:               msg,
+func filterUserRows(users []model.UserProfile, partitions []model.Partition, f admin.UserListProps) []admin.UserRow {
+	names := map[int64]string{}
+	for _, p := range partitions {
+		names[p.ID] = partitionName(p)
 	}
-	if r.Header.Get(model.HeaderHxRequest) == "true" {
-		_ = admin.UsersContent(props).Render(r.Context(), w)
-	} else {
-		_ = admin.UsersPage(props).Render(r.Context(), w)
+	rows := make([]admin.UserRow, 0, len(users))
+	for _, u := range users {
+		if matchesUserFilter(u, f) {
+			rows = append(rows, admin.UserRow{User: u, PartitionName: names[u.PartitionID]})
+		}
+	}
+	return rows
+}
+
+func matchesUserFilter(u model.UserProfile, f admin.UserListProps) bool {
+	if !matchesUserStatus(u, f.Status) {
+		return false
+	}
+	if f.Query == "" {
+		return true
+	}
+	needle := strings.ToLower(f.Query)
+	for _, field := range []string{u.PreferredUsername, u.Name, u.Email} {
+		if strings.Contains(strings.ToLower(field), needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesUserStatus(u model.UserProfile, status string) bool {
+	switch status {
+	case "active":
+		return !u.Blocked && u.LifecycleState == model.LifecycleActivated
+	case "pending":
+		return u.LifecycleState == model.LifecycleRequested
+	case "blocked":
+		return u.Blocked
+	case "inactive":
+		return !u.Blocked && u.LifecycleState != model.LifecycleActivated && u.LifecycleState != model.LifecycleRequested
+	default:
+		return true
 	}
 }
 
-func (h *AdminUserHandler) adminViewUser(w http.ResponseWriter, r *http.Request) {
-	tenant, _ := TenantFromContext(r.Context())
-	userIDStr := r.URL.Query().Get("id")
-	userUUID, err := uuid.Parse(userIDStr)
+// loadPage reads everything the detail page needs.
+func (h *AdminUserHandler) loadPage(r *http.Request, tenant *model.Tenant, partitionID int64, id uuid.UUID) (admin.UserPageProps, error) {
+	detail, err := h.adminUserUseCase.GetUser(r.Context(), tenant.ID, partitionID, id)
 	if err != nil {
-		h.renderError(w, r, http.StatusBadRequest, ErrInvalidUserUUID)
-		return
+		return admin.UserPageProps{}, err
 	}
-
-	partitionIDStr := r.URL.Query().Get("partition_id")
-	partitionID, _ := strconv.ParseInt(partitionIDStr, 10, 64)
-
-	user, err := h.storagePort.GetUserProfileByID(r.Context(), tenant.ID, partitionID, userUUID)
-	if err != nil {
-		h.renderError(w, r, http.StatusNotFound, err.Error())
-		return
-	}
-
-	identities, err := h.adminStorage.GetUserIdentities(r.Context(), userUUID)
-	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	providers, err := h.idpService.GetIdentityProviders(r.Context(), tenant.ID)
-	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	if r.URL.Query().Get("modal") == "true" {
-		component := admin.Modal(user.Name, fmt.Sprintf(port.RouteAdmin+port.RouteAdminUsers+"/view?id=%s&partition_id=%d", userIDStr, partitionID))
-		_ = component.Render(r.Context(), w)
-		return
-	}
-	component := admin.UserDetails(admin.UserDetailsProps{
-		User:       *user,
-		Identities: identities,
-		Providers:  providers,
-	})
-	_ = component.Render(r.Context(), w)
-}
-
-func (h *AdminUserHandler) adminEditUserForm(w http.ResponseWriter, r *http.Request) {
-	tenant, _ := TenantFromContext(r.Context())
-	userIDStr := r.URL.Query().Get("id")
-	userUUID, err := uuid.Parse(userIDStr)
-	if err != nil {
-		h.renderError(w, r, http.StatusBadRequest, ErrInvalidUserUUID)
-		return
-	}
-
-	partitionIDStr := r.URL.Query().Get("partition_id")
-	partitionID, _ := strconv.ParseInt(partitionIDStr, 10, 64)
-
-	user, err := h.storagePort.GetUserProfileByID(r.Context(), tenant.ID, partitionID, userUUID)
-	if err != nil {
-		h.renderError(w, r, http.StatusNotFound, err.Error())
-		return
-	}
-
 	partitions, err := h.storagePort.GetPartitions(r.Context(), tenant.ID)
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
-		return
+		return admin.UserPageProps{}, err
 	}
-
-	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	if r.URL.Query().Get("modal") == "true" {
-		component := admin.Modal("Edit User", fmt.Sprintf(port.RouteAdmin+port.RouteAdminUsers+"/edit?id=%s&partition_id=%d", userIDStr, partitionID))
-		_ = component.Render(r.Context(), w)
-		return
+	props := admin.UserPageProps{
+		ActiveTenant: *tenant, Detail: detail, Msg: r.URL.Query().Get("msg"), Sections: map[string]admin.SectionResult{},
 	}
-	component := admin.UserForm(admin.UserFormProps{
-		User:       *user,
-		Partitions: partitions,
-		Errors:     nil,
-	})
-	_ = component.Render(r.Context(), w)
-}
-
-func (h *AdminUserHandler) adminSaveUser(w http.ResponseWriter, r *http.Request) {
-	tenant, _ := TenantFromContext(r.Context())
-	id := r.FormValue("id")
-	userUUID, err := uuid.Parse(id)
-	if err != nil {
-		h.renderError(w, r, http.StatusBadRequest, ErrInvalidUserUUID)
-		return
+	if session, ok := AdminSessionFromContext(r.Context()); ok {
+		props.ActingUserID = session.UserID.String()
 	}
-
-	partitionIDStr := r.FormValue("partition_id")
-	partitionID, _ := strconv.ParseInt(partitionIDStr, 10, 64)
-
-	user, err := h.storagePort.GetUserProfileByID(r.Context(), tenant.ID, partitionID, userUUID)
-	if err != nil {
-		h.renderError(w, r, http.StatusNotFound, err.Error())
-		return
-	}
-
-	fullName := r.FormValue("name")
-	email := r.FormValue("email")
-	password := r.FormValue("password")
-
-	errs := make(map[string]string)
-	if fullName == "" {
-		errs["name"] = "Full name is required"
-	}
-	if email == "" {
-		errs["email"] = "Email address is required"
-	}
-
-	if len(errs) > 0 {
-		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		partitions, _ := h.storagePort.GetPartitions(r.Context(), tenant.ID)
-		component := admin.UserForm(admin.UserFormProps{
-			User:       *user,
-			Partitions: partitions,
-			Errors:     errs,
-		})
-		_ = component.Render(r.Context(), w)
-		return
-	}
-
-	user.Name = fullName
-	user.Email = email
-
-	if password != "" {
-		hash, err := h.cryptoPort.HashCredential(password)
-		if err != nil {
-			h.renderError(w, r, http.StatusInternalServerError, "failed to hash password")
-			return
-		}
-		// Try to find the local username-password provider for this user's partition
-		providers, err := h.storagePort.GetIdentityProviders(r.Context(), tenant.ID)
-		if err == nil {
-			var localIDP *model.IdentityProvider
-			for _, p := range providers {
-				if p.IDPType == model.UsernamePasswordIDPType && p.PartitionID == user.PartitionID {
-					localIDP = &p
-					break
-				}
-			}
-			if localIDP != nil {
-				// Get or create password credential
-				passwordCred, err := h.storagePort.GetPasswordCredentialByProfileID(r.Context(), tenant.ID, user.PartitionID, user.ID, localIDP.ID)
-				if err != nil {
-					// Create new
-					passwordCred = &model.PasswordCredential{
-						UserProfileID:      user.ID,
-						IdentityProviderID: localIDP.ID,
-						Argon2Hash:         hash,
-					}
-				} else {
-					passwordCred.Argon2Hash = hash
-				}
-				_ = h.storagePort.SavePasswordCredential(r.Context(), *passwordCred)
-			}
+	for _, p := range partitions {
+		if p.ID == partitionID {
+			props.PartitionName = partitionName(p)
 		}
 	}
-
-	err = h.adminStorage.UpdateUserProfile(r.Context(), tenant.ID, user.PartitionID, *user)
-	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	w.Header().Set(model.HeaderHxRedirect, fmt.Sprintf(port.RouteAdmin+port.RouteAdminUsers+"?msg=User+%s+updated+successfully", url.QueryEscape(user.Name)))
-	w.WriteHeader(http.StatusOK)
+	return props, nil
 }
 
-func (h *AdminUserHandler) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
+func (h *AdminUserHandler) detail(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
-	userIDStr := chi.URLParam(r, "id")
-	userUUID, err := uuid.Parse(userIDStr)
+	partition, id, ok := h.target(w, r)
+	if !ok {
+		return
+	}
+	props, err := h.loadPage(r, tenant, partition, id)
 	if err != nil {
-		h.renderError(w, r, http.StatusBadRequest, ErrInvalidUserUUID)
+		h.renderDomainError(w, r, err)
 		return
 	}
-
-	partitionIDStr := r.URL.Query().Get("partition_id")
-	partitionID, _ := strconv.ParseInt(partitionIDStr, 10, 64)
-
-	if err := h.adminStorage.DeleteUserProfile(r.Context(), tenant.ID, partitionID, userUUID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+port.RouteAdminUsers+"?msg=User+deleted+successfully")
-	w.WriteHeader(http.StatusOK)
-}
-
-func (h *AdminUserHandler) adminDecoupleIdentity(w http.ResponseWriter, r *http.Request) {
-	tenant, _ := TenantFromContext(r.Context())
-	userIDStr := chi.URLParam(r, "id")
-	userUUID, err := uuid.Parse(userIDStr)
-	if err != nil {
-		h.renderError(w, r, http.StatusBadRequest, ErrInvalidUserUUID)
-		return
-	}
-
-	idpIDStr := chi.URLParam(r, "idp")
-	idpUUID, err := uuid.Parse(idpIDStr)
-	if err != nil {
-		h.renderError(w, r, http.StatusBadRequest, ErrInvalidIDPUUID)
-		return
-	}
-
-	partitionIDStr := r.URL.Query().Get("partition_id")
-	partitionID, _ := strconv.ParseInt(partitionIDStr, 10, 64)
-
-	cmd := port.DecoupleIdentityCommand{
-		TenantID:           tenant.ID,
-		PartitionID:        partitionID,
-		UserProfileID:      userUUID,
-		IdentityProviderID: idpUUID,
-	}
-
-	if err := h.userProfileUseCase.DecoupleUserIdentity(r.Context(), cmd); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Fetch updated details to re-render in modal body
-	user, err := h.storagePort.GetUserProfileByID(r.Context(), tenant.ID, partitionID, userUUID)
-	if err != nil {
-		h.renderError(w, r, http.StatusNotFound, err.Error())
-		return
-	}
-
-	identities, err := h.adminStorage.GetUserIdentities(r.Context(), userUUID)
-	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	providers, err := h.idpService.GetIdentityProviders(r.Context(), tenant.ID)
-	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	component := admin.UserDetails(admin.UserDetailsProps{
-		User:       *user,
-		Identities: identities,
-		Providers:  providers,
-	})
-	_ = component.Render(r.Context(), w)
+	h.renderAdminPage(w, r, admin.UserContent(props), admin.UserPage(props))
 }

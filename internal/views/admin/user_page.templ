@@ -1,0 +1,41 @@
+package admin
+
+// UserContent is the detail page of one user. Every card saves on its own.
+templ UserContent(props UserPageProps) {
+	@PageHeader(userTitle(props), "Users", usersBase()) {
+		{{ label, severity := userStatusLabel(props.Detail.User) }}
+		@Badge(label, severity)
+	}
+	@FlashMessage(props.Msg)
+	@UserUnlockNotice(props)
+	<div class="grid grid-cols-1 lg:grid-cols-[14rem_minmax(0,1fr)] gap-8 items-start">
+		<nav class="lg:sticky lg:top-24 text-sm" aria-label="Sections">
+			<ul class="space-y-1">
+				<li><a href="#section-profile" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Profile</a></li>
+				<li><a href="#section-status" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Status</a></li>
+				<li><a href="#section-links" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Sign-in methods</a></li>
+				<li><a href="#section-password" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Password</a></li>
+			</ul>
+		</nav>
+		<div class="space-y-6 min-w-0">
+			@UserProfileCard(props.Detail.User, props.Section("profile"))
+			@UserStatusCard(props, props.Section("status"))
+			@UserLinksCard(props, props.Section("links").Error)
+			@UserPasswordCard(props, props.Section("password"))
+			@ConfirmDelete(UserDeleteProps(props))
+		</div>
+	</div>
+}
+
+templ UserPage(props UserPageProps) {
+	@AdminLayout(AdminLayoutProps{Title: userTitle(props), CurrentTab: "users", TenantName: props.ActiveTenant.Name}) {
+		@UserContent(props)
+	}
+}
+
+func userTitle(props UserPageProps) string {
+	if props.Detail.User.Name != "" {
+		return props.Detail.User.Name
+	}
+	return props.Detail.User.PreferredUsername
+}

@@ -18,7 +18,6 @@ const (
 	AdminTenantName      = "Administrative Tenant"
 	ErrInvalidIDPUUID    = "invalid IDP UUID"
 	ErrInvalidTenantUUID = "invalid Tenant UUID"
-	ErrInvalidUserUUID   = "invalid User UUID"
 	ErrInvalidURLFormat  = "Invalid URL format (must include protocol like http:// or https://)"
 	ErrMalformedPayload  = "malformed payload parameters submitted"
 	ErrOIDCDiscoveryURL  = "OIDC discovery URL is required"
