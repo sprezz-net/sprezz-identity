@@ -58,6 +58,21 @@ func TenantContent(props TenantPageProps) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if props.Detail.Tenant.IsActive {
+				templ_7745c5c3_Err = Badge("Active", "active").Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			} else {
+				templ_7745c5c3_Err = Badge("Not active", "locked").Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
 			return nil
 		})
 		templ_7745c5c3_Err = PageHeader(props.Detail.Tenant.Name, tenantBackLabel(props), tenantsBase()).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
@@ -68,13 +83,35 @@ func TenantContent(props TenantPageProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"grid grid-cols-1 lg:grid-cols-[14rem_minmax(0,1fr)] gap-8 items-start\"><nav class=\"lg:sticky lg:top-24 text-sm\" aria-label=\"Sections\"><ul class=\"space-y-1\"><li><a href=\"#section-general\" class=\"block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100\">General</a></li><li><a href=\"#section-signup\" class=\"block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100\">Registration</a></li><li><a href=\"#section-redirects\" class=\"block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100\">Redirect URIs</a></li><li><a href=\"#section-scopes\" class=\"block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100\">Scopes and audiences</a></li><li><a href=\"#section-contents\" class=\"block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100\">Contents</a></li></ul></nav><div class=\"space-y-6 min-w-0\">")
+		if !props.Detail.Tenant.IsActive {
+			templ_7745c5c3_Err = SystemBanner("This tenant is not active. Nobody can sign in and no tokens are issued or accepted until it is switched on again.").Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div class=\"grid grid-cols-1 lg:grid-cols-[14rem_minmax(0,1fr)] gap-8 items-start\"><nav class=\"lg:sticky lg:top-24 text-sm\" aria-label=\"Sections\"><ul class=\"space-y-1\"><li><a href=\"#section-general\" class=\"block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100\">General</a></li>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if props.CanDeactivate() {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<li><a href=\"#section-status\" class=\"block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100\">Status</a></li>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<li><a href=\"#section-signup\" class=\"block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100\">Registration</a></li><li><a href=\"#section-redirects\" class=\"block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100\">Redirect URIs</a></li><li><a href=\"#section-scopes\" class=\"block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100\">Scopes and audiences</a></li><li><a href=\"#section-contents\" class=\"block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100\">Contents</a></li></ul></nav><div class=\"space-y-6 min-w-0\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		templ_7745c5c3_Err = TenantGeneralCard(props.Detail.Tenant, props.Section("general")).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
+		}
+		if props.CanDeactivate() {
+			templ_7745c5c3_Err = TenantStatusCard(props.Detail.Tenant, props.Section("status")).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
 		templ_7745c5c3_Err = TenantSignupCard(props.Detail.Tenant, props.Section("signup")).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
@@ -98,7 +135,7 @@ func TenantContent(props TenantPageProps) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -175,7 +212,7 @@ func TenantContentsCard(props TenantPageProps) templ.Component {
 			templ_7745c5c3_Var5 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<section id=\"section-contents\" class=\"bg-white border border-gray-200 rounded-xl shadow-xs scroll-mt-24\"><div class=\"px-6 pt-5 pb-4 border-b border-gray-100\"><h2 class=\"text-base font-bold text-gray-900\">Contents</h2><p class=\"mt-1 text-sm text-gray-500\">What this tenant owns.</p></div><dl class=\"px-6 py-5 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<section id=\"section-contents\" class=\"bg-white border border-gray-200 rounded-xl shadow-xs scroll-mt-24\"><div class=\"px-6 pt-5 pb-4 border-b border-gray-100\"><h2 class=\"text-base font-bold text-gray-900\">Contents</h2><p class=\"mt-1 text-sm text-gray-500\">What this tenant owns.</p></div><dl class=\"px-6 py-5 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -203,7 +240,7 @@ func TenantContentsCard(props TenantPageProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</dl></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</dl></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -232,33 +269,33 @@ func tenantCount(label string, n int) templ.Component {
 			templ_7745c5c3_Var6 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div><dt class=\"text-gray-500\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div><dt class=\"text-gray-500\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tenant_page.templ`, Line: 63, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tenant_page.templ`, Line: 77, Col: 35}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</dt><dd class=\"text-gray-900 font-semibold\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</dt><dd class=\"text-gray-900 font-semibold\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(n))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tenant_page.templ`, Line: 64, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/tenant_page.templ`, Line: 78, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</dd></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</dd></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

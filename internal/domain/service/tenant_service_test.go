@@ -26,7 +26,7 @@ func TestTenantService_CreateTenant(t *testing.T) {
 	svc := NewTenantService(storage, adminStorage, clock, idpService, "unittest", "admin-domain.com")
 
 	storage.ResolveTenantByUUIDMock.Set(func(ctx context.Context, id uuid.UUID) (*model.Tenant, error) {
-		return &model.Tenant{ID: id, Name: "My Tenant", Domain: "my-tenant.com"}, nil
+		return &model.Tenant{ID: id, Name: "My Tenant", Domain: "my-tenant.com", IsActive: true}, nil
 	})
 
 	adminStorage.CreateTenantMock.Set(func(ctx context.Context, tenant model.Tenant) error {
@@ -74,7 +74,7 @@ func TestTenantService_GetTenant(t *testing.T) {
 	svc := NewTenantService(storage, adminStorage, clock, idpService, "unittest", "admin-domain.com")
 
 	id := uuid.New()
-	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, id).Return(&model.Tenant{ID: id, Name: "Hello"}, nil)
+	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, id).Return(&model.Tenant{ID: id, Name: "Hello", IsActive: true}, nil)
 
 	tenant, err := svc.GetTenant(context.Background(), id)
 	if err != nil {
@@ -99,9 +99,10 @@ func TestTenantService_ToggleSignup(t *testing.T) {
 
 	id := uuid.New()
 	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, id).Return(&model.Tenant{
-		ID:     id,
-		Name:   "Hello",
-		Config: model.TenantConfig{AllowSignup: false},
+		ID:       id,
+		Name:     "Hello",
+		Config:   model.TenantConfig{AllowSignup: false},
+		IsActive: true,
 	}, nil)
 	adminStorage.CreateTenantMock.Set(func(ctx context.Context, tenant model.Tenant) error {
 		if !tenant.Config.AllowSignup {
@@ -132,7 +133,7 @@ func TestTenantService_UpdateTenant(t *testing.T) {
 	svc := NewTenantService(storage, adminStorage, clock, idpService, "unittest", "admin-domain.com")
 
 	id := uuid.New()
-	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, id).Return(&model.Tenant{ID: id, Name: "Hello"}, nil)
+	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, id).Return(&model.Tenant{ID: id, Name: "Hello", IsActive: true}, nil)
 	adminStorage.CreateTenantMock.Set(func(ctx context.Context, tenant model.Tenant) error {
 		if tenant.Name != "Updated" {
 			t.Errorf("expected updated name, got %s", tenant.Name)

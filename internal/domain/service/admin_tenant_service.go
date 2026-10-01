@@ -35,6 +35,9 @@ func (s *AdminTenantService) actor(ctx context.Context, actingTenant uuid.UUID) 
 	if err != nil {
 		return nil, err
 	}
+	if err := requireActiveTenant(t); err != nil {
+		return nil, err
+	}
 	return t, nil
 }
 

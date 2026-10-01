@@ -17,6 +17,8 @@ func TestFederationService_InitiateFederatedLogin_Success(t *testing.T) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+
+	allowTenant(storage)
 	adminStorage := portmock.NewAdminStorageMock(ctrl)
 	fedClient := portmock.NewFederationClientMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
@@ -132,8 +134,9 @@ func TestFederationService_ExecuteFederatedCallback_JITProvisioning(t *testing.T
 
 	// 5. Mock Resolve Tenant
 	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantUUID).Return(&model.Tenant{
-		ID:   tenantUUID,
-		Name: "Test Tenant",
+		ID:       tenantUUID,
+		Name:     "Test Tenant",
+		IsActive: true,
 	}, nil)
 
 	// 6. Mock GetUserIdentityByProviderAndExternalID -> return not found to trigger Strategy B
@@ -254,8 +257,9 @@ func TestFederationService_ExecuteFederatedCallback_FailsIfEmailUnverified(t *te
 
 	// 5. Mock Resolve Tenant
 	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantUUID).Return(&model.Tenant{
-		ID:   tenantUUID,
-		Name: "Test Tenant",
+		ID:       tenantUUID,
+		Name:     "Test Tenant",
+		IsActive: true,
 	}, nil)
 
 	// 6. Mock GetUserIdentityByProviderAndExternalID -> return not found to trigger Strategy B

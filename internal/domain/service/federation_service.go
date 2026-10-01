@@ -85,6 +85,10 @@ func (s *FederationService) InitiateFederatedLogin(
 	cmd port.InitiateFederatedLoginCommand,
 ) (*port.InitiateFederatedLoginResponse, error) {
 
+	if _, err := ensureTenantActive(ctx, s.storage, cmd.TenantID); err != nil {
+		return nil, fmt.Errorf("federation_service: initiate failed: %w", err)
+	}
+
 	// 1. Resolve configuration schemas for the target provider and assert status values
 	idp, err := s.storage.GetIdentityProviderByUUID(ctx, cmd.TenantID, cmd.IdentityProviderID)
 	if err != nil {
@@ -235,6 +239,11 @@ func (s *FederationService) ExecuteFederatedCallback(
 	cmd port.FederatedCallbackCommand,
 ) (*port.FederatedCallbackResponse, error) {
 
+	// A deactivated tenant completes no federated sign-in. The check runs before the handshake state is consumed.
+	if _, err := ensureTenantActive(ctx, s.storage, cmd.TenantID); err != nil {
+		return nil, fmt.Errorf("federation_service: callback refused: %w", err)
+	}
+
 	// 1. STAGE 1: Evict and validate the tracking state parameter to block XSRF replays
 	handshake, err := s.storage.GetAndConsumeOutboundHandshake(ctx, cmd.TenantID, cmd.IncomingState)
 	if err != nil {
@@ -305,7 +314,7 @@ func (s *FederationService) ExecuteFederatedCallback(
 	assurance := s.idpService.ResolveFederatedLevels(idp.Config, upstreamACR, upstreamAMR)
 
 	// Generate downstream space-delimited ACR string configurations.
-	tenant, err := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
+	tenant, err := ensureTenantActive(ctx, s.storage, cmd.TenantID)
 	if err != nil {
 		return nil, fmt.Errorf("federation_service: failed to resolve tenant context: %w", err)
 	}

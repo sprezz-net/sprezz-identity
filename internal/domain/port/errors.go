@@ -74,6 +74,9 @@ var (
 	// Administrative Console Errors
 	// ErrSystemManaged is returned when an operation targets an object provisioned and protected by the bootstrap service.
 	ErrSystemManaged = errors.New("this object is managed by the system and cannot be modified this way")
+	// ErrTenantInactive is returned when a sign-in, token or session operation targets a tenant an administrator has
+	// deactivated. Every entry point of the domain services checks it, not only the HTTP edge.
+	ErrTenantInactive = errors.New("this tenant is not active")
 	// ErrForbidden is returned when the acting administrator may not touch the object, for example another tenant.
 	ErrForbidden = errors.New("you are not allowed to do this")
 	// ErrLastAdministrator is returned when an action would leave the admin console without a usable administrator.

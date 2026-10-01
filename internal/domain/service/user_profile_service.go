@@ -33,6 +33,10 @@ func NewUserProfileService(s port.Storage, as port.AdminStorage, c port.Crypto, 
 // CreateUserProfile coordinates the multi-table transactional initialization of a new human actor profile,
 // generating Argon2id hashes and binding localized audit trail linkage nodes concurrently.
 func (s *UserProfileService) CreateUserProfile(ctx context.Context, cmd port.CreateUserProfileCommand) (*model.UserProfile, error) {
+	if _, err := ensureTenantActive(ctx, s.storage, cmd.TenantID); err != nil {
+		return nil, err
+	}
+
 	compositeName := strings.TrimSpace(cmd.FirstName + " " + cmd.LastName)
 
 	// Without a password the user profile cannot be activated, set back to created state
@@ -113,6 +117,10 @@ func (s *UserProfileService) ChangeUserPassword(ctx context.Context, cmd port.Ch
 		return valErr
 	}
 
+	if _, err := ensureTenantActive(ctx, s.storage, cmd.TenantID); err != nil {
+		return err
+	}
+
 	// 2. Target the exact username-password provider locked to this specific partition
 	providers, err := s.storage.GetIdentityProvidersByTypeAndPartition(ctx, cmd.TenantID, cmd.PartitionID, model.UsernamePasswordIDPType)
 	if err != nil {
@@ -175,6 +183,10 @@ func (s *UserProfileService) ChangeUserEmail(ctx context.Context, cmd port.Chang
 	// 2. Intercept and throw early if structural validations fail before invoking database checks
 	if valErr.HasErrors() {
 		return valErr
+	}
+
+	if _, err := ensureTenantActive(ctx, s.storage, cmd.TenantID); err != nil {
+		return err
 	}
 
 	// 3. Target provider strictly bound to the operational partition
@@ -247,6 +259,10 @@ func (s *UserProfileService) ChangeUserName(ctx context.Context, cmd port.Change
 		return valErr
 	}
 
+	if _, err := ensureTenantActive(ctx, s.storage, cmd.TenantID); err != nil {
+		return err
+	}
+
 	partition, err := s.storage.GetPartitionByID(ctx, cmd.TenantID, cmd.PartitionID)
 	if err != nil {
 		return fmt.Errorf("user_profile_service: failed resolving partition properties: %w", err)
@@ -269,6 +285,10 @@ func (s *UserProfileService) ChangeUserName(ctx context.Context, cmd port.Change
 
 // DecoupleUserIdentity disconnects a federated account while protecting the profile from becoming un-routable.
 func (s *UserProfileService) DecoupleUserIdentity(ctx context.Context, cmd port.DecoupleIdentityCommand) error {
+	if _, err := ensureTenantActive(ctx, s.storage, cmd.TenantID); err != nil {
+		return err
+	}
+
 	// 1. Gather active identities strictly within this isolated partition boundary
 	identities, err := s.storage.GetUserIdentitiesByProfileID(ctx, cmd.TenantID, cmd.PartitionID, cmd.UserProfileID)
 	if err != nil {
@@ -305,6 +325,10 @@ func (s *UserProfileService) DecoupleUserIdentity(ctx context.Context, cmd port.
 }
 
 func (s *UserProfileService) GetUserProfile(ctx context.Context, cmd port.GetUserProfileCommand) (*model.UserProfile, error) {
+	if _, err := ensureTenantActive(ctx, s.storage, cmd.TenantID); err != nil {
+		return nil, err
+	}
+
 	partition, err := s.storage.GetPartitionByID(ctx, cmd.TenantID, cmd.PartitionID)
 	if err != nil {
 		return nil, fmt.Errorf("user_profile_service: failed resolving partition properties: %w", err)

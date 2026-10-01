@@ -33,6 +33,11 @@ func (s *LocalAuthService) AuthenticateLocalCredentials(ctx context.Context, cmd
 	// This forces a consistent CPU execution time when a user profile does not exist
 	const dummyArgon2Hash = "$argon2id$v=19$m=65536,t=3,p=2$NDg4bVUzcmM2M1NxM2I0Yg$d2U4M3I2M3FzYTQ4OG11M3JjNjNzcTNidDRi"
 
+	// A deactivated tenant signs nobody in. This is checked before any credential is compared or counted.
+	if _, err := ensureTenantActive(ctx, s.storage, cmd.TenantID); err != nil {
+		return nil, err
+	}
+
 	// Self-resolve PartitionID if zero
 	if cmd.PartitionID == 0 {
 		tenant, err := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
@@ -167,7 +172,7 @@ func (s *LocalAuthService) GetLoginContext(ctx context.Context, cmd port.GetLogi
 	slog.Debug("GetLoginContext: starting context resolution", "tenant_id", cmd.TenantID, "interaction_id", cmd.InteractionID, "idp_hint_query", cmd.IDPHintQuery)
 
 	// 1. Fetch Tenant configuration permissions
-	tenant, err := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
+	tenant, err := ensureTenantActive(ctx, s.storage, cmd.TenantID)
 	if err != nil {
 		slog.Error("GetLoginContext: failed resolving tenant context", "tenant_id", cmd.TenantID, "err", err)
 		return nil, fmt.Errorf("local_auth_service: failed resolving tenant context: %w", err)
@@ -317,6 +322,10 @@ func (s *LocalAuthService) GetLoginContext(ctx context.Context, cmd port.GetLogi
 }
 
 func (s *LocalAuthService) GetInteractionSession(ctx context.Context, tenantID uuid.UUID, interactionID string) (*model.InteractionSession, error) {
+	if _, err := ensureTenantActive(ctx, s.storage, tenantID); err != nil {
+		return nil, err
+	}
+
 	uid, err := uuid.Parse(interactionID)
 	if err != nil {
 		return nil, fmt.Errorf("local_auth_service: invalid interaction ID format: %w", err)

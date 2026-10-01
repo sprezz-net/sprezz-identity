@@ -37,7 +37,7 @@ func TestTokenHandler_HandleTokenRequest_ClientCredentials_Success(t *testing.T)
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https", IsActive: true}
 	secret := "supersecret"
 	fakeHash := "$argon2id$v=19$m=65536,t=3,p=4$storedsecurecredentialhash"
 
@@ -97,7 +97,7 @@ func TestTokenHandler_HandleTokenRequest_AuthCodeExchange_Success(t *testing.T) 
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https", IsActive: true}
 
 	tuc := portmock.NewTenantUseCaseMock(ctrl)
 	fuc := portmock.NewFederatedLoginUseCaseMock(ctrl)
@@ -150,7 +150,7 @@ func TestTokenHandler_HandleTokenRequest_InvalidGrantType(t *testing.T) {
 	crypto := portmock.NewCryptoMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Scheme: "https", IsActive: true}
 
 	tuc := portmock.NewTenantUseCaseMock(ctrl)
 	fuc := portmock.NewFederatedLoginUseCaseMock(ctrl)

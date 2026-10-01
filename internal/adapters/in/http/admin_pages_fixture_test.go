@@ -44,7 +44,7 @@ func newPagesFixture(t *testing.T) *pagesFixture {
 	tenantsUC := portmock.NewAdminTenantUseCaseMock(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: testAdminHost, Name: "Administrative Tenant", IsSystem: true, Scheme: "http"}
+	tenant := &model.Tenant{ID: tenantID, Domain: testAdminHost, Name: "Administrative Tenant", IsSystem: true, Scheme: "http", IsActive: true}
 	userID := uuid.New()
 
 	tuc.ResolveTenantContextMock.Optional().Set(func(ctx context.Context, host string) (*model.Tenant, error) { return tenant, nil })

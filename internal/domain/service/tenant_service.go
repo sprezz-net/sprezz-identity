@@ -139,6 +139,11 @@ func (s *TenantService) ResolveTenantContext(ctx context.Context, host string) (
 		return nil, fmt.Errorf("tenant_service: domain %s not bootstrapped: %w", host, err)
 	}
 
+	// A deactivated tenant is not served at all. Storage still returns it, so the console can list and reactivate it.
+	if err := requireActiveTenant(tenant); err != nil {
+		return nil, fmt.Errorf("tenant_service: domain %s: %w", host, err)
+	}
+
 	return tenant, nil
 }
 

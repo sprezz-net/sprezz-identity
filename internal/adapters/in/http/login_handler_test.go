@@ -35,7 +35,7 @@ func TestHttpAdapter_LoginRoot_Success(t *testing.T) {
 	adapter, lauc, suc, tuc, _ := buildLocalLoginTestAdapter(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Config: model.TenantConfig{AllowSignup: true}}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Config: model.TenantConfig{AllowSignup: true}, IsActive: true}
 	provider := model.IdentityProvider{
 		ID:       uuid.New(),
 		TenantID: tenantID,
@@ -82,7 +82,7 @@ func TestHttpAdapter_LoginSubmit_MissingCredentials(t *testing.T) {
 	mockSessionCookie(suc)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", IsActive: true}
 
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
 		return tenant, nil
@@ -129,7 +129,7 @@ func TestHttpAdapter_LoginSubmit_Success(t *testing.T) {
 	adapter, lauc, suc, tuc, auth := buildLocalLoginTestAdapter(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Config: model.TenantConfig{AllowSignup: true}}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Config: model.TenantConfig{AllowSignup: true}, IsActive: true}
 	providerID := uuid.New()
 	userUUID := uuid.New()
 
@@ -222,7 +222,7 @@ func TestHttpAdapter_LoginWithInteractionID_QueryAndForm(t *testing.T) {
 	adapter, lauc, suc, tuc, auth := buildLocalLoginTestAdapter(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Config: model.TenantConfig{AllowSignup: true}}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", Config: model.TenantConfig{AllowSignup: true}, IsActive: true}
 	provider := model.IdentityProvider{
 		ID:       uuid.New(),
 		TenantID: tenantID,

@@ -36,6 +36,7 @@ func TestOAuthService_ProcessDiscoveryMetadata_Success(t *testing.T) {
 				"aal1": {AAL: 1},
 			},
 		},
+		IsActive: true,
 	}, nil)
 
 	resp, err := svc.ProcessDiscoveryMetadata(context.Background(), tenantUUID, true)
@@ -99,6 +100,7 @@ func TestOAuthService_ProcessAuthorizeRequest_StrictPartitionIsolation(t *testin
 		Config: model.TenantConfig{
 			RedirectWhitelist: []string{"https://myapp.com/callback"},
 		},
+		IsActive: true,
 	}
 
 	app := &model.Application{ID: uuid.New(), IsEnabled: true}
@@ -187,6 +189,7 @@ func TestOAuthService_ProcessAuthorizeRequest_MatchingPartitionAllowed(t *testin
 		Config: model.TenantConfig{
 			RedirectWhitelist: []string{"https://myapp.com/callback"},
 		},
+		IsActive: true,
 	}
 
 	app := &model.Application{ID: uuid.New(), IsEnabled: true}
@@ -267,6 +270,7 @@ func TestOAuthService_ProcessAuthorizeRequest_PersistsRequestedScopes(t *testing
 			RedirectWhitelist: []string{"https://myapp.com/callback"},
 			PredefinedScopes:  []string{"openid", "profile", "email"},
 		},
+		IsActive: true,
 	}
 
 	app := &model.Application{ID: uuid.New(), IsEnabled: true}
@@ -341,6 +345,7 @@ func TestOAuthService_ProcessLogoutRequest_UnwhitelistedRedirectFallback(t *test
 			RedirectWhitelist:  []string{"https://my-tenant.com/admin"},
 			DefaultRedirectURI: "https://my-tenant.com/admin",
 		},
+		IsActive: true,
 	}
 
 	// 1. SETUP EXPLICIT MOCK EXPECTATIONS
@@ -411,6 +416,7 @@ func TestOAuthService_ProcessLogoutRequest_JITFrontChannelValidation_DropsMalici
 			RedirectWhitelist:  []string{"https://my-tenant.com"},
 			DefaultRedirectURI: "https://my-tenant.com",
 		},
+		IsActive: true,
 	}
 
 	// Mock an application session link where an attacker has injected a malicious iframe hook
@@ -474,6 +480,7 @@ func TestOAuthService_ProcessLogoutRequest_JITBackChannelValidation_DropsMalicio
 			RedirectWhitelist:  []string{"https://my-tenant.com"},
 			DefaultRedirectURI: "https://my-tenant.com",
 		},
+		IsActive: true,
 	}
 
 	// Mock an application link carrying a malicious backchannel destination hook
@@ -527,7 +534,7 @@ func TestOAuthService_ProcessJWKSetRetrieval(t *testing.T) {
 		svc.crypto = crypto
 
 		tenantUUID := uuid.New()
-		storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantUUID).Return(&model.Tenant{ID: tenantUUID}, nil)
+		storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantUUID).Return(&model.Tenant{ID: tenantUUID, IsActive: true}, nil)
 
 		expectedJWKS := []map[string]any{
 			{"kty": "RSA", "kid": "key-1"},
@@ -725,6 +732,7 @@ func TestOAuthService_TokenIntrospection(t *testing.T) {
 	t.Run("RevokedToken_ActiveFalse", func(t *testing.T) {
 		ctrl := minimock.NewController(t)
 		storage := portmock.NewStorageMock(ctrl)
+		allowTenant(storage)
 		crypto := portmock.NewCryptoMock(ctrl)
 		svc := NewOAuthService(storage, nil, nil, nil, nil, nil, nil)
 		svc.crypto = crypto
@@ -751,6 +759,7 @@ func TestOAuthService_TokenIntrospection(t *testing.T) {
 	t.Run("ValidBearerToken_Success", func(t *testing.T) {
 		ctrl := minimock.NewController(t)
 		storage := portmock.NewStorageMock(ctrl)
+		allowTenant(storage)
 		crypto := portmock.NewCryptoMock(ctrl)
 		svc := NewOAuthService(storage, nil, nil, nil, nil, nil, nil)
 		svc.crypto = crypto
@@ -786,6 +795,7 @@ func TestOAuthService_TokenIntrospection(t *testing.T) {
 	t.Run("ValidDPoPToken_Success", func(t *testing.T) {
 		ctrl := minimock.NewController(t)
 		storage := portmock.NewStorageMock(ctrl)
+		allowTenant(storage)
 		crypto := portmock.NewCryptoMock(ctrl)
 		svc := NewOAuthService(storage, nil, nil, nil, nil, nil, nil)
 		svc.crypto = crypto
@@ -825,7 +835,9 @@ func TestOAuthService_RotateRefreshToken(t *testing.T) {
 	t.Run("InvalidRefreshTokenSignature", func(t *testing.T) {
 		ctrl := minimock.NewController(t)
 		crypto := portmock.NewCryptoMock(ctrl)
-		svc := NewOAuthService(nil, nil, nil, nil, nil, nil, nil)
+		storage := portmock.NewStorageMock(ctrl)
+		allowTenant(storage)
+		svc := NewOAuthService(storage, nil, nil, nil, nil, nil, nil)
 		svc.crypto = crypto
 
 		crypto.VerifyTokenMock.Expect("invalid-rt").Return(nil, errors.New("bad sig"))
@@ -843,7 +855,9 @@ func TestOAuthService_RotateRefreshToken(t *testing.T) {
 	t.Run("MissingJTIOFid", func(t *testing.T) {
 		ctrl := minimock.NewController(t)
 		crypto := portmock.NewCryptoMock(ctrl)
-		svc := NewOAuthService(nil, nil, nil, nil, nil, nil, nil)
+		storage := portmock.NewStorageMock(ctrl)
+		allowTenant(storage)
+		svc := NewOAuthService(storage, nil, nil, nil, nil, nil, nil)
 		svc.crypto = crypto
 
 		crypto.VerifyTokenMock.Expect("missing-fields-rt").Return(map[string]any{
@@ -863,6 +877,7 @@ func TestOAuthService_RotateRefreshToken(t *testing.T) {
 	t.Run("ReuseDetection_FamilyRevocation", func(t *testing.T) {
 		ctrl := minimock.NewController(t)
 		storage := portmock.NewStorageMock(ctrl)
+		allowTenant(storage)
 		crypto := portmock.NewCryptoMock(ctrl)
 		clock := portmock.NewMockClock(now)
 		svc := NewOAuthService(storage, nil, nil, nil, clock, nil, nil)
@@ -945,9 +960,10 @@ func TestOAuthService_RotateRefreshToken(t *testing.T) {
 
 		storage.GetApplicationByClientIDMock.Expect(minimock.AnyContext, tenantID, clientID).Return(app, profile, group, nil)
 		storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantID).Return(&model.Tenant{
-			ID:     tenantID,
-			Domain: "example.com",
-			Scheme: "https",
+			ID:       tenantID,
+			Domain:   "example.com",
+			Scheme:   "https",
+			IsActive: true,
 		}, nil)
 
 		crypto.SignAccessTokenMock.Set(func(ctx context.Context, claims model.TokenClaims, alg model.SignatureAlgorithm) (string, error) {

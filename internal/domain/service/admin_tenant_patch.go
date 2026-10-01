@@ -16,7 +16,7 @@ import (
 // PatchTenant saves one section. The stored tenant is re-read and only the submitted section is overlaid, so a
 // save from one card can never drop settings it does not show (assurance levels, registration mode, secrets).
 func (s *AdminTenantService) PatchTenant(ctx context.Context, cmd port.PatchTenantCommand) error {
-	_, tenant, err := s.authorize(ctx, cmd.ActingTenant, cmd.TenantID)
+	actor, tenant, err := s.authorize(ctx, cmd.ActingTenant, cmd.TenantID)
 	if err != nil {
 		return err
 	}
@@ -30,6 +30,8 @@ func (s *AdminTenantService) PatchTenant(ctx context.Context, cmd port.PatchTena
 		}
 	case port.TenantSectionSignup:
 		return s.setSignup(ctx, tenant, cmd.AllowSignup)
+	case port.TenantSectionStatus:
+		return s.setActive(ctx, actor, tenant, cmd)
 	case port.TenantSectionRedirects:
 		overlayRedirects(&updated, cmd, verr)
 	case port.TenantSectionScopes:

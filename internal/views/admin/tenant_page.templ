@@ -9,12 +9,23 @@ templ TenantContent(props TenantPageProps) {
 		if props.IsOwn() {
 			@Badge("Signed in here", "neutral")
 		}
+		if props.Detail.Tenant.IsActive {
+			@Badge("Active", "active")
+		} else {
+			@Badge("Not active", "locked")
+		}
 	}
 	@FlashMessage(props.Msg)
+	if !props.Detail.Tenant.IsActive {
+		@SystemBanner("This tenant is not active. Nobody can sign in and no tokens are issued or accepted until it is switched on again.")
+	}
 	<div class="grid grid-cols-1 lg:grid-cols-[14rem_minmax(0,1fr)] gap-8 items-start">
 		<nav class="lg:sticky lg:top-24 text-sm" aria-label="Sections">
 			<ul class="space-y-1">
 				<li><a href="#section-general" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">General</a></li>
+				if props.CanDeactivate() {
+					<li><a href="#section-status" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Status</a></li>
+				}
 				<li><a href="#section-signup" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Registration</a></li>
 				<li><a href="#section-redirects" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Redirect URIs</a></li>
 				<li><a href="#section-scopes" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Scopes and audiences</a></li>
@@ -23,6 +34,9 @@ templ TenantContent(props TenantPageProps) {
 		</nav>
 		<div class="space-y-6 min-w-0">
 			@TenantGeneralCard(props.Detail.Tenant, props.Section("general"))
+			if props.CanDeactivate() {
+				@TenantStatusCard(props.Detail.Tenant, props.Section("status"))
+			}
 			@TenantSignupCard(props.Detail.Tenant, props.Section("signup"))
 			@TenantRedirectsCard(props.Detail.Tenant, props.Section("redirects"))
 			@TenantScopesCard(props.Detail.Tenant, props.Section("scopes"))

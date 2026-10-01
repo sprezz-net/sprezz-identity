@@ -20,6 +20,7 @@ func TestOAuthValidatorService_ValidateRedirect(t *testing.T) {
 				"/^https:\\/\\/app-[0-9]+\\.example\\.com\\/auth$/",
 			},
 		},
+		IsActive: true,
 	}
 
 	group := &model.ApplicationGroup{
@@ -133,6 +134,7 @@ func TestOAuthValidatorService_ValidateScopes(t *testing.T) {
 		Config: model.TenantConfig{
 			PredefinedScopes: []string{"openid", "profile", "email", "offline_access", "custom-scope"},
 		},
+		IsActive: true,
 	}
 
 	group := &model.ApplicationGroup{
@@ -193,6 +195,7 @@ func TestOAuthValidatorService_ValidateAudiences(t *testing.T) {
 		Config: model.TenantConfig{
 			PredefinedAudiences: []string{"https://api.example.com", "https://api.internal"},
 		},
+		IsActive: true,
 	}
 
 	group := &model.ApplicationGroup{
@@ -264,6 +267,7 @@ func TestOAuthValidatorService_ValidateACR_Default(t *testing.T) {
 				"ial3": {IAL: 3},
 			},
 		},
+		IsActive: true,
 	}
 
 	provider := &model.IdentityProvider{
@@ -295,6 +299,7 @@ func TestOAuthValidatorService_ValidateACR_Essential_OR(t *testing.T) {
 				"ial3": {IAL: 3},
 			},
 		},
+		IsActive: true,
 	}
 
 	providerMet := &model.IdentityProvider{
@@ -337,6 +342,7 @@ func TestOAuthValidatorService_ValidateACR_Essential_AND(t *testing.T) {
 				"ial3": {IAL: 3},
 			},
 		},
+		IsActive: true,
 	}
 
 	providerMet := &model.IdentityProvider{
@@ -379,6 +385,7 @@ func TestOAuthValidatorService_ValidateACR_ClaimsJSON(t *testing.T) {
 				"ial3": {IAL: 3},
 			},
 		},
+		IsActive: true,
 	}
 
 	providerMet := &model.IdentityProvider{

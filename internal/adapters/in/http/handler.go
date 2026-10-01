@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -156,6 +157,10 @@ func (h *HttpAdapter) tenantMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		tenant, err := h.resolveTenant(r.Context(), r.Host)
+		if errors.Is(err, port.ErrTenantInactive) {
+			h.respondTenantInactive(w, r)
+			return
+		}
 		if err != nil {
 			h.respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
@@ -164,6 +169,17 @@ func (h *HttpAdapter) tenantMiddleware(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, TenantIDContextKey, tenant.ID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// respondTenantInactive answers every request to a deactivated tenant: a plain page for browsers and a small JSON
+// error for API clients. Nothing about the tenant is revealed beyond the fact that it is switched off.
+func (h *HttpAdapter) respondTenantInactive(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if strings.Contains(r.Header.Get("Accept"), "text/html") {
+		h.renderError(w, r, http.StatusForbidden, "This service is not available right now.")
+		return
+	}
+	h.respondJSON(w, http.StatusForbidden, map[string]string{"error": "access_denied", "error_description": port.ErrTenantInactive.Error()})
 }
 
 func (h *HttpAdapter) resolveTenant(ctx context.Context, host string) (*model.Tenant, error) {

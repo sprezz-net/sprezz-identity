@@ -22,6 +22,9 @@ func (s *AssuranceService) AssertActionTrust(ctx context.Context, cmd port.Secur
 	if err != nil {
 		return port.ErrTenantNotFound
 	}
+	if err := requireActiveTenant(tenant); err != nil {
+		return err
+	}
 
 	// Resolve the active identity provider from storage to read its authenticated verification trust scores
 	providers, err := s.storage.GetIdentityProviders(ctx, cmd.TenantID)

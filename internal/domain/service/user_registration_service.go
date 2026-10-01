@@ -30,6 +30,10 @@ func NewUserRegistrationService(s port.Storage, upuc port.UserProfileUseCase, cl
 }
 
 func (s *UserRegistrationService) RegisterUser(ctx context.Context, cmd port.RegisterUserCommand) (*model.UserProfile, error) {
+	if _, err := ensureTenantActive(ctx, s.storage, cmd.TenantID); err != nil {
+		return nil, err
+	}
+
 	// 1. Load the explicit identity provider passed down from the target login flow context [5.7]
 	provider, err := s.storage.GetIdentityProviderByUUID(ctx, cmd.TenantID, cmd.ProviderID)
 	if err != nil {
@@ -108,6 +112,10 @@ func (s *UserRegistrationService) RegisterUser(ctx context.Context, cmd port.Reg
 
 // ApproveUserRequest advances a pending profile from REQUESTED to ACTIVATED state [5.7].
 func (s *UserRegistrationService) ApproveUserRequest(ctx context.Context, cmd port.ApproveUserCommand) error {
+	if _, err := ensureTenantActive(ctx, s.storage, cmd.TenantID); err != nil {
+		return err
+	}
+
 	// 1. Fetch the user profile safely locked under the correct multi-tenant partition key
 	profile, err := s.storage.GetUserProfileByID(ctx, cmd.TenantID, cmd.PartitionID, cmd.ProfileID)
 	if err != nil {
@@ -131,6 +139,10 @@ func (s *UserRegistrationService) ApproveUserRequest(ctx context.Context, cmd po
 }
 
 func (s *UserRegistrationService) GetSignupContext(ctx context.Context, cmd port.GetSignupContextCommand) (*port.SignupContextResponse, error) {
+	if _, err := ensureTenantActive(ctx, s.storage, cmd.TenantID); err != nil {
+		return nil, err
+	}
+
 	var interactionSession *model.InteractionSession
 	var partitionID int64
 	var isDirectAccess = true

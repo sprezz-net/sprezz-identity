@@ -62,7 +62,7 @@ func newCSPTestAdapter(t *testing.T) *HttpAdapter {
 	t.Helper()
 	ctrl := minimock.NewController(t)
 	adapter, _, tuc, _, _ := buildLocalAdminTestAdapter(ctrl)
-	tenant := &model.Tenant{ID: uuid.New(), Domain: "admin-domain.com", Name: "Tenant", Scheme: "http"}
+	tenant := &model.Tenant{ID: uuid.New(), Domain: "admin-domain.com", Name: "Tenant", Scheme: "http", IsActive: true}
 	tuc.ResolveTenantContextMock.Optional().Set(func(ctx context.Context, host string) (*model.Tenant, error) { return tenant, nil })
 	return adapter
 }
@@ -103,7 +103,7 @@ func TestPages_LoadOnlySameOriginAssets(t *testing.T) {
 	suc := portmock.NewSSOSessionUseCaseMock(ctrl)
 	lauc := portmock.NewLocalAuthUseCaseMock(ctrl)
 
-	tenant := &model.Tenant{ID: uuid.New(), Domain: "admin-domain.com", Scheme: "http"}
+	tenant := &model.Tenant{ID: uuid.New(), Domain: "admin-domain.com", Scheme: "http", IsActive: true}
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) { return tenant, nil })
 	suc.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
 		return &port.CookieIntentResponse{CookieName: "spz_session"}, nil

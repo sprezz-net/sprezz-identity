@@ -15,6 +15,7 @@ import (
 func TestVerifyPassword_Success(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
+	allowTenant(storage)
 	adminStorage := portmock.NewAdminStorageMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now().Truncate(time.Second)
@@ -66,6 +67,7 @@ func TestVerifyPassword_Success(t *testing.T) {
 func TestVerifyPassword_FailureAndBlocking(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
+	allowTenant(storage)
 	adminStorage := portmock.NewAdminStorageMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now().Truncate(time.Second)
@@ -118,6 +120,7 @@ func TestVerifyPassword_FailureAndBlocking(t *testing.T) {
 func TestVerifyPassword_Blocked_RejectsWithinBlockedTime(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
+	allowTenant(storage)
 	adminStorage := portmock.NewAdminStorageMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now().Truncate(time.Second)
@@ -164,6 +167,7 @@ func TestVerifyPassword_Blocked_RejectsWithinBlockedTime(t *testing.T) {
 func TestVerifyPassword_Blocked_Expires_UnblocksWithCorrectPassword(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
+	allowTenant(storage)
 	adminStorage := portmock.NewAdminStorageMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now().Truncate(time.Second)

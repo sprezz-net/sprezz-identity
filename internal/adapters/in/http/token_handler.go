@@ -158,6 +158,8 @@ func (h *TokenHandler) handleServiceError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, port.ErrInvalidGrant):
 		h.writeError(w, http.StatusBadRequest, "invalid_grant", err.Error())
+	case errors.Is(err, port.ErrTenantInactive):
+		h.writeError(w, http.StatusForbidden, "access_denied", port.ErrTenantInactive.Error())
 	case errors.Is(err, port.ErrInvalidClient):
 		h.writeError(w, http.StatusUnauthorized, "invalid_client", "client authentication failed")
 	case errors.Is(err, port.ErrInvalidRequest):

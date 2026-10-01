@@ -443,7 +443,7 @@ Rules, enforced in `AdminUserService` so every caller is covered:
 | `GET /admin/tenants` | List with search (`q`) and the number of users and applications per tenant. A customer tenant sees only itself |
 | `GET /admin/tenants/new`, `POST /admin/tenants` | Add a tenant (administrative tenant only) |
 | `GET /admin/tenants/{id}` | Detail page with one card per section and a contents summary |
-| `PUT /admin/tenants/{id}/{section}` | Save one section (`general`, `signup`, `redirects`, `scopes`); answers with that card only |
+| `PUT /admin/tenants/{id}/{section}` | Save one section (`general`, `status`, `signup`, `redirects`, `scopes`); answers with that card only |
 | `DELETE /admin/tenants/{id}` | Delete after the domain is typed (administrative tenant only) |
 
 Rules, enforced in `AdminTenantService`:
@@ -452,3 +452,18 @@ Rules, enforced in `AdminTenantService`:
 - A section save re-reads the tenant and overlays only that section, so assurance levels, ACR mapping, DCR settings and encrypted secrets that no card shows survive every save.
 - The administrative tenant's domain is fixed, and its redirect list must keep the console and federation callback URIs.
 - Deletion is a hard cascade (migration 00028). It is refused for system tenants, for the tenant of the signed-in session and for a wrong confirmation, and it writes a final record to the application log because the database audit trail is deleted with the tenant.
+
+
+### Switching a tenant off
+
+The Status card (administrative tenant only, for other tenants only) sets `is_active`. The rule is enforced by the domain services, so it holds no matter how a request reaches them:
+
+- Every entry point that signs somebody in, issues a token or a session, or serves protocol data calls `ensureTenantActive` / `requireActiveTenant` first and returns `ErrTenantInactive` before reading or changing anything. A tenant that arrives inside a command is checked as well.
+- Introspection answers `active: false` and userinfo refuses the token, although the signature is valid.
+- Signing out and revoking tokens stay available, since they only reduce access.
+- The HTTP edge only translates the refusal: 403 with a plain page for browsers, `access_denied` JSON for API clients. It never names the tenant.
+- Deactivating also purges the tenant's sessions and refresh tokens. Reactivating restores nothing.
+- The administrative tenant cannot be switched off from the console and is forced back on at startup.
+- `tenant_inactive_contract_test.go` fails when a use-case interface gains a method that is neither gated nor listed as exempt.
+
+Limit: access tokens are stateless JWTs. This server stops accepting them immediately, but a relying party that verifies signatures locally keeps honouring one until it expires.

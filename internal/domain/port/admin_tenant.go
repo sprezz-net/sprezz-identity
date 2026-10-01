@@ -16,6 +16,7 @@ const (
 	TenantSectionSignup    TenantSection = "signup"
 	TenantSectionRedirects TenantSection = "redirects"
 	TenantSectionScopes    TenantSection = "scopes"
+	TenantSectionStatus    TenantSection = "status"
 )
 
 // PatchTenantCommand saves one section of a tenant. Only the fields of Section are read; everything else the
@@ -31,6 +32,9 @@ type PatchTenantCommand struct {
 
 	// Signup
 	AllowSignup bool
+
+	// Status. An inactive tenant refuses every sign-in and token request.
+	Active bool
 
 	// Redirects
 	RedirectWhitelist  []string

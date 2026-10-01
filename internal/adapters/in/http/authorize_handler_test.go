@@ -51,7 +51,7 @@ func TestHttpAdapter_Authorize_PreservesParams(t *testing.T) {
 	mockSessionCookie(suc)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", IsActive: true}
 
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
 		return tenant, nil
@@ -90,7 +90,7 @@ func TestHttpAdapter_Authorize_InvalidClient(t *testing.T) {
 	mockSessionCookie(suc)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", IsActive: true}
 
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
 		return tenant, nil
@@ -116,7 +116,7 @@ func TestHttpAdapter_Authorize_DisallowedRedirectURI(t *testing.T) {
 	mockSessionCookie(suc)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", IsActive: true}
 
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
 		return tenant, nil
@@ -141,7 +141,7 @@ func TestHttpAdapter_Authorize_AuthenticatedSSO(t *testing.T) {
 	adapter, _, auth, _, tuc, _, suc, _, _ := setupTestEnv(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", IsActive: true}
 
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
 		return tenant, nil

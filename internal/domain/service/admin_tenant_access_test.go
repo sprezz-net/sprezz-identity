@@ -71,7 +71,7 @@ func TestCreateTenant_OnlyTheSystemTenantMayCreate(t *testing.T) {
 	var got port.CreateTenantCommand
 	f.tenants.CreateTenantMock.Set(func(ctx context.Context, cmd port.CreateTenantCommand) (*model.Tenant, error) {
 		got = cmd
-		return &model.Tenant{ID: uuid.New(), Name: cmd.TenantName, Domain: cmd.DomainName}, nil
+		return &model.Tenant{ID: uuid.New(), Name: cmd.TenantName, Domain: cmd.DomainName, IsActive: true}, nil
 	})
 
 	_, err := f.svc.CreateTenant(context.Background(), port.CreateTenantFromConsoleCommand{ActingTenant: f.acme.ID, Name: "Evil", Domain: "evil.example.com"})

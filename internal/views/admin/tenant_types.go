@@ -11,6 +11,7 @@ type TenantListProps struct {
 	Rows         []port.TenantDetail
 	Msg          string
 	Query        string
+	Status       string
 	// CanManageAll is true for the administrative tenant, which may add and delete tenants.
 	CanManageAll bool
 }
@@ -27,6 +28,12 @@ type TenantPageProps struct {
 // Section returns the result for a section, or the zero value when it was not just saved.
 func (p TenantPageProps) Section(name string) SectionResult {
 	return p.Sections[name]
+}
+
+// CanDeactivate reports whether the status card is offered: only the administrative tenant may switch tenants on
+// and off, and never itself or another system tenant.
+func (p TenantPageProps) CanDeactivate() bool {
+	return p.CanManageAll && !p.Detail.Tenant.IsSystem && !p.IsOwn()
 }
 
 // IsOwn reports whether the page shows the tenant the administrator is signed in to.

@@ -35,7 +35,7 @@ func TestHttpAdapter_ViewProfile_Success(t *testing.T) {
 	adapter, upuc, suc, tuc := buildLocalProfileTestAdapter(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", IsActive: true}
 
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
 		return tenant, nil

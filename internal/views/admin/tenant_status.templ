@@ -1,0 +1,19 @@
+package admin
+
+import "sprezz-identity/internal/domain/model"
+
+// TenantStatusCard switches a tenant on or off. It is only shown to the administrative tenant, for tenants other
+// than itself: switching off the console's own tenant would shut out the person doing it.
+templ TenantStatusCard(t model.Tenant, result SectionResult) {
+	@SectionCard(SectionCardProps{
+		ID:          "section-status",
+		Title:       "Status",
+		Description: "Whether this tenant is served at all.",
+		Action:      tenantSectionAction(t.ID.String(), "status"),
+		Saved:       result.Saved,
+		Error:       result.Error,
+	}) {
+		@ToggleRow("active", "true", "Active", "A tenant that is not active answers every request with an error: nobody can sign in, no tokens are issued or accepted, and its discovery documents are not served.", t.IsActive, false)
+		<p class="text-xs text-amber-700">Switching a tenant off ends all of its sessions and refresh tokens at once. Switching it back on restores nothing; people sign in again. Access tokens that were already issued stop being accepted by this server, but an application that checks signatures on its own can keep honouring one until it expires.</p>
+	}
+}

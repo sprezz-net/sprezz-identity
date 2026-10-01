@@ -16,6 +16,7 @@ import (
 func TestUserProfileService_CreateUserProfile(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
+	allowTenant(storage)
 	adminStorage := portmock.NewAdminStorageMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
 	clock := portmock.NewMockClock(time.Now())
@@ -101,6 +102,7 @@ func TestUserProfileService_ChangeUserPassword(t *testing.T) {
 	t.Run("InvalidCurrentPassword", func(t *testing.T) {
 		ctrl := minimock.NewController(t)
 		storage := portmock.NewStorageMock(ctrl)
+		allowTenant(storage)
 		crypto := portmock.NewCryptoMock(ctrl)
 		clock := portmock.NewMockClock(time.Now())
 		svc := NewUserProfileService(storage, nil, crypto, clock)
@@ -137,6 +139,7 @@ func TestUserProfileService_ChangeUserPassword(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		ctrl := minimock.NewController(t)
 		storage := portmock.NewStorageMock(ctrl)
+		allowTenant(storage)
 		crypto := portmock.NewCryptoMock(ctrl)
 		clock := portmock.NewMockClock(time.Now())
 		svc := NewUserProfileService(storage, nil, crypto, clock)
@@ -197,6 +200,7 @@ func TestUserProfileService_ChangeUserEmail(t *testing.T) {
 	t.Run("InvalidPassword", func(t *testing.T) {
 		ctrl := minimock.NewController(t)
 		storage := portmock.NewStorageMock(ctrl)
+		allowTenant(storage)
 		crypto := portmock.NewCryptoMock(ctrl)
 		clock := portmock.NewMockClock(time.Now())
 		svc := NewUserProfileService(storage, nil, crypto, clock)
@@ -231,6 +235,7 @@ func TestUserProfileService_ChangeUserEmail(t *testing.T) {
 	t.Run("EmailCollision", func(t *testing.T) {
 		ctrl := minimock.NewController(t)
 		storage := portmock.NewStorageMock(ctrl)
+		allowTenant(storage)
 		crypto := portmock.NewCryptoMock(ctrl)
 		clock := portmock.NewMockClock(time.Now())
 		svc := NewUserProfileService(storage, nil, crypto, clock)
@@ -269,6 +274,7 @@ func TestUserProfileService_ChangeUserEmail(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		ctrl := minimock.NewController(t)
 		storage := portmock.NewStorageMock(ctrl)
+		allowTenant(storage)
 		adminStorage := portmock.NewAdminStorageMock(ctrl)
 		crypto := portmock.NewCryptoMock(ctrl)
 		clock := portmock.NewMockClock(time.Now())
@@ -340,6 +346,7 @@ func TestUserProfileService_ChangeUserName(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		ctrl := minimock.NewController(t)
 		storage := portmock.NewStorageMock(ctrl)
+		allowTenant(storage)
 		adminStorage := portmock.NewAdminStorageMock(ctrl)
 		clock := portmock.NewMockClock(time.Now())
 		svc := NewUserProfileService(storage, adminStorage, nil, clock)
@@ -380,6 +387,7 @@ func TestUserProfileService_DecoupleUserIdentity(t *testing.T) {
 	t.Run("SingleIdentityCannotDecouple", func(t *testing.T) {
 		ctrl := minimock.NewController(t)
 		storage := portmock.NewStorageMock(ctrl)
+		allowTenant(storage)
 		svc := NewUserProfileService(storage, nil, nil, nil)
 
 		tenantID := uuid.New()
@@ -405,6 +413,7 @@ func TestUserProfileService_DecoupleUserIdentity(t *testing.T) {
 	t.Run("IdentityNotCoupled", func(t *testing.T) {
 		ctrl := minimock.NewController(t)
 		storage := portmock.NewStorageMock(ctrl)
+		allowTenant(storage)
 		svc := NewUserProfileService(storage, nil, nil, nil)
 
 		tenantID := uuid.New()
@@ -433,6 +442,7 @@ func TestUserProfileService_DecoupleUserIdentity(t *testing.T) {
 	t.Run("DisallowedDecoupling", func(t *testing.T) {
 		ctrl := minimock.NewController(t)
 		storage := portmock.NewStorageMock(ctrl)
+		allowTenant(storage)
 		svc := NewUserProfileService(storage, nil, nil, nil)
 
 		tenantID := uuid.New()
@@ -465,6 +475,7 @@ func TestUserProfileService_DecoupleUserIdentity(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		ctrl := minimock.NewController(t)
 		storage := portmock.NewStorageMock(ctrl)
+		allowTenant(storage)
 		svc := NewUserProfileService(storage, nil, nil, nil)
 
 		tenantID := uuid.New()
@@ -498,6 +509,7 @@ func TestUserProfileService_DecoupleUserIdentity(t *testing.T) {
 func TestUserProfileService_GetUserProfile(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
+	allowTenant(storage)
 	svc := NewUserProfileService(storage, nil, nil, nil)
 
 	tenantID := uuid.New()
@@ -531,6 +543,7 @@ func TestUserProfileService_GetUserProfile(t *testing.T) {
 func TestUserProfileService_GetUserProfileDashboard(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
+	allowTenant(storage)
 	svc := NewUserProfileService(storage, nil, nil, nil)
 
 	tenantID := uuid.New()

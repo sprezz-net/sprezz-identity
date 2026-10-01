@@ -19,6 +19,7 @@ var tenantSections = map[string]port.TenantSection{
 	"signup":    port.TenantSectionSignup,
 	"redirects": port.TenantSectionRedirects,
 	"scopes":    port.TenantSectionScopes,
+	"status":    port.TenantSectionStatus,
 }
 
 // tenantPatchFromForm reads only the fields of one section from a submitted form.
@@ -29,6 +30,8 @@ func tenantPatchFromForm(r *http.Request, section port.TenantSection) port.Patch
 		cmd.Name, cmd.Domain = r.FormValue("name"), r.FormValue("domain")
 	case port.TenantSectionSignup:
 		cmd.AllowSignup = r.FormValue("allow_signup") == "true"
+	case port.TenantSectionStatus:
+		cmd.Active = r.FormValue("active") == "true"
 	case port.TenantSectionRedirects:
 		cmd.RedirectWhitelist = CleanBoundaryStringSlice(parseFormStringSlice(r.Form, "redirect_uris"))
 		cmd.DefaultRedirectURI = strings.TrimSpace(r.FormValue("default_redirect_uri"))
@@ -77,6 +80,8 @@ func (h *AdminTenantHandler) renderTenantSection(w http.ResponseWriter, r *http.
 func tenantCard(section port.TenantSection, props admin.TenantPageProps) templ.Component {
 	t, result := props.Detail.Tenant, props.Section(string(section))
 	switch section {
+	case port.TenantSectionStatus:
+		return admin.TenantStatusCard(t, result)
 	case port.TenantSectionSignup:
 		return admin.TenantSignupCard(t, result)
 	case port.TenantSectionRedirects:

@@ -87,6 +87,7 @@ func TestHttpAdapter_CSPNonce(t *testing.T) {
 		Config: model.TenantConfig{
 			AllowSignup: false,
 		},
+		IsActive: true,
 	}
 
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {

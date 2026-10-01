@@ -17,6 +17,8 @@ func TestAdminLogonService_InitiateAdminLogon_Success(t *testing.T) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+
+	allowTenant(storage)
 	fedLogin := portmock.NewFederatedLoginUseCaseMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
@@ -66,6 +68,8 @@ func TestAdminLogonService_InitiateAdminLogon_OnDemandDCR_Success(t *testing.T) 
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+
+	allowTenant(storage)
 	adminStorage := portmock.NewAdminStorageMock(ctrl)
 	auth := portmock.NewAuthUseCaseMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)
@@ -94,8 +98,9 @@ func TestAdminLogonService_InitiateAdminLogon_OnDemandDCR_Success(t *testing.T) 
 	}, nil)
 
 	storage.ResolveTenantByDomainMock.Expect(minimock.AnyContext, "admin.com").Return(&model.Tenant{
-		ID:     adminTenantUUID,
-		Domain: "admin.com",
+		ID:       adminTenantUUID,
+		Domain:   "admin.com",
+		IsActive: true,
 	}, nil)
 
 	crypto.SignSoftwareStatementMock.Set(func(ctx context.Context, issuer string, audience string, claims model.SoftwareStatementClaims, issuedAt time.Time, expiresAt time.Time, notBefore time.Time) (string, error) {
@@ -155,6 +160,8 @@ func TestAdminLogonService_InitiateAdminLogon_DiscoveryPersist_Success(t *testin
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+
+	allowTenant(storage)
 	adminStorage := portmock.NewAdminStorageMock(ctrl)
 	auth := portmock.NewAuthUseCaseMock(ctrl)
 	crypto := portmock.NewCryptoMock(ctrl)

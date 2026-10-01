@@ -20,7 +20,7 @@ func TestHttpAdapter_PAR_Success(t *testing.T) {
 	adapter, storage, auth, _, tuc, _, _, _, _ := setupTestEnv(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", IsActive: true}
 
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
 		return tenant, nil

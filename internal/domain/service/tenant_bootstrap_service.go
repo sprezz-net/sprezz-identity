@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"sprezz-identity/internal/domain/model"
@@ -62,6 +63,14 @@ func (s *TenantBootstrapService) bootstrapExistingTenant(ctx context.Context, te
 	needsSave := false
 	if !tenant.IsSystem {
 		tenant.IsSystem = true
+		needsSave = true
+	}
+
+	// The administrative tenant is always active. Nothing in the console can switch it off, so an inactive one can
+	// only come from a manual change, and it would lock every administrator out with no way back in.
+	if !tenant.IsActive {
+		slog.Warn("administrative tenant was inactive; reactivating it", "tenant_id", tenant.ID, "domain", domain)
+		tenant.IsActive = true
 		needsSave = true
 	}
 

@@ -37,7 +37,7 @@ func newAdminGuardFixture(t *testing.T) *adminGuardFixture {
 	adapter, _, tuc, storage, sso := buildLocalAdminTestAdapter(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: testAdminHost, Name: "Administrative Tenant", IsSystem: true, Scheme: "http"}
+	tenant := &model.Tenant{ID: tenantID, Domain: testAdminHost, Name: "Administrative Tenant", IsSystem: true, Scheme: "http", IsActive: true}
 	tuc.ResolveTenantContextMock.Optional().Set(func(ctx context.Context, host string) (*model.Tenant, error) { return tenant, nil })
 
 	storage.GetPartitionByAliasMock.Optional().Set(func(ctx context.Context, tID uuid.UUID, alias string) (*model.Partition, error) {

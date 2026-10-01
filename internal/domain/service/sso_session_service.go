@@ -19,6 +19,13 @@ func NewSSOSessionService(s port.Storage, appEnv string) *SSOSessionService {
 
 // BuildSessionCookie enforces partition namespacing and environmental security prefix gates [8.3, 8.3.1, 8.3.2]
 func (s *SSOSessionService) BuildSessionCookie(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
+	// Issuing a session needs an active tenant. Clearing one never does, so people can always sign out.
+	if cmd.LifecycleStage != "clear" {
+		if _, err := ensureTenantActive(ctx, s.storage, cmd.TenantID); err != nil {
+			return nil, err
+		}
+	}
+
 	partitionID := cmd.PartitionID
 	if partitionID == 0 {
 		tenant, tenantErr := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)

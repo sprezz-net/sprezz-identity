@@ -16,6 +16,8 @@ func TestSSOSessionService_BuildSessionCookie_ExplicitPartition(t *testing.T) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+
+	allowTenant(storage)
 	svc := NewSSOSessionService(storage, "local")
 
 	tenantID := uuid.New()
@@ -64,6 +66,7 @@ func TestSSOSessionService_BuildSessionCookie_ZeroPartition_Fallback(t *testing.
 	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantID).Return(&model.Tenant{
 		ID:               tenantID,
 		DefaultPartition: &defaultPartID,
+		IsActive:         true,
 	}, nil)
 
 	// Mock partition resolution with partition ID 100

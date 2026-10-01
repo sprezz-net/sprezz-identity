@@ -68,6 +68,10 @@ func (s *IdentityProviderService) recordSuccessfulLogin(ctx context.Context, ten
 }
 
 func (s *IdentityProviderService) AuthenticateUsernamePassword(ctx context.Context, tenantID uuid.UUID, partitionID int64, username string, password string) (*model.LoginResult, error) {
+	if _, err := ensureTenantActive(ctx, s.storage, tenantID); err != nil {
+		return nil, err
+	}
+
 	providers, err := s.storage.GetEnabledIdentityProviders(ctx, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("resolve enabled identity providers: %w", err)
@@ -130,6 +134,10 @@ func (s *IdentityProviderService) resolveUserPartitionProvider(ctx context.Conte
 }
 
 func (s *IdentityProviderService) VerifyPassword(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID, password string) (bool, error) {
+	if _, err := ensureTenantActive(ctx, s.storage, tenantID); err != nil {
+		return false, err
+	}
+
 	profile, err := s.storage.GetUserProfileByID(ctx, tenantID, 0, userID)
 	if err != nil {
 		return false, fmt.Errorf("get user profile: %w", err)
@@ -189,6 +197,10 @@ func (s *IdentityProviderService) VerifyPassword(ctx context.Context, tenantID u
 }
 
 func (s *IdentityProviderService) ChangePassword(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID, currentPassword string, newPassword string) error {
+	if _, err := ensureTenantActive(ctx, s.storage, tenantID); err != nil {
+		return err
+	}
+
 	provider, err := s.storage.GetIdentityProviderByType(ctx, tenantID, model.UsernamePasswordIDPType)
 	if err != nil {
 		return fmt.Errorf("username-password provider not found: %w", err)

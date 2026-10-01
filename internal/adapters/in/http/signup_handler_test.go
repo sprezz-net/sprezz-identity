@@ -20,7 +20,7 @@ func TestHttpAdapter_SignUpForm_Success(t *testing.T) {
 	mockSessionCookie(suc)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", IsActive: true}
 	provider := model.IdentityProvider{
 		ID:       uuid.New(),
 		TenantID: tenantID,
@@ -55,7 +55,7 @@ func TestHttpAdapter_SignUpForm_Forbidden(t *testing.T) {
 	mockSessionCookie(suc)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", IsActive: true}
 
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
 		return tenant, nil
@@ -81,7 +81,7 @@ func TestHttpAdapter_SignUpWithTx_Success(t *testing.T) {
 	adapter, _, _, _, tuc, _, _, _, uruc := setupTestEnv(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "test.com"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", IsActive: true}
 	providerID := uuid.New()
 	provider := model.IdentityProvider{
 		ID:          providerID,

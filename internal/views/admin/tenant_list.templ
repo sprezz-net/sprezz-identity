@@ -5,8 +5,13 @@ templ TenantsContent(props TenantListProps) {
 	@FlashMessage(props.Msg)
 	if props.CanManageAll {
 		@ListToolbar("+ Add tenant", tenantsBase()+"/new") {
-			<form hx-get={ tenantsBase() } hx-target="main" hx-swap="innerHTML" hx-push-url="true" hx-trigger="keyup changed delay:300ms from:find input" class="flex items-center gap-3">
+			<form hx-get={ tenantsBase() } hx-target="main" hx-swap="innerHTML" hx-push-url="true" hx-trigger="change, keyup changed delay:300ms from:find input" class="flex items-center gap-3">
 				<input type="search" name="q" value={ props.Query } placeholder="Search name or domain" aria-label="Search tenants" class="w-72 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"/>
+				<select name="status" aria-label="Filter by status" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+					<option value="" selected?={ props.Status == "" }>Any status</option>
+					<option value="active" selected?={ props.Status == "active" }>Active</option>
+					<option value="inactive" selected?={ props.Status == "inactive" }>Not active</option>
+				</select>
 			</form>
 		}
 	}
@@ -21,6 +26,7 @@ templ TenantsContent(props TenantListProps) {
 						<th scope="col" class="px-6 py-3 text-left">Domain</th>
 						<th scope="col" class="px-6 py-3 text-right">Users</th>
 						<th scope="col" class="px-6 py-3 text-right">Applications</th>
+						<th scope="col" class="px-6 py-3 text-left">Status</th>
 						<th scope="col" class="px-6 py-3 text-left">Registration</th>
 					</tr>
 				</thead>
@@ -38,6 +44,13 @@ templ TenantsContent(props TenantListProps) {
 							<td class="px-6 py-3 font-mono text-xs text-gray-600">{ row.Tenant.Domain }</td>
 							<td class="px-6 py-3 text-right text-gray-600">{ itoa(row.Usage.Users) }</td>
 							<td class="px-6 py-3 text-right text-gray-600">{ itoa(row.Usage.Applications) }</td>
+							<td class="px-6 py-3">
+								if row.Tenant.IsActive {
+									@Badge("Active", "active")
+								} else {
+									@Badge("Not active", "locked")
+								}
+							</td>
 							<td class="px-6 py-3">
 								if row.Tenant.Config.AllowSignup {
 									@Badge("Open", "warning")

@@ -31,9 +31,9 @@ func newTenantFixture(t *testing.T) *tenantFixture {
 		storage: portmock.NewStorageMock(mc),
 		admin:   portmock.NewAdminStorageMock(mc),
 		tenants: portmock.NewTenantUseCaseMock(mc),
-		system:  model.Tenant{ID: uuid.New(), Name: "Administrative Tenant", Domain: "admin.example.com", IsSystem: true, Scheme: "https"},
-		acme:    model.Tenant{ID: uuid.New(), Name: "Acme", Domain: "acme.example.com", Scheme: "https"},
-		globex:  model.Tenant{ID: uuid.New(), Name: "Globex", Domain: "globex.example.com", Scheme: "https"},
+		system:  model.Tenant{ID: uuid.New(), Name: "Administrative Tenant", Domain: "admin.example.com", IsSystem: true, IsActive: true, Scheme: "https"},
+		acme:    model.Tenant{ID: uuid.New(), Name: "Acme", Domain: "acme.example.com", IsActive: true, Scheme: "https"},
+		globex:  model.Tenant{ID: uuid.New(), Name: "Globex", Domain: "globex.example.com", IsActive: true, Scheme: "https"},
 	}
 	f.acme.Config = model.TenantConfig{
 		PredefinedScopes: []string{"openid", "profile"}, PredefinedAudiences: []string{"https://api.acme.example"},

@@ -28,6 +28,7 @@ func TestAssuranceService_AssertActionTrust_Success(t *testing.T) {
 				"aal1": {AAL: 1},
 			},
 		},
+		IsActive: true,
 	}, nil)
 
 	storage.GetIdentityProvidersMock.Expect(minimock.AnyContext, tenantUUID).Return([]model.IdentityProvider{
@@ -68,6 +69,7 @@ func TestAssuranceService_AssertActionTrust_InsufficientAAL(t *testing.T) {
 		Config: model.TenantConfig{
 			PasswordAAL: 2,
 		},
+		IsActive: true,
 	}, nil)
 
 	storage.GetIdentityProvidersMock.Expect(minimock.AnyContext, tenantUUID).Return([]model.IdentityProvider{

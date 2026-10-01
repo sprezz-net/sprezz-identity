@@ -82,7 +82,7 @@ func NewOAuthService(
 // ============================================================================
 
 func (s *OAuthService) ProcessDiscoveryMetadata(ctx context.Context, tenantID uuid.UUID, isOIDC bool) (*port.DiscoveryResponse, error) {
-	tenant, err := s.storage.ResolveTenantByUUID(ctx, tenantID)
+	tenant, err := ensureTenantActive(ctx, s.storage, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("oauth_service: tenant unresolvable: %w", err)
 	}
@@ -137,9 +137,8 @@ func (s *OAuthService) ProcessDiscoveryMetadata(ctx context.Context, tenantID uu
 }
 
 func (s *OAuthService) ProcessJWKSetRetrieval(ctx context.Context, tenantID uuid.UUID, host string, scheme string) (map[string]any, error) {
-	_, err := s.storage.ResolveTenantByUUID(ctx, tenantID)
-	if err != nil {
-		return nil, fmt.Errorf("oauth_service: tenant unresolvable: %w", err)
+	if _, err := ensureTenantActive(ctx, s.storage, tenantID); err != nil {
+		return nil, fmt.Errorf("oauth_service: tenant unavailable: %w", err)
 	}
 
 	jwkSet, err := s.crypto.JWKSForTenant(ctx, host, scheme)
@@ -194,9 +193,9 @@ func (s *OAuthService) ProcessAuthorizeRequest(ctx context.Context, cmd port.Aut
 		return nil, fmt.Errorf("%w: client_id parameter is mandatory", port.ErrInvalidRequest)
 	}
 
-	tenant, err := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
+	tenant, err := ensureTenantActive(ctx, s.storage, cmd.TenantID)
 	if err != nil {
-		return nil, fmt.Errorf("oauth_service: tenant unresolvable: %w", err)
+		return nil, fmt.Errorf("oauth_service: tenant unavailable: %w", err)
 	}
 
 	app, profile, group, err := s.storage.GetApplicationByClientID(ctx, cmd.TenantID, cmd.ClientID)
@@ -585,6 +584,11 @@ func (s *OAuthService) ExchangeCodeForTokens(
 	ctx context.Context,
 	cmd port.ExchangeCodeForTokensCommand,
 ) (*model.TokenSetResponse, error) {
+	// A deactivated tenant issues nothing, and the check runs before the code is consumed so nothing changes.
+	if _, err := activeTenantFor(ctx, s.storage, cmd.Tenant, cmd.TenantID); err != nil {
+		return nil, fmt.Errorf("%w: %w", port.ErrInvalidGrant, err)
+	}
+
 	now := s.clock.Now()
 
 	// 1. Destructive Read: Atomically fetch and consume the authorization session to prevent replay vectors
@@ -624,13 +628,9 @@ func (s *OAuthService) ExchangeCodeForTokens(
 		return nil, fmt.Errorf("oauth_service: internal partition context unresolved: %w", err)
 	}
 
-	tenant := cmd.Tenant
-	if tenant == nil {
-		tn, err := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
-		if err != nil {
-			return nil, fmt.Errorf("oauth_service: multi-tenant structural boundaries missing: %w", err)
-		}
-		tenant = tn
+	tenant, err := activeTenantFor(ctx, s.storage, cmd.Tenant, cmd.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("oauth_service: multi-tenant structural boundaries unavailable: %w", err)
 	}
 
 	// 6. Session to client tracking [Section 7.2]
@@ -687,6 +687,11 @@ func (s *OAuthService) RotateRefreshToken(
 	ctx context.Context,
 	cmd port.RotateRefreshTokenCommand,
 ) (*model.TokenSetResponse, error) {
+	// A deactivated tenant rotates nothing; the token stays unused and the family intact.
+	if _, err := activeTenantFor(ctx, s.storage, cmd.Tenant, cmd.TenantID); err != nil {
+		return nil, fmt.Errorf("%w: %w", port.ErrInvalidGrant, err)
+	}
+
 	// 1. Verify and unpack the raw token string using the injected Crypto adapter port
 	claimsMap, err := s.crypto.VerifyToken(cmd.RefreshToken)
 	if err != nil {
@@ -744,13 +749,9 @@ func (s *OAuthService) RotateRefreshToken(
 	}
 
 	// 10. Gather multi-tenant metadata to resolve stateless wire properties
-	tenant := cmd.Tenant
-	if tenant == nil {
-		tn, err := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
-		if err != nil {
-			return nil, fmt.Errorf("oauth_service: multi-tenant structural boundaries missing: %w", err)
-		}
-		tenant = tn
+	tenant, err := activeTenantFor(ctx, s.storage, cmd.Tenant, cmd.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("oauth_service: multi-tenant structural boundaries unavailable: %w", err)
 	}
 
 	// 11. Mint rotated sliding child tokens while preserving historical lineage anchors [1.14]
@@ -816,6 +817,10 @@ func (s *OAuthService) ExchangeExternalToken(
 	subjectTokenType model.TokenType,
 ) (*model.TokenSetResponse, error) {
 	slog.Debug("ExchangeExternalToken: starting token exchange", "tenant_id", tenantID, "client_id", clientID, "subject_token_type", subjectTokenType)
+
+	if _, err := ensureTenantActive(ctx, s.storage, tenantID); err != nil {
+		return nil, fmt.Errorf("%w: %w", port.ErrInvalidGrant, err)
+	}
 
 	// 1. Enforce strict RFC 8693 standard incoming subject token profile constraints [5.7]
 	if subjectTokenType != model.TokenTypeIDToken {
@@ -916,7 +921,7 @@ func (s *OAuthService) ExchangeExternalToken(
 		return nil, fmt.Errorf("oauth_service: failed to log client session association during exchange: %w", err)
 	}
 
-	tenant, err := s.storage.ResolveTenantByUUID(ctx, tenantID)
+	tenant, err := ensureTenantActive(ctx, s.storage, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("oauth_service: failed to resolve tenant boundaries: %w", err)
 	}
@@ -968,6 +973,10 @@ func (s *OAuthService) ExchangeExternalToken(
 
 // ExchangeClientCredentials executes machine-to-machine OAuth2 token issuance loops securely.
 func (s *OAuthService) ExchangeClientCredentials(ctx context.Context, cmd port.ExchangeClientCredentialsCommand) (*model.TokenSetResponse, error) {
+	if _, err := activeTenantFor(ctx, s.storage, cmd.Tenant, cmd.TenantID); err != nil {
+		return nil, fmt.Errorf("%w: %w", port.ErrInvalidGrant, err)
+	}
+
 	// 1. Fetch client metadata context structures from storage to verify the grant capability ceiling
 	profile := cmd.ApplicationProfile
 	group := cmd.ApplicationGroup
@@ -993,13 +1002,9 @@ func (s *OAuthService) ExchangeClientCredentials(ctx context.Context, cmd port.E
 	}
 
 	// 3. Multi-Tenant Structural Boundaries Check
-	tenant := cmd.Tenant
-	if tenant == nil {
-		tn, err := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
-		if err != nil {
-			return nil, fmt.Errorf("oauth_service: multi-tenant structural boundaries missing: %w", err)
-		}
-		tenant = tn
+	tenant, err := activeTenantFor(ctx, s.storage, cmd.Tenant, cmd.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("oauth_service: multi-tenant structural boundaries unavailable: %w", err)
 	}
 
 	// 4. Calculate target backend scopes configured on the group
@@ -1190,9 +1195,9 @@ func (s *OAuthService) ProcessPushedAuthorization(ctx context.Context, cmd port.
 		return nil, fmt.Errorf("%w: pushed authorization requests mandate client authentication", port.ErrInvalidClient)
 	}
 
-	tenant, err := s.storage.ResolveTenantByUUID(ctx, cmd.TenantID)
+	tenant, err := ensureTenantActive(ctx, s.storage, cmd.TenantID)
 	if err != nil {
-		return nil, fmt.Errorf("oauth_service: tenant unresolvable: %w", err)
+		return nil, fmt.Errorf("oauth_service: tenant unavailable: %w", err)
 	}
 
 	app, profile, group, err := s.storage.GetApplicationByClientID(ctx, cmd.TenantID, cmd.ClientID)
@@ -1659,6 +1664,11 @@ func (s *OAuthService) executeTokenIntrospection(ctx context.Context, expectedTe
 		return &model.IntrospectionResponse{Active: false}, nil
 	}
 
+	// A token of a deactivated tenant is no longer active, even though its signature and lifetime are still valid.
+	if _, err := ensureTenantActive(ctx, s.storage, expectedTenantID); err != nil {
+		return &model.IntrospectionResponse{Active: false}, nil
+	}
+
 	tokenID, _ := claims["jti"].(string)
 
 	// 3. FIXED-WINDOW BLACKLIST LOOKUP: Interrogate the repository to verify if the token was revoked
@@ -1768,7 +1778,7 @@ func (s *OAuthService) RegisterDynamicApplication(
 	tenantID uuid.UUID,
 	payload model.DynamicRegistrationPayload,
 ) (*model.Application, string, error) {
-	tenant, err := s.storage.ResolveTenantByUUID(ctx, tenantID)
+	tenant, err := ensureTenantActive(ctx, s.storage, tenantID)
 	if err != nil {
 		return nil, "", fmt.Errorf("dynamic_registration: failed to resolve tenant profile context: %w", err)
 	}

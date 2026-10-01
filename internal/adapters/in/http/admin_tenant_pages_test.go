@@ -20,6 +20,7 @@ func testTenant(name, domain string) model.Tenant {
 			PredefinedScopes: []string{"openid", "profile"}, RedirectWhitelist: []string{"https://" + domain + "/cb"},
 			DefaultRedirectURI: "https://" + domain + "/cb", PredefinedAudiences: []string{"https://api." + domain},
 		},
+		IsActive: true,
 	}
 }
 

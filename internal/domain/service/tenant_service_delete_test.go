@@ -31,7 +31,7 @@ func newTenantDeleteFixture(t *testing.T, tenant *model.Tenant) (*TenantService,
 }
 
 func TestTenantService_DeleteTenant_SystemTenantIsNeverDeleted(t *testing.T) {
-	tenant := &model.Tenant{ID: uuid.New(), Name: "Administrative Tenant", Domain: "admin.example.com", IsSystem: true}
+	tenant := &model.Tenant{ID: uuid.New(), Name: "Administrative Tenant", Domain: "admin.example.com", IsSystem: true, IsActive: true}
 	svc, adminStorage := newTenantDeleteFixture(t, tenant)
 
 	adminStorage.DeleteTenantMock.Optional().Set(func(ctx context.Context, id uuid.UUID) error {
@@ -61,7 +61,7 @@ func TestTenantService_DeleteTenant_RequiresTypedConfirmation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tenant := &model.Tenant{ID: uuid.New(), Name: "Customer Tenant", Domain: "customer.example.com"}
+			tenant := &model.Tenant{ID: uuid.New(), Name: "Customer Tenant", Domain: "customer.example.com", IsActive: true}
 			svc, adminStorage := newTenantDeleteFixture(t, tenant)
 
 			adminStorage.DeleteTenantMock.Optional().Set(func(ctx context.Context, id uuid.UUID) error {
@@ -83,7 +83,7 @@ func TestTenantService_DeleteTenant_RequiresTypedConfirmation(t *testing.T) {
 }
 
 func TestTenantService_DeleteTenant_CannotDeleteActingTenant(t *testing.T) {
-	tenant := &model.Tenant{ID: uuid.New(), Name: "Customer Tenant", Domain: "customer.example.com"}
+	tenant := &model.Tenant{ID: uuid.New(), Name: "Customer Tenant", Domain: "customer.example.com", IsActive: true}
 	svc, adminStorage := newTenantDeleteFixture(t, tenant)
 
 	adminStorage.DeleteTenantMock.Optional().Set(func(ctx context.Context, id uuid.UUID) error {
@@ -102,7 +102,7 @@ func TestTenantService_DeleteTenant_CannotDeleteActingTenant(t *testing.T) {
 }
 
 func TestTenantService_DeleteTenant_Success(t *testing.T) {
-	tenant := &model.Tenant{ID: uuid.New(), Name: "Customer Tenant", Domain: "customer.example.com"}
+	tenant := &model.Tenant{ID: uuid.New(), Name: "Customer Tenant", Domain: "customer.example.com", IsActive: true}
 	svc, adminStorage := newTenantDeleteFixture(t, tenant)
 
 	adminStorage.DeleteTenantMock.Set(func(ctx context.Context, id uuid.UUID) error {

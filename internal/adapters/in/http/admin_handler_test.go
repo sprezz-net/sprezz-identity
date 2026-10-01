@@ -37,7 +37,7 @@ func TestHttpAdapter_AdminOIDC_Initiation_Success(t *testing.T) {
 	adapter, aluc, tuc, storage, suc := buildLocalAdminTestAdapter(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "admin-domain.com", Name: "Administrative Tenant", Scheme: "http"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "admin-domain.com", Name: "Administrative Tenant", Scheme: "http", IsActive: true}
 	providerID := uuid.New()
 
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
@@ -103,7 +103,7 @@ func TestHttpAdapter_AdminDashboard_AuthorizedSession_Success(t *testing.T) {
 	adapter, _, tuc, storage, ssoMock := buildLocalAdminTestAdapter(ctrl)
 
 	tenantID := uuid.New()
-	tenant := &model.Tenant{ID: tenantID, Domain: "admin-domain.com", Name: "Administrative Tenant", Scheme: "http"}
+	tenant := &model.Tenant{ID: tenantID, Domain: "admin-domain.com", Name: "Administrative Tenant", Scheme: "http", IsActive: true}
 	userUUID := uuid.New()
 	adminPartitionID := int64(12)
 

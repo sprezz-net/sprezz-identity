@@ -54,6 +54,10 @@ func NewAdminLogonService(
 
 // InitiateAdminLogon evaluates localized setup configuration fields and triggers automated DCR workflows if needed.
 func (s *AdminLogonService) InitiateAdminLogon(ctx context.Context, localTenantID uuid.UUID, callbackURI string, targetAdminUI string) (*port.InitiateFederatedLoginResponse, error) {
+	if _, err := ensureTenantActive(ctx, s.storage, localTenantID); err != nil {
+		return nil, fmt.Errorf("admin_logon: %w", err)
+	}
+
 	providers, err := s.storage.GetIdentityProviders(ctx, localTenantID)
 	if err != nil {
 		return nil, fmt.Errorf("admin_logon: failed loading tenant provider maps: %w", err)

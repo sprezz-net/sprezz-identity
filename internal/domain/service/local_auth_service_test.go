@@ -17,6 +17,8 @@ func TestLocalAuthService_AuthenticateLocalCredentials_Success(t *testing.T) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+
+	allowTenant(storage)
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
@@ -78,6 +80,8 @@ func TestLocalAuthService_AuthenticateLocalCredentials_UserNotFound_TimingAttack
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+
+	allowTenant(storage)
 	crypto := portmock.NewCryptoMock(ctrl)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
@@ -130,6 +134,7 @@ func TestLocalAuthService_AuthenticateLocalCredentials_SelfResolve_Success(t *te
 	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantUUID).Return(&model.Tenant{
 		ID:               tenantUUID,
 		DefaultPartition: &partitionID,
+		IsActive:         true,
 	}, nil)
 
 	// Mock GetEnabledIdentityProviders to resolve the username-password provider
@@ -211,6 +216,7 @@ func TestLocalAuthService_GetLoginContext_InteractionSessionZeroPartition_Fallba
 		Config: model.TenantConfig{
 			AllowSignup: false,
 		},
+		IsActive: true,
 	}, nil)
 
 	// 2. Fetch enabled providers

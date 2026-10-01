@@ -54,22 +54,23 @@ func (h *AdminTenantHandler) list(w http.ResponseWriter, r *http.Request) {
 
 	q := r.URL.Query()
 	props := admin.TenantListProps{
-		ActiveTenant: *tenant, Msg: q.Get("msg"), Query: strings.TrimSpace(q.Get("q")), CanManageAll: tenant.IsSystem,
+		ActiveTenant: *tenant, Msg: q.Get("msg"), Query: strings.TrimSpace(q.Get("q")), Status: q.Get("status"), CanManageAll: tenant.IsSystem,
 	}
-	props.Rows = filterTenantRows(rows, props.Query)
+	props.Rows = filterTenantRows(rows, props.Query, props.Status)
 	h.renderAdminPage(w, r, admin.TenantsContent(props), admin.TenantsPage(props))
 }
 
-func filterTenantRows(rows []port.TenantDetail, query string) []port.TenantDetail {
-	if query == "" {
-		return rows
-	}
+func filterTenantRows(rows []port.TenantDetail, query, status string) []port.TenantDetail {
 	needle := strings.ToLower(query)
 	out := make([]port.TenantDetail, 0, len(rows))
 	for _, row := range rows {
-		if strings.Contains(strings.ToLower(row.Tenant.Name), needle) || strings.Contains(strings.ToLower(row.Tenant.Domain), needle) {
-			out = append(out, row)
+		if (status == "active" && !row.Tenant.IsActive) || (status == "inactive" && row.Tenant.IsActive) {
+			continue
 		}
+		if needle != "" && !strings.Contains(strings.ToLower(row.Tenant.Name), needle) && !strings.Contains(strings.ToLower(row.Tenant.Domain), needle) {
+			continue
+		}
+		out = append(out, row)
 	}
 	return out
 }

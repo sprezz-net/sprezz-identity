@@ -17,6 +17,8 @@ func TestUserRegistrationService_GetSignupContext_WithSession(t *testing.T) {
 	ctrl := minimock.NewController(t)
 
 	storage := portmock.NewStorageMock(ctrl)
+
+	allowTenant(storage)
 	now := time.Now()
 	clock := portmock.NewMockClock(now)
 
@@ -77,6 +79,7 @@ func TestUserRegistrationService_GetSignupContext_DirectAccessFallback(t *testin
 	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantID).Return(&model.Tenant{
 		ID:               tenantID,
 		DefaultPartition: &defaultPartID,
+		IsActive:         true,
 	}, nil)
 
 	// Should fetch providers under default partition (100)
