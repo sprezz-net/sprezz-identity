@@ -142,6 +142,8 @@ type AdminStorage interface {
 	CreateTenant(ctx context.Context, tenant model.Tenant) error
 	GetAllTenants(ctx context.Context) ([]model.Tenant, error)
 	DeleteTenant(ctx context.Context, tenantUUID uuid.UUID) error
+	// GetAllTenantUsage counts the users, applications, groups, profiles, providers and partitions of every tenant.
+	GetAllTenantUsage(ctx context.Context) ([]model.TenantUsage, error)
 
 	CreateIdentityProvider(ctx context.Context, tenantID uuid.UUID, provider model.IdentityProvider) error
 	// GetIdentityProviderUsage reports linked users, allowing groups and the last sign-in per provider of a tenant.

@@ -1089,6 +1089,39 @@ func (s *Storage) GetAllTenants(ctx context.Context) ([]model.Tenant, error) {
 	return result, nil
 }
 
+// GetAllTenantUsage counts what every tenant owns.
+func (s *Storage) GetAllTenantUsage(ctx context.Context) ([]model.TenantUsage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	usage := make([]model.TenantUsage, 0, len(s.tenants))
+	for _, t := range s.tenants {
+		u := model.TenantUsage{TenantID: t.ID, Providers: len(s.providers[t.ID.String()]), Partitions: len(s.partitions[t.ID.String()])}
+		for _, p := range s.userProfiles {
+			if p.TenantID == t.ID {
+				u.Users++
+			}
+		}
+		for _, a := range s.applications {
+			if a.TenantID == t.ID {
+				u.Applications++
+			}
+		}
+		for _, g := range s.groups {
+			if g.TenantID == t.ID {
+				u.Groups++
+			}
+		}
+		for _, p := range s.profiles {
+			if p.TenantID == t.ID {
+				u.Profiles++
+			}
+		}
+		usage = append(usage, u)
+	}
+	return usage, nil
+}
+
 // DeleteTenant removes a non-system tenant. System tenants are never deleted.
 func (s *Storage) DeleteTenant(ctx context.Context, tenantUUID uuid.UUID) error {
 	s.mu.Lock()

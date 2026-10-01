@@ -29,6 +29,7 @@ type HttpAdapter struct {
 	localAuthUseCase        port.LocalAuthUseCase
 	adminApplicationUseCase port.AdminApplicationUseCase
 	adminUserUseCase        port.AdminUserUseCase
+	adminTenantUseCase      port.AdminTenantUseCase
 	adminStorage            port.AdminStorage
 	idpService              port.IdentityProviderUseCase
 	storagePort             port.Storage
@@ -42,6 +43,12 @@ type HttpAdapter struct {
 // signature, which every test and the composition root use, stays unchanged.
 func (h *HttpAdapter) WithAdminUserUseCase(uc port.AdminUserUseCase) *HttpAdapter {
 	h.adminUserUseCase = uc
+	return h
+}
+
+// WithAdminTenantUseCase wires the use case behind the admin Tenants pages.
+func (h *HttpAdapter) WithAdminTenantUseCase(uc port.AdminTenantUseCase) *HttpAdapter {
+	h.adminTenantUseCase = uc
 	return h
 }
 

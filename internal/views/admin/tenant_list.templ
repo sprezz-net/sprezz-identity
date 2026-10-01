@@ -1,0 +1,60 @@
+package admin
+
+// TenantsContent lists the tenants. Search is a plain GET request, so every view has a URL.
+templ TenantsContent(props TenantListProps) {
+	@FlashMessage(props.Msg)
+	if props.CanManageAll {
+		@ListToolbar("+ Add tenant", tenantsBase()+"/new") {
+			<form hx-get={ tenantsBase() } hx-target="main" hx-swap="innerHTML" hx-push-url="true" hx-trigger="keyup changed delay:300ms from:find input" class="flex items-center gap-3">
+				<input type="search" name="q" value={ props.Query } placeholder="Search name or domain" aria-label="Search tenants" class="w-72 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"/>
+			</form>
+		}
+	}
+	<div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
+		if len(props.Rows) == 0 {
+			@EmptyState("No tenants found", "Change the search or add a tenant.")
+		} else {
+			<table class="min-w-full divide-y divide-gray-200 text-sm">
+				<thead>
+					<tr class="bg-gray-50 text-gray-500 font-semibold">
+						<th scope="col" class="px-6 py-3 text-left">Tenant</th>
+						<th scope="col" class="px-6 py-3 text-left">Domain</th>
+						<th scope="col" class="px-6 py-3 text-right">Users</th>
+						<th scope="col" class="px-6 py-3 text-right">Applications</th>
+						<th scope="col" class="px-6 py-3 text-left">Registration</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-gray-100">
+					for _, row := range props.Rows {
+						<tr class="hover:bg-gray-50">
+							<td class="px-6 py-3">
+								@rowLink(tenantURL(row.Tenant.ID.String())) {
+									{ row.Tenant.Name }
+								}
+								if row.Tenant.IsSystem {
+									@SystemBadge()
+								}
+							</td>
+							<td class="px-6 py-3 font-mono text-xs text-gray-600">{ row.Tenant.Domain }</td>
+							<td class="px-6 py-3 text-right text-gray-600">{ itoa(row.Usage.Users) }</td>
+							<td class="px-6 py-3 text-right text-gray-600">{ itoa(row.Usage.Applications) }</td>
+							<td class="px-6 py-3">
+								if row.Tenant.Config.AllowSignup {
+									@Badge("Open", "warning")
+								} else {
+									@Badge("Closed", "active")
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	</div>
+}
+
+templ TenantsPage(props TenantListProps) {
+	@AdminLayout(AdminLayoutProps{Title: "Tenants", CurrentTab: "tenants", TenantName: props.ActiveTenant.Name}) {
+		@TenantsContent(props)
+	}
+}

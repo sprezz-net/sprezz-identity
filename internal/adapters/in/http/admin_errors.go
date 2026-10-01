@@ -18,6 +18,8 @@ func adminErrorStatus(err error) (int, string) {
 		return http.StatusUnprocessableEntity, validationErr.Error()
 	case errors.Is(err, port.ErrSystemManaged):
 		return http.StatusForbidden, port.ErrSystemManaged.Error()
+	case errors.Is(err, port.ErrForbidden):
+		return http.StatusForbidden, port.ErrForbidden.Error()
 	case errors.Is(err, port.ErrLastAdministrator):
 		return http.StatusConflict, port.ErrLastAdministrator.Error()
 	case errors.Is(err, port.ErrOwnAccount):

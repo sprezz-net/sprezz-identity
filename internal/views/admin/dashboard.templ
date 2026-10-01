@@ -1,0 +1,59 @@
+package admin
+
+import "sprezz-identity/internal/domain/model"
+
+type AdminDashboardProps struct {
+	ActiveTenant  model.Tenant
+	IsAdminTenant bool
+	Msg           string
+}
+
+templ AdminDashboard(props AdminDashboardProps) {
+	@AdminLayout(AdminLayoutProps{Title: "Dashboard", CurrentTab: "dashboard", TenantName: props.ActiveTenant.Name}) {
+		<div class="space-y-6">
+			if props.Msg != "" {
+				<div class="p-4 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm font-medium">
+					{ props.Msg }
+				</div>
+			}
+
+			if props.IsAdminTenant {
+				<div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden p-6 space-y-4">
+					<div class="flex items-center justify-between border-b border-gray-200 pb-3">
+						<h3 class="font-bold text-gray-800">Administrative Lockdown Panel</h3>
+						if props.ActiveTenant.Config.AllowSignup {
+							@Badge("Active", "active")
+						} else {
+							@Badge("Locked", "locked")
+						}
+					</div>
+					<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+						<div>
+							<p class="text-sm font-semibold text-slate-800">Public Registration State</p>
+							<p class="text-sm text-slate-500 mt-1">
+								When public registration is Active, new administrative user profiles can self-register. Turn this Off to secure your admin partition permanently.
+							</p>
+						</div>
+						<div>
+							<a
+								href={ templ.SafeURL(tenantURL(props.ActiveTenant.ID.String()) + "#section-signup") }
+								hx-get={ tenantURL(props.ActiveTenant.ID.String()) }
+								hx-target="main"
+								hx-swap="innerHTML"
+								hx-push-url="true"
+								class="inline-block px-4 py-2 rounded-lg font-semibold text-sm transition shadow-xs bg-slate-900 text-white hover:bg-slate-800"
+							>
+								Manage registration
+							</a>
+						</div>
+					</div>
+				</div>
+			} else {
+				<div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden p-6 text-center space-y-2">
+					<h3 class="text-xl font-bold text-gray-800">Welcome to Sprezz Identity</h3>
+					<p class="text-gray-500">You are logged into the administration console for tenant <span class="font-semibold text-gray-700">{ props.ActiveTenant.Name }</span>.</p>
+				</div>
+			}
+		</div>
+	}
+}

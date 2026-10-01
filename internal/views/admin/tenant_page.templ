@@ -1,0 +1,73 @@
+package admin
+
+// TenantContent is the detail page of one tenant. Every card saves on its own.
+templ TenantContent(props TenantPageProps) {
+	@PageHeader(props.Detail.Tenant.Name, tenantBackLabel(props), tenantsBase()) {
+		if props.Detail.Tenant.IsSystem {
+			@SystemBadge()
+		}
+		if props.IsOwn() {
+			@Badge("Signed in here", "neutral")
+		}
+	}
+	@FlashMessage(props.Msg)
+	<div class="grid grid-cols-1 lg:grid-cols-[14rem_minmax(0,1fr)] gap-8 items-start">
+		<nav class="lg:sticky lg:top-24 text-sm" aria-label="Sections">
+			<ul class="space-y-1">
+				<li><a href="#section-general" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">General</a></li>
+				<li><a href="#section-signup" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Registration</a></li>
+				<li><a href="#section-redirects" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Redirect URIs</a></li>
+				<li><a href="#section-scopes" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Scopes and audiences</a></li>
+				<li><a href="#section-contents" class="block px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Contents</a></li>
+			</ul>
+		</nav>
+		<div class="space-y-6 min-w-0">
+			@TenantGeneralCard(props.Detail.Tenant, props.Section("general"))
+			@TenantSignupCard(props.Detail.Tenant, props.Section("signup"))
+			@TenantRedirectsCard(props.Detail.Tenant, props.Section("redirects"))
+			@TenantScopesCard(props.Detail.Tenant, props.Section("scopes"))
+			@TenantContentsCard(props)
+			if props.CanManageAll && !props.Detail.Tenant.IsSystem {
+				@ConfirmDelete(TenantDeleteProps(props))
+			}
+		</div>
+	</div>
+}
+
+templ TenantPage(props TenantPageProps) {
+	@AdminLayout(AdminLayoutProps{Title: props.Detail.Tenant.Name, CurrentTab: "tenants", TenantName: props.ActiveTenant.Name}) {
+		@TenantContent(props)
+	}
+}
+
+// TenantContentsCard shows what the tenant owns.
+templ TenantContentsCard(props TenantPageProps) {
+	<section id="section-contents" class="bg-white border border-gray-200 rounded-xl shadow-xs scroll-mt-24">
+		<div class="px-6 pt-5 pb-4 border-b border-gray-100">
+			<h2 class="text-base font-bold text-gray-900">Contents</h2>
+			<p class="mt-1 text-sm text-gray-500">What this tenant owns.</p>
+		</div>
+		<dl class="px-6 py-5 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+			@tenantCount("Users", props.Detail.Usage.Users)
+			@tenantCount("Applications", props.Detail.Usage.Applications)
+			@tenantCount("Groups", props.Detail.Usage.Groups)
+			@tenantCount("Profiles", props.Detail.Usage.Profiles)
+			@tenantCount("Identity providers", props.Detail.Usage.Providers)
+			@tenantCount("Partitions", props.Detail.Usage.Partitions)
+		</dl>
+	</section>
+}
+
+templ tenantCount(label string, n int) {
+	<div>
+		<dt class="text-gray-500">{ label }</dt>
+		<dd class="text-gray-900 font-semibold">{ itoa(n) }</dd>
+	</div>
+}
+
+func tenantBackLabel(props TenantPageProps) string {
+	if props.CanManageAll {
+		return "Tenants"
+	}
+	return "Back"
+}

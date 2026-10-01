@@ -77,3 +77,15 @@ WHERE tenant_uuid = @tenant_uuid::uuid;
 UPDATE tenants
 SET default_partition = @default_partition::bigint
 WHERE tenant_uuid = @tenant_uuid::uuid;
+
+-- name: GetAllTenantUsage :many
+-- GetAllTenantUsage counts what every tenant owns, in one pass, for the tenant list and the deletion impact summary.
+SELECT
+    t.tenant_uuid,
+    (SELECT COUNT(*) FROM user_profiles x WHERE x.tenant_id = t.id)::bigint AS users,
+    (SELECT COUNT(*) FROM applications x WHERE x.tenant_id = t.id)::bigint AS applications,
+    (SELECT COUNT(*) FROM application_groups x WHERE x.tenant_id = t.id)::bigint AS groups,
+    (SELECT COUNT(*) FROM application_profiles x WHERE x.tenant_id = t.id)::bigint AS profiles,
+    (SELECT COUNT(*) FROM identity_providers x WHERE x.tenant_id = t.id)::bigint AS providers,
+    (SELECT COUNT(*) FROM partitions x WHERE x.tenant_id = t.id)::bigint AS partitions
+FROM tenants t;

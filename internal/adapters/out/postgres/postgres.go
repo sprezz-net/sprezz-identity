@@ -3016,6 +3016,26 @@ func (s *PostgresStorage) DeleteTenant(ctx context.Context, tenantUUID uuid.UUID
 	return nil
 }
 
+// GetAllTenantUsage counts what every tenant owns in a single query.
+func (s *PostgresStorage) GetAllTenantUsage(ctx context.Context) ([]model.TenantUsage, error) {
+	rows, err := s.queries.GetAllTenantUsage(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: failed to count tenant usage: %w", err)
+	}
+	usage := make([]model.TenantUsage, 0, len(rows))
+	for _, row := range rows {
+		id, err := pgUUIDToUUID(row.TenantUuid)
+		if err != nil {
+			return nil, fmt.Errorf("storage: parse tenant id: %w", err)
+		}
+		usage = append(usage, model.TenantUsage{
+			TenantID: id, Users: int(row.Users), Applications: int(row.Applications), Groups: int(row.Groups),
+			Profiles: int(row.Profiles), Providers: int(row.Providers), Partitions: int(row.Partitions),
+		})
+	}
+	return usage, nil
+}
+
 // DeleteIdentityProvider removes a non-system provider. Users linked to it lose that link (their identity rows
 // cascade). A provider that an application group still allows is refused by the RESTRICT foreign key and reported
 // as port.ErrInUse. System providers are refused by the WHERE clause as a second guard behind the domain service.

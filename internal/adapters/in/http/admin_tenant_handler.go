@@ -2,8 +2,7 @@ package http
 
 import (
 	"net/http"
-	"net/url"
-	"time"
+	"strings"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -13,6 +12,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// AdminTenantHandler serves the tenant pages under /admin/tenants. Which tenants a session may see or change is
+// decided by AdminTenantService, not here, so the rule cannot be bypassed by a new route.
 type AdminTenantHandler struct {
 	*HttpAdapter
 }
@@ -21,242 +22,80 @@ func NewAdminTenantHandler(adapter *HttpAdapter) *AdminTenantHandler {
 	return &AdminTenantHandler{HttpAdapter: adapter}
 }
 
+// Routes mounts the tenant routes. The static "new" route is registered before the {id} routes.
 func (h *AdminTenantHandler) Routes(r chi.Router) {
 	r.Route(port.RouteAdminTenants, func(r chi.Router) {
-		r.Get("/", h.adminTenantsPage)
-		r.Get("/new", h.adminNewTenantForm)
-		r.Post("/", h.adminCreateTenant)
-		r.Post("/settings", h.adminSaveTenantSettings)
-		r.Patch("/{id}/toggle-signup", h.adminToggleSignup)
+		r.Get("/", h.list)
+		r.Get("/new", h.newForm)
+		r.Post("/", h.create)
+		r.Get("/{id}", h.detail)
+		r.Delete("/{id}", h.delete)
+		r.Put("/{id}/{section}", h.saveSection)
 	})
 }
 
-func (h *AdminTenantHandler) adminNewTenantForm(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	if r.URL.Query().Get("modal") == "true" {
-		component := admin.Modal("Create Tenant", port.RouteAdmin+port.RouteAdminTenants+"/new")
-		_ = component.Render(r.Context(), w)
-		return
+func (h *AdminTenantHandler) tenantID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		h.renderError(w, r, http.StatusNotFound, port.ErrTenantNotFound.Error())
+		return uuid.Nil, false
 	}
-	component := admin.CreateTenantForm(nil)
-	_ = component.Render(r.Context(), w)
+	return id, true
 }
 
-func (h *AdminTenantHandler) adminCreateTenant(w http.ResponseWriter, r *http.Request) {
-	name := r.FormValue("name")
-	domain := r.FormValue("domain")
-
-	errs := make(map[string]string)
-	if name == "" {
-		errs["name"] = "tenant name is required"
-	}
-	if domain == "" {
-		errs["domain"] = "canonical domain is required"
-	}
-
-	if len(errs) > 0 {
-		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		component := admin.CreateTenantForm(errs)
-		_ = component.Render(r.Context(), w)
-		return
-	}
-
-	scheme := model.SchemeHttp + "://"
-	if r.TLS != nil || r.Header.Get(model.HeaderXForwardedProto) == model.SchemeHttps {
-		scheme = model.SchemeHttps + "://"
-	}
-
-	newTenant := model.Tenant{
-		ID:        uuid.New(),
-		Name:      name,
-		Domain:    domain,
-		IsActive:  true,
-		CreatedAt: time.Now(),
-		Config: model.TenantConfig{
-			PredefinedScopes:    []string{"openid", "profile", "email", "offline_access"},
-			PredefinedAudiences: []string{},
-			DefaultRedirectURI:  scheme + domain,
-			RedirectWhitelist:   []string{scheme + domain},
-			AllowSignup:         false,
-		},
-	}
-
-	if err := h.adminStorage.CreateTenant(r.Context(), newTenant); err != nil {
-		errs["name"] = err.Error()
-		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-		component := admin.CreateTenantForm(errs)
-		_ = component.Render(r.Context(), w)
-		return
-	}
-
-	// Default Provider for new Tenant
-	defaultProvider := model.IdentityProvider{
-		ID:       uuid.New(),
-		TenantID: newTenant.ID,
-		IDPType:  model.UsernamePasswordIDPType,
-		Enabled:  true,
-		Alias:    "username-password",
-		Config: model.IdentityProviderConfig{
-			UsernameField: "preferredUsername",
-		},
-	}
-	_ = h.adminStorage.CreateIdentityProvider(r.Context(), newTenant.ID, defaultProvider)
-
-	w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+"?msg=Tenant+created+successfully")
-	w.WriteHeader(http.StatusOK)
-}
-
-func (h *AdminTenantHandler) adminToggleSignup(w http.ResponseWriter, r *http.Request) {
-	tenantIDStr := chi.URLParam(r, "id")
-	tenantID, err := uuid.Parse(tenantIDStr)
-	if err != nil {
-		h.renderError(w, r, http.StatusBadRequest, ErrInvalidTenantUUID)
-		return
-	}
-
-	// Fetch the tenant first to determine the toggled signup state
-	t, err := h.storagePort.ResolveTenantByUUID(r.Context(), tenantID)
-	if err != nil {
-		h.renderError(w, r, http.StatusNotFound, err.Error())
-		return
-	}
-
-	// Delegate orchestration completely to the domain service
-	tenant, err := h.tenantUseCase.ToggleSignup(r.Context(), tenantID, !t.Config.AllowSignup)
-	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	var label, severity string
-	if tenant.Config.AllowSignup {
-		label, severity = "Active", "active"
-	} else {
-		label, severity = "Locked", "locked"
-	}
-	component := admin.Badge(label, severity)
-	_ = component.Render(r.Context(), w)
-
-	// We use HX-Redirect to natively trigger a full page refresh with the success message
-	w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+"?msg=Registration+status+updated+successfully")
-}
-
-func (h *AdminTenantHandler) adminTenantsPage(w http.ResponseWriter, r *http.Request) {
+// list shows the tenants the signed-in tenant may see. A customer tenant therefore sees only itself.
+func (h *AdminTenantHandler) list(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := TenantFromContext(r.Context())
-	isAdminTenant := tenant.IsSystem
-
-	allTenants := []model.Tenant{}
-	if isAdminTenant {
-		var err error
-		allTenants, err = h.adminStorage.GetAllTenants(r.Context())
-		if err != nil {
-			h.renderError(w, r, http.StatusInternalServerError, err.Error())
-			return
-		}
-	}
-
-	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	msg := r.URL.Query().Get("msg")
-	props := admin.TenantsPageProps{
-		ActiveTenant:  *tenant,
-		IsAdminTenant: isAdminTenant,
-		Tenants:       allTenants,
-		Msg:           msg,
-		Errors:        make(map[string]string),
-	}
-	if r.Header.Get(model.HeaderHxRequest) == "true" {
-		_ = admin.TenantsContent(props).Render(r.Context(), w)
-	} else {
-		_ = admin.TenantsPage(props).Render(r.Context(), w)
-	}
-}
-
-func isPresentInWhitelist(uri string, whitelist []string) bool {
-	for _, w := range whitelist {
-		if w == uri {
-			return true
-		}
-	}
-	return false
-}
-
-func validateDefaultRedirectURI(uri string, whitelist []string) string {
-	if uri == "" {
-		return ""
-	}
-	u, err := url.Parse(uri)
-	if err != nil || u.Scheme == "" || u.Host == "" {
-		return ErrInvalidURLFormat
-	}
-	if !isPresentInWhitelist(uri, whitelist) {
-		return "Default Redirect URI must be present in the Redirect Whitelist"
-	}
-	return ""
-}
-
-func validateTenantSettingsInputs(name, domain, defaultRedirectURI string, redirectWhitelist []string) map[string]string {
-	errs := make(map[string]string)
-	if name == "" {
-		errs["name"] = "tenant name is required"
-	}
-	if domain == "" {
-		errs["domain"] = "canonical domain is required"
-	}
-	if errMsg := validateDefaultRedirectURI(defaultRedirectURI, redirectWhitelist); errMsg != "" {
-		errs["default_redirect_uri"] = errMsg
-	}
-	return errs
-}
-
-func (h *AdminTenantHandler) adminSaveTenantSettings(w http.ResponseWriter, r *http.Request) {
-	tenant, _ := TenantFromContext(r.Context())
-	if err := r.ParseForm(); err != nil {
-		h.renderError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-	name := r.FormValue("name")
-	domain := r.FormValue("domain")
-	defaultRedirectURI := r.FormValue("default_redirect_uri")
-
-	// Force in-place cleanup loops over multi-tenant infrastructure array configurations
-	redirectWhitelist := CleanBoundaryStringSlice(r.Form["redirect_whitelist"])
-	predefinedScopes := CleanBoundaryStringSlice(r.Form["predefined_scopes"])
-	predefinedAudiences := CleanBoundaryStringSlice(r.Form["predefined_audiences"])
-
-	errs := validateTenantSettingsInputs(name, domain, defaultRedirectURI, redirectWhitelist)
-
-	config := tenant.Config
-	config.DefaultRedirectURI = defaultRedirectURI
-	config.RedirectWhitelist = redirectWhitelist
-	config.PredefinedScopes = predefinedScopes
-	config.PredefinedAudiences = predefinedAudiences
-
-	if len(errs) > 0 {
-		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		isAdminTenant := tenant.IsSystem
-		allTenants := []model.Tenant{}
-		if isAdminTenant {
-			allTenants, _ = h.adminStorage.GetAllTenants(r.Context())
-		}
-		component := admin.TenantsPage(admin.TenantsPageProps{
-			ActiveTenant:  *tenant,
-			IsAdminTenant: isAdminTenant,
-			Tenants:       allTenants,
-			Errors:        errs,
-		})
-		_ = component.Render(r.Context(), w)
-		return
-	}
-
-	_, err := h.tenantService.UpdateTenant(r.Context(), tenant.ID, name, domain, config)
+	rows, err := h.adminTenantUseCase.ListTenants(r.Context(), tenant.ID)
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, err.Error())
+		h.renderDomainError(w, r, err)
 		return
 	}
 
-	w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin+port.RouteAdminTenants+"?msg=Settings+saved+successfully")
-	w.WriteHeader(http.StatusOK)
+	q := r.URL.Query()
+	props := admin.TenantListProps{
+		ActiveTenant: *tenant, Msg: q.Get("msg"), Query: strings.TrimSpace(q.Get("q")), CanManageAll: tenant.IsSystem,
+	}
+	props.Rows = filterTenantRows(rows, props.Query)
+	h.renderAdminPage(w, r, admin.TenantsContent(props), admin.TenantsPage(props))
+}
+
+func filterTenantRows(rows []port.TenantDetail, query string) []port.TenantDetail {
+	if query == "" {
+		return rows
+	}
+	needle := strings.ToLower(query)
+	out := make([]port.TenantDetail, 0, len(rows))
+	for _, row := range rows {
+		if strings.Contains(strings.ToLower(row.Tenant.Name), needle) || strings.Contains(strings.ToLower(row.Tenant.Domain), needle) {
+			out = append(out, row)
+		}
+	}
+	return out
+}
+
+// loadPage reads everything the detail page needs.
+func (h *AdminTenantHandler) loadPage(r *http.Request, tenant *model.Tenant, id uuid.UUID) (admin.TenantPageProps, error) {
+	detail, err := h.adminTenantUseCase.GetTenant(r.Context(), tenant.ID, id)
+	if err != nil {
+		return admin.TenantPageProps{}, err
+	}
+	return admin.TenantPageProps{
+		ActiveTenant: *tenant, Detail: detail, CanManageAll: tenant.IsSystem,
+		Msg: r.URL.Query().Get("msg"), Sections: map[string]admin.SectionResult{},
+	}, nil
+}
+
+func (h *AdminTenantHandler) detail(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := TenantFromContext(r.Context())
+	id, ok := h.tenantID(w, r)
+	if !ok {
+		return
+	}
+	props, err := h.loadPage(r, tenant, id)
+	if err != nil {
+		h.renderDomainError(w, r, err)
+		return
+	}
+	h.renderAdminPage(w, r, admin.TenantContent(props), admin.TenantPage(props))
 }

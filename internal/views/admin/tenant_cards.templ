@@ -1,0 +1,90 @@
+package admin
+
+import "sprezz-identity/internal/domain/model"
+
+// TenantGeneralCard edits the name and the domain. The domain of the administrative tenant is fixed.
+templ TenantGeneralCard(t model.Tenant, result SectionResult) {
+	@SectionCard(SectionCardProps{
+		ID:          "section-general",
+		Title:       "General",
+		Description: "How the tenant is named and which domain it answers on.",
+		Action:      tenantSectionAction(t.ID.String(), "general"),
+		Saved:       result.Saved,
+		Error:       result.Error,
+	}) {
+		<div>
+			<label for="name" class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+			<input id="name" type="text" name="name" value={ t.Name } required maxlength="100" class={ idpInputClass }/>
+			@FieldError(result.FieldErr("name"))
+		</div>
+		<div>
+			<label for="domain" class="block text-sm font-medium text-gray-700 mb-1">Domain</label>
+			<input id="domain" type="text" name="domain" value={ t.Domain } required readonly?={ t.IsSystem } class={ idpInputClass + " font-mono" }/>
+			@FieldError(result.FieldErr("domain"))
+			if t.IsSystem {
+				<p class="mt-1 text-xs text-gray-500">The domain of the administrative tenant is fixed: the console and every other tenant's sign-in depend on it.</p>
+			} else {
+				<p class="mt-1 text-xs text-amber-700">Changing the domain changes every URL this tenant issues. Applications must be updated to match.</p>
+			}
+		</div>
+	}
+}
+
+// TenantSignupCard controls whether people can register themselves.
+templ TenantSignupCard(t model.Tenant, result SectionResult) {
+	@SectionCard(SectionCardProps{
+		ID:          "section-signup",
+		Title:       "Registration",
+		Description: "Whether people can create their own account.",
+		Action:      tenantSectionAction(t.ID.String(), "signup"),
+		Saved:       result.Saved,
+		Error:       result.Error,
+	}) {
+		@ToggleRow("allow_signup", "true", "Open registration", "Anyone who can reach the sign-in page may register. Leave this off to add users yourself.", t.Config.AllowSignup, false)
+		if t.IsSystem {
+			<p class="text-xs text-amber-700">Turning registration off on the administrative tenant also ends sessions created while it was open.</p>
+		}
+	}
+}
+
+// TenantRedirectsCard edits the exact redirect URIs the tenant accepts and the default.
+templ TenantRedirectsCard(t model.Tenant, result SectionResult) {
+	@SectionCard(SectionCardProps{
+		ID:          "section-redirects",
+		Title:       "Redirect URIs",
+		Description: "The tenant-wide allow list. An application's own list can only narrow it.",
+		Action:      tenantSectionAction(t.ID.String(), "redirects"),
+		Saved:       result.Saved,
+		Error:       result.Error,
+	}) {
+		@RedirectList(RedirectListProps{
+			URIs:         t.Config.RedirectWhitelist,
+			Default:      t.Config.DefaultRedirectURI,
+			Error:        result.FieldErr("redirect_whitelist"),
+			DefaultError: result.FieldErr("default_redirect_uri"),
+		})
+		if t.IsSystem {
+			<p class="text-xs text-amber-700">The administrative tenant must keep the console and federation callback URIs.</p>
+		}
+	}
+}
+
+// TenantScopesCard edits the scopes and token audiences the tenant offers.
+templ TenantScopesCard(t model.Tenant, result SectionResult) {
+	@SectionCard(SectionCardProps{
+		ID:          "section-scopes",
+		Title:       "Scopes and audiences",
+		Description: "The ceiling for what applications of this tenant may request.",
+		Action:      tenantSectionAction(t.ID.String(), "scopes"),
+		Saved:       result.Saved,
+		Error:       result.Error,
+	}) {
+		<div>
+			<label for="predefined_scopes" class="block text-sm font-medium text-gray-700 mb-1">Scopes</label>
+			<input id="predefined_scopes" type="text" name="predefined_scopes_text" value={ joinSpaces(t.Config.PredefinedScopes) } placeholder="openid profile email offline_access" class={ idpInputClass + " font-mono" }/>
+			@FieldError(result.FieldErr("predefined_scopes"))
+			<p class="mt-1 text-xs text-gray-500">Separated by spaces. The openid scope is required.</p>
+		</div>
+		@URLList("Token audiences", "predefined_audiences", t.Config.PredefinedAudiences, result.FieldErr("predefined_audiences"), "Absolute URIs that access tokens may be issued for.")
+	}
+}

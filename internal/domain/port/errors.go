@@ -74,6 +74,8 @@ var (
 	// Administrative Console Errors
 	// ErrSystemManaged is returned when an operation targets an object provisioned and protected by the bootstrap service.
 	ErrSystemManaged = errors.New("this object is managed by the system and cannot be modified this way")
+	// ErrForbidden is returned when the acting administrator may not touch the object, for example another tenant.
+	ErrForbidden = errors.New("you are not allowed to do this")
 	// ErrLastAdministrator is returned when an action would leave the admin console without a usable administrator.
 	ErrLastAdministrator = errors.New("this would remove the last administrator who can sign in")
 	// ErrOwnAccount is returned when an administrator tries to block, deactivate or delete their own account.

@@ -32,6 +32,17 @@ func (t Tenant) GetBaseURI() string {
 	return t.Scheme + "://" + t.Domain
 }
 
+// TenantUsage counts what a tenant owns, for the tenant list and for the impact summary of a deletion.
+type TenantUsage struct {
+	TenantID     uuid.UUID
+	Users        int
+	Applications int
+	Groups       int
+	Profiles     int
+	Providers    int
+	Partitions   int
+}
+
 type Levels struct {
 	IAL int `json:"ial,omitempty"`
 	AAL int `json:"aal,omitempty"`

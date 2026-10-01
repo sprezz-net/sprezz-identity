@@ -116,7 +116,7 @@ internal/
 
 The admin UI is built from type-safe `templ` components, compiled Tailwind and CSP-safe Alpine.js components.
 
-- **`AdminLayout`**: side navigation from a `[]NavItem` slice, a global spinner and a modal container. Only the Tenants page still uses modals.
+- **`AdminLayout`**: side navigation from a `[]NavItem` slice, a global spinner and a modal container. No admin page uses modals any more; the modal container remains in the layout for later use.
 - **`ApplicationsSubNav`**: the Applications | Groups | Profiles tab strip. Active state comes from the route, so each tab has its own address and needs no client state.
 - **`PageHeader`, `SystemBadge`, `SystemBanner`, `FlashMessage`, `EmptyState`**: page chrome. System objects always show the badge and a banner explaining why the page is read-only.
 - **`SectionCard` and `SaveBar`**: one independently saved part of a detail page. Each card is its own form (`hx-put` to `.../{section}`) that swaps only itself, with "Unsaved changes" and "Saved" indicators.
@@ -434,3 +434,21 @@ Rules, enforced in `AdminUserService` so every caller is covered:
 - The last sign-in method of a user cannot be removed.
 - The password is write-only: the field is never prefilled and the hash is never rendered. Setting a password also clears a lockout, and a failed save is reported to the administrator.
 - Username and email are unique per partition and are reported against the field that caused the conflict.
+
+
+## Tenants
+
+| Route | Purpose |
+| --- | --- |
+| `GET /admin/tenants` | List with search (`q`) and the number of users and applications per tenant. A customer tenant sees only itself |
+| `GET /admin/tenants/new`, `POST /admin/tenants` | Add a tenant (administrative tenant only) |
+| `GET /admin/tenants/{id}` | Detail page with one card per section and a contents summary |
+| `PUT /admin/tenants/{id}/{section}` | Save one section (`general`, `signup`, `redirects`, `scopes`); answers with that card only |
+| `DELETE /admin/tenants/{id}` | Delete after the domain is typed (administrative tenant only) |
+
+Rules, enforced in `AdminTenantService`:
+
+- The administrative tenant may manage every tenant. Any other tenant may only see and edit itself; creating or deleting tenants is refused. A foreign or unknown ID is answered with "not allowed", never "not found".
+- A section save re-reads the tenant and overlays only that section, so assurance levels, ACR mapping, DCR settings and encrypted secrets that no card shows survive every save.
+- The administrative tenant's domain is fixed, and its redirect list must keep the console and federation callback URIs.
+- Deletion is a hard cascade (migration 00028). It is refused for system tenants, for the tenant of the signed-in session and for a wrong confirmation, and it writes a final record to the application log because the database audit trail is deleted with the tenant.

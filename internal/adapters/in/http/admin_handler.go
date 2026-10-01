@@ -15,12 +15,10 @@ import (
 )
 
 const (
-	AdminTenantName      = "Administrative Tenant"
-	ErrInvalidIDPUUID    = "invalid IDP UUID"
-	ErrInvalidTenantUUID = "invalid Tenant UUID"
-	ErrInvalidURLFormat  = "Invalid URL format (must include protocol like http:// or https://)"
-	ErrMalformedPayload  = "malformed payload parameters submitted"
-	ErrOIDCDiscoveryURL  = "OIDC discovery URL is required"
+	AdminTenantName     = "Administrative Tenant"
+	ErrInvalidIDPUUID   = "invalid IDP UUID"
+	ErrMalformedPayload = "malformed payload parameters submitted"
+	ErrOIDCDiscoveryURL = "OIDC discovery URL is required"
 )
 
 // parseFormStringSlice extracts a raw string array from incoming form values.

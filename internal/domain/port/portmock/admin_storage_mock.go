@@ -111,6 +111,13 @@ type AdminStorageMock struct {
 	beforeDeleteUserProfileCounter uint64
 	DeleteUserProfileMock          mAdminStorageMockDeleteUserProfile
 
+	funcGetAllTenantUsage          func(ctx context.Context) (ta1 []model.TenantUsage, err error)
+	funcGetAllTenantUsageOrigin    string
+	inspectFuncGetAllTenantUsage   func(ctx context.Context)
+	afterGetAllTenantUsageCounter  uint64
+	beforeGetAllTenantUsageCounter uint64
+	GetAllTenantUsageMock          mAdminStorageMockGetAllTenantUsage
+
 	funcGetAllTenants          func(ctx context.Context) (ta1 []model.Tenant, err error)
 	funcGetAllTenantsOrigin    string
 	inspectFuncGetAllTenants   func(ctx context.Context)
@@ -270,6 +277,9 @@ func NewAdminStorageMock(t minimock.Tester) *AdminStorageMock {
 
 	m.DeleteUserProfileMock = mAdminStorageMockDeleteUserProfile{mock: m}
 	m.DeleteUserProfileMock.callArgs = []*AdminStorageMockDeleteUserProfileParams{}
+
+	m.GetAllTenantUsageMock = mAdminStorageMockGetAllTenantUsage{mock: m}
+	m.GetAllTenantUsageMock.callArgs = []*AdminStorageMockGetAllTenantUsageParams{}
 
 	m.GetAllTenantsMock = mAdminStorageMockGetAllTenants{mock: m}
 	m.GetAllTenantsMock.callArgs = []*AdminStorageMockGetAllTenantsParams{}
@@ -5171,6 +5181,318 @@ func (m *AdminStorageMock) MinimockDeleteUserProfileInspect() {
 	if !m.DeleteUserProfileMock.invocationsDone() && afterDeleteUserProfileCounter > 0 {
 		m.t.Errorf("Expected %d calls to AdminStorageMock.DeleteUserProfile at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.DeleteUserProfileMock.expectedInvocations), m.DeleteUserProfileMock.expectedInvocationsOrigin, afterDeleteUserProfileCounter)
+	}
+}
+
+type mAdminStorageMockGetAllTenantUsage struct {
+	optional           bool
+	mock               *AdminStorageMock
+	defaultExpectation *AdminStorageMockGetAllTenantUsageExpectation
+	expectations       []*AdminStorageMockGetAllTenantUsageExpectation
+
+	callArgs []*AdminStorageMockGetAllTenantUsageParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// AdminStorageMockGetAllTenantUsageExpectation specifies expectation struct of the AdminStorage.GetAllTenantUsage
+type AdminStorageMockGetAllTenantUsageExpectation struct {
+	mock               *AdminStorageMock
+	params             *AdminStorageMockGetAllTenantUsageParams
+	paramPtrs          *AdminStorageMockGetAllTenantUsageParamPtrs
+	expectationOrigins AdminStorageMockGetAllTenantUsageExpectationOrigins
+	results            *AdminStorageMockGetAllTenantUsageResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// AdminStorageMockGetAllTenantUsageParams contains parameters of the AdminStorage.GetAllTenantUsage
+type AdminStorageMockGetAllTenantUsageParams struct {
+	ctx context.Context
+}
+
+// AdminStorageMockGetAllTenantUsageParamPtrs contains pointers to parameters of the AdminStorage.GetAllTenantUsage
+type AdminStorageMockGetAllTenantUsageParamPtrs struct {
+	ctx *context.Context
+}
+
+// AdminStorageMockGetAllTenantUsageResults contains results of the AdminStorage.GetAllTenantUsage
+type AdminStorageMockGetAllTenantUsageResults struct {
+	ta1 []model.TenantUsage
+	err error
+}
+
+// AdminStorageMockGetAllTenantUsageOrigins contains origins of expectations of the AdminStorage.GetAllTenantUsage
+type AdminStorageMockGetAllTenantUsageExpectationOrigins struct {
+	origin    string
+	originCtx string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetAllTenantUsage *mAdminStorageMockGetAllTenantUsage) Optional() *mAdminStorageMockGetAllTenantUsage {
+	mmGetAllTenantUsage.optional = true
+	return mmGetAllTenantUsage
+}
+
+// Expect sets up expected params for AdminStorage.GetAllTenantUsage
+func (mmGetAllTenantUsage *mAdminStorageMockGetAllTenantUsage) Expect(ctx context.Context) *mAdminStorageMockGetAllTenantUsage {
+	if mmGetAllTenantUsage.mock.funcGetAllTenantUsage != nil {
+		mmGetAllTenantUsage.mock.t.Fatalf("AdminStorageMock.GetAllTenantUsage mock is already set by Set")
+	}
+
+	if mmGetAllTenantUsage.defaultExpectation == nil {
+		mmGetAllTenantUsage.defaultExpectation = &AdminStorageMockGetAllTenantUsageExpectation{}
+	}
+
+	if mmGetAllTenantUsage.defaultExpectation.paramPtrs != nil {
+		mmGetAllTenantUsage.mock.t.Fatalf("AdminStorageMock.GetAllTenantUsage mock is already set by ExpectParams functions")
+	}
+
+	mmGetAllTenantUsage.defaultExpectation.params = &AdminStorageMockGetAllTenantUsageParams{ctx}
+	mmGetAllTenantUsage.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetAllTenantUsage.expectations {
+		if minimock.Equal(e.params, mmGetAllTenantUsage.defaultExpectation.params) {
+			mmGetAllTenantUsage.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetAllTenantUsage.defaultExpectation.params)
+		}
+	}
+
+	return mmGetAllTenantUsage
+}
+
+// ExpectCtxParam1 sets up expected param ctx for AdminStorage.GetAllTenantUsage
+func (mmGetAllTenantUsage *mAdminStorageMockGetAllTenantUsage) ExpectCtxParam1(ctx context.Context) *mAdminStorageMockGetAllTenantUsage {
+	if mmGetAllTenantUsage.mock.funcGetAllTenantUsage != nil {
+		mmGetAllTenantUsage.mock.t.Fatalf("AdminStorageMock.GetAllTenantUsage mock is already set by Set")
+	}
+
+	if mmGetAllTenantUsage.defaultExpectation == nil {
+		mmGetAllTenantUsage.defaultExpectation = &AdminStorageMockGetAllTenantUsageExpectation{}
+	}
+
+	if mmGetAllTenantUsage.defaultExpectation.params != nil {
+		mmGetAllTenantUsage.mock.t.Fatalf("AdminStorageMock.GetAllTenantUsage mock is already set by Expect")
+	}
+
+	if mmGetAllTenantUsage.defaultExpectation.paramPtrs == nil {
+		mmGetAllTenantUsage.defaultExpectation.paramPtrs = &AdminStorageMockGetAllTenantUsageParamPtrs{}
+	}
+	mmGetAllTenantUsage.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetAllTenantUsage.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetAllTenantUsage
+}
+
+// Inspect accepts an inspector function that has same arguments as the AdminStorage.GetAllTenantUsage
+func (mmGetAllTenantUsage *mAdminStorageMockGetAllTenantUsage) Inspect(f func(ctx context.Context)) *mAdminStorageMockGetAllTenantUsage {
+	if mmGetAllTenantUsage.mock.inspectFuncGetAllTenantUsage != nil {
+		mmGetAllTenantUsage.mock.t.Fatalf("Inspect function is already set for AdminStorageMock.GetAllTenantUsage")
+	}
+
+	mmGetAllTenantUsage.mock.inspectFuncGetAllTenantUsage = f
+
+	return mmGetAllTenantUsage
+}
+
+// Return sets up results that will be returned by AdminStorage.GetAllTenantUsage
+func (mmGetAllTenantUsage *mAdminStorageMockGetAllTenantUsage) Return(ta1 []model.TenantUsage, err error) *AdminStorageMock {
+	if mmGetAllTenantUsage.mock.funcGetAllTenantUsage != nil {
+		mmGetAllTenantUsage.mock.t.Fatalf("AdminStorageMock.GetAllTenantUsage mock is already set by Set")
+	}
+
+	if mmGetAllTenantUsage.defaultExpectation == nil {
+		mmGetAllTenantUsage.defaultExpectation = &AdminStorageMockGetAllTenantUsageExpectation{mock: mmGetAllTenantUsage.mock}
+	}
+	mmGetAllTenantUsage.defaultExpectation.results = &AdminStorageMockGetAllTenantUsageResults{ta1, err}
+	mmGetAllTenantUsage.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetAllTenantUsage.mock
+}
+
+// Set uses given function f to mock the AdminStorage.GetAllTenantUsage method
+func (mmGetAllTenantUsage *mAdminStorageMockGetAllTenantUsage) Set(f func(ctx context.Context) (ta1 []model.TenantUsage, err error)) *AdminStorageMock {
+	if mmGetAllTenantUsage.defaultExpectation != nil {
+		mmGetAllTenantUsage.mock.t.Fatalf("Default expectation is already set for the AdminStorage.GetAllTenantUsage method")
+	}
+
+	if len(mmGetAllTenantUsage.expectations) > 0 {
+		mmGetAllTenantUsage.mock.t.Fatalf("Some expectations are already set for the AdminStorage.GetAllTenantUsage method")
+	}
+
+	mmGetAllTenantUsage.mock.funcGetAllTenantUsage = f
+	mmGetAllTenantUsage.mock.funcGetAllTenantUsageOrigin = minimock.CallerInfo(1)
+	return mmGetAllTenantUsage.mock
+}
+
+// When sets expectation for the AdminStorage.GetAllTenantUsage which will trigger the result defined by the following
+// Then helper
+func (mmGetAllTenantUsage *mAdminStorageMockGetAllTenantUsage) When(ctx context.Context) *AdminStorageMockGetAllTenantUsageExpectation {
+	if mmGetAllTenantUsage.mock.funcGetAllTenantUsage != nil {
+		mmGetAllTenantUsage.mock.t.Fatalf("AdminStorageMock.GetAllTenantUsage mock is already set by Set")
+	}
+
+	expectation := &AdminStorageMockGetAllTenantUsageExpectation{
+		mock:               mmGetAllTenantUsage.mock,
+		params:             &AdminStorageMockGetAllTenantUsageParams{ctx},
+		expectationOrigins: AdminStorageMockGetAllTenantUsageExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetAllTenantUsage.expectations = append(mmGetAllTenantUsage.expectations, expectation)
+	return expectation
+}
+
+// Then sets up AdminStorage.GetAllTenantUsage return parameters for the expectation previously defined by the When method
+func (e *AdminStorageMockGetAllTenantUsageExpectation) Then(ta1 []model.TenantUsage, err error) *AdminStorageMock {
+	e.results = &AdminStorageMockGetAllTenantUsageResults{ta1, err}
+	return e.mock
+}
+
+// Times sets number of times AdminStorage.GetAllTenantUsage should be invoked
+func (mmGetAllTenantUsage *mAdminStorageMockGetAllTenantUsage) Times(n uint64) *mAdminStorageMockGetAllTenantUsage {
+	if n == 0 {
+		mmGetAllTenantUsage.mock.t.Fatalf("Times of AdminStorageMock.GetAllTenantUsage mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetAllTenantUsage.expectedInvocations, n)
+	mmGetAllTenantUsage.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetAllTenantUsage
+}
+
+func (mmGetAllTenantUsage *mAdminStorageMockGetAllTenantUsage) invocationsDone() bool {
+	if len(mmGetAllTenantUsage.expectations) == 0 && mmGetAllTenantUsage.defaultExpectation == nil && mmGetAllTenantUsage.mock.funcGetAllTenantUsage == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetAllTenantUsage.mock.afterGetAllTenantUsageCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetAllTenantUsage.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetAllTenantUsage implements mm_port.AdminStorage
+func (mmGetAllTenantUsage *AdminStorageMock) GetAllTenantUsage(ctx context.Context) (ta1 []model.TenantUsage, err error) {
+	mm_atomic.AddUint64(&mmGetAllTenantUsage.beforeGetAllTenantUsageCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetAllTenantUsage.afterGetAllTenantUsageCounter, 1)
+
+	mmGetAllTenantUsage.t.Helper()
+
+	if mmGetAllTenantUsage.inspectFuncGetAllTenantUsage != nil {
+		mmGetAllTenantUsage.inspectFuncGetAllTenantUsage(ctx)
+	}
+
+	mm_params := AdminStorageMockGetAllTenantUsageParams{ctx}
+
+	// Record call args
+	mmGetAllTenantUsage.GetAllTenantUsageMock.mutex.Lock()
+	mmGetAllTenantUsage.GetAllTenantUsageMock.callArgs = append(mmGetAllTenantUsage.GetAllTenantUsageMock.callArgs, &mm_params)
+	mmGetAllTenantUsage.GetAllTenantUsageMock.mutex.Unlock()
+
+	for _, e := range mmGetAllTenantUsage.GetAllTenantUsageMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.ta1, e.results.err
+		}
+	}
+
+	if mmGetAllTenantUsage.GetAllTenantUsageMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetAllTenantUsage.GetAllTenantUsageMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetAllTenantUsage.GetAllTenantUsageMock.defaultExpectation.params
+		mm_want_ptrs := mmGetAllTenantUsage.GetAllTenantUsageMock.defaultExpectation.paramPtrs
+
+		mm_got := AdminStorageMockGetAllTenantUsageParams{ctx}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetAllTenantUsage.t.Errorf("AdminStorageMock.GetAllTenantUsage got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetAllTenantUsage.GetAllTenantUsageMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetAllTenantUsage.t.Errorf("AdminStorageMock.GetAllTenantUsage got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetAllTenantUsage.GetAllTenantUsageMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetAllTenantUsage.GetAllTenantUsageMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetAllTenantUsage.t.Fatal("No results are set for the AdminStorageMock.GetAllTenantUsage")
+		}
+		return (*mm_results).ta1, (*mm_results).err
+	}
+	if mmGetAllTenantUsage.funcGetAllTenantUsage != nil {
+		return mmGetAllTenantUsage.funcGetAllTenantUsage(ctx)
+	}
+	mmGetAllTenantUsage.t.Fatalf("Unexpected call to AdminStorageMock.GetAllTenantUsage. %v", ctx)
+	return
+}
+
+// GetAllTenantUsageAfterCounter returns a count of finished AdminStorageMock.GetAllTenantUsage invocations
+func (mmGetAllTenantUsage *AdminStorageMock) GetAllTenantUsageAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetAllTenantUsage.afterGetAllTenantUsageCounter)
+}
+
+// GetAllTenantUsageBeforeCounter returns a count of AdminStorageMock.GetAllTenantUsage invocations
+func (mmGetAllTenantUsage *AdminStorageMock) GetAllTenantUsageBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetAllTenantUsage.beforeGetAllTenantUsageCounter)
+}
+
+// Calls returns a list of arguments used in each call to AdminStorageMock.GetAllTenantUsage.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetAllTenantUsage *mAdminStorageMockGetAllTenantUsage) Calls() []*AdminStorageMockGetAllTenantUsageParams {
+	mmGetAllTenantUsage.mutex.RLock()
+
+	argCopy := make([]*AdminStorageMockGetAllTenantUsageParams, len(mmGetAllTenantUsage.callArgs))
+	copy(argCopy, mmGetAllTenantUsage.callArgs)
+
+	mmGetAllTenantUsage.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetAllTenantUsageDone returns true if the count of the GetAllTenantUsage invocations corresponds
+// the number of defined expectations
+func (m *AdminStorageMock) MinimockGetAllTenantUsageDone() bool {
+	if m.GetAllTenantUsageMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetAllTenantUsageMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetAllTenantUsageMock.invocationsDone()
+}
+
+// MinimockGetAllTenantUsageInspect logs each unmet expectation
+func (m *AdminStorageMock) MinimockGetAllTenantUsageInspect() {
+	for _, e := range m.GetAllTenantUsageMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to AdminStorageMock.GetAllTenantUsage at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetAllTenantUsageCounter := mm_atomic.LoadUint64(&m.afterGetAllTenantUsageCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetAllTenantUsageMock.defaultExpectation != nil && afterGetAllTenantUsageCounter < 1 {
+		if m.GetAllTenantUsageMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to AdminStorageMock.GetAllTenantUsage at\n%s", m.GetAllTenantUsageMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to AdminStorageMock.GetAllTenantUsage at\n%s with params: %#v", m.GetAllTenantUsageMock.defaultExpectation.expectationOrigins.origin, *m.GetAllTenantUsageMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetAllTenantUsage != nil && afterGetAllTenantUsageCounter < 1 {
+		m.t.Errorf("Expected call to AdminStorageMock.GetAllTenantUsage at\n%s", m.funcGetAllTenantUsageOrigin)
+	}
+
+	if !m.GetAllTenantUsageMock.invocationsDone() && afterGetAllTenantUsageCounter > 0 {
+		m.t.Errorf("Expected %d calls to AdminStorageMock.GetAllTenantUsage at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetAllTenantUsageMock.expectedInvocations), m.GetAllTenantUsageMock.expectedInvocationsOrigin, afterGetAllTenantUsageCounter)
 	}
 }
 
@@ -10998,6 +11320,8 @@ func (m *AdminStorageMock) MinimockFinish() {
 
 			m.MinimockDeleteUserProfileInspect()
 
+			m.MinimockGetAllTenantUsageInspect()
+
 			m.MinimockGetAllTenantsInspect()
 
 			m.MinimockGetApplicationGroupByIDInspect()
@@ -11065,6 +11389,7 @@ func (m *AdminStorageMock) minimockDone() bool {
 		m.MinimockDeleteIdentityProviderDone() &&
 		m.MinimockDeleteTenantDone() &&
 		m.MinimockDeleteUserProfileDone() &&
+		m.MinimockGetAllTenantUsageDone() &&
 		m.MinimockGetAllTenantsDone() &&
 		m.MinimockGetApplicationGroupByIDDone() &&
 		m.MinimockGetApplicationGroupsDone() &&

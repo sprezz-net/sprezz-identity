@@ -82,6 +82,57 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (int
 	return id, err
 }
 
+const getAllTenantUsage = `-- name: GetAllTenantUsage :many
+SELECT
+    t.tenant_uuid,
+    (SELECT COUNT(*) FROM user_profiles x WHERE x.tenant_id = t.id)::bigint AS users,
+    (SELECT COUNT(*) FROM applications x WHERE x.tenant_id = t.id)::bigint AS applications,
+    (SELECT COUNT(*) FROM application_groups x WHERE x.tenant_id = t.id)::bigint AS groups,
+    (SELECT COUNT(*) FROM application_profiles x WHERE x.tenant_id = t.id)::bigint AS profiles,
+    (SELECT COUNT(*) FROM identity_providers x WHERE x.tenant_id = t.id)::bigint AS providers,
+    (SELECT COUNT(*) FROM partitions x WHERE x.tenant_id = t.id)::bigint AS partitions
+FROM tenants t
+`
+
+type GetAllTenantUsageRow struct {
+	TenantUuid   pgtype.UUID `json:"tenant_uuid"`
+	Users        int64       `json:"users"`
+	Applications int64       `json:"applications"`
+	Groups       int64       `json:"groups"`
+	Profiles     int64       `json:"profiles"`
+	Providers    int64       `json:"providers"`
+	Partitions   int64       `json:"partitions"`
+}
+
+// GetAllTenantUsage counts what every tenant owns, in one pass, for the tenant list and the deletion impact summary.
+func (q *Queries) GetAllTenantUsage(ctx context.Context) ([]GetAllTenantUsageRow, error) {
+	rows, err := q.db.Query(ctx, getAllTenantUsage)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAllTenantUsageRow{}
+	for rows.Next() {
+		var i GetAllTenantUsageRow
+		if err := rows.Scan(
+			&i.TenantUuid,
+			&i.Users,
+			&i.Applications,
+			&i.Groups,
+			&i.Profiles,
+			&i.Providers,
+			&i.Partitions,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTenantIDByUUID = `-- name: GetTenantIDByUUID :one
 SELECT id
 FROM tenants
