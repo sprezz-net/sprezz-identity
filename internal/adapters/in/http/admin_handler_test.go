@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -118,8 +117,11 @@ func TestHttpAdapter_AdminDashboard_AuthorizedSession_Success(t *testing.T) {
 		AliasName: model.AdminPartitionAliasName,
 	}, nil)
 
-	ssoMock.ParseSessionCookieMock.Set(func(ctx context.Context, value string) (string, string, error) {
-		return "bearer", strings.TrimPrefix(value, "bearer:"), nil
+	ssoMock.ResolveSessionMock.Set(func(ctx context.Context, tID uuid.UUID, value string) (*model.SSOSession, error) {
+		if value != testSessionSecret || tID != tenantID {
+			return nil, port.ErrSessionNotFound
+		}
+		return &model.SSOSession{ID: uuid.New(), TenantID: tenantID, PartitionID: adminPartitionID, UserProfileID: userUUID}, nil
 	})
 
 	ssoMock.BuildSessionCookieMock.Expect(minimock.AnyContext, port.CookieIntentCommand{
@@ -146,7 +148,7 @@ func TestHttpAdapter_AdminDashboard_AuthorizedSession_Success(t *testing.T) {
 	req.Host = "admin-domain.com"
 	req.AddCookie(&http.Cookie{
 		Name:  "spz_session_" + model.AdminPartitionAliasName,
-		Value: fmt.Sprintf("bearer:%s:%d", userUUID.String(), adminPartitionID),
+		Value: testSessionSecret,
 	})
 	rec := httptest.NewRecorder()
 

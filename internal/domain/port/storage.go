@@ -63,6 +63,15 @@ type Storage interface {
 	SavePasswordCredential(ctx context.Context, credential model.PasswordCredential) error
 
 	RevokeSession(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) error
+
+	// Browser SSO sessions. The token hash is the SHA-256 of the cookie secret; the secret itself is never stored.
+	SaveSSOSession(ctx context.Context, session model.SSOSession, tokenHash []byte) error
+	// GetActiveSSOSession returns ErrSessionNotFound unless the session exists for this tenant and has not passed
+	// its absolute or idle deadline at "now".
+	GetActiveSSOSession(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, now time.Time) (*model.SSOSession, error)
+	TouchSSOSession(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, lastSeenAt time.Time, idleExpiresAt time.Time) error
+	DeleteSSOSession(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID) error
+	DeleteSSOSessionsByUser(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID) error
 	SaveInteractionSession(ctx context.Context, session model.InteractionSession) error
 	GetAndConsumeInteractionSession(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.InteractionSession, error)
 	GetInteractionSession(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.InteractionSession, error)

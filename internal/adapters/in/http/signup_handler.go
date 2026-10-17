@@ -116,7 +116,7 @@ func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Reques
 		lastName = strings.Join(nameParts[1:], " ")
 	}
 
-	_, err = h.registrationUseCase.RegisterUser(r.Context(), port.RegisterUserCommand{
+	newProfile, err := h.registrationUseCase.RegisterUser(r.Context(), port.RegisterUserCommand{
 		TenantID:   tenant.ID,
 		ProviderID: provider.ID,
 		FirstName:  firstName,
@@ -139,24 +139,20 @@ func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// 3. Delegate single sign-on cookie building completely to the use case port
-	cookieIntent, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
-		TenantID:       tenant.ID,
-		PartitionID:    provider.PartitionID,
-		LifecycleStage: "bearer",
-		RequestHost:    r.Host,
+	// 3. Open the server-side session for the new account and hand the browser its opaque cookie
+	created, err := h.ssoUseCase.CreateSession(r.Context(), port.CreateSessionCommand{
+		TenantID:           tenant.ID,
+		PartitionID:        provider.PartitionID,
+		UserProfileID:      newProfile.ID,
+		IdentityProviderID: provider.ID,
+		RequestHost:        r.Host,
 	})
-	if err == nil {
-		http.SetCookie(w, &http.Cookie{
-			Name:     cookieIntent.CookieName,
-			Value:    cookieIntent.CookieValue,
-			Path:     "/",
-			MaxAge:   cookieIntent.MaxAge,
-			HttpOnly: true,
-			Secure:   cookieIntent.Secure,
-			SameSite: http.SameSiteLaxMode,
-		})
+	if err != nil {
+		slog.Error("Self-service registration: failed to create the session", "error", err, "tenant_id", tenant.ID)
+		h.renderInlineFormError(w, r, provider, interactionID, map[string]string{"global": "Your account was created, but we could not sign you in. Please sign in."})
+		return
 	}
+	writeSessionCookie(w, &created.Cookie)
 
 	targetURL := h.resolveSignUpRedirectURL(r, tenant, interactionID)
 	w.Header().Set(model.HeaderHxRedirect, targetURL)

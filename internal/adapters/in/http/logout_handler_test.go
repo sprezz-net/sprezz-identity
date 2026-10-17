@@ -31,12 +31,18 @@ func TestHttpAdapter_Logout_Success(t *testing.T) {
 		return &port.CookieIntentResponse{CookieName: "spz_session_default", CookieValue: "bearer-token"}, nil
 	})
 
-	suc.ParseSessionCookieMock.Set(func(ctx context.Context, cookieValue string) (string, string, error) {
-		// Set partition index to 33 to match our clean public consumer layout boundary tests
-		return "bearer", "user123:33", nil
+	live := &model.SSOSession{ID: uuid.New(), TenantID: tenantID, PartitionID: 33, UserProfileID: uuid.New()}
+	suc.ResolveSessionMock.Set(func(ctx context.Context, tID uuid.UUID, cookieValue string) (*model.SSOSession, error) {
+		if tID != tenantID || cookieValue != "opaque-secret" {
+			return nil, port.ErrSessionNotFound
+		}
+		return live, nil
 	})
 
 	auth.ProcessLogoutRequestMock.Set(func(ctx context.Context, cmd port.LogoutRequestCommand) (*port.LogoutExecutionResult, error) {
+		if cmd.ActiveSession != live {
+			t.Errorf("logout must name the live session so it can be revoked, got %+v", cmd.ActiveSession)
+		}
 		return &port.LogoutExecutionResult{
 			PostLogoutRedirectURI: "https://redirect-after-logout.com",
 			HasCookieIntent:       true,
@@ -46,7 +52,7 @@ func TestHttpAdapter_Logout_Success(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/logout?post_logout_redirect_uri=https://redirect-after-logout.com", nil)
-	req.Header.Set("Cookie", "spz_session_default=bearer-token")
+	req.Header.Set("Cookie", "spz_session_default=opaque-secret")
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
 
@@ -78,8 +84,12 @@ func TestHttpAdapter_Logout_FallbackRedirectURI(t *testing.T) {
 		return &port.CookieIntentResponse{CookieName: "spz_session_default"}, nil
 	})
 
-	suc.ParseSessionCookieMock.Set(func(ctx context.Context, cookieValue string) (string, string, error) {
-		return "bearer", "user123:33", nil
+	live := &model.SSOSession{ID: uuid.New(), TenantID: tenantID, PartitionID: 33, UserProfileID: uuid.New()}
+	suc.ResolveSessionMock.Set(func(ctx context.Context, tID uuid.UUID, cookieValue string) (*model.SSOSession, error) {
+		if tID != tenantID || cookieValue != "opaque-secret" {
+			return nil, port.ErrSessionNotFound
+		}
+		return live, nil
 	})
 
 	auth.ProcessLogoutRequestMock.Set(func(ctx context.Context, cmd port.LogoutRequestCommand) (*port.LogoutExecutionResult, error) {
@@ -92,7 +102,7 @@ func TestHttpAdapter_Logout_FallbackRedirectURI(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/logout", nil)
-	req.Header.Set("Cookie", "spz_session_default=bearer-token")
+	req.Header.Set("Cookie", "spz_session_default=opaque-secret")
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
 
@@ -124,8 +134,12 @@ func TestHttpAdapter_Logout_FrontChannelIframe(t *testing.T) {
 		return &port.CookieIntentResponse{CookieName: "spz_session_default"}, nil
 	})
 
-	suc.ParseSessionCookieMock.Set(func(ctx context.Context, cookieValue string) (string, string, error) {
-		return "bearer", "user123:33", nil
+	live := &model.SSOSession{ID: uuid.New(), TenantID: tenantID, PartitionID: 33, UserProfileID: uuid.New()}
+	suc.ResolveSessionMock.Set(func(ctx context.Context, tID uuid.UUID, cookieValue string) (*model.SSOSession, error) {
+		if tID != tenantID || cookieValue != "opaque-secret" {
+			return nil, port.ErrSessionNotFound
+		}
+		return live, nil
 	})
 
 	auth.ProcessLogoutRequestMock.Set(func(ctx context.Context, cmd port.LogoutRequestCommand) (*port.LogoutExecutionResult, error) {
@@ -139,7 +153,7 @@ func TestHttpAdapter_Logout_FrontChannelIframe(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/logout", nil)
-	req.Header.Set("Cookie", "spz_session_default=bearer-token")
+	req.Header.Set("Cookie", "spz_session_default=opaque-secret")
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
 
@@ -176,8 +190,12 @@ func TestHttpAdapter_Logout_UnwhitelistedRedirectURI_Fallback(t *testing.T) {
 		return &port.CookieIntentResponse{CookieName: "spz_session_default"}, nil
 	})
 
-	suc.ParseSessionCookieMock.Set(func(ctx context.Context, cookieValue string) (string, string, error) {
-		return "bearer", "user123:33", nil
+	live := &model.SSOSession{ID: uuid.New(), TenantID: tenantID, PartitionID: 33, UserProfileID: uuid.New()}
+	suc.ResolveSessionMock.Set(func(ctx context.Context, tID uuid.UUID, cookieValue string) (*model.SSOSession, error) {
+		if tID != tenantID || cookieValue != "opaque-secret" {
+			return nil, port.ErrSessionNotFound
+		}
+		return live, nil
 	})
 
 	auth.ProcessLogoutRequestMock.Set(func(ctx context.Context, cmd port.LogoutRequestCommand) (*port.LogoutExecutionResult, error) {
@@ -193,7 +211,7 @@ func TestHttpAdapter_Logout_UnwhitelistedRedirectURI_Fallback(t *testing.T) {
 
 	// An attacker attempts an open redirect exploit by passing a malicious destination parameter
 	req := httptest.NewRequest(http.MethodGet, "/logout?post_logout_redirect_uri=https://malicious-attacker-site.com", nil)
-	req.Header.Set("Cookie", "spz_session_default=bearer-token")
+	req.Header.Set("Cookie", "spz_session_default=opaque-secret")
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
 

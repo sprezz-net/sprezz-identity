@@ -6,12 +6,14 @@ package portmock
 
 import (
 	"context"
+	"sprezz-identity/internal/domain/model"
 	mm_port "sprezz-identity/internal/domain/port"
 	"sync"
 	mm_atomic "sync/atomic"
 	mm_time "time"
 
 	"github.com/gojuno/minimock/v3"
+	"github.com/google/uuid"
 )
 
 // SSOSessionUseCaseMock implements mm_port.SSOSessionUseCase
@@ -26,12 +28,40 @@ type SSOSessionUseCaseMock struct {
 	beforeBuildSessionCookieCounter uint64
 	BuildSessionCookieMock          mSSOSessionUseCaseMockBuildSessionCookie
 
+	funcCreateSession          func(ctx context.Context, cmd mm_port.CreateSessionCommand) (cp1 *mm_port.CreatedSession, err error)
+	funcCreateSessionOrigin    string
+	inspectFuncCreateSession   func(ctx context.Context, cmd mm_port.CreateSessionCommand)
+	afterCreateSessionCounter  uint64
+	beforeCreateSessionCounter uint64
+	CreateSessionMock          mSSOSessionUseCaseMockCreateSession
+
 	funcParseSessionCookie          func(ctx context.Context, cookieValue string) (stage string, payload string, err error)
 	funcParseSessionCookieOrigin    string
 	inspectFuncParseSessionCookie   func(ctx context.Context, cookieValue string)
 	afterParseSessionCookieCounter  uint64
 	beforeParseSessionCookieCounter uint64
 	ParseSessionCookieMock          mSSOSessionUseCaseMockParseSessionCookie
+
+	funcResolveSession          func(ctx context.Context, tenantID uuid.UUID, cookieValue string) (sp1 *model.SSOSession, err error)
+	funcResolveSessionOrigin    string
+	inspectFuncResolveSession   func(ctx context.Context, tenantID uuid.UUID, cookieValue string)
+	afterResolveSessionCounter  uint64
+	beforeResolveSessionCounter uint64
+	ResolveSessionMock          mSSOSessionUseCaseMockResolveSession
+
+	funcRevokeSession          func(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID) (err error)
+	funcRevokeSessionOrigin    string
+	inspectFuncRevokeSession   func(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID)
+	afterRevokeSessionCounter  uint64
+	beforeRevokeSessionCounter uint64
+	RevokeSessionMock          mSSOSessionUseCaseMockRevokeSession
+
+	funcRevokeUserSessions          func(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID) (err error)
+	funcRevokeUserSessionsOrigin    string
+	inspectFuncRevokeUserSessions   func(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID)
+	afterRevokeUserSessionsCounter  uint64
+	beforeRevokeUserSessionsCounter uint64
+	RevokeUserSessionsMock          mSSOSessionUseCaseMockRevokeUserSessions
 }
 
 // NewSSOSessionUseCaseMock returns a mock for mm_port.SSOSessionUseCase
@@ -45,8 +75,20 @@ func NewSSOSessionUseCaseMock(t minimock.Tester) *SSOSessionUseCaseMock {
 	m.BuildSessionCookieMock = mSSOSessionUseCaseMockBuildSessionCookie{mock: m}
 	m.BuildSessionCookieMock.callArgs = []*SSOSessionUseCaseMockBuildSessionCookieParams{}
 
+	m.CreateSessionMock = mSSOSessionUseCaseMockCreateSession{mock: m}
+	m.CreateSessionMock.callArgs = []*SSOSessionUseCaseMockCreateSessionParams{}
+
 	m.ParseSessionCookieMock = mSSOSessionUseCaseMockParseSessionCookie{mock: m}
 	m.ParseSessionCookieMock.callArgs = []*SSOSessionUseCaseMockParseSessionCookieParams{}
+
+	m.ResolveSessionMock = mSSOSessionUseCaseMockResolveSession{mock: m}
+	m.ResolveSessionMock.callArgs = []*SSOSessionUseCaseMockResolveSessionParams{}
+
+	m.RevokeSessionMock = mSSOSessionUseCaseMockRevokeSession{mock: m}
+	m.RevokeSessionMock.callArgs = []*SSOSessionUseCaseMockRevokeSessionParams{}
+
+	m.RevokeUserSessionsMock = mSSOSessionUseCaseMockRevokeUserSessions{mock: m}
+	m.RevokeUserSessionsMock.callArgs = []*SSOSessionUseCaseMockRevokeUserSessionsParams{}
 
 	t.Cleanup(m.MinimockFinish)
 
@@ -396,6 +438,349 @@ func (m *SSOSessionUseCaseMock) MinimockBuildSessionCookieInspect() {
 	}
 }
 
+type mSSOSessionUseCaseMockCreateSession struct {
+	optional           bool
+	mock               *SSOSessionUseCaseMock
+	defaultExpectation *SSOSessionUseCaseMockCreateSessionExpectation
+	expectations       []*SSOSessionUseCaseMockCreateSessionExpectation
+
+	callArgs []*SSOSessionUseCaseMockCreateSessionParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// SSOSessionUseCaseMockCreateSessionExpectation specifies expectation struct of the SSOSessionUseCase.CreateSession
+type SSOSessionUseCaseMockCreateSessionExpectation struct {
+	mock               *SSOSessionUseCaseMock
+	params             *SSOSessionUseCaseMockCreateSessionParams
+	paramPtrs          *SSOSessionUseCaseMockCreateSessionParamPtrs
+	expectationOrigins SSOSessionUseCaseMockCreateSessionExpectationOrigins
+	results            *SSOSessionUseCaseMockCreateSessionResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// SSOSessionUseCaseMockCreateSessionParams contains parameters of the SSOSessionUseCase.CreateSession
+type SSOSessionUseCaseMockCreateSessionParams struct {
+	ctx context.Context
+	cmd mm_port.CreateSessionCommand
+}
+
+// SSOSessionUseCaseMockCreateSessionParamPtrs contains pointers to parameters of the SSOSessionUseCase.CreateSession
+type SSOSessionUseCaseMockCreateSessionParamPtrs struct {
+	ctx *context.Context
+	cmd *mm_port.CreateSessionCommand
+}
+
+// SSOSessionUseCaseMockCreateSessionResults contains results of the SSOSessionUseCase.CreateSession
+type SSOSessionUseCaseMockCreateSessionResults struct {
+	cp1 *mm_port.CreatedSession
+	err error
+}
+
+// SSOSessionUseCaseMockCreateSessionOrigins contains origins of expectations of the SSOSessionUseCase.CreateSession
+type SSOSessionUseCaseMockCreateSessionExpectationOrigins struct {
+	origin    string
+	originCtx string
+	originCmd string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmCreateSession *mSSOSessionUseCaseMockCreateSession) Optional() *mSSOSessionUseCaseMockCreateSession {
+	mmCreateSession.optional = true
+	return mmCreateSession
+}
+
+// Expect sets up expected params for SSOSessionUseCase.CreateSession
+func (mmCreateSession *mSSOSessionUseCaseMockCreateSession) Expect(ctx context.Context, cmd mm_port.CreateSessionCommand) *mSSOSessionUseCaseMockCreateSession {
+	if mmCreateSession.mock.funcCreateSession != nil {
+		mmCreateSession.mock.t.Fatalf("SSOSessionUseCaseMock.CreateSession mock is already set by Set")
+	}
+
+	if mmCreateSession.defaultExpectation == nil {
+		mmCreateSession.defaultExpectation = &SSOSessionUseCaseMockCreateSessionExpectation{}
+	}
+
+	if mmCreateSession.defaultExpectation.paramPtrs != nil {
+		mmCreateSession.mock.t.Fatalf("SSOSessionUseCaseMock.CreateSession mock is already set by ExpectParams functions")
+	}
+
+	mmCreateSession.defaultExpectation.params = &SSOSessionUseCaseMockCreateSessionParams{ctx, cmd}
+	mmCreateSession.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmCreateSession.expectations {
+		if minimock.Equal(e.params, mmCreateSession.defaultExpectation.params) {
+			mmCreateSession.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmCreateSession.defaultExpectation.params)
+		}
+	}
+
+	return mmCreateSession
+}
+
+// ExpectCtxParam1 sets up expected param ctx for SSOSessionUseCase.CreateSession
+func (mmCreateSession *mSSOSessionUseCaseMockCreateSession) ExpectCtxParam1(ctx context.Context) *mSSOSessionUseCaseMockCreateSession {
+	if mmCreateSession.mock.funcCreateSession != nil {
+		mmCreateSession.mock.t.Fatalf("SSOSessionUseCaseMock.CreateSession mock is already set by Set")
+	}
+
+	if mmCreateSession.defaultExpectation == nil {
+		mmCreateSession.defaultExpectation = &SSOSessionUseCaseMockCreateSessionExpectation{}
+	}
+
+	if mmCreateSession.defaultExpectation.params != nil {
+		mmCreateSession.mock.t.Fatalf("SSOSessionUseCaseMock.CreateSession mock is already set by Expect")
+	}
+
+	if mmCreateSession.defaultExpectation.paramPtrs == nil {
+		mmCreateSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockCreateSessionParamPtrs{}
+	}
+	mmCreateSession.defaultExpectation.paramPtrs.ctx = &ctx
+	mmCreateSession.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmCreateSession
+}
+
+// ExpectCmdParam2 sets up expected param cmd for SSOSessionUseCase.CreateSession
+func (mmCreateSession *mSSOSessionUseCaseMockCreateSession) ExpectCmdParam2(cmd mm_port.CreateSessionCommand) *mSSOSessionUseCaseMockCreateSession {
+	if mmCreateSession.mock.funcCreateSession != nil {
+		mmCreateSession.mock.t.Fatalf("SSOSessionUseCaseMock.CreateSession mock is already set by Set")
+	}
+
+	if mmCreateSession.defaultExpectation == nil {
+		mmCreateSession.defaultExpectation = &SSOSessionUseCaseMockCreateSessionExpectation{}
+	}
+
+	if mmCreateSession.defaultExpectation.params != nil {
+		mmCreateSession.mock.t.Fatalf("SSOSessionUseCaseMock.CreateSession mock is already set by Expect")
+	}
+
+	if mmCreateSession.defaultExpectation.paramPtrs == nil {
+		mmCreateSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockCreateSessionParamPtrs{}
+	}
+	mmCreateSession.defaultExpectation.paramPtrs.cmd = &cmd
+	mmCreateSession.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
+
+	return mmCreateSession
+}
+
+// Inspect accepts an inspector function that has same arguments as the SSOSessionUseCase.CreateSession
+func (mmCreateSession *mSSOSessionUseCaseMockCreateSession) Inspect(f func(ctx context.Context, cmd mm_port.CreateSessionCommand)) *mSSOSessionUseCaseMockCreateSession {
+	if mmCreateSession.mock.inspectFuncCreateSession != nil {
+		mmCreateSession.mock.t.Fatalf("Inspect function is already set for SSOSessionUseCaseMock.CreateSession")
+	}
+
+	mmCreateSession.mock.inspectFuncCreateSession = f
+
+	return mmCreateSession
+}
+
+// Return sets up results that will be returned by SSOSessionUseCase.CreateSession
+func (mmCreateSession *mSSOSessionUseCaseMockCreateSession) Return(cp1 *mm_port.CreatedSession, err error) *SSOSessionUseCaseMock {
+	if mmCreateSession.mock.funcCreateSession != nil {
+		mmCreateSession.mock.t.Fatalf("SSOSessionUseCaseMock.CreateSession mock is already set by Set")
+	}
+
+	if mmCreateSession.defaultExpectation == nil {
+		mmCreateSession.defaultExpectation = &SSOSessionUseCaseMockCreateSessionExpectation{mock: mmCreateSession.mock}
+	}
+	mmCreateSession.defaultExpectation.results = &SSOSessionUseCaseMockCreateSessionResults{cp1, err}
+	mmCreateSession.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmCreateSession.mock
+}
+
+// Set uses given function f to mock the SSOSessionUseCase.CreateSession method
+func (mmCreateSession *mSSOSessionUseCaseMockCreateSession) Set(f func(ctx context.Context, cmd mm_port.CreateSessionCommand) (cp1 *mm_port.CreatedSession, err error)) *SSOSessionUseCaseMock {
+	if mmCreateSession.defaultExpectation != nil {
+		mmCreateSession.mock.t.Fatalf("Default expectation is already set for the SSOSessionUseCase.CreateSession method")
+	}
+
+	if len(mmCreateSession.expectations) > 0 {
+		mmCreateSession.mock.t.Fatalf("Some expectations are already set for the SSOSessionUseCase.CreateSession method")
+	}
+
+	mmCreateSession.mock.funcCreateSession = f
+	mmCreateSession.mock.funcCreateSessionOrigin = minimock.CallerInfo(1)
+	return mmCreateSession.mock
+}
+
+// When sets expectation for the SSOSessionUseCase.CreateSession which will trigger the result defined by the following
+// Then helper
+func (mmCreateSession *mSSOSessionUseCaseMockCreateSession) When(ctx context.Context, cmd mm_port.CreateSessionCommand) *SSOSessionUseCaseMockCreateSessionExpectation {
+	if mmCreateSession.mock.funcCreateSession != nil {
+		mmCreateSession.mock.t.Fatalf("SSOSessionUseCaseMock.CreateSession mock is already set by Set")
+	}
+
+	expectation := &SSOSessionUseCaseMockCreateSessionExpectation{
+		mock:               mmCreateSession.mock,
+		params:             &SSOSessionUseCaseMockCreateSessionParams{ctx, cmd},
+		expectationOrigins: SSOSessionUseCaseMockCreateSessionExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmCreateSession.expectations = append(mmCreateSession.expectations, expectation)
+	return expectation
+}
+
+// Then sets up SSOSessionUseCase.CreateSession return parameters for the expectation previously defined by the When method
+func (e *SSOSessionUseCaseMockCreateSessionExpectation) Then(cp1 *mm_port.CreatedSession, err error) *SSOSessionUseCaseMock {
+	e.results = &SSOSessionUseCaseMockCreateSessionResults{cp1, err}
+	return e.mock
+}
+
+// Times sets number of times SSOSessionUseCase.CreateSession should be invoked
+func (mmCreateSession *mSSOSessionUseCaseMockCreateSession) Times(n uint64) *mSSOSessionUseCaseMockCreateSession {
+	if n == 0 {
+		mmCreateSession.mock.t.Fatalf("Times of SSOSessionUseCaseMock.CreateSession mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmCreateSession.expectedInvocations, n)
+	mmCreateSession.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmCreateSession
+}
+
+func (mmCreateSession *mSSOSessionUseCaseMockCreateSession) invocationsDone() bool {
+	if len(mmCreateSession.expectations) == 0 && mmCreateSession.defaultExpectation == nil && mmCreateSession.mock.funcCreateSession == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmCreateSession.mock.afterCreateSessionCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmCreateSession.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// CreateSession implements mm_port.SSOSessionUseCase
+func (mmCreateSession *SSOSessionUseCaseMock) CreateSession(ctx context.Context, cmd mm_port.CreateSessionCommand) (cp1 *mm_port.CreatedSession, err error) {
+	mm_atomic.AddUint64(&mmCreateSession.beforeCreateSessionCounter, 1)
+	defer mm_atomic.AddUint64(&mmCreateSession.afterCreateSessionCounter, 1)
+
+	mmCreateSession.t.Helper()
+
+	if mmCreateSession.inspectFuncCreateSession != nil {
+		mmCreateSession.inspectFuncCreateSession(ctx, cmd)
+	}
+
+	mm_params := SSOSessionUseCaseMockCreateSessionParams{ctx, cmd}
+
+	// Record call args
+	mmCreateSession.CreateSessionMock.mutex.Lock()
+	mmCreateSession.CreateSessionMock.callArgs = append(mmCreateSession.CreateSessionMock.callArgs, &mm_params)
+	mmCreateSession.CreateSessionMock.mutex.Unlock()
+
+	for _, e := range mmCreateSession.CreateSessionMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.cp1, e.results.err
+		}
+	}
+
+	if mmCreateSession.CreateSessionMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmCreateSession.CreateSessionMock.defaultExpectation.Counter, 1)
+		mm_want := mmCreateSession.CreateSessionMock.defaultExpectation.params
+		mm_want_ptrs := mmCreateSession.CreateSessionMock.defaultExpectation.paramPtrs
+
+		mm_got := SSOSessionUseCaseMockCreateSessionParams{ctx, cmd}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmCreateSession.t.Errorf("SSOSessionUseCaseMock.CreateSession got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmCreateSession.CreateSessionMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
+				mmCreateSession.t.Errorf("SSOSessionUseCaseMock.CreateSession got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmCreateSession.CreateSessionMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmCreateSession.t.Errorf("SSOSessionUseCaseMock.CreateSession got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmCreateSession.CreateSessionMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmCreateSession.CreateSessionMock.defaultExpectation.results
+		if mm_results == nil {
+			mmCreateSession.t.Fatal("No results are set for the SSOSessionUseCaseMock.CreateSession")
+		}
+		return (*mm_results).cp1, (*mm_results).err
+	}
+	if mmCreateSession.funcCreateSession != nil {
+		return mmCreateSession.funcCreateSession(ctx, cmd)
+	}
+	mmCreateSession.t.Fatalf("Unexpected call to SSOSessionUseCaseMock.CreateSession. %v %v", ctx, cmd)
+	return
+}
+
+// CreateSessionAfterCounter returns a count of finished SSOSessionUseCaseMock.CreateSession invocations
+func (mmCreateSession *SSOSessionUseCaseMock) CreateSessionAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmCreateSession.afterCreateSessionCounter)
+}
+
+// CreateSessionBeforeCounter returns a count of SSOSessionUseCaseMock.CreateSession invocations
+func (mmCreateSession *SSOSessionUseCaseMock) CreateSessionBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmCreateSession.beforeCreateSessionCounter)
+}
+
+// Calls returns a list of arguments used in each call to SSOSessionUseCaseMock.CreateSession.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmCreateSession *mSSOSessionUseCaseMockCreateSession) Calls() []*SSOSessionUseCaseMockCreateSessionParams {
+	mmCreateSession.mutex.RLock()
+
+	argCopy := make([]*SSOSessionUseCaseMockCreateSessionParams, len(mmCreateSession.callArgs))
+	copy(argCopy, mmCreateSession.callArgs)
+
+	mmCreateSession.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockCreateSessionDone returns true if the count of the CreateSession invocations corresponds
+// the number of defined expectations
+func (m *SSOSessionUseCaseMock) MinimockCreateSessionDone() bool {
+	if m.CreateSessionMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.CreateSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.CreateSessionMock.invocationsDone()
+}
+
+// MinimockCreateSessionInspect logs each unmet expectation
+func (m *SSOSessionUseCaseMock) MinimockCreateSessionInspect() {
+	for _, e := range m.CreateSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.CreateSession at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterCreateSessionCounter := mm_atomic.LoadUint64(&m.afterCreateSessionCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.CreateSessionMock.defaultExpectation != nil && afterCreateSessionCounter < 1 {
+		if m.CreateSessionMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.CreateSession at\n%s", m.CreateSessionMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.CreateSession at\n%s with params: %#v", m.CreateSessionMock.defaultExpectation.expectationOrigins.origin, *m.CreateSessionMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcCreateSession != nil && afterCreateSessionCounter < 1 {
+		m.t.Errorf("Expected call to SSOSessionUseCaseMock.CreateSession at\n%s", m.funcCreateSessionOrigin)
+	}
+
+	if !m.CreateSessionMock.invocationsDone() && afterCreateSessionCounter > 0 {
+		m.t.Errorf("Expected %d calls to SSOSessionUseCaseMock.CreateSession at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.CreateSessionMock.expectedInvocations), m.CreateSessionMock.expectedInvocationsOrigin, afterCreateSessionCounter)
+	}
+}
+
 type mSSOSessionUseCaseMockParseSessionCookie struct {
 	optional           bool
 	mock               *SSOSessionUseCaseMock
@@ -740,13 +1125,1141 @@ func (m *SSOSessionUseCaseMock) MinimockParseSessionCookieInspect() {
 	}
 }
 
+type mSSOSessionUseCaseMockResolveSession struct {
+	optional           bool
+	mock               *SSOSessionUseCaseMock
+	defaultExpectation *SSOSessionUseCaseMockResolveSessionExpectation
+	expectations       []*SSOSessionUseCaseMockResolveSessionExpectation
+
+	callArgs []*SSOSessionUseCaseMockResolveSessionParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// SSOSessionUseCaseMockResolveSessionExpectation specifies expectation struct of the SSOSessionUseCase.ResolveSession
+type SSOSessionUseCaseMockResolveSessionExpectation struct {
+	mock               *SSOSessionUseCaseMock
+	params             *SSOSessionUseCaseMockResolveSessionParams
+	paramPtrs          *SSOSessionUseCaseMockResolveSessionParamPtrs
+	expectationOrigins SSOSessionUseCaseMockResolveSessionExpectationOrigins
+	results            *SSOSessionUseCaseMockResolveSessionResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// SSOSessionUseCaseMockResolveSessionParams contains parameters of the SSOSessionUseCase.ResolveSession
+type SSOSessionUseCaseMockResolveSessionParams struct {
+	ctx         context.Context
+	tenantID    uuid.UUID
+	cookieValue string
+}
+
+// SSOSessionUseCaseMockResolveSessionParamPtrs contains pointers to parameters of the SSOSessionUseCase.ResolveSession
+type SSOSessionUseCaseMockResolveSessionParamPtrs struct {
+	ctx         *context.Context
+	tenantID    *uuid.UUID
+	cookieValue *string
+}
+
+// SSOSessionUseCaseMockResolveSessionResults contains results of the SSOSessionUseCase.ResolveSession
+type SSOSessionUseCaseMockResolveSessionResults struct {
+	sp1 *model.SSOSession
+	err error
+}
+
+// SSOSessionUseCaseMockResolveSessionOrigins contains origins of expectations of the SSOSessionUseCase.ResolveSession
+type SSOSessionUseCaseMockResolveSessionExpectationOrigins struct {
+	origin            string
+	originCtx         string
+	originTenantID    string
+	originCookieValue string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmResolveSession *mSSOSessionUseCaseMockResolveSession) Optional() *mSSOSessionUseCaseMockResolveSession {
+	mmResolveSession.optional = true
+	return mmResolveSession
+}
+
+// Expect sets up expected params for SSOSessionUseCase.ResolveSession
+func (mmResolveSession *mSSOSessionUseCaseMockResolveSession) Expect(ctx context.Context, tenantID uuid.UUID, cookieValue string) *mSSOSessionUseCaseMockResolveSession {
+	if mmResolveSession.mock.funcResolveSession != nil {
+		mmResolveSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveSession mock is already set by Set")
+	}
+
+	if mmResolveSession.defaultExpectation == nil {
+		mmResolveSession.defaultExpectation = &SSOSessionUseCaseMockResolveSessionExpectation{}
+	}
+
+	if mmResolveSession.defaultExpectation.paramPtrs != nil {
+		mmResolveSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveSession mock is already set by ExpectParams functions")
+	}
+
+	mmResolveSession.defaultExpectation.params = &SSOSessionUseCaseMockResolveSessionParams{ctx, tenantID, cookieValue}
+	mmResolveSession.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmResolveSession.expectations {
+		if minimock.Equal(e.params, mmResolveSession.defaultExpectation.params) {
+			mmResolveSession.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmResolveSession.defaultExpectation.params)
+		}
+	}
+
+	return mmResolveSession
+}
+
+// ExpectCtxParam1 sets up expected param ctx for SSOSessionUseCase.ResolveSession
+func (mmResolveSession *mSSOSessionUseCaseMockResolveSession) ExpectCtxParam1(ctx context.Context) *mSSOSessionUseCaseMockResolveSession {
+	if mmResolveSession.mock.funcResolveSession != nil {
+		mmResolveSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveSession mock is already set by Set")
+	}
+
+	if mmResolveSession.defaultExpectation == nil {
+		mmResolveSession.defaultExpectation = &SSOSessionUseCaseMockResolveSessionExpectation{}
+	}
+
+	if mmResolveSession.defaultExpectation.params != nil {
+		mmResolveSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveSession mock is already set by Expect")
+	}
+
+	if mmResolveSession.defaultExpectation.paramPtrs == nil {
+		mmResolveSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolveSessionParamPtrs{}
+	}
+	mmResolveSession.defaultExpectation.paramPtrs.ctx = &ctx
+	mmResolveSession.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmResolveSession
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for SSOSessionUseCase.ResolveSession
+func (mmResolveSession *mSSOSessionUseCaseMockResolveSession) ExpectTenantIDParam2(tenantID uuid.UUID) *mSSOSessionUseCaseMockResolveSession {
+	if mmResolveSession.mock.funcResolveSession != nil {
+		mmResolveSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveSession mock is already set by Set")
+	}
+
+	if mmResolveSession.defaultExpectation == nil {
+		mmResolveSession.defaultExpectation = &SSOSessionUseCaseMockResolveSessionExpectation{}
+	}
+
+	if mmResolveSession.defaultExpectation.params != nil {
+		mmResolveSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveSession mock is already set by Expect")
+	}
+
+	if mmResolveSession.defaultExpectation.paramPtrs == nil {
+		mmResolveSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolveSessionParamPtrs{}
+	}
+	mmResolveSession.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmResolveSession.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmResolveSession
+}
+
+// ExpectCookieValueParam3 sets up expected param cookieValue for SSOSessionUseCase.ResolveSession
+func (mmResolveSession *mSSOSessionUseCaseMockResolveSession) ExpectCookieValueParam3(cookieValue string) *mSSOSessionUseCaseMockResolveSession {
+	if mmResolveSession.mock.funcResolveSession != nil {
+		mmResolveSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveSession mock is already set by Set")
+	}
+
+	if mmResolveSession.defaultExpectation == nil {
+		mmResolveSession.defaultExpectation = &SSOSessionUseCaseMockResolveSessionExpectation{}
+	}
+
+	if mmResolveSession.defaultExpectation.params != nil {
+		mmResolveSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveSession mock is already set by Expect")
+	}
+
+	if mmResolveSession.defaultExpectation.paramPtrs == nil {
+		mmResolveSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolveSessionParamPtrs{}
+	}
+	mmResolveSession.defaultExpectation.paramPtrs.cookieValue = &cookieValue
+	mmResolveSession.defaultExpectation.expectationOrigins.originCookieValue = minimock.CallerInfo(1)
+
+	return mmResolveSession
+}
+
+// Inspect accepts an inspector function that has same arguments as the SSOSessionUseCase.ResolveSession
+func (mmResolveSession *mSSOSessionUseCaseMockResolveSession) Inspect(f func(ctx context.Context, tenantID uuid.UUID, cookieValue string)) *mSSOSessionUseCaseMockResolveSession {
+	if mmResolveSession.mock.inspectFuncResolveSession != nil {
+		mmResolveSession.mock.t.Fatalf("Inspect function is already set for SSOSessionUseCaseMock.ResolveSession")
+	}
+
+	mmResolveSession.mock.inspectFuncResolveSession = f
+
+	return mmResolveSession
+}
+
+// Return sets up results that will be returned by SSOSessionUseCase.ResolveSession
+func (mmResolveSession *mSSOSessionUseCaseMockResolveSession) Return(sp1 *model.SSOSession, err error) *SSOSessionUseCaseMock {
+	if mmResolveSession.mock.funcResolveSession != nil {
+		mmResolveSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveSession mock is already set by Set")
+	}
+
+	if mmResolveSession.defaultExpectation == nil {
+		mmResolveSession.defaultExpectation = &SSOSessionUseCaseMockResolveSessionExpectation{mock: mmResolveSession.mock}
+	}
+	mmResolveSession.defaultExpectation.results = &SSOSessionUseCaseMockResolveSessionResults{sp1, err}
+	mmResolveSession.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmResolveSession.mock
+}
+
+// Set uses given function f to mock the SSOSessionUseCase.ResolveSession method
+func (mmResolveSession *mSSOSessionUseCaseMockResolveSession) Set(f func(ctx context.Context, tenantID uuid.UUID, cookieValue string) (sp1 *model.SSOSession, err error)) *SSOSessionUseCaseMock {
+	if mmResolveSession.defaultExpectation != nil {
+		mmResolveSession.mock.t.Fatalf("Default expectation is already set for the SSOSessionUseCase.ResolveSession method")
+	}
+
+	if len(mmResolveSession.expectations) > 0 {
+		mmResolveSession.mock.t.Fatalf("Some expectations are already set for the SSOSessionUseCase.ResolveSession method")
+	}
+
+	mmResolveSession.mock.funcResolveSession = f
+	mmResolveSession.mock.funcResolveSessionOrigin = minimock.CallerInfo(1)
+	return mmResolveSession.mock
+}
+
+// When sets expectation for the SSOSessionUseCase.ResolveSession which will trigger the result defined by the following
+// Then helper
+func (mmResolveSession *mSSOSessionUseCaseMockResolveSession) When(ctx context.Context, tenantID uuid.UUID, cookieValue string) *SSOSessionUseCaseMockResolveSessionExpectation {
+	if mmResolveSession.mock.funcResolveSession != nil {
+		mmResolveSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveSession mock is already set by Set")
+	}
+
+	expectation := &SSOSessionUseCaseMockResolveSessionExpectation{
+		mock:               mmResolveSession.mock,
+		params:             &SSOSessionUseCaseMockResolveSessionParams{ctx, tenantID, cookieValue},
+		expectationOrigins: SSOSessionUseCaseMockResolveSessionExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmResolveSession.expectations = append(mmResolveSession.expectations, expectation)
+	return expectation
+}
+
+// Then sets up SSOSessionUseCase.ResolveSession return parameters for the expectation previously defined by the When method
+func (e *SSOSessionUseCaseMockResolveSessionExpectation) Then(sp1 *model.SSOSession, err error) *SSOSessionUseCaseMock {
+	e.results = &SSOSessionUseCaseMockResolveSessionResults{sp1, err}
+	return e.mock
+}
+
+// Times sets number of times SSOSessionUseCase.ResolveSession should be invoked
+func (mmResolveSession *mSSOSessionUseCaseMockResolveSession) Times(n uint64) *mSSOSessionUseCaseMockResolveSession {
+	if n == 0 {
+		mmResolveSession.mock.t.Fatalf("Times of SSOSessionUseCaseMock.ResolveSession mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmResolveSession.expectedInvocations, n)
+	mmResolveSession.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmResolveSession
+}
+
+func (mmResolveSession *mSSOSessionUseCaseMockResolveSession) invocationsDone() bool {
+	if len(mmResolveSession.expectations) == 0 && mmResolveSession.defaultExpectation == nil && mmResolveSession.mock.funcResolveSession == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmResolveSession.mock.afterResolveSessionCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmResolveSession.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// ResolveSession implements mm_port.SSOSessionUseCase
+func (mmResolveSession *SSOSessionUseCaseMock) ResolveSession(ctx context.Context, tenantID uuid.UUID, cookieValue string) (sp1 *model.SSOSession, err error) {
+	mm_atomic.AddUint64(&mmResolveSession.beforeResolveSessionCounter, 1)
+	defer mm_atomic.AddUint64(&mmResolveSession.afterResolveSessionCounter, 1)
+
+	mmResolveSession.t.Helper()
+
+	if mmResolveSession.inspectFuncResolveSession != nil {
+		mmResolveSession.inspectFuncResolveSession(ctx, tenantID, cookieValue)
+	}
+
+	mm_params := SSOSessionUseCaseMockResolveSessionParams{ctx, tenantID, cookieValue}
+
+	// Record call args
+	mmResolveSession.ResolveSessionMock.mutex.Lock()
+	mmResolveSession.ResolveSessionMock.callArgs = append(mmResolveSession.ResolveSessionMock.callArgs, &mm_params)
+	mmResolveSession.ResolveSessionMock.mutex.Unlock()
+
+	for _, e := range mmResolveSession.ResolveSessionMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.sp1, e.results.err
+		}
+	}
+
+	if mmResolveSession.ResolveSessionMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmResolveSession.ResolveSessionMock.defaultExpectation.Counter, 1)
+		mm_want := mmResolveSession.ResolveSessionMock.defaultExpectation.params
+		mm_want_ptrs := mmResolveSession.ResolveSessionMock.defaultExpectation.paramPtrs
+
+		mm_got := SSOSessionUseCaseMockResolveSessionParams{ctx, tenantID, cookieValue}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmResolveSession.t.Errorf("SSOSessionUseCaseMock.ResolveSession got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolveSession.ResolveSessionMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmResolveSession.t.Errorf("SSOSessionUseCaseMock.ResolveSession got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolveSession.ResolveSessionMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.cookieValue != nil && !minimock.Equal(*mm_want_ptrs.cookieValue, mm_got.cookieValue) {
+				mmResolveSession.t.Errorf("SSOSessionUseCaseMock.ResolveSession got unexpected parameter cookieValue, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolveSession.ResolveSessionMock.defaultExpectation.expectationOrigins.originCookieValue, *mm_want_ptrs.cookieValue, mm_got.cookieValue, minimock.Diff(*mm_want_ptrs.cookieValue, mm_got.cookieValue))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmResolveSession.t.Errorf("SSOSessionUseCaseMock.ResolveSession got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmResolveSession.ResolveSessionMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmResolveSession.ResolveSessionMock.defaultExpectation.results
+		if mm_results == nil {
+			mmResolveSession.t.Fatal("No results are set for the SSOSessionUseCaseMock.ResolveSession")
+		}
+		return (*mm_results).sp1, (*mm_results).err
+	}
+	if mmResolveSession.funcResolveSession != nil {
+		return mmResolveSession.funcResolveSession(ctx, tenantID, cookieValue)
+	}
+	mmResolveSession.t.Fatalf("Unexpected call to SSOSessionUseCaseMock.ResolveSession. %v %v %v", ctx, tenantID, cookieValue)
+	return
+}
+
+// ResolveSessionAfterCounter returns a count of finished SSOSessionUseCaseMock.ResolveSession invocations
+func (mmResolveSession *SSOSessionUseCaseMock) ResolveSessionAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmResolveSession.afterResolveSessionCounter)
+}
+
+// ResolveSessionBeforeCounter returns a count of SSOSessionUseCaseMock.ResolveSession invocations
+func (mmResolveSession *SSOSessionUseCaseMock) ResolveSessionBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmResolveSession.beforeResolveSessionCounter)
+}
+
+// Calls returns a list of arguments used in each call to SSOSessionUseCaseMock.ResolveSession.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmResolveSession *mSSOSessionUseCaseMockResolveSession) Calls() []*SSOSessionUseCaseMockResolveSessionParams {
+	mmResolveSession.mutex.RLock()
+
+	argCopy := make([]*SSOSessionUseCaseMockResolveSessionParams, len(mmResolveSession.callArgs))
+	copy(argCopy, mmResolveSession.callArgs)
+
+	mmResolveSession.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockResolveSessionDone returns true if the count of the ResolveSession invocations corresponds
+// the number of defined expectations
+func (m *SSOSessionUseCaseMock) MinimockResolveSessionDone() bool {
+	if m.ResolveSessionMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.ResolveSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.ResolveSessionMock.invocationsDone()
+}
+
+// MinimockResolveSessionInspect logs each unmet expectation
+func (m *SSOSessionUseCaseMock) MinimockResolveSessionInspect() {
+	for _, e := range m.ResolveSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolveSession at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterResolveSessionCounter := mm_atomic.LoadUint64(&m.afterResolveSessionCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.ResolveSessionMock.defaultExpectation != nil && afterResolveSessionCounter < 1 {
+		if m.ResolveSessionMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolveSession at\n%s", m.ResolveSessionMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolveSession at\n%s with params: %#v", m.ResolveSessionMock.defaultExpectation.expectationOrigins.origin, *m.ResolveSessionMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcResolveSession != nil && afterResolveSessionCounter < 1 {
+		m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolveSession at\n%s", m.funcResolveSessionOrigin)
+	}
+
+	if !m.ResolveSessionMock.invocationsDone() && afterResolveSessionCounter > 0 {
+		m.t.Errorf("Expected %d calls to SSOSessionUseCaseMock.ResolveSession at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.ResolveSessionMock.expectedInvocations), m.ResolveSessionMock.expectedInvocationsOrigin, afterResolveSessionCounter)
+	}
+}
+
+type mSSOSessionUseCaseMockRevokeSession struct {
+	optional           bool
+	mock               *SSOSessionUseCaseMock
+	defaultExpectation *SSOSessionUseCaseMockRevokeSessionExpectation
+	expectations       []*SSOSessionUseCaseMockRevokeSessionExpectation
+
+	callArgs []*SSOSessionUseCaseMockRevokeSessionParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// SSOSessionUseCaseMockRevokeSessionExpectation specifies expectation struct of the SSOSessionUseCase.RevokeSession
+type SSOSessionUseCaseMockRevokeSessionExpectation struct {
+	mock               *SSOSessionUseCaseMock
+	params             *SSOSessionUseCaseMockRevokeSessionParams
+	paramPtrs          *SSOSessionUseCaseMockRevokeSessionParamPtrs
+	expectationOrigins SSOSessionUseCaseMockRevokeSessionExpectationOrigins
+	results            *SSOSessionUseCaseMockRevokeSessionResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// SSOSessionUseCaseMockRevokeSessionParams contains parameters of the SSOSessionUseCase.RevokeSession
+type SSOSessionUseCaseMockRevokeSessionParams struct {
+	ctx       context.Context
+	tenantID  uuid.UUID
+	sessionID uuid.UUID
+}
+
+// SSOSessionUseCaseMockRevokeSessionParamPtrs contains pointers to parameters of the SSOSessionUseCase.RevokeSession
+type SSOSessionUseCaseMockRevokeSessionParamPtrs struct {
+	ctx       *context.Context
+	tenantID  *uuid.UUID
+	sessionID *uuid.UUID
+}
+
+// SSOSessionUseCaseMockRevokeSessionResults contains results of the SSOSessionUseCase.RevokeSession
+type SSOSessionUseCaseMockRevokeSessionResults struct {
+	err error
+}
+
+// SSOSessionUseCaseMockRevokeSessionOrigins contains origins of expectations of the SSOSessionUseCase.RevokeSession
+type SSOSessionUseCaseMockRevokeSessionExpectationOrigins struct {
+	origin          string
+	originCtx       string
+	originTenantID  string
+	originSessionID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmRevokeSession *mSSOSessionUseCaseMockRevokeSession) Optional() *mSSOSessionUseCaseMockRevokeSession {
+	mmRevokeSession.optional = true
+	return mmRevokeSession
+}
+
+// Expect sets up expected params for SSOSessionUseCase.RevokeSession
+func (mmRevokeSession *mSSOSessionUseCaseMockRevokeSession) Expect(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID) *mSSOSessionUseCaseMockRevokeSession {
+	if mmRevokeSession.mock.funcRevokeSession != nil {
+		mmRevokeSession.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeSession mock is already set by Set")
+	}
+
+	if mmRevokeSession.defaultExpectation == nil {
+		mmRevokeSession.defaultExpectation = &SSOSessionUseCaseMockRevokeSessionExpectation{}
+	}
+
+	if mmRevokeSession.defaultExpectation.paramPtrs != nil {
+		mmRevokeSession.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeSession mock is already set by ExpectParams functions")
+	}
+
+	mmRevokeSession.defaultExpectation.params = &SSOSessionUseCaseMockRevokeSessionParams{ctx, tenantID, sessionID}
+	mmRevokeSession.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmRevokeSession.expectations {
+		if minimock.Equal(e.params, mmRevokeSession.defaultExpectation.params) {
+			mmRevokeSession.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmRevokeSession.defaultExpectation.params)
+		}
+	}
+
+	return mmRevokeSession
+}
+
+// ExpectCtxParam1 sets up expected param ctx for SSOSessionUseCase.RevokeSession
+func (mmRevokeSession *mSSOSessionUseCaseMockRevokeSession) ExpectCtxParam1(ctx context.Context) *mSSOSessionUseCaseMockRevokeSession {
+	if mmRevokeSession.mock.funcRevokeSession != nil {
+		mmRevokeSession.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeSession mock is already set by Set")
+	}
+
+	if mmRevokeSession.defaultExpectation == nil {
+		mmRevokeSession.defaultExpectation = &SSOSessionUseCaseMockRevokeSessionExpectation{}
+	}
+
+	if mmRevokeSession.defaultExpectation.params != nil {
+		mmRevokeSession.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeSession mock is already set by Expect")
+	}
+
+	if mmRevokeSession.defaultExpectation.paramPtrs == nil {
+		mmRevokeSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockRevokeSessionParamPtrs{}
+	}
+	mmRevokeSession.defaultExpectation.paramPtrs.ctx = &ctx
+	mmRevokeSession.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmRevokeSession
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for SSOSessionUseCase.RevokeSession
+func (mmRevokeSession *mSSOSessionUseCaseMockRevokeSession) ExpectTenantIDParam2(tenantID uuid.UUID) *mSSOSessionUseCaseMockRevokeSession {
+	if mmRevokeSession.mock.funcRevokeSession != nil {
+		mmRevokeSession.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeSession mock is already set by Set")
+	}
+
+	if mmRevokeSession.defaultExpectation == nil {
+		mmRevokeSession.defaultExpectation = &SSOSessionUseCaseMockRevokeSessionExpectation{}
+	}
+
+	if mmRevokeSession.defaultExpectation.params != nil {
+		mmRevokeSession.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeSession mock is already set by Expect")
+	}
+
+	if mmRevokeSession.defaultExpectation.paramPtrs == nil {
+		mmRevokeSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockRevokeSessionParamPtrs{}
+	}
+	mmRevokeSession.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmRevokeSession.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmRevokeSession
+}
+
+// ExpectSessionIDParam3 sets up expected param sessionID for SSOSessionUseCase.RevokeSession
+func (mmRevokeSession *mSSOSessionUseCaseMockRevokeSession) ExpectSessionIDParam3(sessionID uuid.UUID) *mSSOSessionUseCaseMockRevokeSession {
+	if mmRevokeSession.mock.funcRevokeSession != nil {
+		mmRevokeSession.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeSession mock is already set by Set")
+	}
+
+	if mmRevokeSession.defaultExpectation == nil {
+		mmRevokeSession.defaultExpectation = &SSOSessionUseCaseMockRevokeSessionExpectation{}
+	}
+
+	if mmRevokeSession.defaultExpectation.params != nil {
+		mmRevokeSession.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeSession mock is already set by Expect")
+	}
+
+	if mmRevokeSession.defaultExpectation.paramPtrs == nil {
+		mmRevokeSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockRevokeSessionParamPtrs{}
+	}
+	mmRevokeSession.defaultExpectation.paramPtrs.sessionID = &sessionID
+	mmRevokeSession.defaultExpectation.expectationOrigins.originSessionID = minimock.CallerInfo(1)
+
+	return mmRevokeSession
+}
+
+// Inspect accepts an inspector function that has same arguments as the SSOSessionUseCase.RevokeSession
+func (mmRevokeSession *mSSOSessionUseCaseMockRevokeSession) Inspect(f func(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID)) *mSSOSessionUseCaseMockRevokeSession {
+	if mmRevokeSession.mock.inspectFuncRevokeSession != nil {
+		mmRevokeSession.mock.t.Fatalf("Inspect function is already set for SSOSessionUseCaseMock.RevokeSession")
+	}
+
+	mmRevokeSession.mock.inspectFuncRevokeSession = f
+
+	return mmRevokeSession
+}
+
+// Return sets up results that will be returned by SSOSessionUseCase.RevokeSession
+func (mmRevokeSession *mSSOSessionUseCaseMockRevokeSession) Return(err error) *SSOSessionUseCaseMock {
+	if mmRevokeSession.mock.funcRevokeSession != nil {
+		mmRevokeSession.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeSession mock is already set by Set")
+	}
+
+	if mmRevokeSession.defaultExpectation == nil {
+		mmRevokeSession.defaultExpectation = &SSOSessionUseCaseMockRevokeSessionExpectation{mock: mmRevokeSession.mock}
+	}
+	mmRevokeSession.defaultExpectation.results = &SSOSessionUseCaseMockRevokeSessionResults{err}
+	mmRevokeSession.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmRevokeSession.mock
+}
+
+// Set uses given function f to mock the SSOSessionUseCase.RevokeSession method
+func (mmRevokeSession *mSSOSessionUseCaseMockRevokeSession) Set(f func(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID) (err error)) *SSOSessionUseCaseMock {
+	if mmRevokeSession.defaultExpectation != nil {
+		mmRevokeSession.mock.t.Fatalf("Default expectation is already set for the SSOSessionUseCase.RevokeSession method")
+	}
+
+	if len(mmRevokeSession.expectations) > 0 {
+		mmRevokeSession.mock.t.Fatalf("Some expectations are already set for the SSOSessionUseCase.RevokeSession method")
+	}
+
+	mmRevokeSession.mock.funcRevokeSession = f
+	mmRevokeSession.mock.funcRevokeSessionOrigin = minimock.CallerInfo(1)
+	return mmRevokeSession.mock
+}
+
+// When sets expectation for the SSOSessionUseCase.RevokeSession which will trigger the result defined by the following
+// Then helper
+func (mmRevokeSession *mSSOSessionUseCaseMockRevokeSession) When(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID) *SSOSessionUseCaseMockRevokeSessionExpectation {
+	if mmRevokeSession.mock.funcRevokeSession != nil {
+		mmRevokeSession.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeSession mock is already set by Set")
+	}
+
+	expectation := &SSOSessionUseCaseMockRevokeSessionExpectation{
+		mock:               mmRevokeSession.mock,
+		params:             &SSOSessionUseCaseMockRevokeSessionParams{ctx, tenantID, sessionID},
+		expectationOrigins: SSOSessionUseCaseMockRevokeSessionExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmRevokeSession.expectations = append(mmRevokeSession.expectations, expectation)
+	return expectation
+}
+
+// Then sets up SSOSessionUseCase.RevokeSession return parameters for the expectation previously defined by the When method
+func (e *SSOSessionUseCaseMockRevokeSessionExpectation) Then(err error) *SSOSessionUseCaseMock {
+	e.results = &SSOSessionUseCaseMockRevokeSessionResults{err}
+	return e.mock
+}
+
+// Times sets number of times SSOSessionUseCase.RevokeSession should be invoked
+func (mmRevokeSession *mSSOSessionUseCaseMockRevokeSession) Times(n uint64) *mSSOSessionUseCaseMockRevokeSession {
+	if n == 0 {
+		mmRevokeSession.mock.t.Fatalf("Times of SSOSessionUseCaseMock.RevokeSession mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmRevokeSession.expectedInvocations, n)
+	mmRevokeSession.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmRevokeSession
+}
+
+func (mmRevokeSession *mSSOSessionUseCaseMockRevokeSession) invocationsDone() bool {
+	if len(mmRevokeSession.expectations) == 0 && mmRevokeSession.defaultExpectation == nil && mmRevokeSession.mock.funcRevokeSession == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmRevokeSession.mock.afterRevokeSessionCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmRevokeSession.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// RevokeSession implements mm_port.SSOSessionUseCase
+func (mmRevokeSession *SSOSessionUseCaseMock) RevokeSession(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID) (err error) {
+	mm_atomic.AddUint64(&mmRevokeSession.beforeRevokeSessionCounter, 1)
+	defer mm_atomic.AddUint64(&mmRevokeSession.afterRevokeSessionCounter, 1)
+
+	mmRevokeSession.t.Helper()
+
+	if mmRevokeSession.inspectFuncRevokeSession != nil {
+		mmRevokeSession.inspectFuncRevokeSession(ctx, tenantID, sessionID)
+	}
+
+	mm_params := SSOSessionUseCaseMockRevokeSessionParams{ctx, tenantID, sessionID}
+
+	// Record call args
+	mmRevokeSession.RevokeSessionMock.mutex.Lock()
+	mmRevokeSession.RevokeSessionMock.callArgs = append(mmRevokeSession.RevokeSessionMock.callArgs, &mm_params)
+	mmRevokeSession.RevokeSessionMock.mutex.Unlock()
+
+	for _, e := range mmRevokeSession.RevokeSessionMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmRevokeSession.RevokeSessionMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmRevokeSession.RevokeSessionMock.defaultExpectation.Counter, 1)
+		mm_want := mmRevokeSession.RevokeSessionMock.defaultExpectation.params
+		mm_want_ptrs := mmRevokeSession.RevokeSessionMock.defaultExpectation.paramPtrs
+
+		mm_got := SSOSessionUseCaseMockRevokeSessionParams{ctx, tenantID, sessionID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmRevokeSession.t.Errorf("SSOSessionUseCaseMock.RevokeSession got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRevokeSession.RevokeSessionMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmRevokeSession.t.Errorf("SSOSessionUseCaseMock.RevokeSession got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRevokeSession.RevokeSessionMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.sessionID != nil && !minimock.Equal(*mm_want_ptrs.sessionID, mm_got.sessionID) {
+				mmRevokeSession.t.Errorf("SSOSessionUseCaseMock.RevokeSession got unexpected parameter sessionID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRevokeSession.RevokeSessionMock.defaultExpectation.expectationOrigins.originSessionID, *mm_want_ptrs.sessionID, mm_got.sessionID, minimock.Diff(*mm_want_ptrs.sessionID, mm_got.sessionID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmRevokeSession.t.Errorf("SSOSessionUseCaseMock.RevokeSession got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRevokeSession.RevokeSessionMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmRevokeSession.RevokeSessionMock.defaultExpectation.results
+		if mm_results == nil {
+			mmRevokeSession.t.Fatal("No results are set for the SSOSessionUseCaseMock.RevokeSession")
+		}
+		return (*mm_results).err
+	}
+	if mmRevokeSession.funcRevokeSession != nil {
+		return mmRevokeSession.funcRevokeSession(ctx, tenantID, sessionID)
+	}
+	mmRevokeSession.t.Fatalf("Unexpected call to SSOSessionUseCaseMock.RevokeSession. %v %v %v", ctx, tenantID, sessionID)
+	return
+}
+
+// RevokeSessionAfterCounter returns a count of finished SSOSessionUseCaseMock.RevokeSession invocations
+func (mmRevokeSession *SSOSessionUseCaseMock) RevokeSessionAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRevokeSession.afterRevokeSessionCounter)
+}
+
+// RevokeSessionBeforeCounter returns a count of SSOSessionUseCaseMock.RevokeSession invocations
+func (mmRevokeSession *SSOSessionUseCaseMock) RevokeSessionBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRevokeSession.beforeRevokeSessionCounter)
+}
+
+// Calls returns a list of arguments used in each call to SSOSessionUseCaseMock.RevokeSession.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmRevokeSession *mSSOSessionUseCaseMockRevokeSession) Calls() []*SSOSessionUseCaseMockRevokeSessionParams {
+	mmRevokeSession.mutex.RLock()
+
+	argCopy := make([]*SSOSessionUseCaseMockRevokeSessionParams, len(mmRevokeSession.callArgs))
+	copy(argCopy, mmRevokeSession.callArgs)
+
+	mmRevokeSession.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockRevokeSessionDone returns true if the count of the RevokeSession invocations corresponds
+// the number of defined expectations
+func (m *SSOSessionUseCaseMock) MinimockRevokeSessionDone() bool {
+	if m.RevokeSessionMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.RevokeSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.RevokeSessionMock.invocationsDone()
+}
+
+// MinimockRevokeSessionInspect logs each unmet expectation
+func (m *SSOSessionUseCaseMock) MinimockRevokeSessionInspect() {
+	for _, e := range m.RevokeSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.RevokeSession at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterRevokeSessionCounter := mm_atomic.LoadUint64(&m.afterRevokeSessionCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.RevokeSessionMock.defaultExpectation != nil && afterRevokeSessionCounter < 1 {
+		if m.RevokeSessionMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.RevokeSession at\n%s", m.RevokeSessionMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.RevokeSession at\n%s with params: %#v", m.RevokeSessionMock.defaultExpectation.expectationOrigins.origin, *m.RevokeSessionMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcRevokeSession != nil && afterRevokeSessionCounter < 1 {
+		m.t.Errorf("Expected call to SSOSessionUseCaseMock.RevokeSession at\n%s", m.funcRevokeSessionOrigin)
+	}
+
+	if !m.RevokeSessionMock.invocationsDone() && afterRevokeSessionCounter > 0 {
+		m.t.Errorf("Expected %d calls to SSOSessionUseCaseMock.RevokeSession at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.RevokeSessionMock.expectedInvocations), m.RevokeSessionMock.expectedInvocationsOrigin, afterRevokeSessionCounter)
+	}
+}
+
+type mSSOSessionUseCaseMockRevokeUserSessions struct {
+	optional           bool
+	mock               *SSOSessionUseCaseMock
+	defaultExpectation *SSOSessionUseCaseMockRevokeUserSessionsExpectation
+	expectations       []*SSOSessionUseCaseMockRevokeUserSessionsExpectation
+
+	callArgs []*SSOSessionUseCaseMockRevokeUserSessionsParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// SSOSessionUseCaseMockRevokeUserSessionsExpectation specifies expectation struct of the SSOSessionUseCase.RevokeUserSessions
+type SSOSessionUseCaseMockRevokeUserSessionsExpectation struct {
+	mock               *SSOSessionUseCaseMock
+	params             *SSOSessionUseCaseMockRevokeUserSessionsParams
+	paramPtrs          *SSOSessionUseCaseMockRevokeUserSessionsParamPtrs
+	expectationOrigins SSOSessionUseCaseMockRevokeUserSessionsExpectationOrigins
+	results            *SSOSessionUseCaseMockRevokeUserSessionsResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// SSOSessionUseCaseMockRevokeUserSessionsParams contains parameters of the SSOSessionUseCase.RevokeUserSessions
+type SSOSessionUseCaseMockRevokeUserSessionsParams struct {
+	ctx           context.Context
+	tenantID      uuid.UUID
+	userProfileID uuid.UUID
+}
+
+// SSOSessionUseCaseMockRevokeUserSessionsParamPtrs contains pointers to parameters of the SSOSessionUseCase.RevokeUserSessions
+type SSOSessionUseCaseMockRevokeUserSessionsParamPtrs struct {
+	ctx           *context.Context
+	tenantID      *uuid.UUID
+	userProfileID *uuid.UUID
+}
+
+// SSOSessionUseCaseMockRevokeUserSessionsResults contains results of the SSOSessionUseCase.RevokeUserSessions
+type SSOSessionUseCaseMockRevokeUserSessionsResults struct {
+	err error
+}
+
+// SSOSessionUseCaseMockRevokeUserSessionsOrigins contains origins of expectations of the SSOSessionUseCase.RevokeUserSessions
+type SSOSessionUseCaseMockRevokeUserSessionsExpectationOrigins struct {
+	origin              string
+	originCtx           string
+	originTenantID      string
+	originUserProfileID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmRevokeUserSessions *mSSOSessionUseCaseMockRevokeUserSessions) Optional() *mSSOSessionUseCaseMockRevokeUserSessions {
+	mmRevokeUserSessions.optional = true
+	return mmRevokeUserSessions
+}
+
+// Expect sets up expected params for SSOSessionUseCase.RevokeUserSessions
+func (mmRevokeUserSessions *mSSOSessionUseCaseMockRevokeUserSessions) Expect(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID) *mSSOSessionUseCaseMockRevokeUserSessions {
+	if mmRevokeUserSessions.mock.funcRevokeUserSessions != nil {
+		mmRevokeUserSessions.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeUserSessions mock is already set by Set")
+	}
+
+	if mmRevokeUserSessions.defaultExpectation == nil {
+		mmRevokeUserSessions.defaultExpectation = &SSOSessionUseCaseMockRevokeUserSessionsExpectation{}
+	}
+
+	if mmRevokeUserSessions.defaultExpectation.paramPtrs != nil {
+		mmRevokeUserSessions.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeUserSessions mock is already set by ExpectParams functions")
+	}
+
+	mmRevokeUserSessions.defaultExpectation.params = &SSOSessionUseCaseMockRevokeUserSessionsParams{ctx, tenantID, userProfileID}
+	mmRevokeUserSessions.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmRevokeUserSessions.expectations {
+		if minimock.Equal(e.params, mmRevokeUserSessions.defaultExpectation.params) {
+			mmRevokeUserSessions.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmRevokeUserSessions.defaultExpectation.params)
+		}
+	}
+
+	return mmRevokeUserSessions
+}
+
+// ExpectCtxParam1 sets up expected param ctx for SSOSessionUseCase.RevokeUserSessions
+func (mmRevokeUserSessions *mSSOSessionUseCaseMockRevokeUserSessions) ExpectCtxParam1(ctx context.Context) *mSSOSessionUseCaseMockRevokeUserSessions {
+	if mmRevokeUserSessions.mock.funcRevokeUserSessions != nil {
+		mmRevokeUserSessions.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeUserSessions mock is already set by Set")
+	}
+
+	if mmRevokeUserSessions.defaultExpectation == nil {
+		mmRevokeUserSessions.defaultExpectation = &SSOSessionUseCaseMockRevokeUserSessionsExpectation{}
+	}
+
+	if mmRevokeUserSessions.defaultExpectation.params != nil {
+		mmRevokeUserSessions.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeUserSessions mock is already set by Expect")
+	}
+
+	if mmRevokeUserSessions.defaultExpectation.paramPtrs == nil {
+		mmRevokeUserSessions.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockRevokeUserSessionsParamPtrs{}
+	}
+	mmRevokeUserSessions.defaultExpectation.paramPtrs.ctx = &ctx
+	mmRevokeUserSessions.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmRevokeUserSessions
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for SSOSessionUseCase.RevokeUserSessions
+func (mmRevokeUserSessions *mSSOSessionUseCaseMockRevokeUserSessions) ExpectTenantIDParam2(tenantID uuid.UUID) *mSSOSessionUseCaseMockRevokeUserSessions {
+	if mmRevokeUserSessions.mock.funcRevokeUserSessions != nil {
+		mmRevokeUserSessions.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeUserSessions mock is already set by Set")
+	}
+
+	if mmRevokeUserSessions.defaultExpectation == nil {
+		mmRevokeUserSessions.defaultExpectation = &SSOSessionUseCaseMockRevokeUserSessionsExpectation{}
+	}
+
+	if mmRevokeUserSessions.defaultExpectation.params != nil {
+		mmRevokeUserSessions.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeUserSessions mock is already set by Expect")
+	}
+
+	if mmRevokeUserSessions.defaultExpectation.paramPtrs == nil {
+		mmRevokeUserSessions.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockRevokeUserSessionsParamPtrs{}
+	}
+	mmRevokeUserSessions.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmRevokeUserSessions.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmRevokeUserSessions
+}
+
+// ExpectUserProfileIDParam3 sets up expected param userProfileID for SSOSessionUseCase.RevokeUserSessions
+func (mmRevokeUserSessions *mSSOSessionUseCaseMockRevokeUserSessions) ExpectUserProfileIDParam3(userProfileID uuid.UUID) *mSSOSessionUseCaseMockRevokeUserSessions {
+	if mmRevokeUserSessions.mock.funcRevokeUserSessions != nil {
+		mmRevokeUserSessions.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeUserSessions mock is already set by Set")
+	}
+
+	if mmRevokeUserSessions.defaultExpectation == nil {
+		mmRevokeUserSessions.defaultExpectation = &SSOSessionUseCaseMockRevokeUserSessionsExpectation{}
+	}
+
+	if mmRevokeUserSessions.defaultExpectation.params != nil {
+		mmRevokeUserSessions.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeUserSessions mock is already set by Expect")
+	}
+
+	if mmRevokeUserSessions.defaultExpectation.paramPtrs == nil {
+		mmRevokeUserSessions.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockRevokeUserSessionsParamPtrs{}
+	}
+	mmRevokeUserSessions.defaultExpectation.paramPtrs.userProfileID = &userProfileID
+	mmRevokeUserSessions.defaultExpectation.expectationOrigins.originUserProfileID = minimock.CallerInfo(1)
+
+	return mmRevokeUserSessions
+}
+
+// Inspect accepts an inspector function that has same arguments as the SSOSessionUseCase.RevokeUserSessions
+func (mmRevokeUserSessions *mSSOSessionUseCaseMockRevokeUserSessions) Inspect(f func(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID)) *mSSOSessionUseCaseMockRevokeUserSessions {
+	if mmRevokeUserSessions.mock.inspectFuncRevokeUserSessions != nil {
+		mmRevokeUserSessions.mock.t.Fatalf("Inspect function is already set for SSOSessionUseCaseMock.RevokeUserSessions")
+	}
+
+	mmRevokeUserSessions.mock.inspectFuncRevokeUserSessions = f
+
+	return mmRevokeUserSessions
+}
+
+// Return sets up results that will be returned by SSOSessionUseCase.RevokeUserSessions
+func (mmRevokeUserSessions *mSSOSessionUseCaseMockRevokeUserSessions) Return(err error) *SSOSessionUseCaseMock {
+	if mmRevokeUserSessions.mock.funcRevokeUserSessions != nil {
+		mmRevokeUserSessions.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeUserSessions mock is already set by Set")
+	}
+
+	if mmRevokeUserSessions.defaultExpectation == nil {
+		mmRevokeUserSessions.defaultExpectation = &SSOSessionUseCaseMockRevokeUserSessionsExpectation{mock: mmRevokeUserSessions.mock}
+	}
+	mmRevokeUserSessions.defaultExpectation.results = &SSOSessionUseCaseMockRevokeUserSessionsResults{err}
+	mmRevokeUserSessions.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmRevokeUserSessions.mock
+}
+
+// Set uses given function f to mock the SSOSessionUseCase.RevokeUserSessions method
+func (mmRevokeUserSessions *mSSOSessionUseCaseMockRevokeUserSessions) Set(f func(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID) (err error)) *SSOSessionUseCaseMock {
+	if mmRevokeUserSessions.defaultExpectation != nil {
+		mmRevokeUserSessions.mock.t.Fatalf("Default expectation is already set for the SSOSessionUseCase.RevokeUserSessions method")
+	}
+
+	if len(mmRevokeUserSessions.expectations) > 0 {
+		mmRevokeUserSessions.mock.t.Fatalf("Some expectations are already set for the SSOSessionUseCase.RevokeUserSessions method")
+	}
+
+	mmRevokeUserSessions.mock.funcRevokeUserSessions = f
+	mmRevokeUserSessions.mock.funcRevokeUserSessionsOrigin = minimock.CallerInfo(1)
+	return mmRevokeUserSessions.mock
+}
+
+// When sets expectation for the SSOSessionUseCase.RevokeUserSessions which will trigger the result defined by the following
+// Then helper
+func (mmRevokeUserSessions *mSSOSessionUseCaseMockRevokeUserSessions) When(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID) *SSOSessionUseCaseMockRevokeUserSessionsExpectation {
+	if mmRevokeUserSessions.mock.funcRevokeUserSessions != nil {
+		mmRevokeUserSessions.mock.t.Fatalf("SSOSessionUseCaseMock.RevokeUserSessions mock is already set by Set")
+	}
+
+	expectation := &SSOSessionUseCaseMockRevokeUserSessionsExpectation{
+		mock:               mmRevokeUserSessions.mock,
+		params:             &SSOSessionUseCaseMockRevokeUserSessionsParams{ctx, tenantID, userProfileID},
+		expectationOrigins: SSOSessionUseCaseMockRevokeUserSessionsExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmRevokeUserSessions.expectations = append(mmRevokeUserSessions.expectations, expectation)
+	return expectation
+}
+
+// Then sets up SSOSessionUseCase.RevokeUserSessions return parameters for the expectation previously defined by the When method
+func (e *SSOSessionUseCaseMockRevokeUserSessionsExpectation) Then(err error) *SSOSessionUseCaseMock {
+	e.results = &SSOSessionUseCaseMockRevokeUserSessionsResults{err}
+	return e.mock
+}
+
+// Times sets number of times SSOSessionUseCase.RevokeUserSessions should be invoked
+func (mmRevokeUserSessions *mSSOSessionUseCaseMockRevokeUserSessions) Times(n uint64) *mSSOSessionUseCaseMockRevokeUserSessions {
+	if n == 0 {
+		mmRevokeUserSessions.mock.t.Fatalf("Times of SSOSessionUseCaseMock.RevokeUserSessions mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmRevokeUserSessions.expectedInvocations, n)
+	mmRevokeUserSessions.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmRevokeUserSessions
+}
+
+func (mmRevokeUserSessions *mSSOSessionUseCaseMockRevokeUserSessions) invocationsDone() bool {
+	if len(mmRevokeUserSessions.expectations) == 0 && mmRevokeUserSessions.defaultExpectation == nil && mmRevokeUserSessions.mock.funcRevokeUserSessions == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmRevokeUserSessions.mock.afterRevokeUserSessionsCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmRevokeUserSessions.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// RevokeUserSessions implements mm_port.SSOSessionUseCase
+func (mmRevokeUserSessions *SSOSessionUseCaseMock) RevokeUserSessions(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID) (err error) {
+	mm_atomic.AddUint64(&mmRevokeUserSessions.beforeRevokeUserSessionsCounter, 1)
+	defer mm_atomic.AddUint64(&mmRevokeUserSessions.afterRevokeUserSessionsCounter, 1)
+
+	mmRevokeUserSessions.t.Helper()
+
+	if mmRevokeUserSessions.inspectFuncRevokeUserSessions != nil {
+		mmRevokeUserSessions.inspectFuncRevokeUserSessions(ctx, tenantID, userProfileID)
+	}
+
+	mm_params := SSOSessionUseCaseMockRevokeUserSessionsParams{ctx, tenantID, userProfileID}
+
+	// Record call args
+	mmRevokeUserSessions.RevokeUserSessionsMock.mutex.Lock()
+	mmRevokeUserSessions.RevokeUserSessionsMock.callArgs = append(mmRevokeUserSessions.RevokeUserSessionsMock.callArgs, &mm_params)
+	mmRevokeUserSessions.RevokeUserSessionsMock.mutex.Unlock()
+
+	for _, e := range mmRevokeUserSessions.RevokeUserSessionsMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmRevokeUserSessions.RevokeUserSessionsMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmRevokeUserSessions.RevokeUserSessionsMock.defaultExpectation.Counter, 1)
+		mm_want := mmRevokeUserSessions.RevokeUserSessionsMock.defaultExpectation.params
+		mm_want_ptrs := mmRevokeUserSessions.RevokeUserSessionsMock.defaultExpectation.paramPtrs
+
+		mm_got := SSOSessionUseCaseMockRevokeUserSessionsParams{ctx, tenantID, userProfileID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmRevokeUserSessions.t.Errorf("SSOSessionUseCaseMock.RevokeUserSessions got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRevokeUserSessions.RevokeUserSessionsMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmRevokeUserSessions.t.Errorf("SSOSessionUseCaseMock.RevokeUserSessions got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRevokeUserSessions.RevokeUserSessionsMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.userProfileID != nil && !minimock.Equal(*mm_want_ptrs.userProfileID, mm_got.userProfileID) {
+				mmRevokeUserSessions.t.Errorf("SSOSessionUseCaseMock.RevokeUserSessions got unexpected parameter userProfileID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRevokeUserSessions.RevokeUserSessionsMock.defaultExpectation.expectationOrigins.originUserProfileID, *mm_want_ptrs.userProfileID, mm_got.userProfileID, minimock.Diff(*mm_want_ptrs.userProfileID, mm_got.userProfileID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmRevokeUserSessions.t.Errorf("SSOSessionUseCaseMock.RevokeUserSessions got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRevokeUserSessions.RevokeUserSessionsMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmRevokeUserSessions.RevokeUserSessionsMock.defaultExpectation.results
+		if mm_results == nil {
+			mmRevokeUserSessions.t.Fatal("No results are set for the SSOSessionUseCaseMock.RevokeUserSessions")
+		}
+		return (*mm_results).err
+	}
+	if mmRevokeUserSessions.funcRevokeUserSessions != nil {
+		return mmRevokeUserSessions.funcRevokeUserSessions(ctx, tenantID, userProfileID)
+	}
+	mmRevokeUserSessions.t.Fatalf("Unexpected call to SSOSessionUseCaseMock.RevokeUserSessions. %v %v %v", ctx, tenantID, userProfileID)
+	return
+}
+
+// RevokeUserSessionsAfterCounter returns a count of finished SSOSessionUseCaseMock.RevokeUserSessions invocations
+func (mmRevokeUserSessions *SSOSessionUseCaseMock) RevokeUserSessionsAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRevokeUserSessions.afterRevokeUserSessionsCounter)
+}
+
+// RevokeUserSessionsBeforeCounter returns a count of SSOSessionUseCaseMock.RevokeUserSessions invocations
+func (mmRevokeUserSessions *SSOSessionUseCaseMock) RevokeUserSessionsBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRevokeUserSessions.beforeRevokeUserSessionsCounter)
+}
+
+// Calls returns a list of arguments used in each call to SSOSessionUseCaseMock.RevokeUserSessions.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmRevokeUserSessions *mSSOSessionUseCaseMockRevokeUserSessions) Calls() []*SSOSessionUseCaseMockRevokeUserSessionsParams {
+	mmRevokeUserSessions.mutex.RLock()
+
+	argCopy := make([]*SSOSessionUseCaseMockRevokeUserSessionsParams, len(mmRevokeUserSessions.callArgs))
+	copy(argCopy, mmRevokeUserSessions.callArgs)
+
+	mmRevokeUserSessions.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockRevokeUserSessionsDone returns true if the count of the RevokeUserSessions invocations corresponds
+// the number of defined expectations
+func (m *SSOSessionUseCaseMock) MinimockRevokeUserSessionsDone() bool {
+	if m.RevokeUserSessionsMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.RevokeUserSessionsMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.RevokeUserSessionsMock.invocationsDone()
+}
+
+// MinimockRevokeUserSessionsInspect logs each unmet expectation
+func (m *SSOSessionUseCaseMock) MinimockRevokeUserSessionsInspect() {
+	for _, e := range m.RevokeUserSessionsMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.RevokeUserSessions at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterRevokeUserSessionsCounter := mm_atomic.LoadUint64(&m.afterRevokeUserSessionsCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.RevokeUserSessionsMock.defaultExpectation != nil && afterRevokeUserSessionsCounter < 1 {
+		if m.RevokeUserSessionsMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.RevokeUserSessions at\n%s", m.RevokeUserSessionsMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.RevokeUserSessions at\n%s with params: %#v", m.RevokeUserSessionsMock.defaultExpectation.expectationOrigins.origin, *m.RevokeUserSessionsMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcRevokeUserSessions != nil && afterRevokeUserSessionsCounter < 1 {
+		m.t.Errorf("Expected call to SSOSessionUseCaseMock.RevokeUserSessions at\n%s", m.funcRevokeUserSessionsOrigin)
+	}
+
+	if !m.RevokeUserSessionsMock.invocationsDone() && afterRevokeUserSessionsCounter > 0 {
+		m.t.Errorf("Expected %d calls to SSOSessionUseCaseMock.RevokeUserSessions at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.RevokeUserSessionsMock.expectedInvocations), m.RevokeUserSessionsMock.expectedInvocationsOrigin, afterRevokeUserSessionsCounter)
+	}
+}
+
 // MinimockFinish checks that all mocked methods have been called the expected number of times
 func (m *SSOSessionUseCaseMock) MinimockFinish() {
 	m.finishOnce.Do(func() {
 		if !m.minimockDone() {
 			m.MinimockBuildSessionCookieInspect()
 
+			m.MinimockCreateSessionInspect()
+
 			m.MinimockParseSessionCookieInspect()
+
+			m.MinimockResolveSessionInspect()
+
+			m.MinimockRevokeSessionInspect()
+
+			m.MinimockRevokeUserSessionsInspect()
 		}
 	})
 }
@@ -771,5 +2284,9 @@ func (m *SSOSessionUseCaseMock) minimockDone() bool {
 	done := true
 	return done &&
 		m.MinimockBuildSessionCookieDone() &&
-		m.MinimockParseSessionCookieDone()
+		m.MinimockCreateSessionDone() &&
+		m.MinimockParseSessionCookieDone() &&
+		m.MinimockResolveSessionDone() &&
+		m.MinimockRevokeSessionDone() &&
+		m.MinimockRevokeUserSessionsDone()
 }

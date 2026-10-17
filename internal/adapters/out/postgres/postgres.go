@@ -859,6 +859,11 @@ func (s *PostgresStorage) PruneExpiredTokens(ctx context.Context) error {
 		return fmt.Errorf("storage: failed to prune expired dpop proofs: %w", err)
 	}
 
+	// 7. Prune browser sessions past their absolute or idle deadline
+	if err := s.queries.PruneExpiredSSOSessions(ctx); err != nil {
+		return fmt.Errorf("storage: failed to prune expired sso sessions: %w", err)
+	}
+
 	return nil
 }
 
@@ -2695,6 +2700,117 @@ func (s *PostgresStorage) TrackUserLogin(ctx context.Context, tenantID uuid.UUID
 	})
 }
 
+func (s *PostgresStorage) SaveSSOSession(ctx context.Context, session model.SSOSession, tokenHash []byte) error {
+	providerID := pgtype.UUID{}
+	if session.IdentityProviderID != uuid.Nil {
+		providerID = toPGUUID(session.IdentityProviderID)
+	}
+
+	amr := session.AMR
+	if amr == nil {
+		amr = []string{} // the column is NOT NULL; a nil slice would be sent as NULL
+	}
+
+	err := s.queries.SaveSSOSession(ctx, sqlcdb.SaveSSOSessionParams{
+		TokenHash:          tokenHash,
+		ID:                 toPGUUID(session.ID),
+		TenantUuid:         toPGUUID(session.TenantID),
+		PartitionID:        session.PartitionID,
+		UserProfileID:      toPGUUID(session.UserProfileID),
+		IdentityProviderID: providerID,
+		Acr:                session.ACR,
+		Amr:                amr,
+		AuthTime:           toPGTimestamptz(session.AuthTime),
+		CreatedAt:          toPGTimestamptz(session.CreatedAt),
+		LastSeenAt:         toPGTimestamptz(session.LastSeenAt),
+		ExpiresAt:          toPGTimestamptz(session.ExpiresAt),
+		IdleExpiresAt:      toPGTimestamptz(session.IdleExpiresAt),
+	})
+	if err != nil {
+		return fmt.Errorf("save sso session: %w", err)
+	}
+	return nil
+}
+
+// GetActiveSSOSession reads one live session by the hash of its cookie secret in a single primary-key lookup.
+func (s *PostgresStorage) GetActiveSSOSession(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, now time.Time) (*model.SSOSession, error) {
+	row, err := s.queries.GetActiveSSOSession(ctx, sqlcdb.GetActiveSSOSessionParams{
+		TokenHash:  tokenHash,
+		TenantUuid: toPGUUID(tenantID),
+		Now:        toPGTimestamptz(now),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, port.ErrSessionNotFound
+		}
+		return nil, fmt.Errorf("get sso session: %w", err)
+	}
+
+	id, err := pgUUIDToUUID(row.ID)
+	if err != nil {
+		return nil, fmt.Errorf("parse sso session id: %w", err)
+	}
+	userID, err := pgUUIDToUUID(row.UserProfileID)
+	if err != nil {
+		return nil, fmt.Errorf("parse sso session user: %w", err)
+	}
+
+	providerID := uuid.Nil
+	if row.IdentityProviderID.Valid {
+		providerID = uuid.UUID(row.IdentityProviderID.Bytes)
+	}
+
+	return &model.SSOSession{
+		ID:                 id,
+		TenantID:           tenantID,
+		PartitionID:        row.PartitionID,
+		UserProfileID:      userID,
+		IdentityProviderID: providerID,
+		ACR:                row.Acr,
+		AMR:                row.Amr,
+		AuthTime:           pgTimestamptzToTimeOrZero(row.AuthTime),
+		CreatedAt:          pgTimestamptzToTimeOrZero(row.CreatedAt),
+		LastSeenAt:         pgTimestamptzToTimeOrZero(row.LastSeenAt),
+		ExpiresAt:          pgTimestamptzToTimeOrZero(row.ExpiresAt),
+		IdleExpiresAt:      pgTimestamptzToTimeOrZero(row.IdleExpiresAt),
+	}, nil
+}
+
+// TouchSSOSession moves the idle deadline of a session forward.
+func (s *PostgresStorage) TouchSSOSession(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, lastSeenAt time.Time, idleExpiresAt time.Time) error {
+	if err := s.queries.TouchSSOSession(ctx, sqlcdb.TouchSSOSessionParams{
+		TokenHash:     tokenHash,
+		TenantUuid:    toPGUUID(tenantID),
+		LastSeenAt:    toPGTimestamptz(lastSeenAt),
+		IdleExpiresAt: toPGTimestamptz(idleExpiresAt),
+	}); err != nil {
+		return fmt.Errorf("touch sso session: %w", err)
+	}
+	return nil
+}
+
+// DeleteSSOSession removes one session by its public ID. Deleting an unknown session is not an error.
+func (s *PostgresStorage) DeleteSSOSession(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID) error {
+	if err := s.queries.DeleteSSOSessionByID(ctx, sqlcdb.DeleteSSOSessionByIDParams{
+		ID:         toPGUUID(sessionID),
+		TenantUuid: toPGUUID(tenantID),
+	}); err != nil {
+		return fmt.Errorf("delete sso session: %w", err)
+	}
+	return nil
+}
+
+// DeleteSSOSessionsByUser removes every session of a user.
+func (s *PostgresStorage) DeleteSSOSessionsByUser(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID) error {
+	if err := s.queries.DeleteSSOSessionsByUser(ctx, sqlcdb.DeleteSSOSessionsByUserParams{
+		UserProfileID: toPGUUID(userProfileID),
+		TenantUuid:    toPGUUID(tenantID),
+	}); err != nil {
+		return fmt.Errorf("delete sso sessions by user: %w", err)
+	}
+	return nil
+}
+
 // RevokeSession terminates active authorization code and refresh token sessions
 // by passing tracking parameters straight through your safe generated sqlc queries.
 func (s *PostgresStorage) RevokeSession(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) error {
@@ -3433,7 +3549,12 @@ func (s *PostgresStorage) PurgeTenantSessionsAndTokens(ctx context.Context, tena
 		return fmt.Errorf("purge tenant session data: failed to clear refresh token chains: %w", err)
 	}
 
-	// 5. Commit everything safely down to the database catalog to lock in modifications
+	// 5. Browser sign-in sessions: deactivating a tenant ends every one of them
+	if err = txQueries.PurgeSSOSessionsByTenant(ctx, pgTenantID); err != nil {
+		return fmt.Errorf("purge tenant session data: failed to clear sso sessions: %w", err)
+	}
+
+	// 6. Commit everything safely down to the database catalog to lock in modifications
 	if err = tx.Commit(ctx); err != nil {
 		return fmt.Errorf("purge tenant session data: failed to commit transaction state updates: %w", err)
 	}

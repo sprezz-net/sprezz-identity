@@ -54,9 +54,10 @@ type AuthorizeRequestCommand struct {
 	ACRValues       string
 	ClaimsJSON      string
 	Scopes          []string
-	ActiveSessionID string
-	RequestHost     string
-	RequestURI      string
+	// ActiveSession is the live browser session resolved by the transport adapter; nil when nobody is signed in.
+	ActiveSession *model.SSOSession
+	RequestHost   string
+	RequestURI    string
 }
 
 // PushedAuthCommand carries raw parameters from the back-channel client POST payload.
@@ -103,7 +104,7 @@ type RevokeTokenCommand struct {
 // LogoutRequestCommand carries transport properties straight across the inbound perimeter.
 type LogoutRequestCommand struct {
 	TenantID              uuid.UUID
-	ActiveSessionID       string
+	ActiveSession         *model.SSOSession // nil when no live session was presented
 	PostLogoutRedirectURI string
 	State                 string
 	RequestHost           string

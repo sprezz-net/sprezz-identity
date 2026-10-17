@@ -153,11 +153,18 @@ func TestHttpAdapter_Authorize_AuthenticatedSSO(t *testing.T) {
 		}, nil
 	})
 
-	suc.ParseSessionCookieMock.Set(func(ctx context.Context, val string) (string, string, error) {
-		return "bearer", "some-user-session-id", nil
+	live := &model.SSOSession{ID: uuid.New(), TenantID: tenantID, PartitionID: 1, UserProfileID: uuid.New()}
+	suc.ResolveSessionMock.Set(func(ctx context.Context, tID uuid.UUID, val string) (*model.SSOSession, error) {
+		if tID != tenantID || val != "existing-cookie-val" {
+			return nil, port.ErrSessionNotFound
+		}
+		return live, nil
 	})
 
 	auth.ProcessAuthorizeRequestMock.Set(func(ctx context.Context, cmd port.AuthorizeRequestCommand) (*port.AuthorizeExecutionResult, error) {
+		if cmd.ActiveSession != live {
+			t.Errorf("the live session behind the cookie must reach the use case, got %+v", cmd.ActiveSession)
+		}
 		return &port.AuthorizeExecutionResult{
 			Action:          port.ActionEmitAuthorizationCode,
 			RedirectURL:     "https://test.com/callback?code=code123&state=state123",

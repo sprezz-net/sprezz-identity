@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -16,6 +15,8 @@ import (
 	"github.com/gojuno/minimock/v3"
 	"github.com/google/uuid"
 )
+
+const testSessionSecret = "opaque-admin-session"
 
 // pagesFixture is an adapter with a valid admin session and mocked application and identity provider use cases.
 type pagesFixture struct {
@@ -54,10 +55,8 @@ func newPagesFixture(t *testing.T) *pagesFixture {
 	sso.BuildSessionCookieMock.Optional().Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
 		return &port.CookieIntentResponse{CookieName: testAdminCookieName}, nil
 	})
-	sso.ParseSessionCookieMock.Optional().Set(func(ctx context.Context, value string) (string, string, error) {
-		stage, payload, _ := strings.Cut(value, ":")
-		return stage, payload, nil
-	})
+	sessions := stubSessions(sso)
+	sessions[testSessionSecret] = &model.SSOSession{ID: uuid.New(), TenantID: tenantID, PartitionID: testAdminPartition, UserProfileID: userID}
 	storage.GetUserProfileByIDAndPartitionAliasMock.Optional().Set(func(ctx context.Context, tID uuid.UUID, alias string, id uuid.UUID) (*model.UserProfile, error) {
 		return &model.UserProfile{ID: userID, TenantID: tID, PartitionID: testAdminPartition, LifecycleState: model.LifecycleActivated}, nil
 	})
@@ -81,7 +80,7 @@ func (f *pagesFixture) do(method, path string, form url.Values, headers map[stri
 		req = httptest.NewRequest(method, path, nil)
 	}
 	req.Host = testAdminHost
-	req.AddCookie(&http.Cookie{Name: testAdminCookieName, Value: fmt.Sprintf("bearer:%s:%d", f.userID, testAdminPartition)})
+	req.AddCookie(&http.Cookie{Name: testAdminCookieName, Value: testSessionSecret})
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}

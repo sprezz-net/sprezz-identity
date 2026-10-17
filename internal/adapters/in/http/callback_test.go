@@ -3,7 +3,6 @@ package http
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -39,14 +38,13 @@ func TestHttpAdapter_HandleFederationCallback_Success(t *testing.T) {
 		}, nil
 	})
 
-	suc.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
-		expectedPayload := fmt.Sprintf("%s:123", userProfileUUID.String())
-		if cmd.PayloadValue != expectedPayload {
-			t.Errorf("expected session cookie payload '%s', got '%s'", expectedPayload, cmd.PayloadValue)
+	suc.CreateSessionMock.Set(func(ctx context.Context, cmd port.CreateSessionCommand) (*port.CreatedSession, error) {
+		if cmd.UserProfileID != userProfileUUID || cmd.PartitionID != 123 || cmd.TenantID != tenantID {
+			t.Errorf("expected a session for the federated user in partition 123, got %+v", cmd)
 		}
-		return &port.CookieIntentResponse{
-			CookieName:  "spz_session",
-			CookieValue: "cookie-val-123",
+		return &port.CreatedSession{
+			Session: model.SSOSession{ID: uuid.New(), TenantID: tenantID, PartitionID: 123, UserProfileID: userProfileUUID},
+			Cookie:  port.CookieIntentResponse{CookieName: "spz_session", CookieValue: "opaque-secret", MaxAge: 86400},
 		}, nil
 	})
 
@@ -63,6 +61,16 @@ func TestHttpAdapter_HandleFederationCallback_Success(t *testing.T) {
 	loc := rec.Header().Get("Location")
 	if loc != "https://test.com/dashboard" {
 		t.Fatalf("expected redirect to dashboard, got %s", loc)
+	}
+
+	found := false
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "spz_session" && c.Value == "opaque-secret" && c.HttpOnly {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected the opaque session cookie to be set HttpOnly")
 	}
 }
 

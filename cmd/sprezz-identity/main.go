@@ -182,7 +182,12 @@ func initDependencies(ctx context.Context) *dependencies {
 	userProfileUseCase := service.NewUserProfileService(storage, storage, cryptoSigner, sysClock)
 	userRegistrationUseCase := service.NewUserRegistrationService(storage, userProfileUseCase, sysClock)
 
-	ssoService := service.NewSSOSessionService(storage, cfg.AppEnv)
+	ssoService := service.NewSSOSessionService(storage, sysClock, cfg.AppEnv, service.SSOSessionPolicy{
+		AbsoluteLifetime:      cfg.IdentityServer.SessionAbsoluteLifetime,
+		IdleTimeout:           cfg.IdentityServer.SessionIdleTimeout,
+		AdminAbsoluteLifetime: cfg.IdentityServer.AdminSessionAbsoluteLifetime,
+		AdminIdleTimeout:      cfg.IdentityServer.AdminSessionIdleTimeout,
+	})
 
 	federatedLoginService := service.NewFederationService(
 		storage,

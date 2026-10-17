@@ -63,3 +63,13 @@ func (q *Queries) PruneExpiredRevokedTokens(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, pruneExpiredRevokedTokens)
 	return err
 }
+
+const pruneExpiredSSOSessions = `-- name: PruneExpiredSSOSessions :exec
+DELETE FROM sso_sessions WHERE expires_at <= NOW() OR idle_expires_at <= NOW()
+`
+
+// PruneExpiredSSOSessions removes browser sessions past their absolute or idle deadline.
+func (q *Queries) PruneExpiredSSOSessions(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, pruneExpiredSSOSessions)
+	return err
+}

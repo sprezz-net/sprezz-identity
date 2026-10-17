@@ -126,7 +126,7 @@ func TestOAuthService_ProcessAuthorizeRequest_StrictPartitionIsolation(t *testin
 	storage.GetApplicationByClientIDMock.Expect(minimock.AnyContext, tenantUUID, clientID).Return(app, profile, group, nil)
 	storage.GetIdentityProvidersByUUIDsMock.Expect(minimock.AnyContext, tenantUUID, group.AllowedIDPIDs).Return(idps, nil)
 
-	// Since we pass ActiveSessionID = "user-uuid:13" (partition 13, mismatching 14),
+	// Since we pass a session of partition 13 (mismatching 14),
 	// the engine should invalidate it and proceed to Branch A (SaveInteractionSession and BuildSessionCookie).
 	storage.SaveInteractionSessionMock.Set(func(ctx context.Context, session model.InteractionSession) error {
 		if session.PartitionID != 14 {
@@ -148,10 +148,10 @@ func TestOAuthService_ProcessAuthorizeRequest_StrictPartitionIsolation(t *testin
 	})
 
 	cmd := port.AuthorizeRequestCommand{
-		TenantID:        tenantUUID,
-		ClientID:        clientID,
-		RedirectURI:     redirectURI,
-		ActiveSessionID: "user-uuid:13", // Mismatching partition (13 vs 14)
+		TenantID:      tenantUUID,
+		ClientID:      clientID,
+		RedirectURI:   redirectURI,
+		ActiveSession: testSession(tenantUUID, 13), // Mismatching partition (13 vs 14)
 	}
 
 	res, err := svc.ProcessAuthorizeRequest(context.Background(), cmd)
@@ -215,23 +215,24 @@ func TestOAuthService_ProcessAuthorizeRequest_MatchingPartitionAllowed(t *testin
 	storage.GetApplicationByClientIDMock.Expect(minimock.AnyContext, tenantUUID, clientID).Return(app, profile, group, nil)
 	storage.GetIdentityProvidersByUUIDsMock.Expect(minimock.AnyContext, tenantUUID, group.AllowedIDPIDs).Return(idps, nil)
 
-	// Since we pass ActiveSessionID = "user-uuid:14" (matching partition 14),
+	active := testSession(tenantUUID, 14)
+	// Since we pass a session of partition 14 (matching partition 14),
 	// the engine should accept it and proceed to Branch B (SaveAuthSession and return authorization code).
 	storage.SaveAuthSessionMock.Set(func(ctx context.Context, session model.AuthorizationCodeSession) error {
 		if session.PartitionID != 14 {
 			t.Errorf("expected authorization code session to be bound to partition 14, got %d", session.PartitionID)
 		}
-		if session.Subject != "user-uuid" {
-			t.Errorf("expected subject to be user-uuid, got %s", session.Subject)
+		if session.Subject != active.UserProfileID.String() || session.SessionID != active.ID.String() {
+			t.Errorf("expected subject and session to come from the live session, got %s / %s", session.Subject, session.SessionID)
 		}
 		return nil
 	})
 
 	cmd := port.AuthorizeRequestCommand{
-		TenantID:        tenantUUID,
-		ClientID:        clientID,
-		RedirectURI:     redirectURI,
-		ActiveSessionID: "user-uuid:14", // Matching partition!
+		TenantID:      tenantUUID,
+		ClientID:      clientID,
+		RedirectURI:   redirectURI,
+		ActiveSession: active, // Matching partition!
 	}
 
 	res, err := svc.ProcessAuthorizeRequest(context.Background(), cmd)
@@ -307,11 +308,11 @@ func TestOAuthService_ProcessAuthorizeRequest_PersistsRequestedScopes(t *testing
 	})
 
 	cmd := port.AuthorizeRequestCommand{
-		TenantID:        tenantUUID,
-		ClientID:        clientID,
-		RedirectURI:     redirectURI,
-		ActiveSessionID: "user-uuid:14",
-		Scopes:          []string{"openid", "profile", "email"}, // Requested custom scopes!
+		TenantID:      tenantUUID,
+		ClientID:      clientID,
+		RedirectURI:   redirectURI,
+		ActiveSession: testSession(tenantUUID, 14),
+		Scopes:        []string{"openid", "profile", "email"}, // Requested custom scopes!
 	}
 
 	_, err := svc.ProcessAuthorizeRequest(context.Background(), cmd)
@@ -352,10 +353,11 @@ func TestOAuthService_ProcessLogoutRequest_UnwhitelistedRedirectFallback(t *test
 	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantUUID).Return(tenant, nil)
 
 	// Mock the destructive database session revocation step cleanly
-	storage.RevokeSessionMock.Expect(minimock.AnyContext, tenantUUID, "user-uuid", "user-uuid:33").Return(nil)
+	active := testSession(tenantUUID, 33)
+	ssoUseCase.RevokeSessionMock.Expect(minimock.AnyContext, tenantUUID, active.ID).Return(nil)
 
 	// Mock the front-channel application lookup loop to return zero bound clients
-	storage.GetApplicationsLogoutContextBySessionMock.Expect(minimock.AnyContext, tenantUUID, "user-uuid:33").Return([]model.Application{}, nil)
+	storage.GetApplicationsLogoutContextBySessionMock.Expect(minimock.AnyContext, tenantUUID, active.ID.String()).Return([]model.Application{}, nil)
 
 	// Mock dynamic single sign-out cookie clearance parameters
 	ssoUseCase.BuildSessionCookieMock.Expect(minimock.AnyContext, port.CookieIntentCommand{
@@ -372,7 +374,7 @@ func TestOAuthService_ProcessLogoutRequest_UnwhitelistedRedirectFallback(t *test
 	// 2. Build malicious payload parameters context
 	cmd := port.LogoutRequestCommand{
 		TenantID:              tenantUUID,
-		ActiveSessionID:       "user-uuid:33",
+		ActiveSession:         active,
 		PostLogoutRedirectURI: "https://malicious-attacker-site.com", // Dangerous unwhitelisted destination!
 		RequestHost:           "my-tenant.com",
 	}
@@ -430,8 +432,9 @@ func TestOAuthService_ProcessLogoutRequest_JITFrontChannelValidation_DropsMalici
 	}
 
 	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantUUID).Return(tenant, nil)
-	storage.RevokeSessionMock.Expect(minimock.AnyContext, tenantUUID, "user-uuid", "user-uuid:33").Return(nil)
-	storage.GetApplicationsLogoutContextBySessionMock.Expect(minimock.AnyContext, tenantUUID, "user-uuid:33").Return(activeApps, nil)
+	active := testSession(tenantUUID, 33)
+	ssoUseCase.RevokeSessionMock.Expect(minimock.AnyContext, tenantUUID, active.ID).Return(nil)
+	storage.GetApplicationsLogoutContextBySessionMock.Expect(minimock.AnyContext, tenantUUID, active.ID.String()).Return(activeApps, nil)
 
 	ssoUseCase.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
 		return &port.CookieIntentResponse{CookieName: "spz_session_default", MaxAge: -1}, nil
@@ -439,7 +442,7 @@ func TestOAuthService_ProcessLogoutRequest_JITFrontChannelValidation_DropsMalici
 
 	cmd := port.LogoutRequestCommand{
 		TenantID:              tenantUUID,
-		ActiveSessionID:       "user-uuid:33",
+		ActiveSession:         active,
 		PostLogoutRedirectURI: "https://my-tenant.com",
 		RequestHost:           "my-tenant.com",
 	}
@@ -495,8 +498,9 @@ func TestOAuthService_ProcessLogoutRequest_JITBackChannelValidation_DropsMalicio
 	}
 
 	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantUUID).Return(tenant, nil)
-	storage.RevokeSessionMock.Expect(minimock.AnyContext, tenantUUID, "user-uuid", "user-uuid:33").Return(nil)
-	storage.GetApplicationsLogoutContextBySessionMock.Expect(minimock.AnyContext, tenantUUID, "user-uuid:33").Return(activeApps, nil)
+	active := testSession(tenantUUID, 33)
+	ssoUseCase.RevokeSessionMock.Expect(minimock.AnyContext, tenantUUID, active.ID).Return(nil)
+	storage.GetApplicationsLogoutContextBySessionMock.Expect(minimock.AnyContext, tenantUUID, active.ID.String()).Return(activeApps, nil)
 
 	ssoUseCase.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
 		return &port.CookieIntentResponse{CookieName: "spz_session_default", MaxAge: -1}, nil
@@ -515,7 +519,7 @@ func TestOAuthService_ProcessLogoutRequest_JITBackChannelValidation_DropsMalicio
 
 	cmd := port.LogoutRequestCommand{
 		TenantID:              tenantUUID,
-		ActiveSessionID:       "user-uuid:33",
+		ActiveSession:         active,
 		PostLogoutRedirectURI: "https://my-tenant.com",
 		RequestHost:           "my-tenant.com",
 	}
@@ -995,4 +999,9 @@ func TestOAuthService_RotateRefreshToken(t *testing.T) {
 			t.Error("expected non-empty rotated refresh token")
 		}
 	})
+}
+
+// testSession is a live SSO session of a user in the given partition.
+func testSession(tenantID uuid.UUID, partitionID int64) *model.SSOSession {
+	return &model.SSOSession{ID: uuid.New(), TenantID: tenantID, PartitionID: partitionID, UserProfileID: uuid.New()}
 }

@@ -24,6 +24,12 @@ type IdentityServerConfig struct {
 	AdminTenantDomain    string        `yaml:"admin_tenant_domain" env:"ADMIN_TENANT_DOMAIN" env-default:"localhost:8100"`
 	TokenPruningInterval time.Duration `yaml:"token_pruning_interval" env:"TOKEN_PRUNING_INTERVAL" env-default:"15m"`
 	KeyRotationInterval  time.Duration `yaml:"key_rotation_interval" env:"KEY_ROTATION_INTERVAL" env-default:"24h"`
+
+	// Browser sign-in sessions. The administrative partition has its own, shorter limits.
+	SessionAbsoluteLifetime      time.Duration `yaml:"session_absolute_lifetime" env:"SESSION_ABSOLUTE_LIFETIME" env-default:"24h"`
+	SessionIdleTimeout           time.Duration `yaml:"session_idle_timeout" env:"SESSION_IDLE_TIMEOUT" env-default:"8h"`
+	AdminSessionAbsoluteLifetime time.Duration `yaml:"admin_session_absolute_lifetime" env:"ADMIN_SESSION_ABSOLUTE_LIFETIME" env-default:"8h"`
+	AdminSessionIdleTimeout      time.Duration `yaml:"admin_session_idle_timeout" env:"ADMIN_SESSION_IDLE_TIMEOUT" env-default:"1h"`
 }
 
 type Config struct {

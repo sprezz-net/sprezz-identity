@@ -91,21 +91,14 @@ func (h *AdminHandler) Routes(r chi.Router) {
 	})
 }
 
-// HandleAdminLogoutRequest clears out the administrative partition session.
+// HandleAdminLogoutRequest ends the administrative session: the server-side record is revoked, so a copied cookie
+// is worthless afterwards, and the cookie is evicted from the browser.
 // It detects and supports both OIDC front-channel iframe sweeps and manual user clicks.
 func (h *AdminHandler) HandleAdminLogoutRequest(w http.ResponseWriter, r *http.Request) {
-	// 1. Establish a secure baseline default matching max production profiles
-	isSecure := h.appEnv != "local"
+	cookieName, isSecure := h.revokeAdminSession(r)
 
-	// 2. READ CURRENT COOKIE: Attempt to load the active privileged token block
-	if adminCookie, err := r.Cookie("spz_session_sprezz_admin"); err == nil {
-		// TARGET FOUND: Dynamically mirror the exact secure flag from the live cookie instance
-		isSecure = adminCookie.Secure
-	}
-
-	// 3. EXECUTE EVICTION: Clear out the admin token cleanly using the verified secure flag state
 	http.SetCookie(w, &http.Cookie{
-		Name:     "spz_session_sprezz_admin",
+		Name:     cookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1, // Forces immediate native browser-level erasure
@@ -114,7 +107,7 @@ func (h *AdminHandler) HandleAdminLogoutRequest(w http.ResponseWriter, r *http.R
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	// 2. ADAPTIVE RESPONSE PATHWAY:
+	// ADAPTIVE RESPONSE PATHWAY:
 	// If the request contains an OIDC 'state' or 'id_token_hint' query parameter, or if the
 	// User-Agent/Headers indicate a background iframe fetch, satisfy the OIDC spec with a 200 OK.
 	if r.URL.Query().Get("state") != "" || r.Header.Get("Sec-Fetch-Dest") == "iframe" {
@@ -123,7 +116,7 @@ func (h *AdminHandler) HandleAdminLogoutRequest(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// 3. MANUAL CLICK FALLBACK:
+	// MANUAL CLICK FALLBACK:
 	// If an admin manually clicked "Sign Out" from within the admin dashboard,
 	// send them directly to the clean unauthenticated admin login wall route.
 	http.Redirect(w, r, port.RouteAdmin, http.StatusFound)
@@ -219,4 +212,32 @@ func (h *HttpAdapter) renderError(w http.ResponseWriter, r *http.Request, status
 	w.WriteHeader(status)
 	component := public.Error(errorMessage)
 	_ = component.Render(r.Context(), w)
+}
+
+// revokeAdminSession ends the server-side session behind the administrative cookie, when there is one, and returns
+// the cookie name and Secure flag to evict. The name comes from the domain, so it carries the __Host- prefix in
+// production; the local name is the fallback when the tenant or partition cannot be resolved.
+func (h *AdminHandler) revokeAdminSession(r *http.Request) (string, bool) {
+	cookieName, isSecure := sessionCookiePrefix+model.AdminPartitionAliasName, h.appEnv != "local"
+
+	tenant, ok := TenantFromContext(r.Context())
+	if !ok {
+		return cookieName, isSecure
+	}
+	partition, err := h.storagePort.GetPartitionByAlias(r.Context(), tenant.ID, model.AdminPartitionAliasName)
+	if err != nil {
+		return cookieName, isSecure
+	}
+	spec, err := sessionCookieName(r, h.ssoUseCase, tenant.ID, partition.ID)
+	if err != nil {
+		return cookieName, isSecure
+	}
+	cookieName, isSecure = spec.CookieName, spec.Secure
+
+	if session := sessionFromCookie(r, h.ssoUseCase, tenant.ID, cookieName); session != nil {
+		if err := h.ssoUseCase.RevokeSession(r.Context(), tenant.ID, session.ID); err != nil {
+			slog.Error("admin logout: failed to revoke the session", "session_id", session.ID, "err", err)
+		}
+	}
+	return cookieName, isSecure
 }

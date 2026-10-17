@@ -22,3 +22,7 @@ DELETE FROM pushed_authorization_requests WHERE expires_at <= NOW();
 -- PruneExpiredDPoPProofs drops old device-binding proof thumbprints
 -- whose replay protection time windows have closed.
 DELETE FROM dpop_proofs WHERE expires_at <= NOW();
+
+-- name: PruneExpiredSSOSessions :exec
+-- PruneExpiredSSOSessions removes browser sessions past their absolute or idle deadline.
+DELETE FROM sso_sessions WHERE expires_at <= NOW() OR idle_expires_at <= NOW();

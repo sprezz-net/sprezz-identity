@@ -1,7 +1,6 @@
 package http
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -169,25 +168,20 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// 2. Provision the single sign-on bearer session cookie on the browser using the user's unique stable UUID
-	cookieIntent, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
-		TenantID:       tenantUUID,
-		PartitionID:    partitionID,
-		PayloadValue:   fmt.Sprintf("%s:%d", loginResp.Subject, partitionID),
-		LifecycleStage: "bearer",
-		RequestHost:    r.Host,
+	// 2. Open the server-side session and hand the browser its opaque cookie
+	created, err := h.ssoUseCase.CreateSession(r.Context(), port.CreateSessionCommand{
+		TenantID:           tenantUUID,
+		PartitionID:        partitionID,
+		UserProfileID:      loginResp.UserProfileID,
+		IdentityProviderID: providerID,
+		RequestHost:        r.Host,
 	})
-	if err == nil {
-		http.SetCookie(w, &http.Cookie{
-			Name:     cookieIntent.CookieName,
-			Value:    cookieIntent.CookieValue,
-			Path:     "/",
-			MaxAge:   cookieIntent.MaxAge,
-			HttpOnly: true,
-			Secure:   cookieIntent.Secure,
-			SameSite: http.SameSiteLaxMode,
-		})
+	if err != nil {
+		slog.Error("Local login: failed to create the session", "error", err, "tenant_id", tenantUUID)
+		h.renderInlineFormError(w, r, ctxResp, interactionID, map[string]string{"global": "Unable to sign you in right now"})
+		return
 	}
+	writeSessionCookie(w, &created.Cookie)
 
 	// 3. If there is an active interaction session, delegate to OIDC authorize flow completion
 	if interactionSession != nil {
@@ -202,7 +196,7 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 			ACRValues:       interactionSession.ACRValues,
 			RequestHost:     r.Host,
 			RequestURI:      "",
-			ActiveSessionID: fmt.Sprintf("%s:%d", loginResp.Subject, partitionID),
+			ActiveSession:   &created.Session,
 		})
 		if err != nil {
 			h.renderInlineFormError(w, r, ctxResp, interactionID, map[string]string{"global": err.Error()})
@@ -274,22 +268,7 @@ func (h *LoginHandler) parseInteractionCookie(r *http.Request, tenantID uuid.UUI
 }
 
 func (h *LoginHandler) hasActiveBearerSession(r *http.Request, tenantID uuid.UUID) bool {
-	cookieSpec, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
-		TenantID:       tenantID,
-		LifecycleStage: "clear",
-		RequestHost:    r.Host,
-	})
-	if err != nil {
-		return false
-	}
-
-	cookie, err := r.Cookie(cookieSpec.CookieName)
-	if err != nil {
-		return false
-	}
-
-	stage, _, err := h.ssoUseCase.ParseSessionCookie(r.Context(), cookie.Value)
-	return err == nil && stage == "bearer"
+	return defaultPartitionSession(r, h.ssoUseCase, tenantID) != nil
 }
 
 func (h *LoginHandler) triggerExternalFederationRedirection(w http.ResponseWriter, r *http.Request, tenantID uuid.UUID, provider model.IdentityProvider, session *model.InteractionSession, baseURI string) {

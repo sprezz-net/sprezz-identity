@@ -37,7 +37,7 @@ func TestResolveTenantContext_RefusesInactiveTenants(t *testing.T) {
 func TestSSOSession_ClearingACookieWorksForAnInactiveTenant(t *testing.T) {
 	mc := minimock.NewController(t)
 	storage := portmock.NewStorageMock(mc) // strict: no tenant or partition lookup is allowed
-	svc := NewSSOSessionService(storage, "unittest")
+	svc := NewSSOSessionService(storage, portmock.NewMockClock(time.Now()), "unittest", SSOSessionPolicy{})
 	storage.GetPartitionByIDMock.Optional().Return(&model.Partition{ID: 1, AliasName: "default"}, nil)
 
 	resp, err := svc.BuildSessionCookie(context.Background(), port.CookieIntentCommand{

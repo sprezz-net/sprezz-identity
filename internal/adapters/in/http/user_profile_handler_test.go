@@ -47,8 +47,11 @@ func TestHttpAdapter_ViewProfile_Success(t *testing.T) {
 
 	userUUID := uuid.New()
 
-	suc.ParseSessionCookieMock.Set(func(ctx context.Context, cookieValue string) (string, string, error) {
-		return "bearer", userUUID.String() + ":0", nil
+	suc.ResolveSessionMock.Set(func(ctx context.Context, tID uuid.UUID, cookieValue string) (*model.SSOSession, error) {
+		if tID != tenantID || cookieValue != "opaque-secret" {
+			return nil, port.ErrSessionNotFound
+		}
+		return &model.SSOSession{ID: uuid.New(), TenantID: tenantID, UserProfileID: userUUID}, nil
 	})
 
 	upuc.GetUserProfileDashboardMock.Set(func(ctx context.Context, cmd port.GetUserProfileDashboardCommand) (*port.GetUserProfileDashboardResponse, error) {
@@ -66,7 +69,7 @@ func TestHttpAdapter_ViewProfile_Success(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/profile", nil)
-	req.Header.Set("Cookie", "spz_session=bearer-token")
+	req.Header.Set("Cookie", "spz_session=opaque-secret")
 	req.Host = "test.com"
 	rec := httptest.NewRecorder()
 

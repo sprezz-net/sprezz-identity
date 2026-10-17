@@ -265,6 +265,22 @@ type RevokedToken struct {
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
+type SsoSession struct {
+	TokenHash          []byte             `json:"token_hash"`
+	ID                 pgtype.UUID        `json:"id"`
+	TenantID           int32              `json:"tenant_id"`
+	PartitionID        int64              `json:"partition_id"`
+	UserProfileID      pgtype.UUID        `json:"user_profile_id"`
+	IdentityProviderID pgtype.UUID        `json:"identity_provider_id"`
+	Acr                string             `json:"acr"`
+	Amr                []string           `json:"amr"`
+	AuthTime           pgtype.Timestamptz `json:"auth_time"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	LastSeenAt         pgtype.Timestamptz `json:"last_seen_at"`
+	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
+	IdleExpiresAt      pgtype.Timestamptz `json:"idle_expires_at"`
+}
+
 type Tenant struct {
 	ID               int32              `json:"id"`
 	TenantUuid       pgtype.UUID        `json:"tenant_uuid"`

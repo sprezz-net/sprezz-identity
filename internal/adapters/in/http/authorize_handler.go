@@ -35,21 +35,8 @@ func (h *AuthorizeHandler) HandleAuthorize(w http.ResponseWriter, r *http.Reques
 
 	tenantUUID := TenantIDFromContext(r.Context())
 
-	// 1. Scan for an active namespaced session cookie using pure port orchestration
-	var activeSessionPayload string
-	cookieSpec, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
-		TenantID:       tenantUUID,
-		LifecycleStage: "clear",
-		RequestHost:    r.Host,
-	})
-	if err == nil {
-		if cookie, cookieErr := r.Cookie(cookieSpec.CookieName); cookieErr == nil {
-			stage, payload, parseErr := h.ssoUseCase.ParseSessionCookie(r.Context(), cookie.Value)
-			if parseErr == nil && stage == "bearer" {
-				activeSessionPayload = payload
-			}
-		}
-	}
+	// 1. Resolve the live server-side session behind the partition cookie, if any
+	activeSession := defaultPartitionSession(r, h.ssoUseCase, tenantUUID)
 
 	var scopes []string
 	if scopeFormVal := r.FormValue("scope"); scopeFormVal != "" {
@@ -70,7 +57,7 @@ func (h *AuthorizeHandler) HandleAuthorize(w http.ResponseWriter, r *http.Reques
 		ClaimsJSON:      r.FormValue("claims"),
 		RequestURI:      r.FormValue("request_uri"), // When PAR is used
 		Scopes:          scopes,
-		ActiveSessionID: activeSessionPayload,
+		ActiveSession:   activeSession,
 		RequestHost:     r.Host,
 	}
 

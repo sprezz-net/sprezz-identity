@@ -240,7 +240,7 @@ sequenceDiagram
     Note over Admin,LocalHTTP: [1. Access Attempt]
     Admin->>LocalHTTP: GET /admin
     Note over LocalHTTP: Evaluate Cookie: spz_session_sprezz_admin
-    LocalHTTP-->>Admin: Missing 'bearer:[user_uuid]:18' -> Trigger OIDC Loop
+    LocalHTTP-->>Admin: No live session behind the cookie -> Trigger OIDC Loop
 
     Note over LocalHTTP,LocalCore: [2. On-Demand DCR Registration]
     LocalHTTP->>LocalCore: Initiate Admin Logon Intent
@@ -294,7 +294,8 @@ sequenceDiagram
     LocalCore-->>LocalHTTP: Return native local Token Set
 
     Note over LocalHTTP,Admin: [7. Access Granted]
-    LocalHTTP->>Admin: Overwrite Cookie spz_session_sprezz_admin to 'bearer:[user_uuid]:18'
+    LocalCore->>LocalCore: Store sso_sessions row (SHA-256 of a fresh 256-bit secret)
+    LocalHTTP->>Admin: Overwrite Cookie spz_session_sprezz_admin with the opaque session secret
     LocalHTTP->>Admin: 302 Redirect to /admin (Dashboard Access Granted!)
 ```
 
@@ -699,7 +700,10 @@ This configuration forces the browser to sandbox storage contexts natively (e.g.
 Within the isolated partition cookie, states are evaluated and migrated using strict protocol value prefixes:
 
 - **Outbound Handshake Lifecycle:** The cookie value stores a high-entropy state tracking UUID prefixed with the handshake protocol identifier (`handshake:[state_uuid]`). This acts as an anti-XSRF fence during the redirection loop, restricted strictly to a short-lived, 5-minute (300 seconds) expiration boundary.
-- **Authenticated Bearer Lifecycle:** Upon completing back-channel validation, the HTTP adapter overwrites the transient token with the finalized, signed access token string using the bearer namespace prefix (`bearer:[jwt_access_token]`), defaulting to a standard 24-hour expiration threshold.
+- **Authenticated Session Lifecycle:** Once a sign-in succeeds, the cookie value is replaced with an **opaque random secret** (256 bits from `crypto/rand`, base64url). It carries no identity and no claims, so it cannot be forged, guessed or decoded. The server keeps the session in the `sso_sessions` table, keyed by the **SHA-256 hash** of the secret, so a database leak cannot be replayed. A new secret is generated at every sign-in, so a planted cookie never becomes valid (no session fixation). The session row holds the tenant, partition, user, identity provider, `acr`/`amr`, `auth_time`, creation and last-seen time, an absolute expiry and an idle expiry. The row's public `id` (not the secret) is the `sid` claim and the anchor of client session links.
+- **Session limits:** the absolute lifetime defaults to 24 hours and the idle timeout to 8 hours; the administrative partition (`sprezz_admin`) defaults to 8 hours and 1 hour. All four are configurable (`SESSION_ABSOLUTE_LIFETIME`, `SESSION_IDLE_TIMEOUT`, `ADMIN_SESSION_ABSOLUTE_LIFETIME`, `ADMIN_SESSION_IDLE_TIMEOUT`). "Last seen" is written at most once a minute per session, so a busy session does not cause a write per request.
+- **Where the state lives, and why:** the identity server stays stateless where a resource server verifies a token on its own (access tokens: only revoked `jti` values are tracked). The browser session is read only by this server, on one primary-key lookup per browser request, so server-side state costs little there and buys real sign-out, idle and absolute timeouts, "sign out everywhere" and tenant deactivation that takes effect at once. Resolving a session is a single query that is tenant-scoped; expired, idle and signed-out sessions are invisible even before the 15-minute housekeeping sweep deletes them.
+- **Revocation:** sign-out deletes the row (`ProcessLogoutRequest`, `/admin/logout`), deactivating a tenant purges all of its sessions, and a user's sessions can be ended together (`RevokeUserSessions`). Deleting a user, partition or tenant cascades to its sessions.
 - **Clear/Evict Lifecycle:** When terminating or revoking a session, the adapter forcefully expires and clears the browser's partition-scoped first-party cookie by returning a standard `Set-Cookie` header with a negative `Max-Age` attribute (`Max-Age = -1`) and an empty value.
 
 ### 8.4 Hypermedia Functional Validation and Error Delivery Strategy

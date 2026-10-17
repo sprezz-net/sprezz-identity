@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"slices"
 	"sort"
@@ -37,6 +38,7 @@ type Storage struct {
 	parSessions         map[string]model.PushedAuthorizationRequest
 	dpopProofs          map[string]time.Time
 	refreshTokens       map[string]model.RefreshToken
+	ssoSessions         map[string]model.SSOSession // keyed by hex of the token hash
 	partitions          map[string]map[int64]model.Partition
 	deks                map[uuid.UUID][]byte
 	nonces              map[uuid.UUID][]byte
@@ -63,6 +65,7 @@ func NewStorage(appEnv string) *Storage {
 		parSessions:         make(map[string]model.PushedAuthorizationRequest),
 		dpopProofs:          make(map[string]time.Time),
 		refreshTokens:       make(map[string]model.RefreshToken),
+		ssoSessions:         make(map[string]model.SSOSession),
 		partitions:          make(map[string]map[int64]model.Partition),
 		deks:                make(map[uuid.UUID][]byte),
 		nonces:              make(map[uuid.UUID][]byte),
@@ -105,6 +108,7 @@ func (s *Storage) InTransaction(ctx context.Context, fn func(txRepo port.Storage
 		parSessions:         make(map[string]model.PushedAuthorizationRequest, len(s.parSessions)),
 		dpopProofs:          make(map[string]time.Time, len(s.dpopProofs)),
 		refreshTokens:       make(map[string]model.RefreshToken, len(s.refreshTokens)),
+		ssoSessions:         make(map[string]model.SSOSession, len(s.ssoSessions)),
 		partitions:          make(map[string]map[int64]model.Partition, len(s.partitions)),
 		deks:                make(map[uuid.UUID][]byte, len(s.deks)),
 		nonces:              make(map[uuid.UUID][]byte, len(s.nonces)),
@@ -157,6 +161,9 @@ func (s *Storage) InTransaction(ctx context.Context, fn func(txRepo port.Storage
 	}
 	for k, v := range s.refreshTokens {
 		txStorage.refreshTokens[k] = v
+	}
+	for k, v := range s.ssoSessions {
+		txStorage.ssoSessions[k] = v
 	}
 	for k, v := range s.deks {
 		txStorage.deks[k] = v
@@ -214,6 +221,7 @@ func (s *Storage) InTransaction(ctx context.Context, fn func(txRepo port.Storage
 	s.parSessions = txStorage.parSessions
 	s.dpopProofs = txStorage.dpopProofs
 	s.refreshTokens = txStorage.refreshTokens
+	s.ssoSessions = txStorage.ssoSessions
 	s.partitions = txStorage.partitions
 	s.deks = txStorage.deks
 	s.nonces = txStorage.nonces
@@ -588,6 +596,11 @@ func (s *Storage) PruneExpiredTokens(ctx context.Context) error {
 			delete(s.parSessions, k)
 		}
 	}
+	for k, sess := range s.ssoSessions {
+		if !sess.ExpiresAt.After(now) || !sess.IdleExpiresAt.After(now) {
+			delete(s.ssoSessions, k)
+		}
+	}
 	for k, exp := range s.dpopProofs {
 		if now.After(exp) {
 			delete(s.dpopProofs, k)
@@ -613,6 +626,68 @@ func (s *Storage) PruneExpiredAuthSessions(ctx context.Context, now time.Time) e
 	for code, session := range s.sessions {
 		if now.After(session.ExpiresAt) {
 			delete(s.sessions, code)
+		}
+	}
+	return nil
+}
+
+// Browser SSO sessions, keyed by the hex of the SHA-256 of the cookie secret.
+func (s *Storage) SaveSSOSession(_ context.Context, session model.SSOSession, tokenHash []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	session.AMR = append([]string{}, session.AMR...)
+	s.ssoSessions[hex.EncodeToString(tokenHash)] = session
+	return nil
+}
+
+func (s *Storage) GetActiveSSOSession(_ context.Context, tenantID uuid.UUID, tokenHash []byte, now time.Time) (*model.SSOSession, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	session, ok := s.ssoSessions[hex.EncodeToString(tokenHash)]
+	if !ok || session.TenantID != tenantID || !session.ExpiresAt.After(now) || !session.IdleExpiresAt.After(now) {
+		return nil, port.ErrSessionNotFound
+	}
+
+	session.AMR = append([]string{}, session.AMR...)
+	return &session, nil
+}
+
+func (s *Storage) TouchSSOSession(_ context.Context, tenantID uuid.UUID, tokenHash []byte, lastSeenAt time.Time, idleExpiresAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := hex.EncodeToString(tokenHash)
+	session, ok := s.ssoSessions[key]
+	if !ok || session.TenantID != tenantID {
+		return nil
+	}
+	session.LastSeenAt = lastSeenAt
+	session.IdleExpiresAt = idleExpiresAt
+	s.ssoSessions[key] = session
+	return nil
+}
+
+func (s *Storage) DeleteSSOSession(_ context.Context, tenantID uuid.UUID, sessionID uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for key, session := range s.ssoSessions {
+		if session.TenantID == tenantID && session.ID == sessionID {
+			delete(s.ssoSessions, key)
+		}
+	}
+	return nil
+}
+
+func (s *Storage) DeleteSSOSessionsByUser(_ context.Context, tenantID uuid.UUID, userProfileID uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for key, session := range s.ssoSessions {
+		if session.TenantID == tenantID && session.UserProfileID == userProfileID {
+			delete(s.ssoSessions, key)
 		}
 	}
 	return nil
@@ -1427,6 +1502,12 @@ func (s *Storage) PurgeTenantSessionsAndTokens(ctx context.Context, tenantID uui
 	for k, v := range s.refreshTokens {
 		if v.TenantID == tenantID {
 			delete(s.refreshTokens, k)
+		}
+	}
+
+	for k, v := range s.ssoSessions {
+		if v.TenantID == tenantID {
+			delete(s.ssoSessions, k)
 		}
 	}
 

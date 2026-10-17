@@ -24,7 +24,7 @@ var gatedEntryPoints = map[string][]string{
 	"LocalAuthUseCase":         {"AuthenticateLocalCredentials", "GetLoginContext", "GetInteractionSession"},
 	"UserRegistrationUseCase":  {"RegisterUser", "ApproveUserRequest", "GetSignupContext"},
 	"UserProfileUseCase":       {"CreateUserProfile", "ChangeUserPassword", "ChangeUserEmail", "ChangeUserName", "DecoupleUserIdentity", "GetUserProfile", "GetUserProfileDashboard"},
-	"SSOSessionUseCase":        {"BuildSessionCookie"},
+	"SSOSessionUseCase":        {"BuildSessionCookie", "CreateSession", "ResolveSession"},
 	"IdentityAssuranceUseCase": {"AssertActionTrust"},
 	"AdminLogonUseCase":        {"InitiateAdminLogon"},
 }
@@ -38,6 +38,8 @@ var exemptEntryPoints = map[string]map[string]string{
 	},
 	"SSOSessionUseCase": {
 		"ParseSessionCookie": "only reads a cookie value; it grants nothing by itself",
+		"RevokeSession":      "ending a session only reduces access, and people must always be able to sign out",
+		"RevokeUserSessions": "ending sessions only reduces access",
 	},
 	"TenantUseCase": {
 		"ResolveTenantContext": "refuses inactive tenants itself (TestResolveTenantContext_RefusesInactiveTenants)",

@@ -65,21 +65,20 @@ func (h *CallbackHandler) HandleFederationCallback(w http.ResponseWriter, r *htt
 
 	slog.Debug("HandleFederationCallback: callback executed successfully, building session cookie", "user_id", response.UserProfileID, "partition_id", response.PartitionID)
 
-	intent, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
-		TenantID:       tenantUUID,
-		PartitionID:    response.PartitionID,
-		PayloadValue:   fmt.Sprintf("%s:%d", response.UserProfileID.String(), response.PartitionID),
-		LifecycleStage: "bearer",
-		RequestHost:    r.Host,
+	created, err := h.ssoUseCase.CreateSession(r.Context(), port.CreateSessionCommand{
+		TenantID:      tenantUUID,
+		PartitionID:   response.PartitionID,
+		UserProfileID: response.UserProfileID,
+		RequestHost:   r.Host,
 	})
 	if err != nil {
-		slog.Error("HandleFederationCallback: BuildSessionCookie failed", "err", err)
-		h.writeWebError(w, http.StatusInternalServerError, "server_error", "failed to structure authorization session cookie")
+		slog.Error("HandleFederationCallback: CreateSession failed", "err", err)
+		h.writeWebError(w, http.StatusInternalServerError, "server_error", "failed to establish the authorization session")
 		return
 	}
 
-	slog.Debug("HandleFederationCallback: applying cookie intent", "cookie_name", intent.CookieName, "cookie_val_len", len(intent.CookieValue))
-	h.applyCookieIntent(w, intent)
+	slog.Debug("HandleFederationCallback: applying session cookie", "cookie_name", created.Cookie.CookieName)
+	writeSessionCookie(w, &created.Cookie)
 	h.clearTransientHandshakeCookie(w)
 
 	redirectTarget := response.TargetLandingURI
@@ -114,34 +113,18 @@ func (h *CallbackHandler) HandleOAuthCallbackRequest(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Leverage ssoUseCase strictly as a lookup tool to resolve the namespaced cookie name config
-	cookieSpec, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
-		TenantID:       tenantUUID,
-		LifecycleStage: "clear",
-		RequestHost:    r.Host,
-	})
-
-	var activeSessionPayload string
-	if err == nil {
-		if ssoCookie, ssoErr := r.Cookie(cookieSpec.CookieName); ssoErr == nil {
-			stage, payload, parseErr := h.ssoUseCase.ParseSessionCookie(r.Context(), ssoCookie.Value)
-			if parseErr == nil && stage == "bearer" {
-				activeSessionPayload = payload
-			}
-		}
-	}
-
-	if activeSessionPayload == "" {
+	activeSession := defaultPartitionSession(r, h.ssoUseCase, tenantUUID)
+	if activeSession == nil {
 		h.writeWebError(w, http.StatusUnauthorized, "access_denied", "no authenticated session exists for this partition loop")
 		return
 	}
 
 	cmd := port.AuthorizeRequestCommand{
-		TenantID:        tenantUUID,
-		ActiveSessionID: activeSessionPayload,
-		State:           r.URL.Query().Get("state"),
-		RequestHost:     r.Host,
-		RequestURI:      model.URIPrefixPAR + sessionUUID.String(),
+		TenantID:      tenantUUID,
+		ActiveSession: activeSession,
+		State:         r.URL.Query().Get("state"),
+		RequestHost:   r.Host,
+		RequestURI:    model.URIPrefixPAR + sessionUUID.String(),
 	}
 
 	result, err := h.authUseCase.ProcessAuthorizeRequest(r.Context(), cmd)
@@ -161,18 +144,6 @@ func (h *CallbackHandler) HandleOAuthCallbackRequest(w http.ResponseWriter, r *h
 	}
 
 	http.Redirect(w, r, result.RedirectURL, http.StatusFound)
-}
-
-func (h *CallbackHandler) applyCookieIntent(w http.ResponseWriter, intent *port.CookieIntentResponse) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     intent.CookieName,
-		Value:    intent.CookieValue,
-		Path:     "/",
-		MaxAge:   intent.MaxAge,
-		HttpOnly: true,
-		Secure:   intent.Secure,
-		SameSite: http.SameSiteLaxMode,
-	})
 }
 
 func (h *CallbackHandler) clearTransientHandshakeCookie(w http.ResponseWriter) {

@@ -2,7 +2,6 @@ package http
 
 import (
 	"net/http"
-	"strings"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -31,53 +30,21 @@ func (h *LogoutHandler) Routes(r chi.Router) {
 func (h *LogoutHandler) HandleLogoutRequest(w http.ResponseWriter, r *http.Request) {
 	tenantUUID := TenantIDFromContext(r.Context())
 
-	// 1. Calculate the exact standard public consumer fallback cookie name spec
-	defaultSpec, _ := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
-		TenantID:       tenantUUID,
-		LifecycleStage: "clear",
-		RequestHost:    r.Host,
-	})
-
-	var activeSessionPayload string
+	// 1. Find the live session of this request: custom partitions (e.g. sprezz_admin) first, then the default one.
+	// The cookie that carried it is the one to evict.
+	var activeSession *model.SSOSession
 	var targetCookieToEvict string
 	var targetCookieIsSecure bool
-
-	// 2. PASS 1: Prioritize parsing custom partitions (e.g., sprezz_admin or other partitions) over the default fallback
-	for _, cookie := range r.Cookies() {
-		// Skip any cookies that don't match the expected session cookie prefix
-		if !strings.HasPrefix(cookie.Name, "spz_session_") {
-			continue
-		}
-		// Skip the default cookie name to find any custom partition cookies in the first pass
-		if cookie.Name == defaultSpec.CookieName {
-			continue
-		}
-
-		stage, payload, parseErr := h.ssoUseCase.ParseSessionCookie(r.Context(), cookie.Value)
-		if parseErr == nil && stage == "bearer" {
-			activeSessionPayload = payload
-			targetCookieToEvict = cookie.Name // TARGET FOUND: Lock eviction to this specific custom partition key
-			targetCookieIsSecure = cookie.Secure
-			break
-		}
-	}
-
-	// 3. PASS 2: Fall back to parsing the default partition session if no custom partitions matched
-	if activeSessionPayload == "" {
-		if defaultCookie, err := r.Cookie(defaultSpec.CookieName); err == nil && defaultCookie.Value != "" {
-			stage, payload, parseErr := h.ssoUseCase.ParseSessionCookie(r.Context(), defaultCookie.Value)
-			if parseErr == nil && stage == "bearer" {
-				activeSessionPayload = payload
-				targetCookieToEvict = defaultSpec.CookieName // TARGET FOUND: Lock eviction strictly to the default fallback key
-				targetCookieIsSecure = defaultCookie.Secure
-			}
-		}
+	if found := anyPartitionSession(r, h.ssoUseCase, tenantUUID); found != nil {
+		activeSession = found.session
+		targetCookieToEvict = found.cookie.Name
+		targetCookieIsSecure = found.cookie.Secure
 	}
 
 	// 4. Map transport data parameters into the Port Command envelope object
 	cmd := port.LogoutRequestCommand{
 		TenantID:              tenantUUID,
-		ActiveSessionID:       activeSessionPayload,
+		ActiveSession:         activeSession,
 		IDTokenHint:           r.URL.Query().Get("id_token_hint"),
 		PostLogoutRedirectURI: r.URL.Query().Get("post_logout_redirect_uri"),
 		State:                 r.URL.Query().Get("state"),

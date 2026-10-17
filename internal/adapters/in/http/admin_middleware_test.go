@@ -26,14 +26,17 @@ func TestRequireAdminSession_ValidSessionReachesHandler(t *testing.T) {
 func TestRequireAdminSession_InvalidCookies(t *testing.T) {
 	tests := []struct {
 		name   string
-		cookie string
+		cookie func(f *adminGuardFixture) string
 	}{
-		{name: "missing cookie", cookie: ""},
-		{name: "handshake stage", cookie: fmt.Sprintf("handshake:%s", uuid.New())},
-		{name: "garbage", cookie: "nonsense"},
-		{name: "not a uuid", cookie: "bearer:not-a-uuid:12"},
-		{name: "wrong partition", cookie: fmt.Sprintf("bearer:%s:99", uuid.New())},
-		{name: "extra segments", cookie: fmt.Sprintf("bearer:%s:12:extra", uuid.New())},
+		{name: "missing cookie", cookie: func(*adminGuardFixture) string { return "" }},
+		{name: "handshake value", cookie: func(*adminGuardFixture) string { return fmt.Sprintf("handshake:%s", uuid.New()) }},
+		{name: "garbage", cookie: func(*adminGuardFixture) string { return "nonsense" }},
+		{name: "the old forgeable format", cookie: func(f *adminGuardFixture) string {
+			return fmt.Sprintf("bearer:%s:%d", f.userID, testAdminPartition)
+		}},
+		{name: "a bare user id", cookie: func(f *adminGuardFixture) string { return f.userID.String() }},
+		{name: "expired, signed out or revoked", cookie: func(*adminGuardFixture) string { return "opaque-" + uuid.NewString() }},
+		{name: "session of another partition", cookie: func(f *adminGuardFixture) string { return f.sessionFor(f.userID, 99) }},
 	}
 
 	for _, tt := range tests {
@@ -42,8 +45,8 @@ func TestRequireAdminSession_InvalidCookies(t *testing.T) {
 			// HTMX requests make the outcome observable without starting a real OIDC handshake.
 			rec := f.do(http.MethodGet, "/admin/users", func(r *http.Request) {
 				r.Header.Set(model.HeaderHxRequest, "true")
-				if tt.cookie != "" {
-					f.withCookie(tt.cookie)(r)
+				if value := tt.cookie(f); value != "" {
+					f.withCookie(value)(r)
 				}
 			})
 
@@ -52,6 +55,20 @@ func TestRequireAdminSession_InvalidCookies(t *testing.T) {
 			assert.NotContains(t, rec.Body.String(), "<table", "no admin content may leak")
 		})
 	}
+}
+
+// A session of another tenant must not open this tenant's console, even with a valid secret.
+func TestRequireAdminSession_SessionOfAnotherTenantIsRejected(t *testing.T) {
+	f := newAdminGuardFixture(t)
+	value := f.bearer()
+	f.sessions[value].TenantID = uuid.New()
+
+	rec := f.do(http.MethodGet, "/admin/users", func(r *http.Request) {
+		r.Header.Set(model.HeaderHxRequest, "true")
+		f.withCookie(value)(r)
+	})
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
 func TestRequireAdminSession_UnknownUserIsRejected(t *testing.T) {

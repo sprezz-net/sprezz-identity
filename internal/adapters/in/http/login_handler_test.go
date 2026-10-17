@@ -146,18 +146,23 @@ func TestHttpAdapter_LoginSubmit_Success(t *testing.T) {
 		}, nil
 	})
 
-	// Mock cookie building for both handshake parsing and bearer creation
+	// Handshake cookie building and the creation of the server-side session
 	suc.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
 		if cmd.LifecycleStage == "handshake" {
 			return &port.CookieIntentResponse{CookieName: "spz_auth_session_id", CookieValue: "handshake:session123"}, nil
 		}
-		if cmd.LifecycleStage == "bearer" {
-			if !strings.Contains(cmd.PayloadValue, userUUID.String()) {
-				t.Errorf("expected session cookie payload to contain user UUID '%s', got '%s'", userUUID.String(), cmd.PayloadValue)
-			}
-			return &port.CookieIntentResponse{CookieName: "spz_session_default", CookieValue: "bearer:session123"}, nil
-		}
 		return &port.CookieIntentResponse{CookieName: "spz_session_default"}, nil
+	})
+	created := &port.CreatedSession{
+		Session: model.SSOSession{ID: uuid.New(), TenantID: tenantID, PartitionID: 1, UserProfileID: userUUID},
+		Token:   "opaque-secret",
+		Cookie:  port.CookieIntentResponse{CookieName: "spz_session_default", CookieValue: "opaque-secret", MaxAge: 86400, Secure: true},
+	}
+	suc.CreateSessionMock.Set(func(ctx context.Context, cmd port.CreateSessionCommand) (*port.CreatedSession, error) {
+		if cmd.UserProfileID != userUUID || cmd.TenantID != tenantID || cmd.PartitionID != 1 || cmd.IdentityProviderID != providerID {
+			t.Errorf("session must be created for the authenticated user in the interaction's partition and provider, got %+v", cmd)
+		}
+		return created, nil
 	})
 
 	suc.ParseSessionCookieMock.Set(func(ctx context.Context, cookieValue string) (string, string, error) {
@@ -187,8 +192,8 @@ func TestHttpAdapter_LoginSubmit_Success(t *testing.T) {
 	}, nil)
 
 	auth.ProcessAuthorizeRequestMock.Set(func(ctx context.Context, cmd port.AuthorizeRequestCommand) (*port.AuthorizeExecutionResult, error) {
-		if cmd.ActiveSessionID != userUUID.String()+":1" {
-			t.Errorf("expected ActiveSessionID containing user UUID, got '%s'", cmd.ActiveSessionID)
+		if cmd.ActiveSession == nil || cmd.ActiveSession.ID != created.Session.ID {
+			t.Errorf("expected the new session to complete the authorize request, got %+v", cmd.ActiveSession)
 		}
 		if cmd.RequestURI != "" {
 			t.Errorf("expected RequestURI to be empty on login complete, got '%s'", cmd.RequestURI)
@@ -215,6 +220,16 @@ func TestHttpAdapter_LoginSubmit_Success(t *testing.T) {
 	if hxRedirect != "https://callback?code=abc" {
 		t.Errorf("expected HX-Redirect 'https://callback?code=abc', got '%s'", hxRedirect)
 	}
+
+	var session *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "spz_session_default" {
+			session = c
+		}
+	}
+	if session == nil || session.Value != "opaque-secret" || !session.HttpOnly || !session.Secure || session.MaxAge != 86400 {
+		t.Errorf("expected the opaque session cookie to be set HttpOnly and Secure, got %+v", session)
+	}
 }
 
 func TestHttpAdapter_LoginWithInteractionID_QueryAndForm(t *testing.T) {
@@ -232,10 +247,6 @@ func TestHttpAdapter_LoginWithInteractionID_QueryAndForm(t *testing.T) {
 
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
 		return tenant, nil
-	})
-
-	suc.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
-		return &port.CookieIntentResponse{CookieName: "spz_session_default", CookieValue: "bearer:session123"}, nil
 	})
 
 	// 1. Verify HandleLoginRoot correctly reads tx from URL query parameter
@@ -303,6 +314,13 @@ func TestHttpAdapter_LoginWithInteractionID_QueryAndForm(t *testing.T) {
 			PartitionID:   1,
 			SessionID:     "sso-session-id",
 			Subject:       "user-123",
+		}, nil
+	})
+
+	suc.CreateSessionMock.Set(func(ctx context.Context, cmd port.CreateSessionCommand) (*port.CreatedSession, error) {
+		return &port.CreatedSession{
+			Session: model.SSOSession{ID: uuid.New(), TenantID: tenantID, PartitionID: 1, UserProfileID: cmd.UserProfileID},
+			Cookie:  port.CookieIntentResponse{CookieName: "spz_session_default", CookieValue: "opaque-secret", MaxAge: 86400},
 		}, nil
 	})
 

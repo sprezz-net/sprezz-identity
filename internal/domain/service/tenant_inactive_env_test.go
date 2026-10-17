@@ -54,7 +54,7 @@ func newInactiveEnv(t *testing.T) *inactiveEnv {
 	e.local = NewLocalAuthService(storage, crypto, clock)
 	e.profiles = NewUserProfileService(storage, admin, crypto, clock)
 	e.reg = NewUserRegistrationService(storage, e.profiles, clock)
-	e.sso = NewSSOSessionService(storage, "unittest")
+	e.sso = NewSSOSessionService(storage, clock, "unittest", SSOSessionPolicy{})
 	e.assure = NewAssuranceService(storage)
 	e.adminLog = NewAdminLogonService(storage, admin, nil, crypto, nil, nil, clock, "unittest", "off.example.com")
 	return e

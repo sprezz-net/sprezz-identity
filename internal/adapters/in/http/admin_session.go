@@ -6,8 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strconv"
-	"strings"
 
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
@@ -65,21 +63,22 @@ func (h *HttpAdapter) resolveAdminSession(r *http.Request, tenant *model.Tenant)
 		return nil, err
 	}
 
-	cookie, err := r.Cookie(cookieSpec.CookieName)
-	if err != nil || cookie.Value == "" {
-		return &adminSessionResult{state: adminSessionMissing}, nil
+	session := sessionFromCookie(r, h.ssoUseCase, tenant.ID, cookieSpec.CookieName)
+	if session == nil {
+		// Missing, unknown, expired, idle or signed-out: the stale cookie (if any) is evicted by the caller.
+		return &adminSessionResult{state: adminSessionMissing, cookieName: cookieSpec.CookieName}, nil
 	}
-
-	userID, ok := h.parseAdminBearer(r.Context(), cookie.Value, partition.ID)
-	if !ok {
+	// The administrative cookie is bound to the administrative partition by its name, but check the record too.
+	if session.PartitionID != partition.ID {
 		return &adminSessionResult{state: adminSessionMissing, cookieName: cookieSpec.CookieName}, nil
 	}
 
-	return h.verifyAdminProfile(r.Context(), tenant.ID, userID, partition.ID, cookieSpec.CookieName)
+	return h.verifyAdminProfile(r.Context(), tenant.ID, session, cookieSpec.CookieName)
 }
 
-// verifyAdminProfile checks that the user named by the cookie exists in the admin partition and may log in.
-func (h *HttpAdapter) verifyAdminProfile(ctx context.Context, tenantID, userID uuid.UUID, partitionID int64, cookieName string) (*adminSessionResult, error) {
+// verifyAdminProfile checks that the user of the session exists in the admin partition and may log in.
+func (h *HttpAdapter) verifyAdminProfile(ctx context.Context, tenantID uuid.UUID, session *model.SSOSession, cookieName string) (*adminSessionResult, error) {
+	userID, partitionID := session.UserProfileID, session.PartitionID
 	profile, err := h.storagePort.GetUserProfileByIDAndPartitionAlias(ctx, tenantID, model.AdminPartitionAliasName, userID)
 	if errors.Is(err, port.ErrUserProfileNotFound) {
 		slog.Warn("admin session names an unknown user", "user_id", userID, "tenant_id", tenantID)
@@ -98,31 +97,6 @@ func (h *HttpAdapter) verifyAdminProfile(ctx context.Context, tenantID, userID u
 		state:   adminSessionValid,
 		session: &AdminSession{UserID: profile.ID, PartitionID: partitionID},
 	}, nil
-}
-
-// parseAdminBearer extracts the user ID from a "bearer:<userUUID>:<partitionID>" cookie and checks that the
-// cookie was issued for the administrative partition.
-func (h *HttpAdapter) parseAdminBearer(ctx context.Context, cookieValue string, partitionID int64) (uuid.UUID, bool) {
-	stage, payload, err := h.ssoUseCase.ParseSessionCookie(ctx, cookieValue)
-	if err != nil || stage != "bearer" {
-		return uuid.Nil, false
-	}
-
-	parts := strings.Split(payload, ":")
-	if len(parts) != 2 {
-		return uuid.Nil, false
-	}
-
-	userID, err := uuid.Parse(parts[0])
-	if err != nil {
-		return uuid.Nil, false
-	}
-
-	cookiePartition, err := strconv.ParseInt(parts[1], 10, 64)
-	if err != nil || cookiePartition != partitionID {
-		return uuid.Nil, false
-	}
-	return userID, true
 }
 
 // isCrossSiteStateChange reports whether a state-changing request originates from another site.

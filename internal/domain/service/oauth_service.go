@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -239,26 +238,15 @@ func (s *OAuthService) ProcessAuthorizeRequest(ctx context.Context, cmd port.Aut
 	// Strict Multi-Partition Cookie isolation guard:
 	// If the active session is associated with a different partition than the
 	// client's target partition, treat the user as unauthenticated for this request.
-	if cmd.ActiveSessionID != "" {
-		parts := strings.Split(cmd.ActiveSessionID, ":")
-		if len(parts) >= 2 {
-			if parsedPartitionID, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
-				if parsedPartitionID != truePartitionID {
-					cmd.ActiveSessionID = "" // Invalidate session context for this cross-partition request
-				}
-			} else {
-				cmd.ActiveSessionID = "" // Malformed session ID, clear it
-			}
-		} else {
-			cmd.ActiveSessionID = "" // Missing partition namespace, clear it
-		}
+	if cmd.ActiveSession != nil && cmd.ActiveSession.PartitionID != truePartitionID {
+		cmd.ActiveSession = nil // Invalidate session context for this cross-partition request
 	}
 
 	now := s.clock.Now()
 	// ------------------------------------------------------------------------
 	// BRANCH A: User is unauthenticated -> Stage Interaction Session & Handshake
 	// ------------------------------------------------------------------------
-	if cmd.ActiveSessionID == "" {
+	if cmd.ActiveSession == nil {
 		sessionACR := cmd.ACRValues
 		if cmd.ClaimsJSON != "" {
 			sessionACR = cmd.ClaimsJSON
@@ -317,11 +305,7 @@ func (s *OAuthService) ProcessAuthorizeRequest(ctx context.Context, cmd port.Aut
 		reachedACR = "aal1" // TODO Review if this should be empty otherwise
 	}
 
-	parts := strings.Split(cmd.ActiveSessionID, ":")
-	subjectID := cmd.ClientID
-	if len(parts) >= 1 {
-		subjectID = parts[0]
-	}
+	subjectID := cmd.ActiveSession.UserProfileID.String()
 
 	if len(cmd.Scopes) > 0 {
 		if err := s.validator.ValidateScopes(ctx, tenant, group, cmd.Scopes); err != nil {
@@ -345,7 +329,7 @@ func (s *OAuthService) ProcessAuthorizeRequest(ctx context.Context, cmd port.Aut
 		RedirectURI:           redirectURI,
 		Scopes:                grantedScopes,
 		ExpiresAt:             now.Add(5 * time.Minute),
-		SessionID:             cmd.ActiveSessionID,
+		SessionID:             cmd.ActiveSession.ID.String(),
 		State:                 cmd.State,
 		Nonce:                 cmd.Nonce,
 		IdentityProviderID:    activeProvider.ID,
@@ -1050,6 +1034,45 @@ func (s *OAuthService) ExchangeClientCredentials(ctx context.Context, cmd port.E
 	})
 }
 
+// logoutTarget identifies the session a logout request ends.
+type logoutTarget struct {
+	sessionID   string
+	subjectID   string
+	partitionID int64
+}
+
+// resolveLogoutTarget picks the session to end. A verified id_token_hint wins over the cookie session; its sid is
+// the SSO session ID, and its sub the user. Without either, the target is empty and nothing is revoked.
+func (s *OAuthService) resolveLogoutTarget(cmd port.LogoutRequestCommand) logoutTarget {
+	var target logoutTarget
+	if cmd.ActiveSession != nil {
+		target = logoutTarget{
+			sessionID:   cmd.ActiveSession.ID.String(),
+			subjectID:   cmd.ActiveSession.UserProfileID.String(),
+			partitionID: cmd.ActiveSession.PartitionID,
+		}
+	}
+
+	if cmd.IDTokenHint == "" {
+		return target
+	}
+	claims, err := s.crypto.VerifyToken(cmd.IDTokenHint)
+	if err != nil {
+		return target
+	}
+	sid, _ := claims["sid"].(string)
+	sub, _ := claims["sub"].(string)
+	if sid == "" || sub == "" {
+		return target
+	}
+	if target.sessionID != sid {
+		target.partitionID = 0 // the hint does not say which partition; the default cookie is cleared
+	}
+	target.sessionID = sid
+	target.subjectID = sub
+	return target
+}
+
 // ProcessLogoutRequest completely orchestrates specification-driven OIDC Single Sign-Out workflows,
 // invalidating native persistence sessions, querying active client session footprints,
 // and triggering non-blocking asynchronous backchannel logout propagations strictly to active apps.
@@ -1059,41 +1082,22 @@ func (s *OAuthService) ProcessLogoutRequest(ctx context.Context, cmd port.Logout
 		return nil, fmt.Errorf("oauth_service: tenant unresolvable: %w", err)
 	}
 
-	// 1. Establish the Session Invalidation Lookup Hierarchy
-	var targetSessionID = cmd.ActiveSessionID // Default fallback to cookie session context
-
-	// OIDC Spec Compliance: Prioritize id_token_hint parsing if present
-	if cmd.IDTokenHint != "" {
-		if verifiedClaims, err := s.crypto.VerifyToken(cmd.IDTokenHint); err == nil {
-			if tokenSID, ok := verifiedClaims["sid"].(string); ok && tokenSID != "" {
-				targetSessionID = tokenSID
-			} else if tokenSUB, ok := verifiedClaims["sub"].(string); ok && tokenSUB != "" {
-				// Secondary Track: Fallback to subject verification if sid is omitted statelessly
-				targetSessionID = tokenSUB
-			}
-		}
-	}
-
-	var subjectID string
-	var partitionID int64
-
-	// 2. Unpack tracking claims to locate the parent profile and partition lineage
-	if targetSessionID != "" {
-		parts := strings.Split(targetSessionID, ":")
-		if len(parts) >= 2 {
-			subjectID = parts[0]
-			if pID, parseErr := strconv.ParseInt(parts[1], 10, 64); parseErr == nil {
-				partitionID = pID
-			}
-		}
-	}
+	// 1. Establish which session to end: the verified id_token_hint takes priority over the cookie session.
+	target := s.resolveLogoutTarget(cmd)
+	partitionID := target.partitionID
+	subjectID := target.subjectID
+	targetSessionID := target.sessionID
 
 	var frontChannelURIs []string
 
-	// 3. Perform targeted session teardown and trigger out-of-band fan-outs if session attributes are valid
+	// 2. Perform targeted session teardown and trigger out-of-band fan-outs if the session is known
 	if subjectID != "" && targetSessionID != "" {
-		// Clean out native transactional repository sessions
-		_ = s.storage.RevokeSession(ctx, cmd.TenantID, subjectID, targetSessionID)
+		// Ending the server-side session is what makes the sign-out real: the cookie is worthless afterwards.
+		if sessionUUID, parseErr := uuid.Parse(targetSessionID); parseErr == nil {
+			if err := s.ssoUseCase.RevokeSession(ctx, cmd.TenantID, sessionUUID); err != nil {
+				slog.Error("ProcessLogoutRequest: failed to revoke SSO session", "session_id", targetSessionID, "err", err)
+			}
+		}
 
 		// Targetted client sessions lookup: Fetch only client applications used during this specific lifecycle
 		applications, err := s.storage.GetApplicationsLogoutContextBySession(ctx, cmd.TenantID, targetSessionID)
@@ -1140,7 +1144,7 @@ func (s *OAuthService) ProcessLogoutRequest(ctx context.Context, cmd port.Logout
 		}
 	}
 
-	// 4. Calculate spec-compliant post-logout landing target destination URI
+	// 3. Calculate spec-compliant post-logout landing target destination URI
 	targetURL := cmd.PostLogoutRedirectURI
 
 	if targetURL != "" {
@@ -1165,7 +1169,7 @@ func (s *OAuthService) ProcessLogoutRequest(ctx context.Context, cmd port.Logout
 		}
 	}
 
-	// 5. Delegate cookie removal calculations entirely to the ssoUseCase port boundary
+	// 4. Delegate cookie removal calculations entirely to the ssoUseCase port boundary
 	cookieIntent, err := s.ssoUseCase.BuildSessionCookie(ctx, port.CookieIntentCommand{
 		TenantID:       cmd.TenantID,
 		PartitionID:    partitionID,

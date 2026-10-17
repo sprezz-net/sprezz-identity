@@ -29,6 +29,20 @@ type StorageMock struct {
 	beforeDeleteFederatedSessionCounter uint64
 	DeleteFederatedSessionMock          mStorageMockDeleteFederatedSession
 
+	funcDeleteSSOSession          func(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID) (err error)
+	funcDeleteSSOSessionOrigin    string
+	inspectFuncDeleteSSOSession   func(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID)
+	afterDeleteSSOSessionCounter  uint64
+	beforeDeleteSSOSessionCounter uint64
+	DeleteSSOSessionMock          mStorageMockDeleteSSOSession
+
+	funcDeleteSSOSessionsByUser          func(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID) (err error)
+	funcDeleteSSOSessionsByUserOrigin    string
+	inspectFuncDeleteSSOSessionsByUser   func(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID)
+	afterDeleteSSOSessionsByUserCounter  uint64
+	beforeDeleteSSOSessionsByUserCounter uint64
+	DeleteSSOSessionsByUserMock          mStorageMockDeleteSSOSessionsByUser
+
 	funcFindFederatedSessionByUpstreamSubject          func(ctx context.Context, tenantUUID uuid.UUID, idpID uuid.UUID, upstreamSub string) (fp1 *model.FederatedSession, err error)
 	funcFindFederatedSessionByUpstreamSubjectOrigin    string
 	inspectFuncFindFederatedSessionByUpstreamSubject   func(ctx context.Context, tenantUUID uuid.UUID, idpID uuid.UUID, upstreamSub string)
@@ -42,6 +56,13 @@ type StorageMock struct {
 	afterFindProfileByEmailCounter  uint64
 	beforeFindProfileByEmailCounter uint64
 	FindProfileByEmailMock          mStorageMockFindProfileByEmail
+
+	funcGetActiveSSOSession          func(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, now time.Time) (sp1 *model.SSOSession, err error)
+	funcGetActiveSSOSessionOrigin    string
+	inspectFuncGetActiveSSOSession   func(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, now time.Time)
+	afterGetActiveSSOSessionCounter  uint64
+	beforeGetActiveSSOSessionCounter uint64
+	GetActiveSSOSessionMock          mStorageMockGetActiveSSOSession
 
 	funcGetAndConsumeAuthSession          func(ctx context.Context, tenantID uuid.UUID, code string) (ap1 *model.AuthorizationCodeSession, err error)
 	funcGetAndConsumeAuthSessionOrigin    string
@@ -421,12 +442,26 @@ type StorageMock struct {
 	beforeSaveRefreshTokenCounter uint64
 	SaveRefreshTokenMock          mStorageMockSaveRefreshToken
 
+	funcSaveSSOSession          func(ctx context.Context, session model.SSOSession, tokenHash []byte) (err error)
+	funcSaveSSOSessionOrigin    string
+	inspectFuncSaveSSOSession   func(ctx context.Context, session model.SSOSession, tokenHash []byte)
+	afterSaveSSOSessionCounter  uint64
+	beforeSaveSSOSessionCounter uint64
+	SaveSSOSessionMock          mStorageMockSaveSSOSession
+
 	funcSaveUserProfile          func(ctx context.Context, tenantID uuid.UUID, partitionID int64, profile model.UserProfile) (err error)
 	funcSaveUserProfileOrigin    string
 	inspectFuncSaveUserProfile   func(ctx context.Context, tenantID uuid.UUID, partitionID int64, profile model.UserProfile)
 	afterSaveUserProfileCounter  uint64
 	beforeSaveUserProfileCounter uint64
 	SaveUserProfileMock          mStorageMockSaveUserProfile
+
+	funcTouchSSOSession          func(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, lastSeenAt time.Time, idleExpiresAt time.Time) (err error)
+	funcTouchSSOSessionOrigin    string
+	inspectFuncTouchSSOSession   func(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, lastSeenAt time.Time, idleExpiresAt time.Time)
+	afterTouchSSOSessionCounter  uint64
+	beforeTouchSSOSessionCounter uint64
+	TouchSSOSessionMock          mStorageMockTouchSSOSession
 
 	funcTrackUserLogin          func(ctx context.Context, tenantID uuid.UUID, partitionID int64, profileID uuid.UUID, providerID uuid.UUID, externalSub string, loginTime time.Time) (err error)
 	funcTrackUserLoginOrigin    string
@@ -461,11 +496,20 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 	m.DeleteFederatedSessionMock = mStorageMockDeleteFederatedSession{mock: m}
 	m.DeleteFederatedSessionMock.callArgs = []*StorageMockDeleteFederatedSessionParams{}
 
+	m.DeleteSSOSessionMock = mStorageMockDeleteSSOSession{mock: m}
+	m.DeleteSSOSessionMock.callArgs = []*StorageMockDeleteSSOSessionParams{}
+
+	m.DeleteSSOSessionsByUserMock = mStorageMockDeleteSSOSessionsByUser{mock: m}
+	m.DeleteSSOSessionsByUserMock.callArgs = []*StorageMockDeleteSSOSessionsByUserParams{}
+
 	m.FindFederatedSessionByUpstreamSubjectMock = mStorageMockFindFederatedSessionByUpstreamSubject{mock: m}
 	m.FindFederatedSessionByUpstreamSubjectMock.callArgs = []*StorageMockFindFederatedSessionByUpstreamSubjectParams{}
 
 	m.FindProfileByEmailMock = mStorageMockFindProfileByEmail{mock: m}
 	m.FindProfileByEmailMock.callArgs = []*StorageMockFindProfileByEmailParams{}
+
+	m.GetActiveSSOSessionMock = mStorageMockGetActiveSSOSession{mock: m}
+	m.GetActiveSSOSessionMock.callArgs = []*StorageMockGetActiveSSOSessionParams{}
 
 	m.GetAndConsumeAuthSessionMock = mStorageMockGetAndConsumeAuthSession{mock: m}
 	m.GetAndConsumeAuthSessionMock.callArgs = []*StorageMockGetAndConsumeAuthSessionParams{}
@@ -629,8 +673,14 @@ func NewStorageMock(t minimock.Tester) *StorageMock {
 	m.SaveRefreshTokenMock = mStorageMockSaveRefreshToken{mock: m}
 	m.SaveRefreshTokenMock.callArgs = []*StorageMockSaveRefreshTokenParams{}
 
+	m.SaveSSOSessionMock = mStorageMockSaveSSOSession{mock: m}
+	m.SaveSSOSessionMock.callArgs = []*StorageMockSaveSSOSessionParams{}
+
 	m.SaveUserProfileMock = mStorageMockSaveUserProfile{mock: m}
 	m.SaveUserProfileMock.callArgs = []*StorageMockSaveUserProfileParams{}
+
+	m.TouchSSOSessionMock = mStorageMockTouchSSOSession{mock: m}
+	m.TouchSSOSessionMock.callArgs = []*StorageMockTouchSSOSessionParams{}
 
 	m.TrackUserLoginMock = mStorageMockTrackUserLogin{mock: m}
 	m.TrackUserLoginMock.callArgs = []*StorageMockTrackUserLoginParams{}
@@ -1047,6 +1097,752 @@ func (m *StorageMock) MinimockDeleteFederatedSessionInspect() {
 	if !m.DeleteFederatedSessionMock.invocationsDone() && afterDeleteFederatedSessionCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageMock.DeleteFederatedSession at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.DeleteFederatedSessionMock.expectedInvocations), m.DeleteFederatedSessionMock.expectedInvocationsOrigin, afterDeleteFederatedSessionCounter)
+	}
+}
+
+type mStorageMockDeleteSSOSession struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockDeleteSSOSessionExpectation
+	expectations       []*StorageMockDeleteSSOSessionExpectation
+
+	callArgs []*StorageMockDeleteSSOSessionParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockDeleteSSOSessionExpectation specifies expectation struct of the Storage.DeleteSSOSession
+type StorageMockDeleteSSOSessionExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockDeleteSSOSessionParams
+	paramPtrs          *StorageMockDeleteSSOSessionParamPtrs
+	expectationOrigins StorageMockDeleteSSOSessionExpectationOrigins
+	results            *StorageMockDeleteSSOSessionResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockDeleteSSOSessionParams contains parameters of the Storage.DeleteSSOSession
+type StorageMockDeleteSSOSessionParams struct {
+	ctx       context.Context
+	tenantID  uuid.UUID
+	sessionID uuid.UUID
+}
+
+// StorageMockDeleteSSOSessionParamPtrs contains pointers to parameters of the Storage.DeleteSSOSession
+type StorageMockDeleteSSOSessionParamPtrs struct {
+	ctx       *context.Context
+	tenantID  *uuid.UUID
+	sessionID *uuid.UUID
+}
+
+// StorageMockDeleteSSOSessionResults contains results of the Storage.DeleteSSOSession
+type StorageMockDeleteSSOSessionResults struct {
+	err error
+}
+
+// StorageMockDeleteSSOSessionOrigins contains origins of expectations of the Storage.DeleteSSOSession
+type StorageMockDeleteSSOSessionExpectationOrigins struct {
+	origin          string
+	originCtx       string
+	originTenantID  string
+	originSessionID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmDeleteSSOSession *mStorageMockDeleteSSOSession) Optional() *mStorageMockDeleteSSOSession {
+	mmDeleteSSOSession.optional = true
+	return mmDeleteSSOSession
+}
+
+// Expect sets up expected params for Storage.DeleteSSOSession
+func (mmDeleteSSOSession *mStorageMockDeleteSSOSession) Expect(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID) *mStorageMockDeleteSSOSession {
+	if mmDeleteSSOSession.mock.funcDeleteSSOSession != nil {
+		mmDeleteSSOSession.mock.t.Fatalf("StorageMock.DeleteSSOSession mock is already set by Set")
+	}
+
+	if mmDeleteSSOSession.defaultExpectation == nil {
+		mmDeleteSSOSession.defaultExpectation = &StorageMockDeleteSSOSessionExpectation{}
+	}
+
+	if mmDeleteSSOSession.defaultExpectation.paramPtrs != nil {
+		mmDeleteSSOSession.mock.t.Fatalf("StorageMock.DeleteSSOSession mock is already set by ExpectParams functions")
+	}
+
+	mmDeleteSSOSession.defaultExpectation.params = &StorageMockDeleteSSOSessionParams{ctx, tenantID, sessionID}
+	mmDeleteSSOSession.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmDeleteSSOSession.expectations {
+		if minimock.Equal(e.params, mmDeleteSSOSession.defaultExpectation.params) {
+			mmDeleteSSOSession.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmDeleteSSOSession.defaultExpectation.params)
+		}
+	}
+
+	return mmDeleteSSOSession
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.DeleteSSOSession
+func (mmDeleteSSOSession *mStorageMockDeleteSSOSession) ExpectCtxParam1(ctx context.Context) *mStorageMockDeleteSSOSession {
+	if mmDeleteSSOSession.mock.funcDeleteSSOSession != nil {
+		mmDeleteSSOSession.mock.t.Fatalf("StorageMock.DeleteSSOSession mock is already set by Set")
+	}
+
+	if mmDeleteSSOSession.defaultExpectation == nil {
+		mmDeleteSSOSession.defaultExpectation = &StorageMockDeleteSSOSessionExpectation{}
+	}
+
+	if mmDeleteSSOSession.defaultExpectation.params != nil {
+		mmDeleteSSOSession.mock.t.Fatalf("StorageMock.DeleteSSOSession mock is already set by Expect")
+	}
+
+	if mmDeleteSSOSession.defaultExpectation.paramPtrs == nil {
+		mmDeleteSSOSession.defaultExpectation.paramPtrs = &StorageMockDeleteSSOSessionParamPtrs{}
+	}
+	mmDeleteSSOSession.defaultExpectation.paramPtrs.ctx = &ctx
+	mmDeleteSSOSession.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmDeleteSSOSession
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.DeleteSSOSession
+func (mmDeleteSSOSession *mStorageMockDeleteSSOSession) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockDeleteSSOSession {
+	if mmDeleteSSOSession.mock.funcDeleteSSOSession != nil {
+		mmDeleteSSOSession.mock.t.Fatalf("StorageMock.DeleteSSOSession mock is already set by Set")
+	}
+
+	if mmDeleteSSOSession.defaultExpectation == nil {
+		mmDeleteSSOSession.defaultExpectation = &StorageMockDeleteSSOSessionExpectation{}
+	}
+
+	if mmDeleteSSOSession.defaultExpectation.params != nil {
+		mmDeleteSSOSession.mock.t.Fatalf("StorageMock.DeleteSSOSession mock is already set by Expect")
+	}
+
+	if mmDeleteSSOSession.defaultExpectation.paramPtrs == nil {
+		mmDeleteSSOSession.defaultExpectation.paramPtrs = &StorageMockDeleteSSOSessionParamPtrs{}
+	}
+	mmDeleteSSOSession.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmDeleteSSOSession.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmDeleteSSOSession
+}
+
+// ExpectSessionIDParam3 sets up expected param sessionID for Storage.DeleteSSOSession
+func (mmDeleteSSOSession *mStorageMockDeleteSSOSession) ExpectSessionIDParam3(sessionID uuid.UUID) *mStorageMockDeleteSSOSession {
+	if mmDeleteSSOSession.mock.funcDeleteSSOSession != nil {
+		mmDeleteSSOSession.mock.t.Fatalf("StorageMock.DeleteSSOSession mock is already set by Set")
+	}
+
+	if mmDeleteSSOSession.defaultExpectation == nil {
+		mmDeleteSSOSession.defaultExpectation = &StorageMockDeleteSSOSessionExpectation{}
+	}
+
+	if mmDeleteSSOSession.defaultExpectation.params != nil {
+		mmDeleteSSOSession.mock.t.Fatalf("StorageMock.DeleteSSOSession mock is already set by Expect")
+	}
+
+	if mmDeleteSSOSession.defaultExpectation.paramPtrs == nil {
+		mmDeleteSSOSession.defaultExpectation.paramPtrs = &StorageMockDeleteSSOSessionParamPtrs{}
+	}
+	mmDeleteSSOSession.defaultExpectation.paramPtrs.sessionID = &sessionID
+	mmDeleteSSOSession.defaultExpectation.expectationOrigins.originSessionID = minimock.CallerInfo(1)
+
+	return mmDeleteSSOSession
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.DeleteSSOSession
+func (mmDeleteSSOSession *mStorageMockDeleteSSOSession) Inspect(f func(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID)) *mStorageMockDeleteSSOSession {
+	if mmDeleteSSOSession.mock.inspectFuncDeleteSSOSession != nil {
+		mmDeleteSSOSession.mock.t.Fatalf("Inspect function is already set for StorageMock.DeleteSSOSession")
+	}
+
+	mmDeleteSSOSession.mock.inspectFuncDeleteSSOSession = f
+
+	return mmDeleteSSOSession
+}
+
+// Return sets up results that will be returned by Storage.DeleteSSOSession
+func (mmDeleteSSOSession *mStorageMockDeleteSSOSession) Return(err error) *StorageMock {
+	if mmDeleteSSOSession.mock.funcDeleteSSOSession != nil {
+		mmDeleteSSOSession.mock.t.Fatalf("StorageMock.DeleteSSOSession mock is already set by Set")
+	}
+
+	if mmDeleteSSOSession.defaultExpectation == nil {
+		mmDeleteSSOSession.defaultExpectation = &StorageMockDeleteSSOSessionExpectation{mock: mmDeleteSSOSession.mock}
+	}
+	mmDeleteSSOSession.defaultExpectation.results = &StorageMockDeleteSSOSessionResults{err}
+	mmDeleteSSOSession.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmDeleteSSOSession.mock
+}
+
+// Set uses given function f to mock the Storage.DeleteSSOSession method
+func (mmDeleteSSOSession *mStorageMockDeleteSSOSession) Set(f func(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID) (err error)) *StorageMock {
+	if mmDeleteSSOSession.defaultExpectation != nil {
+		mmDeleteSSOSession.mock.t.Fatalf("Default expectation is already set for the Storage.DeleteSSOSession method")
+	}
+
+	if len(mmDeleteSSOSession.expectations) > 0 {
+		mmDeleteSSOSession.mock.t.Fatalf("Some expectations are already set for the Storage.DeleteSSOSession method")
+	}
+
+	mmDeleteSSOSession.mock.funcDeleteSSOSession = f
+	mmDeleteSSOSession.mock.funcDeleteSSOSessionOrigin = minimock.CallerInfo(1)
+	return mmDeleteSSOSession.mock
+}
+
+// When sets expectation for the Storage.DeleteSSOSession which will trigger the result defined by the following
+// Then helper
+func (mmDeleteSSOSession *mStorageMockDeleteSSOSession) When(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID) *StorageMockDeleteSSOSessionExpectation {
+	if mmDeleteSSOSession.mock.funcDeleteSSOSession != nil {
+		mmDeleteSSOSession.mock.t.Fatalf("StorageMock.DeleteSSOSession mock is already set by Set")
+	}
+
+	expectation := &StorageMockDeleteSSOSessionExpectation{
+		mock:               mmDeleteSSOSession.mock,
+		params:             &StorageMockDeleteSSOSessionParams{ctx, tenantID, sessionID},
+		expectationOrigins: StorageMockDeleteSSOSessionExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmDeleteSSOSession.expectations = append(mmDeleteSSOSession.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.DeleteSSOSession return parameters for the expectation previously defined by the When method
+func (e *StorageMockDeleteSSOSessionExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockDeleteSSOSessionResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.DeleteSSOSession should be invoked
+func (mmDeleteSSOSession *mStorageMockDeleteSSOSession) Times(n uint64) *mStorageMockDeleteSSOSession {
+	if n == 0 {
+		mmDeleteSSOSession.mock.t.Fatalf("Times of StorageMock.DeleteSSOSession mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmDeleteSSOSession.expectedInvocations, n)
+	mmDeleteSSOSession.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmDeleteSSOSession
+}
+
+func (mmDeleteSSOSession *mStorageMockDeleteSSOSession) invocationsDone() bool {
+	if len(mmDeleteSSOSession.expectations) == 0 && mmDeleteSSOSession.defaultExpectation == nil && mmDeleteSSOSession.mock.funcDeleteSSOSession == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmDeleteSSOSession.mock.afterDeleteSSOSessionCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmDeleteSSOSession.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// DeleteSSOSession implements mm_port.Storage
+func (mmDeleteSSOSession *StorageMock) DeleteSSOSession(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID) (err error) {
+	mm_atomic.AddUint64(&mmDeleteSSOSession.beforeDeleteSSOSessionCounter, 1)
+	defer mm_atomic.AddUint64(&mmDeleteSSOSession.afterDeleteSSOSessionCounter, 1)
+
+	mmDeleteSSOSession.t.Helper()
+
+	if mmDeleteSSOSession.inspectFuncDeleteSSOSession != nil {
+		mmDeleteSSOSession.inspectFuncDeleteSSOSession(ctx, tenantID, sessionID)
+	}
+
+	mm_params := StorageMockDeleteSSOSessionParams{ctx, tenantID, sessionID}
+
+	// Record call args
+	mmDeleteSSOSession.DeleteSSOSessionMock.mutex.Lock()
+	mmDeleteSSOSession.DeleteSSOSessionMock.callArgs = append(mmDeleteSSOSession.DeleteSSOSessionMock.callArgs, &mm_params)
+	mmDeleteSSOSession.DeleteSSOSessionMock.mutex.Unlock()
+
+	for _, e := range mmDeleteSSOSession.DeleteSSOSessionMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmDeleteSSOSession.DeleteSSOSessionMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmDeleteSSOSession.DeleteSSOSessionMock.defaultExpectation.Counter, 1)
+		mm_want := mmDeleteSSOSession.DeleteSSOSessionMock.defaultExpectation.params
+		mm_want_ptrs := mmDeleteSSOSession.DeleteSSOSessionMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockDeleteSSOSessionParams{ctx, tenantID, sessionID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmDeleteSSOSession.t.Errorf("StorageMock.DeleteSSOSession got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteSSOSession.DeleteSSOSessionMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmDeleteSSOSession.t.Errorf("StorageMock.DeleteSSOSession got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteSSOSession.DeleteSSOSessionMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.sessionID != nil && !minimock.Equal(*mm_want_ptrs.sessionID, mm_got.sessionID) {
+				mmDeleteSSOSession.t.Errorf("StorageMock.DeleteSSOSession got unexpected parameter sessionID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteSSOSession.DeleteSSOSessionMock.defaultExpectation.expectationOrigins.originSessionID, *mm_want_ptrs.sessionID, mm_got.sessionID, minimock.Diff(*mm_want_ptrs.sessionID, mm_got.sessionID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmDeleteSSOSession.t.Errorf("StorageMock.DeleteSSOSession got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmDeleteSSOSession.DeleteSSOSessionMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmDeleteSSOSession.DeleteSSOSessionMock.defaultExpectation.results
+		if mm_results == nil {
+			mmDeleteSSOSession.t.Fatal("No results are set for the StorageMock.DeleteSSOSession")
+		}
+		return (*mm_results).err
+	}
+	if mmDeleteSSOSession.funcDeleteSSOSession != nil {
+		return mmDeleteSSOSession.funcDeleteSSOSession(ctx, tenantID, sessionID)
+	}
+	mmDeleteSSOSession.t.Fatalf("Unexpected call to StorageMock.DeleteSSOSession. %v %v %v", ctx, tenantID, sessionID)
+	return
+}
+
+// DeleteSSOSessionAfterCounter returns a count of finished StorageMock.DeleteSSOSession invocations
+func (mmDeleteSSOSession *StorageMock) DeleteSSOSessionAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteSSOSession.afterDeleteSSOSessionCounter)
+}
+
+// DeleteSSOSessionBeforeCounter returns a count of StorageMock.DeleteSSOSession invocations
+func (mmDeleteSSOSession *StorageMock) DeleteSSOSessionBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteSSOSession.beforeDeleteSSOSessionCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.DeleteSSOSession.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmDeleteSSOSession *mStorageMockDeleteSSOSession) Calls() []*StorageMockDeleteSSOSessionParams {
+	mmDeleteSSOSession.mutex.RLock()
+
+	argCopy := make([]*StorageMockDeleteSSOSessionParams, len(mmDeleteSSOSession.callArgs))
+	copy(argCopy, mmDeleteSSOSession.callArgs)
+
+	mmDeleteSSOSession.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockDeleteSSOSessionDone returns true if the count of the DeleteSSOSession invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockDeleteSSOSessionDone() bool {
+	if m.DeleteSSOSessionMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.DeleteSSOSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.DeleteSSOSessionMock.invocationsDone()
+}
+
+// MinimockDeleteSSOSessionInspect logs each unmet expectation
+func (m *StorageMock) MinimockDeleteSSOSessionInspect() {
+	for _, e := range m.DeleteSSOSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.DeleteSSOSession at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterDeleteSSOSessionCounter := mm_atomic.LoadUint64(&m.afterDeleteSSOSessionCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.DeleteSSOSessionMock.defaultExpectation != nil && afterDeleteSSOSessionCounter < 1 {
+		if m.DeleteSSOSessionMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.DeleteSSOSession at\n%s", m.DeleteSSOSessionMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.DeleteSSOSession at\n%s with params: %#v", m.DeleteSSOSessionMock.defaultExpectation.expectationOrigins.origin, *m.DeleteSSOSessionMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcDeleteSSOSession != nil && afterDeleteSSOSessionCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.DeleteSSOSession at\n%s", m.funcDeleteSSOSessionOrigin)
+	}
+
+	if !m.DeleteSSOSessionMock.invocationsDone() && afterDeleteSSOSessionCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.DeleteSSOSession at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.DeleteSSOSessionMock.expectedInvocations), m.DeleteSSOSessionMock.expectedInvocationsOrigin, afterDeleteSSOSessionCounter)
+	}
+}
+
+type mStorageMockDeleteSSOSessionsByUser struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockDeleteSSOSessionsByUserExpectation
+	expectations       []*StorageMockDeleteSSOSessionsByUserExpectation
+
+	callArgs []*StorageMockDeleteSSOSessionsByUserParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockDeleteSSOSessionsByUserExpectation specifies expectation struct of the Storage.DeleteSSOSessionsByUser
+type StorageMockDeleteSSOSessionsByUserExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockDeleteSSOSessionsByUserParams
+	paramPtrs          *StorageMockDeleteSSOSessionsByUserParamPtrs
+	expectationOrigins StorageMockDeleteSSOSessionsByUserExpectationOrigins
+	results            *StorageMockDeleteSSOSessionsByUserResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockDeleteSSOSessionsByUserParams contains parameters of the Storage.DeleteSSOSessionsByUser
+type StorageMockDeleteSSOSessionsByUserParams struct {
+	ctx           context.Context
+	tenantID      uuid.UUID
+	userProfileID uuid.UUID
+}
+
+// StorageMockDeleteSSOSessionsByUserParamPtrs contains pointers to parameters of the Storage.DeleteSSOSessionsByUser
+type StorageMockDeleteSSOSessionsByUserParamPtrs struct {
+	ctx           *context.Context
+	tenantID      *uuid.UUID
+	userProfileID *uuid.UUID
+}
+
+// StorageMockDeleteSSOSessionsByUserResults contains results of the Storage.DeleteSSOSessionsByUser
+type StorageMockDeleteSSOSessionsByUserResults struct {
+	err error
+}
+
+// StorageMockDeleteSSOSessionsByUserOrigins contains origins of expectations of the Storage.DeleteSSOSessionsByUser
+type StorageMockDeleteSSOSessionsByUserExpectationOrigins struct {
+	origin              string
+	originCtx           string
+	originTenantID      string
+	originUserProfileID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmDeleteSSOSessionsByUser *mStorageMockDeleteSSOSessionsByUser) Optional() *mStorageMockDeleteSSOSessionsByUser {
+	mmDeleteSSOSessionsByUser.optional = true
+	return mmDeleteSSOSessionsByUser
+}
+
+// Expect sets up expected params for Storage.DeleteSSOSessionsByUser
+func (mmDeleteSSOSessionsByUser *mStorageMockDeleteSSOSessionsByUser) Expect(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID) *mStorageMockDeleteSSOSessionsByUser {
+	if mmDeleteSSOSessionsByUser.mock.funcDeleteSSOSessionsByUser != nil {
+		mmDeleteSSOSessionsByUser.mock.t.Fatalf("StorageMock.DeleteSSOSessionsByUser mock is already set by Set")
+	}
+
+	if mmDeleteSSOSessionsByUser.defaultExpectation == nil {
+		mmDeleteSSOSessionsByUser.defaultExpectation = &StorageMockDeleteSSOSessionsByUserExpectation{}
+	}
+
+	if mmDeleteSSOSessionsByUser.defaultExpectation.paramPtrs != nil {
+		mmDeleteSSOSessionsByUser.mock.t.Fatalf("StorageMock.DeleteSSOSessionsByUser mock is already set by ExpectParams functions")
+	}
+
+	mmDeleteSSOSessionsByUser.defaultExpectation.params = &StorageMockDeleteSSOSessionsByUserParams{ctx, tenantID, userProfileID}
+	mmDeleteSSOSessionsByUser.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmDeleteSSOSessionsByUser.expectations {
+		if minimock.Equal(e.params, mmDeleteSSOSessionsByUser.defaultExpectation.params) {
+			mmDeleteSSOSessionsByUser.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmDeleteSSOSessionsByUser.defaultExpectation.params)
+		}
+	}
+
+	return mmDeleteSSOSessionsByUser
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.DeleteSSOSessionsByUser
+func (mmDeleteSSOSessionsByUser *mStorageMockDeleteSSOSessionsByUser) ExpectCtxParam1(ctx context.Context) *mStorageMockDeleteSSOSessionsByUser {
+	if mmDeleteSSOSessionsByUser.mock.funcDeleteSSOSessionsByUser != nil {
+		mmDeleteSSOSessionsByUser.mock.t.Fatalf("StorageMock.DeleteSSOSessionsByUser mock is already set by Set")
+	}
+
+	if mmDeleteSSOSessionsByUser.defaultExpectation == nil {
+		mmDeleteSSOSessionsByUser.defaultExpectation = &StorageMockDeleteSSOSessionsByUserExpectation{}
+	}
+
+	if mmDeleteSSOSessionsByUser.defaultExpectation.params != nil {
+		mmDeleteSSOSessionsByUser.mock.t.Fatalf("StorageMock.DeleteSSOSessionsByUser mock is already set by Expect")
+	}
+
+	if mmDeleteSSOSessionsByUser.defaultExpectation.paramPtrs == nil {
+		mmDeleteSSOSessionsByUser.defaultExpectation.paramPtrs = &StorageMockDeleteSSOSessionsByUserParamPtrs{}
+	}
+	mmDeleteSSOSessionsByUser.defaultExpectation.paramPtrs.ctx = &ctx
+	mmDeleteSSOSessionsByUser.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmDeleteSSOSessionsByUser
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.DeleteSSOSessionsByUser
+func (mmDeleteSSOSessionsByUser *mStorageMockDeleteSSOSessionsByUser) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockDeleteSSOSessionsByUser {
+	if mmDeleteSSOSessionsByUser.mock.funcDeleteSSOSessionsByUser != nil {
+		mmDeleteSSOSessionsByUser.mock.t.Fatalf("StorageMock.DeleteSSOSessionsByUser mock is already set by Set")
+	}
+
+	if mmDeleteSSOSessionsByUser.defaultExpectation == nil {
+		mmDeleteSSOSessionsByUser.defaultExpectation = &StorageMockDeleteSSOSessionsByUserExpectation{}
+	}
+
+	if mmDeleteSSOSessionsByUser.defaultExpectation.params != nil {
+		mmDeleteSSOSessionsByUser.mock.t.Fatalf("StorageMock.DeleteSSOSessionsByUser mock is already set by Expect")
+	}
+
+	if mmDeleteSSOSessionsByUser.defaultExpectation.paramPtrs == nil {
+		mmDeleteSSOSessionsByUser.defaultExpectation.paramPtrs = &StorageMockDeleteSSOSessionsByUserParamPtrs{}
+	}
+	mmDeleteSSOSessionsByUser.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmDeleteSSOSessionsByUser.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmDeleteSSOSessionsByUser
+}
+
+// ExpectUserProfileIDParam3 sets up expected param userProfileID for Storage.DeleteSSOSessionsByUser
+func (mmDeleteSSOSessionsByUser *mStorageMockDeleteSSOSessionsByUser) ExpectUserProfileIDParam3(userProfileID uuid.UUID) *mStorageMockDeleteSSOSessionsByUser {
+	if mmDeleteSSOSessionsByUser.mock.funcDeleteSSOSessionsByUser != nil {
+		mmDeleteSSOSessionsByUser.mock.t.Fatalf("StorageMock.DeleteSSOSessionsByUser mock is already set by Set")
+	}
+
+	if mmDeleteSSOSessionsByUser.defaultExpectation == nil {
+		mmDeleteSSOSessionsByUser.defaultExpectation = &StorageMockDeleteSSOSessionsByUserExpectation{}
+	}
+
+	if mmDeleteSSOSessionsByUser.defaultExpectation.params != nil {
+		mmDeleteSSOSessionsByUser.mock.t.Fatalf("StorageMock.DeleteSSOSessionsByUser mock is already set by Expect")
+	}
+
+	if mmDeleteSSOSessionsByUser.defaultExpectation.paramPtrs == nil {
+		mmDeleteSSOSessionsByUser.defaultExpectation.paramPtrs = &StorageMockDeleteSSOSessionsByUserParamPtrs{}
+	}
+	mmDeleteSSOSessionsByUser.defaultExpectation.paramPtrs.userProfileID = &userProfileID
+	mmDeleteSSOSessionsByUser.defaultExpectation.expectationOrigins.originUserProfileID = minimock.CallerInfo(1)
+
+	return mmDeleteSSOSessionsByUser
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.DeleteSSOSessionsByUser
+func (mmDeleteSSOSessionsByUser *mStorageMockDeleteSSOSessionsByUser) Inspect(f func(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID)) *mStorageMockDeleteSSOSessionsByUser {
+	if mmDeleteSSOSessionsByUser.mock.inspectFuncDeleteSSOSessionsByUser != nil {
+		mmDeleteSSOSessionsByUser.mock.t.Fatalf("Inspect function is already set for StorageMock.DeleteSSOSessionsByUser")
+	}
+
+	mmDeleteSSOSessionsByUser.mock.inspectFuncDeleteSSOSessionsByUser = f
+
+	return mmDeleteSSOSessionsByUser
+}
+
+// Return sets up results that will be returned by Storage.DeleteSSOSessionsByUser
+func (mmDeleteSSOSessionsByUser *mStorageMockDeleteSSOSessionsByUser) Return(err error) *StorageMock {
+	if mmDeleteSSOSessionsByUser.mock.funcDeleteSSOSessionsByUser != nil {
+		mmDeleteSSOSessionsByUser.mock.t.Fatalf("StorageMock.DeleteSSOSessionsByUser mock is already set by Set")
+	}
+
+	if mmDeleteSSOSessionsByUser.defaultExpectation == nil {
+		mmDeleteSSOSessionsByUser.defaultExpectation = &StorageMockDeleteSSOSessionsByUserExpectation{mock: mmDeleteSSOSessionsByUser.mock}
+	}
+	mmDeleteSSOSessionsByUser.defaultExpectation.results = &StorageMockDeleteSSOSessionsByUserResults{err}
+	mmDeleteSSOSessionsByUser.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmDeleteSSOSessionsByUser.mock
+}
+
+// Set uses given function f to mock the Storage.DeleteSSOSessionsByUser method
+func (mmDeleteSSOSessionsByUser *mStorageMockDeleteSSOSessionsByUser) Set(f func(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID) (err error)) *StorageMock {
+	if mmDeleteSSOSessionsByUser.defaultExpectation != nil {
+		mmDeleteSSOSessionsByUser.mock.t.Fatalf("Default expectation is already set for the Storage.DeleteSSOSessionsByUser method")
+	}
+
+	if len(mmDeleteSSOSessionsByUser.expectations) > 0 {
+		mmDeleteSSOSessionsByUser.mock.t.Fatalf("Some expectations are already set for the Storage.DeleteSSOSessionsByUser method")
+	}
+
+	mmDeleteSSOSessionsByUser.mock.funcDeleteSSOSessionsByUser = f
+	mmDeleteSSOSessionsByUser.mock.funcDeleteSSOSessionsByUserOrigin = minimock.CallerInfo(1)
+	return mmDeleteSSOSessionsByUser.mock
+}
+
+// When sets expectation for the Storage.DeleteSSOSessionsByUser which will trigger the result defined by the following
+// Then helper
+func (mmDeleteSSOSessionsByUser *mStorageMockDeleteSSOSessionsByUser) When(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID) *StorageMockDeleteSSOSessionsByUserExpectation {
+	if mmDeleteSSOSessionsByUser.mock.funcDeleteSSOSessionsByUser != nil {
+		mmDeleteSSOSessionsByUser.mock.t.Fatalf("StorageMock.DeleteSSOSessionsByUser mock is already set by Set")
+	}
+
+	expectation := &StorageMockDeleteSSOSessionsByUserExpectation{
+		mock:               mmDeleteSSOSessionsByUser.mock,
+		params:             &StorageMockDeleteSSOSessionsByUserParams{ctx, tenantID, userProfileID},
+		expectationOrigins: StorageMockDeleteSSOSessionsByUserExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmDeleteSSOSessionsByUser.expectations = append(mmDeleteSSOSessionsByUser.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.DeleteSSOSessionsByUser return parameters for the expectation previously defined by the When method
+func (e *StorageMockDeleteSSOSessionsByUserExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockDeleteSSOSessionsByUserResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.DeleteSSOSessionsByUser should be invoked
+func (mmDeleteSSOSessionsByUser *mStorageMockDeleteSSOSessionsByUser) Times(n uint64) *mStorageMockDeleteSSOSessionsByUser {
+	if n == 0 {
+		mmDeleteSSOSessionsByUser.mock.t.Fatalf("Times of StorageMock.DeleteSSOSessionsByUser mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmDeleteSSOSessionsByUser.expectedInvocations, n)
+	mmDeleteSSOSessionsByUser.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmDeleteSSOSessionsByUser
+}
+
+func (mmDeleteSSOSessionsByUser *mStorageMockDeleteSSOSessionsByUser) invocationsDone() bool {
+	if len(mmDeleteSSOSessionsByUser.expectations) == 0 && mmDeleteSSOSessionsByUser.defaultExpectation == nil && mmDeleteSSOSessionsByUser.mock.funcDeleteSSOSessionsByUser == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmDeleteSSOSessionsByUser.mock.afterDeleteSSOSessionsByUserCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmDeleteSSOSessionsByUser.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// DeleteSSOSessionsByUser implements mm_port.Storage
+func (mmDeleteSSOSessionsByUser *StorageMock) DeleteSSOSessionsByUser(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID) (err error) {
+	mm_atomic.AddUint64(&mmDeleteSSOSessionsByUser.beforeDeleteSSOSessionsByUserCounter, 1)
+	defer mm_atomic.AddUint64(&mmDeleteSSOSessionsByUser.afterDeleteSSOSessionsByUserCounter, 1)
+
+	mmDeleteSSOSessionsByUser.t.Helper()
+
+	if mmDeleteSSOSessionsByUser.inspectFuncDeleteSSOSessionsByUser != nil {
+		mmDeleteSSOSessionsByUser.inspectFuncDeleteSSOSessionsByUser(ctx, tenantID, userProfileID)
+	}
+
+	mm_params := StorageMockDeleteSSOSessionsByUserParams{ctx, tenantID, userProfileID}
+
+	// Record call args
+	mmDeleteSSOSessionsByUser.DeleteSSOSessionsByUserMock.mutex.Lock()
+	mmDeleteSSOSessionsByUser.DeleteSSOSessionsByUserMock.callArgs = append(mmDeleteSSOSessionsByUser.DeleteSSOSessionsByUserMock.callArgs, &mm_params)
+	mmDeleteSSOSessionsByUser.DeleteSSOSessionsByUserMock.mutex.Unlock()
+
+	for _, e := range mmDeleteSSOSessionsByUser.DeleteSSOSessionsByUserMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmDeleteSSOSessionsByUser.DeleteSSOSessionsByUserMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmDeleteSSOSessionsByUser.DeleteSSOSessionsByUserMock.defaultExpectation.Counter, 1)
+		mm_want := mmDeleteSSOSessionsByUser.DeleteSSOSessionsByUserMock.defaultExpectation.params
+		mm_want_ptrs := mmDeleteSSOSessionsByUser.DeleteSSOSessionsByUserMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockDeleteSSOSessionsByUserParams{ctx, tenantID, userProfileID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmDeleteSSOSessionsByUser.t.Errorf("StorageMock.DeleteSSOSessionsByUser got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteSSOSessionsByUser.DeleteSSOSessionsByUserMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmDeleteSSOSessionsByUser.t.Errorf("StorageMock.DeleteSSOSessionsByUser got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteSSOSessionsByUser.DeleteSSOSessionsByUserMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.userProfileID != nil && !minimock.Equal(*mm_want_ptrs.userProfileID, mm_got.userProfileID) {
+				mmDeleteSSOSessionsByUser.t.Errorf("StorageMock.DeleteSSOSessionsByUser got unexpected parameter userProfileID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteSSOSessionsByUser.DeleteSSOSessionsByUserMock.defaultExpectation.expectationOrigins.originUserProfileID, *mm_want_ptrs.userProfileID, mm_got.userProfileID, minimock.Diff(*mm_want_ptrs.userProfileID, mm_got.userProfileID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmDeleteSSOSessionsByUser.t.Errorf("StorageMock.DeleteSSOSessionsByUser got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmDeleteSSOSessionsByUser.DeleteSSOSessionsByUserMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmDeleteSSOSessionsByUser.DeleteSSOSessionsByUserMock.defaultExpectation.results
+		if mm_results == nil {
+			mmDeleteSSOSessionsByUser.t.Fatal("No results are set for the StorageMock.DeleteSSOSessionsByUser")
+		}
+		return (*mm_results).err
+	}
+	if mmDeleteSSOSessionsByUser.funcDeleteSSOSessionsByUser != nil {
+		return mmDeleteSSOSessionsByUser.funcDeleteSSOSessionsByUser(ctx, tenantID, userProfileID)
+	}
+	mmDeleteSSOSessionsByUser.t.Fatalf("Unexpected call to StorageMock.DeleteSSOSessionsByUser. %v %v %v", ctx, tenantID, userProfileID)
+	return
+}
+
+// DeleteSSOSessionsByUserAfterCounter returns a count of finished StorageMock.DeleteSSOSessionsByUser invocations
+func (mmDeleteSSOSessionsByUser *StorageMock) DeleteSSOSessionsByUserAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteSSOSessionsByUser.afterDeleteSSOSessionsByUserCounter)
+}
+
+// DeleteSSOSessionsByUserBeforeCounter returns a count of StorageMock.DeleteSSOSessionsByUser invocations
+func (mmDeleteSSOSessionsByUser *StorageMock) DeleteSSOSessionsByUserBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteSSOSessionsByUser.beforeDeleteSSOSessionsByUserCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.DeleteSSOSessionsByUser.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmDeleteSSOSessionsByUser *mStorageMockDeleteSSOSessionsByUser) Calls() []*StorageMockDeleteSSOSessionsByUserParams {
+	mmDeleteSSOSessionsByUser.mutex.RLock()
+
+	argCopy := make([]*StorageMockDeleteSSOSessionsByUserParams, len(mmDeleteSSOSessionsByUser.callArgs))
+	copy(argCopy, mmDeleteSSOSessionsByUser.callArgs)
+
+	mmDeleteSSOSessionsByUser.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockDeleteSSOSessionsByUserDone returns true if the count of the DeleteSSOSessionsByUser invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockDeleteSSOSessionsByUserDone() bool {
+	if m.DeleteSSOSessionsByUserMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.DeleteSSOSessionsByUserMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.DeleteSSOSessionsByUserMock.invocationsDone()
+}
+
+// MinimockDeleteSSOSessionsByUserInspect logs each unmet expectation
+func (m *StorageMock) MinimockDeleteSSOSessionsByUserInspect() {
+	for _, e := range m.DeleteSSOSessionsByUserMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.DeleteSSOSessionsByUser at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterDeleteSSOSessionsByUserCounter := mm_atomic.LoadUint64(&m.afterDeleteSSOSessionsByUserCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.DeleteSSOSessionsByUserMock.defaultExpectation != nil && afterDeleteSSOSessionsByUserCounter < 1 {
+		if m.DeleteSSOSessionsByUserMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.DeleteSSOSessionsByUser at\n%s", m.DeleteSSOSessionsByUserMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.DeleteSSOSessionsByUser at\n%s with params: %#v", m.DeleteSSOSessionsByUserMock.defaultExpectation.expectationOrigins.origin, *m.DeleteSSOSessionsByUserMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcDeleteSSOSessionsByUser != nil && afterDeleteSSOSessionsByUserCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.DeleteSSOSessionsByUser at\n%s", m.funcDeleteSSOSessionsByUserOrigin)
+	}
+
+	if !m.DeleteSSOSessionsByUserMock.invocationsDone() && afterDeleteSSOSessionsByUserCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.DeleteSSOSessionsByUser at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.DeleteSSOSessionsByUserMock.expectedInvocations), m.DeleteSSOSessionsByUserMock.expectedInvocationsOrigin, afterDeleteSSOSessionsByUserCounter)
 	}
 }
 
@@ -1857,6 +2653,411 @@ func (m *StorageMock) MinimockFindProfileByEmailInspect() {
 	if !m.FindProfileByEmailMock.invocationsDone() && afterFindProfileByEmailCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageMock.FindProfileByEmail at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.FindProfileByEmailMock.expectedInvocations), m.FindProfileByEmailMock.expectedInvocationsOrigin, afterFindProfileByEmailCounter)
+	}
+}
+
+type mStorageMockGetActiveSSOSession struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockGetActiveSSOSessionExpectation
+	expectations       []*StorageMockGetActiveSSOSessionExpectation
+
+	callArgs []*StorageMockGetActiveSSOSessionParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockGetActiveSSOSessionExpectation specifies expectation struct of the Storage.GetActiveSSOSession
+type StorageMockGetActiveSSOSessionExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockGetActiveSSOSessionParams
+	paramPtrs          *StorageMockGetActiveSSOSessionParamPtrs
+	expectationOrigins StorageMockGetActiveSSOSessionExpectationOrigins
+	results            *StorageMockGetActiveSSOSessionResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockGetActiveSSOSessionParams contains parameters of the Storage.GetActiveSSOSession
+type StorageMockGetActiveSSOSessionParams struct {
+	ctx       context.Context
+	tenantID  uuid.UUID
+	tokenHash []byte
+	now       time.Time
+}
+
+// StorageMockGetActiveSSOSessionParamPtrs contains pointers to parameters of the Storage.GetActiveSSOSession
+type StorageMockGetActiveSSOSessionParamPtrs struct {
+	ctx       *context.Context
+	tenantID  *uuid.UUID
+	tokenHash *[]byte
+	now       *time.Time
+}
+
+// StorageMockGetActiveSSOSessionResults contains results of the Storage.GetActiveSSOSession
+type StorageMockGetActiveSSOSessionResults struct {
+	sp1 *model.SSOSession
+	err error
+}
+
+// StorageMockGetActiveSSOSessionOrigins contains origins of expectations of the Storage.GetActiveSSOSession
+type StorageMockGetActiveSSOSessionExpectationOrigins struct {
+	origin          string
+	originCtx       string
+	originTenantID  string
+	originTokenHash string
+	originNow       string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetActiveSSOSession *mStorageMockGetActiveSSOSession) Optional() *mStorageMockGetActiveSSOSession {
+	mmGetActiveSSOSession.optional = true
+	return mmGetActiveSSOSession
+}
+
+// Expect sets up expected params for Storage.GetActiveSSOSession
+func (mmGetActiveSSOSession *mStorageMockGetActiveSSOSession) Expect(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, now time.Time) *mStorageMockGetActiveSSOSession {
+	if mmGetActiveSSOSession.mock.funcGetActiveSSOSession != nil {
+		mmGetActiveSSOSession.mock.t.Fatalf("StorageMock.GetActiveSSOSession mock is already set by Set")
+	}
+
+	if mmGetActiveSSOSession.defaultExpectation == nil {
+		mmGetActiveSSOSession.defaultExpectation = &StorageMockGetActiveSSOSessionExpectation{}
+	}
+
+	if mmGetActiveSSOSession.defaultExpectation.paramPtrs != nil {
+		mmGetActiveSSOSession.mock.t.Fatalf("StorageMock.GetActiveSSOSession mock is already set by ExpectParams functions")
+	}
+
+	mmGetActiveSSOSession.defaultExpectation.params = &StorageMockGetActiveSSOSessionParams{ctx, tenantID, tokenHash, now}
+	mmGetActiveSSOSession.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetActiveSSOSession.expectations {
+		if minimock.Equal(e.params, mmGetActiveSSOSession.defaultExpectation.params) {
+			mmGetActiveSSOSession.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetActiveSSOSession.defaultExpectation.params)
+		}
+	}
+
+	return mmGetActiveSSOSession
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.GetActiveSSOSession
+func (mmGetActiveSSOSession *mStorageMockGetActiveSSOSession) ExpectCtxParam1(ctx context.Context) *mStorageMockGetActiveSSOSession {
+	if mmGetActiveSSOSession.mock.funcGetActiveSSOSession != nil {
+		mmGetActiveSSOSession.mock.t.Fatalf("StorageMock.GetActiveSSOSession mock is already set by Set")
+	}
+
+	if mmGetActiveSSOSession.defaultExpectation == nil {
+		mmGetActiveSSOSession.defaultExpectation = &StorageMockGetActiveSSOSessionExpectation{}
+	}
+
+	if mmGetActiveSSOSession.defaultExpectation.params != nil {
+		mmGetActiveSSOSession.mock.t.Fatalf("StorageMock.GetActiveSSOSession mock is already set by Expect")
+	}
+
+	if mmGetActiveSSOSession.defaultExpectation.paramPtrs == nil {
+		mmGetActiveSSOSession.defaultExpectation.paramPtrs = &StorageMockGetActiveSSOSessionParamPtrs{}
+	}
+	mmGetActiveSSOSession.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetActiveSSOSession.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetActiveSSOSession
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.GetActiveSSOSession
+func (mmGetActiveSSOSession *mStorageMockGetActiveSSOSession) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockGetActiveSSOSession {
+	if mmGetActiveSSOSession.mock.funcGetActiveSSOSession != nil {
+		mmGetActiveSSOSession.mock.t.Fatalf("StorageMock.GetActiveSSOSession mock is already set by Set")
+	}
+
+	if mmGetActiveSSOSession.defaultExpectation == nil {
+		mmGetActiveSSOSession.defaultExpectation = &StorageMockGetActiveSSOSessionExpectation{}
+	}
+
+	if mmGetActiveSSOSession.defaultExpectation.params != nil {
+		mmGetActiveSSOSession.mock.t.Fatalf("StorageMock.GetActiveSSOSession mock is already set by Expect")
+	}
+
+	if mmGetActiveSSOSession.defaultExpectation.paramPtrs == nil {
+		mmGetActiveSSOSession.defaultExpectation.paramPtrs = &StorageMockGetActiveSSOSessionParamPtrs{}
+	}
+	mmGetActiveSSOSession.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetActiveSSOSession.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetActiveSSOSession
+}
+
+// ExpectTokenHashParam3 sets up expected param tokenHash for Storage.GetActiveSSOSession
+func (mmGetActiveSSOSession *mStorageMockGetActiveSSOSession) ExpectTokenHashParam3(tokenHash []byte) *mStorageMockGetActiveSSOSession {
+	if mmGetActiveSSOSession.mock.funcGetActiveSSOSession != nil {
+		mmGetActiveSSOSession.mock.t.Fatalf("StorageMock.GetActiveSSOSession mock is already set by Set")
+	}
+
+	if mmGetActiveSSOSession.defaultExpectation == nil {
+		mmGetActiveSSOSession.defaultExpectation = &StorageMockGetActiveSSOSessionExpectation{}
+	}
+
+	if mmGetActiveSSOSession.defaultExpectation.params != nil {
+		mmGetActiveSSOSession.mock.t.Fatalf("StorageMock.GetActiveSSOSession mock is already set by Expect")
+	}
+
+	if mmGetActiveSSOSession.defaultExpectation.paramPtrs == nil {
+		mmGetActiveSSOSession.defaultExpectation.paramPtrs = &StorageMockGetActiveSSOSessionParamPtrs{}
+	}
+	mmGetActiveSSOSession.defaultExpectation.paramPtrs.tokenHash = &tokenHash
+	mmGetActiveSSOSession.defaultExpectation.expectationOrigins.originTokenHash = minimock.CallerInfo(1)
+
+	return mmGetActiveSSOSession
+}
+
+// ExpectNowParam4 sets up expected param now for Storage.GetActiveSSOSession
+func (mmGetActiveSSOSession *mStorageMockGetActiveSSOSession) ExpectNowParam4(now time.Time) *mStorageMockGetActiveSSOSession {
+	if mmGetActiveSSOSession.mock.funcGetActiveSSOSession != nil {
+		mmGetActiveSSOSession.mock.t.Fatalf("StorageMock.GetActiveSSOSession mock is already set by Set")
+	}
+
+	if mmGetActiveSSOSession.defaultExpectation == nil {
+		mmGetActiveSSOSession.defaultExpectation = &StorageMockGetActiveSSOSessionExpectation{}
+	}
+
+	if mmGetActiveSSOSession.defaultExpectation.params != nil {
+		mmGetActiveSSOSession.mock.t.Fatalf("StorageMock.GetActiveSSOSession mock is already set by Expect")
+	}
+
+	if mmGetActiveSSOSession.defaultExpectation.paramPtrs == nil {
+		mmGetActiveSSOSession.defaultExpectation.paramPtrs = &StorageMockGetActiveSSOSessionParamPtrs{}
+	}
+	mmGetActiveSSOSession.defaultExpectation.paramPtrs.now = &now
+	mmGetActiveSSOSession.defaultExpectation.expectationOrigins.originNow = minimock.CallerInfo(1)
+
+	return mmGetActiveSSOSession
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.GetActiveSSOSession
+func (mmGetActiveSSOSession *mStorageMockGetActiveSSOSession) Inspect(f func(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, now time.Time)) *mStorageMockGetActiveSSOSession {
+	if mmGetActiveSSOSession.mock.inspectFuncGetActiveSSOSession != nil {
+		mmGetActiveSSOSession.mock.t.Fatalf("Inspect function is already set for StorageMock.GetActiveSSOSession")
+	}
+
+	mmGetActiveSSOSession.mock.inspectFuncGetActiveSSOSession = f
+
+	return mmGetActiveSSOSession
+}
+
+// Return sets up results that will be returned by Storage.GetActiveSSOSession
+func (mmGetActiveSSOSession *mStorageMockGetActiveSSOSession) Return(sp1 *model.SSOSession, err error) *StorageMock {
+	if mmGetActiveSSOSession.mock.funcGetActiveSSOSession != nil {
+		mmGetActiveSSOSession.mock.t.Fatalf("StorageMock.GetActiveSSOSession mock is already set by Set")
+	}
+
+	if mmGetActiveSSOSession.defaultExpectation == nil {
+		mmGetActiveSSOSession.defaultExpectation = &StorageMockGetActiveSSOSessionExpectation{mock: mmGetActiveSSOSession.mock}
+	}
+	mmGetActiveSSOSession.defaultExpectation.results = &StorageMockGetActiveSSOSessionResults{sp1, err}
+	mmGetActiveSSOSession.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetActiveSSOSession.mock
+}
+
+// Set uses given function f to mock the Storage.GetActiveSSOSession method
+func (mmGetActiveSSOSession *mStorageMockGetActiveSSOSession) Set(f func(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, now time.Time) (sp1 *model.SSOSession, err error)) *StorageMock {
+	if mmGetActiveSSOSession.defaultExpectation != nil {
+		mmGetActiveSSOSession.mock.t.Fatalf("Default expectation is already set for the Storage.GetActiveSSOSession method")
+	}
+
+	if len(mmGetActiveSSOSession.expectations) > 0 {
+		mmGetActiveSSOSession.mock.t.Fatalf("Some expectations are already set for the Storage.GetActiveSSOSession method")
+	}
+
+	mmGetActiveSSOSession.mock.funcGetActiveSSOSession = f
+	mmGetActiveSSOSession.mock.funcGetActiveSSOSessionOrigin = minimock.CallerInfo(1)
+	return mmGetActiveSSOSession.mock
+}
+
+// When sets expectation for the Storage.GetActiveSSOSession which will trigger the result defined by the following
+// Then helper
+func (mmGetActiveSSOSession *mStorageMockGetActiveSSOSession) When(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, now time.Time) *StorageMockGetActiveSSOSessionExpectation {
+	if mmGetActiveSSOSession.mock.funcGetActiveSSOSession != nil {
+		mmGetActiveSSOSession.mock.t.Fatalf("StorageMock.GetActiveSSOSession mock is already set by Set")
+	}
+
+	expectation := &StorageMockGetActiveSSOSessionExpectation{
+		mock:               mmGetActiveSSOSession.mock,
+		params:             &StorageMockGetActiveSSOSessionParams{ctx, tenantID, tokenHash, now},
+		expectationOrigins: StorageMockGetActiveSSOSessionExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetActiveSSOSession.expectations = append(mmGetActiveSSOSession.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.GetActiveSSOSession return parameters for the expectation previously defined by the When method
+func (e *StorageMockGetActiveSSOSessionExpectation) Then(sp1 *model.SSOSession, err error) *StorageMock {
+	e.results = &StorageMockGetActiveSSOSessionResults{sp1, err}
+	return e.mock
+}
+
+// Times sets number of times Storage.GetActiveSSOSession should be invoked
+func (mmGetActiveSSOSession *mStorageMockGetActiveSSOSession) Times(n uint64) *mStorageMockGetActiveSSOSession {
+	if n == 0 {
+		mmGetActiveSSOSession.mock.t.Fatalf("Times of StorageMock.GetActiveSSOSession mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetActiveSSOSession.expectedInvocations, n)
+	mmGetActiveSSOSession.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetActiveSSOSession
+}
+
+func (mmGetActiveSSOSession *mStorageMockGetActiveSSOSession) invocationsDone() bool {
+	if len(mmGetActiveSSOSession.expectations) == 0 && mmGetActiveSSOSession.defaultExpectation == nil && mmGetActiveSSOSession.mock.funcGetActiveSSOSession == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetActiveSSOSession.mock.afterGetActiveSSOSessionCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetActiveSSOSession.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetActiveSSOSession implements mm_port.Storage
+func (mmGetActiveSSOSession *StorageMock) GetActiveSSOSession(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, now time.Time) (sp1 *model.SSOSession, err error) {
+	mm_atomic.AddUint64(&mmGetActiveSSOSession.beforeGetActiveSSOSessionCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetActiveSSOSession.afterGetActiveSSOSessionCounter, 1)
+
+	mmGetActiveSSOSession.t.Helper()
+
+	if mmGetActiveSSOSession.inspectFuncGetActiveSSOSession != nil {
+		mmGetActiveSSOSession.inspectFuncGetActiveSSOSession(ctx, tenantID, tokenHash, now)
+	}
+
+	mm_params := StorageMockGetActiveSSOSessionParams{ctx, tenantID, tokenHash, now}
+
+	// Record call args
+	mmGetActiveSSOSession.GetActiveSSOSessionMock.mutex.Lock()
+	mmGetActiveSSOSession.GetActiveSSOSessionMock.callArgs = append(mmGetActiveSSOSession.GetActiveSSOSessionMock.callArgs, &mm_params)
+	mmGetActiveSSOSession.GetActiveSSOSessionMock.mutex.Unlock()
+
+	for _, e := range mmGetActiveSSOSession.GetActiveSSOSessionMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.sp1, e.results.err
+		}
+	}
+
+	if mmGetActiveSSOSession.GetActiveSSOSessionMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetActiveSSOSession.GetActiveSSOSessionMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetActiveSSOSession.GetActiveSSOSessionMock.defaultExpectation.params
+		mm_want_ptrs := mmGetActiveSSOSession.GetActiveSSOSessionMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockGetActiveSSOSessionParams{ctx, tenantID, tokenHash, now}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetActiveSSOSession.t.Errorf("StorageMock.GetActiveSSOSession got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetActiveSSOSession.GetActiveSSOSessionMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetActiveSSOSession.t.Errorf("StorageMock.GetActiveSSOSession got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetActiveSSOSession.GetActiveSSOSessionMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.tokenHash != nil && !minimock.Equal(*mm_want_ptrs.tokenHash, mm_got.tokenHash) {
+				mmGetActiveSSOSession.t.Errorf("StorageMock.GetActiveSSOSession got unexpected parameter tokenHash, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetActiveSSOSession.GetActiveSSOSessionMock.defaultExpectation.expectationOrigins.originTokenHash, *mm_want_ptrs.tokenHash, mm_got.tokenHash, minimock.Diff(*mm_want_ptrs.tokenHash, mm_got.tokenHash))
+			}
+
+			if mm_want_ptrs.now != nil && !minimock.Equal(*mm_want_ptrs.now, mm_got.now) {
+				mmGetActiveSSOSession.t.Errorf("StorageMock.GetActiveSSOSession got unexpected parameter now, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetActiveSSOSession.GetActiveSSOSessionMock.defaultExpectation.expectationOrigins.originNow, *mm_want_ptrs.now, mm_got.now, minimock.Diff(*mm_want_ptrs.now, mm_got.now))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetActiveSSOSession.t.Errorf("StorageMock.GetActiveSSOSession got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetActiveSSOSession.GetActiveSSOSessionMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetActiveSSOSession.GetActiveSSOSessionMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetActiveSSOSession.t.Fatal("No results are set for the StorageMock.GetActiveSSOSession")
+		}
+		return (*mm_results).sp1, (*mm_results).err
+	}
+	if mmGetActiveSSOSession.funcGetActiveSSOSession != nil {
+		return mmGetActiveSSOSession.funcGetActiveSSOSession(ctx, tenantID, tokenHash, now)
+	}
+	mmGetActiveSSOSession.t.Fatalf("Unexpected call to StorageMock.GetActiveSSOSession. %v %v %v %v", ctx, tenantID, tokenHash, now)
+	return
+}
+
+// GetActiveSSOSessionAfterCounter returns a count of finished StorageMock.GetActiveSSOSession invocations
+func (mmGetActiveSSOSession *StorageMock) GetActiveSSOSessionAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetActiveSSOSession.afterGetActiveSSOSessionCounter)
+}
+
+// GetActiveSSOSessionBeforeCounter returns a count of StorageMock.GetActiveSSOSession invocations
+func (mmGetActiveSSOSession *StorageMock) GetActiveSSOSessionBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetActiveSSOSession.beforeGetActiveSSOSessionCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.GetActiveSSOSession.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetActiveSSOSession *mStorageMockGetActiveSSOSession) Calls() []*StorageMockGetActiveSSOSessionParams {
+	mmGetActiveSSOSession.mutex.RLock()
+
+	argCopy := make([]*StorageMockGetActiveSSOSessionParams, len(mmGetActiveSSOSession.callArgs))
+	copy(argCopy, mmGetActiveSSOSession.callArgs)
+
+	mmGetActiveSSOSession.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetActiveSSOSessionDone returns true if the count of the GetActiveSSOSession invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockGetActiveSSOSessionDone() bool {
+	if m.GetActiveSSOSessionMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetActiveSSOSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetActiveSSOSessionMock.invocationsDone()
+}
+
+// MinimockGetActiveSSOSessionInspect logs each unmet expectation
+func (m *StorageMock) MinimockGetActiveSSOSessionInspect() {
+	for _, e := range m.GetActiveSSOSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.GetActiveSSOSession at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetActiveSSOSessionCounter := mm_atomic.LoadUint64(&m.afterGetActiveSSOSessionCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetActiveSSOSessionMock.defaultExpectation != nil && afterGetActiveSSOSessionCounter < 1 {
+		if m.GetActiveSSOSessionMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.GetActiveSSOSession at\n%s", m.GetActiveSSOSessionMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.GetActiveSSOSession at\n%s with params: %#v", m.GetActiveSSOSessionMock.defaultExpectation.expectationOrigins.origin, *m.GetActiveSSOSessionMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetActiveSSOSession != nil && afterGetActiveSSOSessionCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.GetActiveSSOSession at\n%s", m.funcGetActiveSSOSessionOrigin)
+	}
+
+	if !m.GetActiveSSOSessionMock.invocationsDone() && afterGetActiveSSOSessionCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.GetActiveSSOSession at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetActiveSSOSessionMock.expectedInvocations), m.GetActiveSSOSessionMock.expectedInvocationsOrigin, afterGetActiveSSOSessionCounter)
 	}
 }
 
@@ -21885,6 +23086,379 @@ func (m *StorageMock) MinimockSaveRefreshTokenInspect() {
 	}
 }
 
+type mStorageMockSaveSSOSession struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockSaveSSOSessionExpectation
+	expectations       []*StorageMockSaveSSOSessionExpectation
+
+	callArgs []*StorageMockSaveSSOSessionParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockSaveSSOSessionExpectation specifies expectation struct of the Storage.SaveSSOSession
+type StorageMockSaveSSOSessionExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockSaveSSOSessionParams
+	paramPtrs          *StorageMockSaveSSOSessionParamPtrs
+	expectationOrigins StorageMockSaveSSOSessionExpectationOrigins
+	results            *StorageMockSaveSSOSessionResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockSaveSSOSessionParams contains parameters of the Storage.SaveSSOSession
+type StorageMockSaveSSOSessionParams struct {
+	ctx       context.Context
+	session   model.SSOSession
+	tokenHash []byte
+}
+
+// StorageMockSaveSSOSessionParamPtrs contains pointers to parameters of the Storage.SaveSSOSession
+type StorageMockSaveSSOSessionParamPtrs struct {
+	ctx       *context.Context
+	session   *model.SSOSession
+	tokenHash *[]byte
+}
+
+// StorageMockSaveSSOSessionResults contains results of the Storage.SaveSSOSession
+type StorageMockSaveSSOSessionResults struct {
+	err error
+}
+
+// StorageMockSaveSSOSessionOrigins contains origins of expectations of the Storage.SaveSSOSession
+type StorageMockSaveSSOSessionExpectationOrigins struct {
+	origin          string
+	originCtx       string
+	originSession   string
+	originTokenHash string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmSaveSSOSession *mStorageMockSaveSSOSession) Optional() *mStorageMockSaveSSOSession {
+	mmSaveSSOSession.optional = true
+	return mmSaveSSOSession
+}
+
+// Expect sets up expected params for Storage.SaveSSOSession
+func (mmSaveSSOSession *mStorageMockSaveSSOSession) Expect(ctx context.Context, session model.SSOSession, tokenHash []byte) *mStorageMockSaveSSOSession {
+	if mmSaveSSOSession.mock.funcSaveSSOSession != nil {
+		mmSaveSSOSession.mock.t.Fatalf("StorageMock.SaveSSOSession mock is already set by Set")
+	}
+
+	if mmSaveSSOSession.defaultExpectation == nil {
+		mmSaveSSOSession.defaultExpectation = &StorageMockSaveSSOSessionExpectation{}
+	}
+
+	if mmSaveSSOSession.defaultExpectation.paramPtrs != nil {
+		mmSaveSSOSession.mock.t.Fatalf("StorageMock.SaveSSOSession mock is already set by ExpectParams functions")
+	}
+
+	mmSaveSSOSession.defaultExpectation.params = &StorageMockSaveSSOSessionParams{ctx, session, tokenHash}
+	mmSaveSSOSession.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmSaveSSOSession.expectations {
+		if minimock.Equal(e.params, mmSaveSSOSession.defaultExpectation.params) {
+			mmSaveSSOSession.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmSaveSSOSession.defaultExpectation.params)
+		}
+	}
+
+	return mmSaveSSOSession
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.SaveSSOSession
+func (mmSaveSSOSession *mStorageMockSaveSSOSession) ExpectCtxParam1(ctx context.Context) *mStorageMockSaveSSOSession {
+	if mmSaveSSOSession.mock.funcSaveSSOSession != nil {
+		mmSaveSSOSession.mock.t.Fatalf("StorageMock.SaveSSOSession mock is already set by Set")
+	}
+
+	if mmSaveSSOSession.defaultExpectation == nil {
+		mmSaveSSOSession.defaultExpectation = &StorageMockSaveSSOSessionExpectation{}
+	}
+
+	if mmSaveSSOSession.defaultExpectation.params != nil {
+		mmSaveSSOSession.mock.t.Fatalf("StorageMock.SaveSSOSession mock is already set by Expect")
+	}
+
+	if mmSaveSSOSession.defaultExpectation.paramPtrs == nil {
+		mmSaveSSOSession.defaultExpectation.paramPtrs = &StorageMockSaveSSOSessionParamPtrs{}
+	}
+	mmSaveSSOSession.defaultExpectation.paramPtrs.ctx = &ctx
+	mmSaveSSOSession.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmSaveSSOSession
+}
+
+// ExpectSessionParam2 sets up expected param session for Storage.SaveSSOSession
+func (mmSaveSSOSession *mStorageMockSaveSSOSession) ExpectSessionParam2(session model.SSOSession) *mStorageMockSaveSSOSession {
+	if mmSaveSSOSession.mock.funcSaveSSOSession != nil {
+		mmSaveSSOSession.mock.t.Fatalf("StorageMock.SaveSSOSession mock is already set by Set")
+	}
+
+	if mmSaveSSOSession.defaultExpectation == nil {
+		mmSaveSSOSession.defaultExpectation = &StorageMockSaveSSOSessionExpectation{}
+	}
+
+	if mmSaveSSOSession.defaultExpectation.params != nil {
+		mmSaveSSOSession.mock.t.Fatalf("StorageMock.SaveSSOSession mock is already set by Expect")
+	}
+
+	if mmSaveSSOSession.defaultExpectation.paramPtrs == nil {
+		mmSaveSSOSession.defaultExpectation.paramPtrs = &StorageMockSaveSSOSessionParamPtrs{}
+	}
+	mmSaveSSOSession.defaultExpectation.paramPtrs.session = &session
+	mmSaveSSOSession.defaultExpectation.expectationOrigins.originSession = minimock.CallerInfo(1)
+
+	return mmSaveSSOSession
+}
+
+// ExpectTokenHashParam3 sets up expected param tokenHash for Storage.SaveSSOSession
+func (mmSaveSSOSession *mStorageMockSaveSSOSession) ExpectTokenHashParam3(tokenHash []byte) *mStorageMockSaveSSOSession {
+	if mmSaveSSOSession.mock.funcSaveSSOSession != nil {
+		mmSaveSSOSession.mock.t.Fatalf("StorageMock.SaveSSOSession mock is already set by Set")
+	}
+
+	if mmSaveSSOSession.defaultExpectation == nil {
+		mmSaveSSOSession.defaultExpectation = &StorageMockSaveSSOSessionExpectation{}
+	}
+
+	if mmSaveSSOSession.defaultExpectation.params != nil {
+		mmSaveSSOSession.mock.t.Fatalf("StorageMock.SaveSSOSession mock is already set by Expect")
+	}
+
+	if mmSaveSSOSession.defaultExpectation.paramPtrs == nil {
+		mmSaveSSOSession.defaultExpectation.paramPtrs = &StorageMockSaveSSOSessionParamPtrs{}
+	}
+	mmSaveSSOSession.defaultExpectation.paramPtrs.tokenHash = &tokenHash
+	mmSaveSSOSession.defaultExpectation.expectationOrigins.originTokenHash = minimock.CallerInfo(1)
+
+	return mmSaveSSOSession
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.SaveSSOSession
+func (mmSaveSSOSession *mStorageMockSaveSSOSession) Inspect(f func(ctx context.Context, session model.SSOSession, tokenHash []byte)) *mStorageMockSaveSSOSession {
+	if mmSaveSSOSession.mock.inspectFuncSaveSSOSession != nil {
+		mmSaveSSOSession.mock.t.Fatalf("Inspect function is already set for StorageMock.SaveSSOSession")
+	}
+
+	mmSaveSSOSession.mock.inspectFuncSaveSSOSession = f
+
+	return mmSaveSSOSession
+}
+
+// Return sets up results that will be returned by Storage.SaveSSOSession
+func (mmSaveSSOSession *mStorageMockSaveSSOSession) Return(err error) *StorageMock {
+	if mmSaveSSOSession.mock.funcSaveSSOSession != nil {
+		mmSaveSSOSession.mock.t.Fatalf("StorageMock.SaveSSOSession mock is already set by Set")
+	}
+
+	if mmSaveSSOSession.defaultExpectation == nil {
+		mmSaveSSOSession.defaultExpectation = &StorageMockSaveSSOSessionExpectation{mock: mmSaveSSOSession.mock}
+	}
+	mmSaveSSOSession.defaultExpectation.results = &StorageMockSaveSSOSessionResults{err}
+	mmSaveSSOSession.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmSaveSSOSession.mock
+}
+
+// Set uses given function f to mock the Storage.SaveSSOSession method
+func (mmSaveSSOSession *mStorageMockSaveSSOSession) Set(f func(ctx context.Context, session model.SSOSession, tokenHash []byte) (err error)) *StorageMock {
+	if mmSaveSSOSession.defaultExpectation != nil {
+		mmSaveSSOSession.mock.t.Fatalf("Default expectation is already set for the Storage.SaveSSOSession method")
+	}
+
+	if len(mmSaveSSOSession.expectations) > 0 {
+		mmSaveSSOSession.mock.t.Fatalf("Some expectations are already set for the Storage.SaveSSOSession method")
+	}
+
+	mmSaveSSOSession.mock.funcSaveSSOSession = f
+	mmSaveSSOSession.mock.funcSaveSSOSessionOrigin = minimock.CallerInfo(1)
+	return mmSaveSSOSession.mock
+}
+
+// When sets expectation for the Storage.SaveSSOSession which will trigger the result defined by the following
+// Then helper
+func (mmSaveSSOSession *mStorageMockSaveSSOSession) When(ctx context.Context, session model.SSOSession, tokenHash []byte) *StorageMockSaveSSOSessionExpectation {
+	if mmSaveSSOSession.mock.funcSaveSSOSession != nil {
+		mmSaveSSOSession.mock.t.Fatalf("StorageMock.SaveSSOSession mock is already set by Set")
+	}
+
+	expectation := &StorageMockSaveSSOSessionExpectation{
+		mock:               mmSaveSSOSession.mock,
+		params:             &StorageMockSaveSSOSessionParams{ctx, session, tokenHash},
+		expectationOrigins: StorageMockSaveSSOSessionExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmSaveSSOSession.expectations = append(mmSaveSSOSession.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.SaveSSOSession return parameters for the expectation previously defined by the When method
+func (e *StorageMockSaveSSOSessionExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockSaveSSOSessionResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.SaveSSOSession should be invoked
+func (mmSaveSSOSession *mStorageMockSaveSSOSession) Times(n uint64) *mStorageMockSaveSSOSession {
+	if n == 0 {
+		mmSaveSSOSession.mock.t.Fatalf("Times of StorageMock.SaveSSOSession mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmSaveSSOSession.expectedInvocations, n)
+	mmSaveSSOSession.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmSaveSSOSession
+}
+
+func (mmSaveSSOSession *mStorageMockSaveSSOSession) invocationsDone() bool {
+	if len(mmSaveSSOSession.expectations) == 0 && mmSaveSSOSession.defaultExpectation == nil && mmSaveSSOSession.mock.funcSaveSSOSession == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmSaveSSOSession.mock.afterSaveSSOSessionCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmSaveSSOSession.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// SaveSSOSession implements mm_port.Storage
+func (mmSaveSSOSession *StorageMock) SaveSSOSession(ctx context.Context, session model.SSOSession, tokenHash []byte) (err error) {
+	mm_atomic.AddUint64(&mmSaveSSOSession.beforeSaveSSOSessionCounter, 1)
+	defer mm_atomic.AddUint64(&mmSaveSSOSession.afterSaveSSOSessionCounter, 1)
+
+	mmSaveSSOSession.t.Helper()
+
+	if mmSaveSSOSession.inspectFuncSaveSSOSession != nil {
+		mmSaveSSOSession.inspectFuncSaveSSOSession(ctx, session, tokenHash)
+	}
+
+	mm_params := StorageMockSaveSSOSessionParams{ctx, session, tokenHash}
+
+	// Record call args
+	mmSaveSSOSession.SaveSSOSessionMock.mutex.Lock()
+	mmSaveSSOSession.SaveSSOSessionMock.callArgs = append(mmSaveSSOSession.SaveSSOSessionMock.callArgs, &mm_params)
+	mmSaveSSOSession.SaveSSOSessionMock.mutex.Unlock()
+
+	for _, e := range mmSaveSSOSession.SaveSSOSessionMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmSaveSSOSession.SaveSSOSessionMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmSaveSSOSession.SaveSSOSessionMock.defaultExpectation.Counter, 1)
+		mm_want := mmSaveSSOSession.SaveSSOSessionMock.defaultExpectation.params
+		mm_want_ptrs := mmSaveSSOSession.SaveSSOSessionMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockSaveSSOSessionParams{ctx, session, tokenHash}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmSaveSSOSession.t.Errorf("StorageMock.SaveSSOSession got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSaveSSOSession.SaveSSOSessionMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.session != nil && !minimock.Equal(*mm_want_ptrs.session, mm_got.session) {
+				mmSaveSSOSession.t.Errorf("StorageMock.SaveSSOSession got unexpected parameter session, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSaveSSOSession.SaveSSOSessionMock.defaultExpectation.expectationOrigins.originSession, *mm_want_ptrs.session, mm_got.session, minimock.Diff(*mm_want_ptrs.session, mm_got.session))
+			}
+
+			if mm_want_ptrs.tokenHash != nil && !minimock.Equal(*mm_want_ptrs.tokenHash, mm_got.tokenHash) {
+				mmSaveSSOSession.t.Errorf("StorageMock.SaveSSOSession got unexpected parameter tokenHash, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSaveSSOSession.SaveSSOSessionMock.defaultExpectation.expectationOrigins.originTokenHash, *mm_want_ptrs.tokenHash, mm_got.tokenHash, minimock.Diff(*mm_want_ptrs.tokenHash, mm_got.tokenHash))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmSaveSSOSession.t.Errorf("StorageMock.SaveSSOSession got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmSaveSSOSession.SaveSSOSessionMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmSaveSSOSession.SaveSSOSessionMock.defaultExpectation.results
+		if mm_results == nil {
+			mmSaveSSOSession.t.Fatal("No results are set for the StorageMock.SaveSSOSession")
+		}
+		return (*mm_results).err
+	}
+	if mmSaveSSOSession.funcSaveSSOSession != nil {
+		return mmSaveSSOSession.funcSaveSSOSession(ctx, session, tokenHash)
+	}
+	mmSaveSSOSession.t.Fatalf("Unexpected call to StorageMock.SaveSSOSession. %v %v %v", ctx, session, tokenHash)
+	return
+}
+
+// SaveSSOSessionAfterCounter returns a count of finished StorageMock.SaveSSOSession invocations
+func (mmSaveSSOSession *StorageMock) SaveSSOSessionAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSaveSSOSession.afterSaveSSOSessionCounter)
+}
+
+// SaveSSOSessionBeforeCounter returns a count of StorageMock.SaveSSOSession invocations
+func (mmSaveSSOSession *StorageMock) SaveSSOSessionBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSaveSSOSession.beforeSaveSSOSessionCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.SaveSSOSession.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmSaveSSOSession *mStorageMockSaveSSOSession) Calls() []*StorageMockSaveSSOSessionParams {
+	mmSaveSSOSession.mutex.RLock()
+
+	argCopy := make([]*StorageMockSaveSSOSessionParams, len(mmSaveSSOSession.callArgs))
+	copy(argCopy, mmSaveSSOSession.callArgs)
+
+	mmSaveSSOSession.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockSaveSSOSessionDone returns true if the count of the SaveSSOSession invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockSaveSSOSessionDone() bool {
+	if m.SaveSSOSessionMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.SaveSSOSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.SaveSSOSessionMock.invocationsDone()
+}
+
+// MinimockSaveSSOSessionInspect logs each unmet expectation
+func (m *StorageMock) MinimockSaveSSOSessionInspect() {
+	for _, e := range m.SaveSSOSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.SaveSSOSession at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterSaveSSOSessionCounter := mm_atomic.LoadUint64(&m.afterSaveSSOSessionCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.SaveSSOSessionMock.defaultExpectation != nil && afterSaveSSOSessionCounter < 1 {
+		if m.SaveSSOSessionMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.SaveSSOSession at\n%s", m.SaveSSOSessionMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.SaveSSOSession at\n%s with params: %#v", m.SaveSSOSessionMock.defaultExpectation.expectationOrigins.origin, *m.SaveSSOSessionMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcSaveSSOSession != nil && afterSaveSSOSessionCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.SaveSSOSession at\n%s", m.funcSaveSSOSessionOrigin)
+	}
+
+	if !m.SaveSSOSessionMock.invocationsDone() && afterSaveSSOSessionCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.SaveSSOSession at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.SaveSSOSessionMock.expectedInvocations), m.SaveSSOSessionMock.expectedInvocationsOrigin, afterSaveSSOSessionCounter)
+	}
+}
+
 type mStorageMockSaveUserProfile struct {
 	optional           bool
 	mock               *StorageMock
@@ -22286,6 +23860,441 @@ func (m *StorageMock) MinimockSaveUserProfileInspect() {
 	if !m.SaveUserProfileMock.invocationsDone() && afterSaveUserProfileCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageMock.SaveUserProfile at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.SaveUserProfileMock.expectedInvocations), m.SaveUserProfileMock.expectedInvocationsOrigin, afterSaveUserProfileCounter)
+	}
+}
+
+type mStorageMockTouchSSOSession struct {
+	optional           bool
+	mock               *StorageMock
+	defaultExpectation *StorageMockTouchSSOSessionExpectation
+	expectations       []*StorageMockTouchSSOSessionExpectation
+
+	callArgs []*StorageMockTouchSSOSessionParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageMockTouchSSOSessionExpectation specifies expectation struct of the Storage.TouchSSOSession
+type StorageMockTouchSSOSessionExpectation struct {
+	mock               *StorageMock
+	params             *StorageMockTouchSSOSessionParams
+	paramPtrs          *StorageMockTouchSSOSessionParamPtrs
+	expectationOrigins StorageMockTouchSSOSessionExpectationOrigins
+	results            *StorageMockTouchSSOSessionResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageMockTouchSSOSessionParams contains parameters of the Storage.TouchSSOSession
+type StorageMockTouchSSOSessionParams struct {
+	ctx           context.Context
+	tenantID      uuid.UUID
+	tokenHash     []byte
+	lastSeenAt    time.Time
+	idleExpiresAt time.Time
+}
+
+// StorageMockTouchSSOSessionParamPtrs contains pointers to parameters of the Storage.TouchSSOSession
+type StorageMockTouchSSOSessionParamPtrs struct {
+	ctx           *context.Context
+	tenantID      *uuid.UUID
+	tokenHash     *[]byte
+	lastSeenAt    *time.Time
+	idleExpiresAt *time.Time
+}
+
+// StorageMockTouchSSOSessionResults contains results of the Storage.TouchSSOSession
+type StorageMockTouchSSOSessionResults struct {
+	err error
+}
+
+// StorageMockTouchSSOSessionOrigins contains origins of expectations of the Storage.TouchSSOSession
+type StorageMockTouchSSOSessionExpectationOrigins struct {
+	origin              string
+	originCtx           string
+	originTenantID      string
+	originTokenHash     string
+	originLastSeenAt    string
+	originIdleExpiresAt string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmTouchSSOSession *mStorageMockTouchSSOSession) Optional() *mStorageMockTouchSSOSession {
+	mmTouchSSOSession.optional = true
+	return mmTouchSSOSession
+}
+
+// Expect sets up expected params for Storage.TouchSSOSession
+func (mmTouchSSOSession *mStorageMockTouchSSOSession) Expect(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, lastSeenAt time.Time, idleExpiresAt time.Time) *mStorageMockTouchSSOSession {
+	if mmTouchSSOSession.mock.funcTouchSSOSession != nil {
+		mmTouchSSOSession.mock.t.Fatalf("StorageMock.TouchSSOSession mock is already set by Set")
+	}
+
+	if mmTouchSSOSession.defaultExpectation == nil {
+		mmTouchSSOSession.defaultExpectation = &StorageMockTouchSSOSessionExpectation{}
+	}
+
+	if mmTouchSSOSession.defaultExpectation.paramPtrs != nil {
+		mmTouchSSOSession.mock.t.Fatalf("StorageMock.TouchSSOSession mock is already set by ExpectParams functions")
+	}
+
+	mmTouchSSOSession.defaultExpectation.params = &StorageMockTouchSSOSessionParams{ctx, tenantID, tokenHash, lastSeenAt, idleExpiresAt}
+	mmTouchSSOSession.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmTouchSSOSession.expectations {
+		if minimock.Equal(e.params, mmTouchSSOSession.defaultExpectation.params) {
+			mmTouchSSOSession.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmTouchSSOSession.defaultExpectation.params)
+		}
+	}
+
+	return mmTouchSSOSession
+}
+
+// ExpectCtxParam1 sets up expected param ctx for Storage.TouchSSOSession
+func (mmTouchSSOSession *mStorageMockTouchSSOSession) ExpectCtxParam1(ctx context.Context) *mStorageMockTouchSSOSession {
+	if mmTouchSSOSession.mock.funcTouchSSOSession != nil {
+		mmTouchSSOSession.mock.t.Fatalf("StorageMock.TouchSSOSession mock is already set by Set")
+	}
+
+	if mmTouchSSOSession.defaultExpectation == nil {
+		mmTouchSSOSession.defaultExpectation = &StorageMockTouchSSOSessionExpectation{}
+	}
+
+	if mmTouchSSOSession.defaultExpectation.params != nil {
+		mmTouchSSOSession.mock.t.Fatalf("StorageMock.TouchSSOSession mock is already set by Expect")
+	}
+
+	if mmTouchSSOSession.defaultExpectation.paramPtrs == nil {
+		mmTouchSSOSession.defaultExpectation.paramPtrs = &StorageMockTouchSSOSessionParamPtrs{}
+	}
+	mmTouchSSOSession.defaultExpectation.paramPtrs.ctx = &ctx
+	mmTouchSSOSession.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmTouchSSOSession
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for Storage.TouchSSOSession
+func (mmTouchSSOSession *mStorageMockTouchSSOSession) ExpectTenantIDParam2(tenantID uuid.UUID) *mStorageMockTouchSSOSession {
+	if mmTouchSSOSession.mock.funcTouchSSOSession != nil {
+		mmTouchSSOSession.mock.t.Fatalf("StorageMock.TouchSSOSession mock is already set by Set")
+	}
+
+	if mmTouchSSOSession.defaultExpectation == nil {
+		mmTouchSSOSession.defaultExpectation = &StorageMockTouchSSOSessionExpectation{}
+	}
+
+	if mmTouchSSOSession.defaultExpectation.params != nil {
+		mmTouchSSOSession.mock.t.Fatalf("StorageMock.TouchSSOSession mock is already set by Expect")
+	}
+
+	if mmTouchSSOSession.defaultExpectation.paramPtrs == nil {
+		mmTouchSSOSession.defaultExpectation.paramPtrs = &StorageMockTouchSSOSessionParamPtrs{}
+	}
+	mmTouchSSOSession.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmTouchSSOSession.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmTouchSSOSession
+}
+
+// ExpectTokenHashParam3 sets up expected param tokenHash for Storage.TouchSSOSession
+func (mmTouchSSOSession *mStorageMockTouchSSOSession) ExpectTokenHashParam3(tokenHash []byte) *mStorageMockTouchSSOSession {
+	if mmTouchSSOSession.mock.funcTouchSSOSession != nil {
+		mmTouchSSOSession.mock.t.Fatalf("StorageMock.TouchSSOSession mock is already set by Set")
+	}
+
+	if mmTouchSSOSession.defaultExpectation == nil {
+		mmTouchSSOSession.defaultExpectation = &StorageMockTouchSSOSessionExpectation{}
+	}
+
+	if mmTouchSSOSession.defaultExpectation.params != nil {
+		mmTouchSSOSession.mock.t.Fatalf("StorageMock.TouchSSOSession mock is already set by Expect")
+	}
+
+	if mmTouchSSOSession.defaultExpectation.paramPtrs == nil {
+		mmTouchSSOSession.defaultExpectation.paramPtrs = &StorageMockTouchSSOSessionParamPtrs{}
+	}
+	mmTouchSSOSession.defaultExpectation.paramPtrs.tokenHash = &tokenHash
+	mmTouchSSOSession.defaultExpectation.expectationOrigins.originTokenHash = minimock.CallerInfo(1)
+
+	return mmTouchSSOSession
+}
+
+// ExpectLastSeenAtParam4 sets up expected param lastSeenAt for Storage.TouchSSOSession
+func (mmTouchSSOSession *mStorageMockTouchSSOSession) ExpectLastSeenAtParam4(lastSeenAt time.Time) *mStorageMockTouchSSOSession {
+	if mmTouchSSOSession.mock.funcTouchSSOSession != nil {
+		mmTouchSSOSession.mock.t.Fatalf("StorageMock.TouchSSOSession mock is already set by Set")
+	}
+
+	if mmTouchSSOSession.defaultExpectation == nil {
+		mmTouchSSOSession.defaultExpectation = &StorageMockTouchSSOSessionExpectation{}
+	}
+
+	if mmTouchSSOSession.defaultExpectation.params != nil {
+		mmTouchSSOSession.mock.t.Fatalf("StorageMock.TouchSSOSession mock is already set by Expect")
+	}
+
+	if mmTouchSSOSession.defaultExpectation.paramPtrs == nil {
+		mmTouchSSOSession.defaultExpectation.paramPtrs = &StorageMockTouchSSOSessionParamPtrs{}
+	}
+	mmTouchSSOSession.defaultExpectation.paramPtrs.lastSeenAt = &lastSeenAt
+	mmTouchSSOSession.defaultExpectation.expectationOrigins.originLastSeenAt = minimock.CallerInfo(1)
+
+	return mmTouchSSOSession
+}
+
+// ExpectIdleExpiresAtParam5 sets up expected param idleExpiresAt for Storage.TouchSSOSession
+func (mmTouchSSOSession *mStorageMockTouchSSOSession) ExpectIdleExpiresAtParam5(idleExpiresAt time.Time) *mStorageMockTouchSSOSession {
+	if mmTouchSSOSession.mock.funcTouchSSOSession != nil {
+		mmTouchSSOSession.mock.t.Fatalf("StorageMock.TouchSSOSession mock is already set by Set")
+	}
+
+	if mmTouchSSOSession.defaultExpectation == nil {
+		mmTouchSSOSession.defaultExpectation = &StorageMockTouchSSOSessionExpectation{}
+	}
+
+	if mmTouchSSOSession.defaultExpectation.params != nil {
+		mmTouchSSOSession.mock.t.Fatalf("StorageMock.TouchSSOSession mock is already set by Expect")
+	}
+
+	if mmTouchSSOSession.defaultExpectation.paramPtrs == nil {
+		mmTouchSSOSession.defaultExpectation.paramPtrs = &StorageMockTouchSSOSessionParamPtrs{}
+	}
+	mmTouchSSOSession.defaultExpectation.paramPtrs.idleExpiresAt = &idleExpiresAt
+	mmTouchSSOSession.defaultExpectation.expectationOrigins.originIdleExpiresAt = minimock.CallerInfo(1)
+
+	return mmTouchSSOSession
+}
+
+// Inspect accepts an inspector function that has same arguments as the Storage.TouchSSOSession
+func (mmTouchSSOSession *mStorageMockTouchSSOSession) Inspect(f func(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, lastSeenAt time.Time, idleExpiresAt time.Time)) *mStorageMockTouchSSOSession {
+	if mmTouchSSOSession.mock.inspectFuncTouchSSOSession != nil {
+		mmTouchSSOSession.mock.t.Fatalf("Inspect function is already set for StorageMock.TouchSSOSession")
+	}
+
+	mmTouchSSOSession.mock.inspectFuncTouchSSOSession = f
+
+	return mmTouchSSOSession
+}
+
+// Return sets up results that will be returned by Storage.TouchSSOSession
+func (mmTouchSSOSession *mStorageMockTouchSSOSession) Return(err error) *StorageMock {
+	if mmTouchSSOSession.mock.funcTouchSSOSession != nil {
+		mmTouchSSOSession.mock.t.Fatalf("StorageMock.TouchSSOSession mock is already set by Set")
+	}
+
+	if mmTouchSSOSession.defaultExpectation == nil {
+		mmTouchSSOSession.defaultExpectation = &StorageMockTouchSSOSessionExpectation{mock: mmTouchSSOSession.mock}
+	}
+	mmTouchSSOSession.defaultExpectation.results = &StorageMockTouchSSOSessionResults{err}
+	mmTouchSSOSession.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmTouchSSOSession.mock
+}
+
+// Set uses given function f to mock the Storage.TouchSSOSession method
+func (mmTouchSSOSession *mStorageMockTouchSSOSession) Set(f func(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, lastSeenAt time.Time, idleExpiresAt time.Time) (err error)) *StorageMock {
+	if mmTouchSSOSession.defaultExpectation != nil {
+		mmTouchSSOSession.mock.t.Fatalf("Default expectation is already set for the Storage.TouchSSOSession method")
+	}
+
+	if len(mmTouchSSOSession.expectations) > 0 {
+		mmTouchSSOSession.mock.t.Fatalf("Some expectations are already set for the Storage.TouchSSOSession method")
+	}
+
+	mmTouchSSOSession.mock.funcTouchSSOSession = f
+	mmTouchSSOSession.mock.funcTouchSSOSessionOrigin = minimock.CallerInfo(1)
+	return mmTouchSSOSession.mock
+}
+
+// When sets expectation for the Storage.TouchSSOSession which will trigger the result defined by the following
+// Then helper
+func (mmTouchSSOSession *mStorageMockTouchSSOSession) When(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, lastSeenAt time.Time, idleExpiresAt time.Time) *StorageMockTouchSSOSessionExpectation {
+	if mmTouchSSOSession.mock.funcTouchSSOSession != nil {
+		mmTouchSSOSession.mock.t.Fatalf("StorageMock.TouchSSOSession mock is already set by Set")
+	}
+
+	expectation := &StorageMockTouchSSOSessionExpectation{
+		mock:               mmTouchSSOSession.mock,
+		params:             &StorageMockTouchSSOSessionParams{ctx, tenantID, tokenHash, lastSeenAt, idleExpiresAt},
+		expectationOrigins: StorageMockTouchSSOSessionExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmTouchSSOSession.expectations = append(mmTouchSSOSession.expectations, expectation)
+	return expectation
+}
+
+// Then sets up Storage.TouchSSOSession return parameters for the expectation previously defined by the When method
+func (e *StorageMockTouchSSOSessionExpectation) Then(err error) *StorageMock {
+	e.results = &StorageMockTouchSSOSessionResults{err}
+	return e.mock
+}
+
+// Times sets number of times Storage.TouchSSOSession should be invoked
+func (mmTouchSSOSession *mStorageMockTouchSSOSession) Times(n uint64) *mStorageMockTouchSSOSession {
+	if n == 0 {
+		mmTouchSSOSession.mock.t.Fatalf("Times of StorageMock.TouchSSOSession mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmTouchSSOSession.expectedInvocations, n)
+	mmTouchSSOSession.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmTouchSSOSession
+}
+
+func (mmTouchSSOSession *mStorageMockTouchSSOSession) invocationsDone() bool {
+	if len(mmTouchSSOSession.expectations) == 0 && mmTouchSSOSession.defaultExpectation == nil && mmTouchSSOSession.mock.funcTouchSSOSession == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmTouchSSOSession.mock.afterTouchSSOSessionCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmTouchSSOSession.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// TouchSSOSession implements mm_port.Storage
+func (mmTouchSSOSession *StorageMock) TouchSSOSession(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, lastSeenAt time.Time, idleExpiresAt time.Time) (err error) {
+	mm_atomic.AddUint64(&mmTouchSSOSession.beforeTouchSSOSessionCounter, 1)
+	defer mm_atomic.AddUint64(&mmTouchSSOSession.afterTouchSSOSessionCounter, 1)
+
+	mmTouchSSOSession.t.Helper()
+
+	if mmTouchSSOSession.inspectFuncTouchSSOSession != nil {
+		mmTouchSSOSession.inspectFuncTouchSSOSession(ctx, tenantID, tokenHash, lastSeenAt, idleExpiresAt)
+	}
+
+	mm_params := StorageMockTouchSSOSessionParams{ctx, tenantID, tokenHash, lastSeenAt, idleExpiresAt}
+
+	// Record call args
+	mmTouchSSOSession.TouchSSOSessionMock.mutex.Lock()
+	mmTouchSSOSession.TouchSSOSessionMock.callArgs = append(mmTouchSSOSession.TouchSSOSessionMock.callArgs, &mm_params)
+	mmTouchSSOSession.TouchSSOSessionMock.mutex.Unlock()
+
+	for _, e := range mmTouchSSOSession.TouchSSOSessionMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmTouchSSOSession.TouchSSOSessionMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmTouchSSOSession.TouchSSOSessionMock.defaultExpectation.Counter, 1)
+		mm_want := mmTouchSSOSession.TouchSSOSessionMock.defaultExpectation.params
+		mm_want_ptrs := mmTouchSSOSession.TouchSSOSessionMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageMockTouchSSOSessionParams{ctx, tenantID, tokenHash, lastSeenAt, idleExpiresAt}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmTouchSSOSession.t.Errorf("StorageMock.TouchSSOSession got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmTouchSSOSession.TouchSSOSessionMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmTouchSSOSession.t.Errorf("StorageMock.TouchSSOSession got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmTouchSSOSession.TouchSSOSessionMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.tokenHash != nil && !minimock.Equal(*mm_want_ptrs.tokenHash, mm_got.tokenHash) {
+				mmTouchSSOSession.t.Errorf("StorageMock.TouchSSOSession got unexpected parameter tokenHash, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmTouchSSOSession.TouchSSOSessionMock.defaultExpectation.expectationOrigins.originTokenHash, *mm_want_ptrs.tokenHash, mm_got.tokenHash, minimock.Diff(*mm_want_ptrs.tokenHash, mm_got.tokenHash))
+			}
+
+			if mm_want_ptrs.lastSeenAt != nil && !minimock.Equal(*mm_want_ptrs.lastSeenAt, mm_got.lastSeenAt) {
+				mmTouchSSOSession.t.Errorf("StorageMock.TouchSSOSession got unexpected parameter lastSeenAt, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmTouchSSOSession.TouchSSOSessionMock.defaultExpectation.expectationOrigins.originLastSeenAt, *mm_want_ptrs.lastSeenAt, mm_got.lastSeenAt, minimock.Diff(*mm_want_ptrs.lastSeenAt, mm_got.lastSeenAt))
+			}
+
+			if mm_want_ptrs.idleExpiresAt != nil && !minimock.Equal(*mm_want_ptrs.idleExpiresAt, mm_got.idleExpiresAt) {
+				mmTouchSSOSession.t.Errorf("StorageMock.TouchSSOSession got unexpected parameter idleExpiresAt, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmTouchSSOSession.TouchSSOSessionMock.defaultExpectation.expectationOrigins.originIdleExpiresAt, *mm_want_ptrs.idleExpiresAt, mm_got.idleExpiresAt, minimock.Diff(*mm_want_ptrs.idleExpiresAt, mm_got.idleExpiresAt))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmTouchSSOSession.t.Errorf("StorageMock.TouchSSOSession got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmTouchSSOSession.TouchSSOSessionMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmTouchSSOSession.TouchSSOSessionMock.defaultExpectation.results
+		if mm_results == nil {
+			mmTouchSSOSession.t.Fatal("No results are set for the StorageMock.TouchSSOSession")
+		}
+		return (*mm_results).err
+	}
+	if mmTouchSSOSession.funcTouchSSOSession != nil {
+		return mmTouchSSOSession.funcTouchSSOSession(ctx, tenantID, tokenHash, lastSeenAt, idleExpiresAt)
+	}
+	mmTouchSSOSession.t.Fatalf("Unexpected call to StorageMock.TouchSSOSession. %v %v %v %v %v", ctx, tenantID, tokenHash, lastSeenAt, idleExpiresAt)
+	return
+}
+
+// TouchSSOSessionAfterCounter returns a count of finished StorageMock.TouchSSOSession invocations
+func (mmTouchSSOSession *StorageMock) TouchSSOSessionAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmTouchSSOSession.afterTouchSSOSessionCounter)
+}
+
+// TouchSSOSessionBeforeCounter returns a count of StorageMock.TouchSSOSession invocations
+func (mmTouchSSOSession *StorageMock) TouchSSOSessionBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmTouchSSOSession.beforeTouchSSOSessionCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageMock.TouchSSOSession.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmTouchSSOSession *mStorageMockTouchSSOSession) Calls() []*StorageMockTouchSSOSessionParams {
+	mmTouchSSOSession.mutex.RLock()
+
+	argCopy := make([]*StorageMockTouchSSOSessionParams, len(mmTouchSSOSession.callArgs))
+	copy(argCopy, mmTouchSSOSession.callArgs)
+
+	mmTouchSSOSession.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockTouchSSOSessionDone returns true if the count of the TouchSSOSession invocations corresponds
+// the number of defined expectations
+func (m *StorageMock) MinimockTouchSSOSessionDone() bool {
+	if m.TouchSSOSessionMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.TouchSSOSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.TouchSSOSessionMock.invocationsDone()
+}
+
+// MinimockTouchSSOSessionInspect logs each unmet expectation
+func (m *StorageMock) MinimockTouchSSOSessionInspect() {
+	for _, e := range m.TouchSSOSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageMock.TouchSSOSession at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterTouchSSOSessionCounter := mm_atomic.LoadUint64(&m.afterTouchSSOSessionCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.TouchSSOSessionMock.defaultExpectation != nil && afterTouchSSOSessionCounter < 1 {
+		if m.TouchSSOSessionMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageMock.TouchSSOSession at\n%s", m.TouchSSOSessionMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageMock.TouchSSOSession at\n%s with params: %#v", m.TouchSSOSessionMock.defaultExpectation.expectationOrigins.origin, *m.TouchSSOSessionMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcTouchSSOSession != nil && afterTouchSSOSessionCounter < 1 {
+		m.t.Errorf("Expected call to StorageMock.TouchSSOSession at\n%s", m.funcTouchSSOSessionOrigin)
+	}
+
+	if !m.TouchSSOSessionMock.invocationsDone() && afterTouchSSOSessionCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageMock.TouchSSOSession at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.TouchSSOSessionMock.expectedInvocations), m.TouchSSOSessionMock.expectedInvocationsOrigin, afterTouchSSOSessionCounter)
 	}
 }
 
@@ -23724,9 +25733,15 @@ func (m *StorageMock) MinimockFinish() {
 		if !m.minimockDone() {
 			m.MinimockDeleteFederatedSessionInspect()
 
+			m.MinimockDeleteSSOSessionInspect()
+
+			m.MinimockDeleteSSOSessionsByUserInspect()
+
 			m.MinimockFindFederatedSessionByUpstreamSubjectInspect()
 
 			m.MinimockFindProfileByEmailInspect()
+
+			m.MinimockGetActiveSSOSessionInspect()
 
 			m.MinimockGetAndConsumeAuthSessionInspect()
 
@@ -23836,7 +25851,11 @@ func (m *StorageMock) MinimockFinish() {
 
 			m.MinimockSaveRefreshTokenInspect()
 
+			m.MinimockSaveSSOSessionInspect()
+
 			m.MinimockSaveUserProfileInspect()
+
+			m.MinimockTouchSSOSessionInspect()
 
 			m.MinimockTrackUserLoginInspect()
 
@@ -23867,8 +25886,11 @@ func (m *StorageMock) minimockDone() bool {
 	done := true
 	return done &&
 		m.MinimockDeleteFederatedSessionDone() &&
+		m.MinimockDeleteSSOSessionDone() &&
+		m.MinimockDeleteSSOSessionsByUserDone() &&
 		m.MinimockFindFederatedSessionByUpstreamSubjectDone() &&
 		m.MinimockFindProfileByEmailDone() &&
+		m.MinimockGetActiveSSOSessionDone() &&
 		m.MinimockGetAndConsumeAuthSessionDone() &&
 		m.MinimockGetAndConsumeInteractionSessionDone() &&
 		m.MinimockGetAndConsumeOutboundHandshakeDone() &&
@@ -23923,7 +25945,9 @@ func (m *StorageMock) minimockDone() bool {
 		m.MinimockSavePARDone() &&
 		m.MinimockSavePasswordCredentialDone() &&
 		m.MinimockSaveRefreshTokenDone() &&
+		m.MinimockSaveSSOSessionDone() &&
 		m.MinimockSaveUserProfileDone() &&
+		m.MinimockTouchSSOSessionDone() &&
 		m.MinimockTrackUserLoginDone() &&
 		m.MinimockUpdatePasswordLockoutStateDone() &&
 		m.MinimockUpsertUserIdentityDone()
