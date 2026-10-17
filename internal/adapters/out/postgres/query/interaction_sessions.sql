@@ -16,7 +16,9 @@ INSERT INTO interaction_sessions (
     expires_at,
     state,
     nonce,
-    acr_values
+    acr_values,
+    partition_id,
+    session_id
 )
 SELECT
     @id::uuid,
@@ -29,7 +31,9 @@ SELECT
     @expires_at::timestamptz,
     @state,
     @nonce,
-    @acr_values
+    @acr_values,
+    @partition_id::bigint,
+    sqlc.narg('session_id')::uuid
 FROM tenant;
 
 -- name: ConsumeInteractionSession :one
@@ -48,6 +52,8 @@ WITH deleted AS (
         state,
         nonce,
         acr_values,
+        partition_id,
+        session_id,
         (SELECT tenant_uuid FROM tenants WHERE id = tenant_id) AS tenant_uuid
 )
 SELECT
@@ -61,6 +67,8 @@ SELECT
     state,
     nonce,
     acr_values,
+    partition_id,
+    session_id,
     tenant_uuid
 FROM deleted
 LIMIT 1;
@@ -77,6 +85,8 @@ SELECT
     state,
     nonce,
     acr_values,
+    partition_id,
+    session_id,
     (SELECT tenant_uuid FROM tenants WHERE id = tenant_id) AS tenant_uuid
 FROM interaction_sessions
 WHERE id = @id::uuid

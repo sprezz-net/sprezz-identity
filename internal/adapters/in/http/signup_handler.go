@@ -4,7 +4,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"sprezz-identity/internal/domain/model"
@@ -12,10 +11,7 @@ import (
 	"sprezz-identity/internal/views/public"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
-
-const routeAuthorize = "/oauth/authorize"
 
 type SignupHandler struct {
 	registrationUseCase port.UserRegistrationUseCase
@@ -41,26 +37,50 @@ func (h *SignupHandler) HandleSignUpForm(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	interactionID := r.URL.Query().Get("tx")
-	if interactionID == "" {
-		interactionID = h.parseInteractionCookie(r, tenant.ID)
-	}
-
-	ctxResp, err := h.registrationUseCase.GetSignupContext(r.Context(), port.GetSignupContextCommand{
-		TenantID:       tenant.ID,
-		InteractionID:  interactionID,
-		ConsumeSession: false,
-	})
-	if err != nil || ctxResp.Provider == nil {
-		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-		w.WriteHeader(http.StatusForbidden)
-		_ = public.Error("Self-service signup is not configured or enabled for this partition").Render(r.Context(), w)
+	tx := r.URL.Query().Get("tx")
+	ctxResp, _, result := h.bindSignup(w, r, tenant, tx, true)
+	if result != flowOK {
+		h.refuseSignup(w, r, tenant, ctxResp, result)
 		return
 	}
 
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-	component := public.SignUp(make(map[string]string), ctxResp.Provider, "", "", "", interactionID)
+	component := public.SignUp(make(map[string]string), ctxResp.Provider, "", "", "", tx)
 	_ = component.Render(r.Context(), w)
+}
+
+// bindSignup loads the signup context and checks that the browser owns the sign-in it belongs to.
+func (h *SignupHandler) bindSignup(w http.ResponseWriter, r *http.Request, tenant *model.Tenant, tx string, mayStart bool) (*port.SignupContextResponse, *model.SSOSession, flowResult) {
+	ctxResp, err := h.registrationUseCase.GetSignupContext(r.Context(), port.GetSignupContextCommand{
+		TenantID:       tenant.ID,
+		InteractionID:  tx,
+		ConsumeSession: false,
+	})
+	if err != nil || ctxResp.Provider == nil {
+		return nil, nil, flowRefused
+	}
+	// A ?tx= that names no live interaction is an expired sign-in, not a direct visit.
+	if tx != "" && ctxResp.InteractionSession == nil {
+		return nil, nil, flowRefused
+	}
+
+	session, result := resolveFlow(w, r, h.ssoUseCase, tenant.ID, ctxResp.InteractionSession, directPartitionOf(tenant), mayStart)
+	return ctxResp, session, result
+}
+
+// refuseSignup answers a signup page or submit that does not belong to the browser's flow.
+func (h *SignupHandler) refuseSignup(w http.ResponseWriter, r *http.Request, tenant *model.Tenant, ctxResp *port.SignupContextResponse, result flowResult) {
+	if result == flowSignedIn && ctxResp != nil {
+		http.Redirect(w, r, signedInRedirectURL(tenant, ctxResp.InteractionSession), http.StatusFound)
+		return
+	}
+	if ctxResp == nil {
+		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
+		w.WriteHeader(http.StatusForbidden)
+		_ = public.Error("Self-service signup is not configured, enabled for this partition, or this sign-in is no longer valid").Render(r.Context(), w)
+		return
+	}
+	renderFlowRefused(w, r)
 }
 
 func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Request) {
@@ -71,27 +91,27 @@ func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	interactionID := r.FormValue("tx")
-	if interactionID == "" {
-		interactionID = h.parseInteractionCookie(r, tenant.ID)
-	}
-
-	ctxResp, err := h.registrationUseCase.GetSignupContext(r.Context(), port.GetSignupContextCommand{
-		TenantID:       tenant.ID,
-		InteractionID:  interactionID,
-		ConsumeSession: false,
-	})
-	if err != nil || ctxResp.Provider == nil {
-		w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
-		w.WriteHeader(http.StatusForbidden)
-		_ = public.Error("Self-service signup is not configured or enabled for this partition").Render(r.Context(), w)
+	tx := r.FormValue("tx")
+	ctxResp, session, result := h.bindSignup(w, r, tenant, tx, false)
+	switch result {
+	case flowRefused:
+		if ctxResp != nil {
+			h.renderInlineFormError(w, r, ctxResp.Provider, tx, map[string]string{"global": flowMessageRefused})
+			return
+		}
+		h.refuseSignup(w, r, tenant, nil, result)
 		return
+	case flowSignedIn:
+		w.Header().Set(model.HeaderHxRedirect, signedInRedirectURL(tenant, ctxResp.InteractionSession))
+		w.WriteHeader(http.StatusOK)
+		return
+	case flowOK:
 	}
 	provider := ctxResp.Provider
 
 	if err := r.ParseForm(); err != nil {
 		// Wraps input error into a structured map dictionary context envelope
-		h.renderInlineFormError(w, r, provider, interactionID, map[string]string{"global": "Malformed sign-up payload parameters submitted"})
+		h.renderInlineFormError(w, r, provider, tx, map[string]string{"global": "Malformed sign-up payload parameters submitted"})
 		return
 	}
 
@@ -103,7 +123,7 @@ func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Reques
 
 	if password != confirmPassword {
 		// Maps targeted confirmation failures straight onto the appropriate element key
-		h.renderInlineFormError(w, r, provider, interactionID, map[string]string{"confirm_password": "Passwords provided do not match"})
+		h.renderInlineFormError(w, r, provider, tx, map[string]string{"confirm_password": "Passwords provided do not match"})
 		return
 	}
 
@@ -125,36 +145,36 @@ func (h *SignupHandler) HandleSignUpSubmit(w http.ResponseWriter, r *http.Reques
 		Email:      email,
 		Password:   password,
 	})
-
 	if err != nil {
 		// Dynamic type assertion intercepts our structured field validation envelope smoothly
 		var valErr *port.ValidationError
 		if errors.As(err, &valErr) {
-			h.renderInlineFormError(w, r, provider, interactionID, valErr.Fields)
+			h.renderInlineFormError(w, r, provider, tx, valErr.Fields)
 			return
 		}
 		slog.Error("Self-service registration submission failed", "error", err, "tenant_id", tenant.ID, "username", username)
 		// Fallback for flat database errors or unique constraint blocks and wrap into a structured dictionary
-		h.renderInlineFormError(w, r, provider, interactionID, map[string]string{"global": err.Error()})
+		h.renderInlineFormError(w, r, provider, tx, map[string]string{"global": err.Error()})
 		return
 	}
 
-	// 3. Open the server-side session for the new account and hand the browser its opaque cookie
-	created, err := h.ssoUseCase.CreateSession(r.Context(), port.CreateSessionCommand{
+	// Signing up signs in: the pending session of this flow is promoted, with a fresh secret.
+	created, err := h.ssoUseCase.PromoteSession(r.Context(), port.PromoteSessionCommand{
 		TenantID:           tenant.ID,
-		PartitionID:        provider.PartitionID,
+		SessionID:          session.ID,
+		PartitionID:        session.PartitionID,
 		UserProfileID:      newProfile.ID,
 		IdentityProviderID: provider.ID,
 		RequestHost:        r.Host,
 	})
 	if err != nil {
-		slog.Error("Self-service registration: failed to create the session", "error", err, "tenant_id", tenant.ID)
-		h.renderInlineFormError(w, r, provider, interactionID, map[string]string{"global": "Your account was created, but we could not sign you in. Please sign in."})
+		slog.Error("Self-service registration: failed to promote the session", "error", err, "tenant_id", tenant.ID)
+		h.renderInlineFormError(w, r, provider, tx, map[string]string{"global": "Your account was created, but we could not sign you in. Please sign in."})
 		return
 	}
 	writeSessionCookie(w, &created.Cookie)
 
-	targetURL := h.resolveSignUpRedirectURL(r, tenant, interactionID)
+	targetURL := h.resolveSignUpRedirectURL(r, tenant, tx)
 	w.Header().Set(model.HeaderHxRedirect, targetURL)
 	w.WriteHeader(http.StatusOK)
 }
@@ -183,63 +203,9 @@ func (h *SignupHandler) resolveSignUpRedirectURL(r *http.Request, tenant *model.
 			ConsumeSession: true,
 		})
 		if err == nil && ctxResp.InteractionSession != nil {
-			return h.reconstructAuthorizeURL(ctxResp.InteractionSession)
+			return reconstructAuthorizeURL(ctxResp.InteractionSession)
 		}
 	}
 
 	return tenant.Config.DefaultRedirectURI
-}
-
-func (h *SignupHandler) reconstructAuthorizeURL(session *model.InteractionSession) string {
-	var sb strings.Builder
-	sb.WriteString(routeAuthorize)
-	sb.WriteString("?client_id=")
-	sb.WriteString(url.QueryEscape(session.ClientID))
-	sb.WriteString("&redirect_uri=")
-	sb.WriteString(url.QueryEscape(session.RedirectURI))
-
-	if session.CodeChallenge != "" {
-		sb.WriteString("&code_challenge=")
-		sb.WriteString(url.QueryEscape(session.CodeChallenge))
-	}
-	if session.ChallengeMethod != "" {
-		sb.WriteString("&code_challenge_method=")
-		sb.WriteString(url.QueryEscape(session.ChallengeMethod))
-	}
-	if session.IDPHint != "" {
-		sb.WriteString("&idp_hint=")
-		sb.WriteString(url.QueryEscape(session.IDPHint))
-	}
-	if session.State != "" {
-		sb.WriteString("&state=")
-		sb.WriteString(url.QueryEscape(session.State))
-	}
-	if session.Nonce != "" {
-		sb.WriteString("&nonce=")
-		sb.WriteString(url.QueryEscape(session.Nonce))
-	}
-	return sb.String()
-}
-
-func (h *SignupHandler) parseInteractionCookie(r *http.Request, tenantID uuid.UUID) string {
-	cookieSpec, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
-		TenantID:       tenantID,
-		LifecycleStage: "handshake",
-		RequestHost:    r.Host,
-	})
-	if err != nil {
-		return ""
-	}
-
-	cookie, err := r.Cookie(cookieSpec.CookieName)
-	if err != nil || cookie.Value == "" {
-		return ""
-	}
-
-	_, payload, err := h.ssoUseCase.ParseSessionCookie(r.Context(), cookie.Value)
-	if err != nil {
-		return ""
-	}
-
-	return payload
 }

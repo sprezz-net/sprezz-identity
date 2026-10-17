@@ -12,6 +12,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// flowMessageExpired is shown when the ?tx= of a sign-in is unknown or has expired.
+const flowMessageExpired = "Your sign-in took too long or is no longer valid. Please start again from the application you were signing in to."
+
 type LoginHandler struct {
 	authUseCase      port.AuthUseCase
 	federatedUseCase port.FederatedLoginUseCase
@@ -42,25 +45,51 @@ func (h *LoginHandler) HandleLoginRootRedirect(w http.ResponseWriter, r *http.Re
 	http.Redirect(w, r, target, http.StatusFound)
 }
 
+// loadInteraction loads the pending OAuth request behind a ?tx= value. ok is false when a tx was given that is
+// unknown or expired; an empty tx is a login page opened directly and gives (nil, true).
+func (h *LoginHandler) loadInteraction(r *http.Request, tenantID uuid.UUID, tx string) (*model.InteractionSession, bool) {
+	if tx == "" {
+		return nil, true
+	}
+	interaction, err := h.localAuthUseCase.GetInteractionSession(r.Context(), tenantID, tx)
+	if err != nil || interaction == nil {
+		return nil, false
+	}
+	return interaction, true
+}
+
+func renderFlowExpired(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
+	w.WriteHeader(http.StatusGone)
+	_ = public.Error(flowMessageExpired).Render(r.Context(), w)
+}
+
 func (h *LoginHandler) HandleLoginRoot(w http.ResponseWriter, r *http.Request) {
 	tenantUUID := TenantIDFromContext(r.Context())
-	interactionID := r.URL.Query().Get("tx")
-	if interactionID == "" {
-		interactionID = h.parseInteractionCookie(r, tenantUUID)
+	tenant, _ := TenantFromContext(r.Context())
+	tx := r.URL.Query().Get("tx")
+
+	interaction, ok := h.loadInteraction(r, tenantUUID, tx)
+	if !ok {
+		renderFlowExpired(w, r)
+		return
 	}
 
-	if interactionID == "" {
-		if h.hasActiveBearerSession(r, tenantUUID) {
-			if tenant, ok := TenantFromContext(r.Context()); ok && tenant.Config.DefaultRedirectURI != "" {
-				http.Redirect(w, r, tenant.Config.DefaultRedirectURI, http.StatusFound)
-				return
-			}
-		}
+	// The sign-in belongs to the browser that started it. A direct visit starts a pending session of its own.
+	session, result := resolveFlow(w, r, h.ssoUseCase, tenantUUID, interaction, directPartitionOf(tenant), true)
+	switch result {
+	case flowRefused:
+		renderFlowRefused(w, r)
+		return
+	case flowSignedIn:
+		http.Redirect(w, r, signedInRedirectURL(tenant, interaction), http.StatusFound)
+		return
+	case flowOK:
 	}
 
 	ctxResp, err := h.localAuthUseCase.GetLoginContext(r.Context(), port.GetLoginContextCommand{
 		TenantID:      tenantUUID,
-		InteractionID: interactionID,
+		InteractionID: tx,
 		IDPHintQuery:  r.URL.Query().Get("idp_hint"),
 	})
 	if err != nil {
@@ -71,7 +100,7 @@ func (h *LoginHandler) HandleLoginRoot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if ctxResp.TriggerAutoFederatedIDP != nil {
-		h.triggerExternalFederationRedirection(w, r, tenantUUID, *ctxResp.TriggerAutoFederatedIDP, ctxResp.InteractionSession, ctxResp.TenantBaseURI)
+		h.triggerExternalFederationRedirection(w, r, tenantUUID, *ctxResp.TriggerAutoFederatedIDP, ctxResp.InteractionSession, ctxResp.TenantBaseURI, session.ID)
 		return
 	}
 
@@ -82,22 +111,45 @@ func (h *LoginHandler) HandleLoginRoot(w http.ResponseWriter, r *http.Request) {
 		Providers:                ctxResp.Providers,
 		ShowUsernamePasswordForm: ctxResp.ShowUsernamePasswordForm,
 		PartitionID:              ctxResp.PartitionID,
-		InteractionID:            interactionID,
+		InteractionID:            tx,
 	})
 	_ = component.Render(r.Context(), w)
 }
 
 func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 	tenantUUID := TenantIDFromContext(r.Context())
-	interactionID := r.FormValue("tx")
-	if interactionID == "" {
-		interactionID = h.parseInteractionCookie(r, tenantUUID)
+	tenant, _ := TenantFromContext(r.Context())
+	tx := r.FormValue("tx")
+
+	ctxResp, ctxErr := h.localAuthUseCase.GetLoginContext(r.Context(), port.GetLoginContextCommand{
+		TenantID:      tenantUUID,
+		InteractionID: tx,
+	})
+	if ctxErr != nil || ctxResp == nil {
+		renderFlowExpired(w, r)
+		return
 	}
 
-	ctxResp, _ := h.localAuthUseCase.GetLoginContext(r.Context(), port.GetLoginContextCommand{
-		TenantID:      tenantUUID,
-		InteractionID: interactionID,
-	})
+	interaction, ok := h.loadInteraction(r, tenantUUID, tx)
+	if !ok {
+		renderFlowExpired(w, r)
+		return
+	}
+
+	// Only the browser that started the sign-in may finish it. A submit without its cookie is refused, whether the
+	// cookies are blocked or the form was posted from somewhere else.
+	session, result := resolveFlow(w, r, h.ssoUseCase, tenantUUID, interaction, directPartitionOf(tenant), false)
+	switch result {
+	case flowRefused:
+		h.renderInlineFormError(w, r, ctxResp, tx, map[string]string{"global": flowMessageRefused})
+		return
+	case flowSignedIn:
+		// A stale tab or a double submit: the existing session completes the request, no second sign-in.
+		w.Header().Set(model.HeaderHxRedirect, signedInRedirectURL(tenant, interaction))
+		w.WriteHeader(http.StatusOK)
+		return
+	case flowOK:
+	}
 
 	username := r.FormValue("username")
 	password := r.FormValue("password")
@@ -110,35 +162,11 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 		if password == "" {
 			errs["password"] = "Password authorization parameter is required"
 		}
-		h.renderInlineFormError(w, r, ctxResp, interactionID, errs)
+		h.renderInlineFormError(w, r, ctxResp, tx, errs)
 		return
 	}
 
-	interactionSession, _ := h.localAuthUseCase.GetInteractionSession(r.Context(), tenantUUID, interactionID)
-
-	var partitionID int64
-	var providerID uuid.UUID
-	var redirectURL string
-
-	if interactionSession != nil {
-		if interactionSession.PartitionID != 0 {
-			partitionID = interactionSession.PartitionID
-		} else {
-			tenant, ok := TenantFromContext(r.Context())
-			if ok && tenant.DefaultPartition != nil {
-				partitionID = *tenant.DefaultPartition
-			}
-		}
-		providerID = interactionSession.IdentityProviderID
-	} else {
-		tenant, ok := TenantFromContext(r.Context())
-		if ok {
-			if tenant.DefaultPartition != nil {
-				partitionID = *tenant.DefaultPartition
-			}
-			redirectURL = tenant.Config.DefaultRedirectURI
-		}
-	}
+	partitionID, providerID, redirectURL := h.localSignInTarget(tenant, interaction)
 
 	// 1. Authenticate local credentials first (verifies password and handles lockouts)
 	loginResp, err := h.localAuthUseCase.AuthenticateLocalCredentials(r.Context(), port.LocalLoginCommand{
@@ -153,53 +181,53 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 		// This completely masks lockouts, administrative blocks, and non-existent users.
 		genericErrorMessage := "Invalid username or password"
 
-		errs := map[string]string{
-			"username": genericErrorMessage,
-			"password": genericErrorMessage,
-		}
-
 		// We log the forensic reason internally for audit trails but never leak it to the client viewport
 		slog.Warn("Local authentication checkpoint failed",
 			"error", err,
 			"tenant_id", tenantUUID,
 			"username", username,
 		)
-		h.renderInlineFormError(w, r, ctxResp, interactionID, errs)
+		h.renderInlineFormError(w, r, ctxResp, tx, map[string]string{
+			"username": genericErrorMessage,
+			"password": genericErrorMessage,
+		})
 		return
 	}
 
-	// 2. Open the server-side session and hand the browser its opaque cookie
-	created, err := h.ssoUseCase.CreateSession(r.Context(), port.CreateSessionCommand{
+	// 2. Signing in promotes the pending session: same session ID, a fresh secret and the full lifetime. The cookie
+	// the sign-in ran under stops working at this moment.
+	created, err := h.ssoUseCase.PromoteSession(r.Context(), port.PromoteSessionCommand{
 		TenantID:           tenantUUID,
-		PartitionID:        partitionID,
+		SessionID:          session.ID,
+		PartitionID:        session.PartitionID,
 		UserProfileID:      loginResp.UserProfileID,
 		IdentityProviderID: providerID,
 		RequestHost:        r.Host,
 	})
 	if err != nil {
-		slog.Error("Local login: failed to create the session", "error", err, "tenant_id", tenantUUID)
-		h.renderInlineFormError(w, r, ctxResp, interactionID, map[string]string{"global": "Unable to sign you in right now"})
+		slog.Error("Local login: failed to promote the session", "error", err, "tenant_id", tenantUUID)
+		h.renderInlineFormError(w, r, ctxResp, tx, map[string]string{"global": "Unable to sign you in right now. Please try again."})
 		return
 	}
 	writeSessionCookie(w, &created.Cookie)
 
-	// 3. If there is an active interaction session, delegate to OIDC authorize flow completion
-	if interactionSession != nil {
+	// 3. If there is an interaction session, delegate to the OIDC authorize flow to complete the request
+	if interaction != nil {
 		result, err := h.authUseCase.ProcessAuthorizeRequest(r.Context(), port.AuthorizeRequestCommand{
 			TenantID:        tenantUUID,
-			ClientID:        interactionSession.ClientID,
-			RedirectURI:     interactionSession.RedirectURI,
-			CodeChallenge:   interactionSession.CodeChallenge,
-			ChallengeMethod: interactionSession.ChallengeMethod,
-			State:           interactionSession.State,
-			Nonce:           interactionSession.Nonce,
-			ACRValues:       interactionSession.ACRValues,
+			ClientID:        interaction.ClientID,
+			RedirectURI:     interaction.RedirectURI,
+			CodeChallenge:   interaction.CodeChallenge,
+			ChallengeMethod: interaction.ChallengeMethod,
+			State:           interaction.State,
+			Nonce:           interaction.Nonce,
+			ACRValues:       interaction.ACRValues,
 			RequestHost:     r.Host,
 			RequestURI:      "",
 			ActiveSession:   &created.Session,
 		})
 		if err != nil {
-			h.renderInlineFormError(w, r, ctxResp, interactionID, map[string]string{"global": err.Error()})
+			h.renderInlineFormError(w, r, ctxResp, tx, map[string]string{"global": err.Error()})
 			return
 		}
 		redirectURL = result.RedirectURL
@@ -225,6 +253,24 @@ func (h *LoginHandler) HandleLoginSubmit(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 }
 
+// localSignInTarget works out where a local sign-in happens: the partition, the provider and, for a direct visit
+// without an interaction session, where to land afterwards.
+func (h *LoginHandler) localSignInTarget(tenant *model.Tenant, interaction *model.InteractionSession) (int64, uuid.UUID, string) {
+	if interaction != nil {
+		partitionID := interaction.PartitionID
+		if partitionID == 0 {
+			partitionID = directPartitionOf(tenant)
+		}
+		return partitionID, interaction.IdentityProviderID, ""
+	}
+
+	redirectURL := ""
+	if tenant != nil {
+		redirectURL = tenant.Config.DefaultRedirectURI
+	}
+	return directPartitionOf(tenant), uuid.Nil, redirectURL
+}
+
 // Returning an HTTP 200 OK alongside only the LoginForm sub-component partial
 func (h *LoginHandler) renderInlineFormError(w http.ResponseWriter, r *http.Request, ctxResp *port.LoginContextResponse, tx string, fieldErrors map[string]string) {
 	w.Header().Set(model.HeaderContentType, model.ContentTypeHTML)
@@ -244,45 +290,26 @@ func (h *LoginHandler) renderInlineFormError(w http.ResponseWriter, r *http.Requ
 	_ = component.Render(r.Context(), w)
 }
 
-func (h *LoginHandler) parseInteractionCookie(r *http.Request, tenantID uuid.UUID) string {
-	cookieSpec, err := h.ssoUseCase.BuildSessionCookie(r.Context(), port.CookieIntentCommand{
-		TenantID:       tenantID,
-		LifecycleStage: "handshake",
-		RequestHost:    r.Host,
-	})
-	if err != nil {
-		return ""
-	}
-
-	cookie, err := r.Cookie(cookieSpec.CookieName)
-	if err != nil || cookie.Value == "" {
-		return ""
-	}
-
-	_, payload, err := h.ssoUseCase.ParseSessionCookie(r.Context(), cookie.Value)
-	if err != nil {
-		return ""
-	}
-
-	return payload
-}
-
-func (h *LoginHandler) hasActiveBearerSession(r *http.Request, tenantID uuid.UUID) bool {
-	return defaultPartitionSession(r, h.ssoUseCase, tenantID) != nil
-}
-
-func (h *LoginHandler) triggerExternalFederationRedirection(w http.ResponseWriter, r *http.Request, tenantID uuid.UUID, provider model.IdentityProvider, session *model.InteractionSession, baseURI string) {
+func (h *LoginHandler) triggerExternalFederationRedirection(w http.ResponseWriter, r *http.Request, tenantID uuid.UUID, provider model.IdentityProvider, interaction *model.InteractionSession, baseURI string, flowSessionID uuid.UUID) {
 	// Assemble the fully qualified absolute redirection URL loop per RFC 6749 constraints
 	absoluteCallbackURI := baseURI + port.RouteFederationCallback
+
+	var clientID, finalTarget string
+	if interaction != nil {
+		clientID, finalTarget = interaction.ClientID, interaction.RedirectURI
+	} else if tenant, ok := TenantFromContext(r.Context()); ok {
+		finalTarget = tenant.Config.DefaultRedirectURI
+	}
 
 	// Delegate the initiation of the external federation payload directly down to the use case port
 	response, err := h.federatedUseCase.InitiateFederatedLogin(r.Context(), port.InitiateFederatedLoginCommand{
 		TenantID:           tenantID,
 		IdentityProviderID: provider.ID,
-		ClientID:           session.ClientID,
+		ClientID:           clientID,
 		RequestedScopes:    provider.Config.Scopes,
 		LocalCallbackURI:   absoluteCallbackURI,
-		FinalTargetURI:     session.RedirectURI,
+		FinalTargetURI:     finalTarget,
+		FlowSessionID:      flowSessionID,
 	})
 
 	if err != nil {

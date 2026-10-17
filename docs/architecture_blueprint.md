@@ -259,7 +259,8 @@ sequenceDiagram
 
     Note over LocalCore,LocalHTTP: [3. Federated Redirection]
     LocalCore-->>LocalHTTP: Return OIDC Authorization Intent URL & State
-    LocalHTTP->>Admin: Issue Handshake Cookie spz_session_sprezz_admin (Value = handshake:STATE)
+    LocalCore->>LocalCore: Start pending session (no user), STATE bound to its ID
+    LocalHTTP->>Admin: Set Cookie spz_session_sprezz_admin (opaque secret of the pending session)
     LocalHTTP->>Admin: 302 Redirect to Central Admin Tenant (Tenant A)
     Admin->>CentralIDP: GET /oauth/authorize?client_id=dyn_...&state=STATE&...
 
@@ -276,7 +277,7 @@ sequenceDiagram
     Admin->>LocalHTTP: GET /oauth/federation/callback?code=CODE&state=STATE
 
     Note over LocalHTTP,LocalCore: [5. Callback & Local Token Exchange]
-    LocalHTTP->>LocalHTTP: Assert incoming 'state' == cookie 'handshake:STATE'
+    LocalHTTP->>LocalCore: Redeem STATE only for the pending session behind the browser's cookie (else refused)
     LocalHTTP->>CentralIDP: Back-channel POST /oauth/token (Exchange CODE + PKCE verifier)
     CentralIDP-->>LocalHTTP: Return upstream Token Set (ID Token with email_verified=true)
     LocalHTTP->>LocalCore: ExchangeExternalToken(Tenant B, "admin_ui", ID Token)
@@ -294,8 +295,8 @@ sequenceDiagram
     LocalCore-->>LocalHTTP: Return native local Token Set
 
     Note over LocalHTTP,Admin: [7. Access Granted]
-    LocalCore->>LocalCore: Store sso_sessions row (SHA-256 of a fresh 256-bit secret)
-    LocalHTTP->>Admin: Overwrite Cookie spz_session_sprezz_admin with the opaque session secret
+    LocalCore->>LocalCore: Promote the pending session: same session ID, fresh secret, full lifetime
+    LocalHTTP->>Admin: Overwrite Cookie spz_session_sprezz_admin with the new secret
     LocalHTTP->>Admin: 302 Redirect to /admin (Dashboard Access Granted!)
 ```
 
@@ -321,10 +322,11 @@ Sprezz Identity implements standard password blocking and lockout controls to sa
 
 To maintain architectural purity, separation of concerns, and clean views:
 
-1. When `/oauth/authorize` is accessed unauthenticated, the server instantiates a high-entropy, short-lived `interaction_sessions` record (referencing a native UUID primary key) to store the incoming OAuth context (`client_id`, `redirect_uri`, `code_challenge`, etc.).
-2. The server sets a secure, HTTP-only, short-lived session cookie containing ONLY the session UUID (`spz_auth_session_id`) and redirects to `/`.
-3. The login view template (`login.templ`) is completely decoupled and receives zero OIDC parameters.
-4. Upon successful credential validation, the server consumes (and deletes) the interaction session, clears the cookie, and seamlessly completes the authorization code grant code swap.
+1. When `/oauth/authorize` is accessed unauthenticated, the server stores the incoming OAuth context (`client_id`, `redirect_uri`, `code_challenge`, `state`, `nonce`, `acr_values`, the partition) in a short-lived `interaction_sessions` record (10 minutes) and redirects to `/login?tx=<interaction id>`.
+2. The same step starts, or reuses, the browser's **pending SSO session** (see 8.3.2) and binds the interaction to it (`interaction_sessions.session_id`). The `?tx=` identifies *which* sign-in; the pending session proves *whose* it is. Both are needed: `tx` alone is only a bearer reference that anybody holding the URL could use.
+3. The login view template (`login.templ`) is completely decoupled and receives zero OIDC parameters beyond the `tx`.
+4. Login, sign-up and the federation callback only proceed when the request carries the cookie of the pending session the flow was bound to. A login URL, a form post or a callback URL that reaches another browser finds no matching cookie and is refused (this closes login CSRF).
+5. On success the pending session is **promoted** to the signed-in session, and the authorization code grant completes.
 
 ### 4.2 Content Security Policy & Cryptographic Nonce Propagation
 
@@ -695,16 +697,27 @@ To satisfy strict compliance, data minimalization, and audit guidelines, the pla
 
 This configuration forces the browser to sandbox storage contexts natively (e.g., `spz_session_default` running concurrently beside `spz_session_sprezz_admin`), eliminating state overwrites.
 
-### 8.3.2 Transient Protocol Lifecycle Prefixes
+### 8.3.2 Session Lifecycle: Pending, Active, Cleared
 
-Within the isolated partition cookie, states are evaluated and migrated using strict protocol value prefixes:
+There is exactly one cookie per partition (`spz_session_[partition_alias]`, `__Host-` prefixed outside local), and its value is always an **opaque random secret** (256 bits from `crypto/rand`, base64url). It carries no identity and no claims, so it cannot be forged, guessed or decoded. The server keeps the session in the `sso_sessions` table, keyed by the **SHA-256 hash** of the secret, so a database leak cannot be replayed. The row's public `id` (never the secret) is the `sid` claim and the anchor of client session links.
 
-- **Outbound Handshake Lifecycle:** The cookie value stores a high-entropy state tracking UUID prefixed with the handshake protocol identifier (`handshake:[state_uuid]`). This acts as an anti-XSRF fence during the redirection loop, restricted strictly to a short-lived, 5-minute (300 seconds) expiration boundary.
-- **Authenticated Session Lifecycle:** Once a sign-in succeeds, the cookie value is replaced with an **opaque random secret** (256 bits from `crypto/rand`, base64url). It carries no identity and no claims, so it cannot be forged, guessed or decoded. The server keeps the session in the `sso_sessions` table, keyed by the **SHA-256 hash** of the secret, so a database leak cannot be replayed. A new secret is generated at every sign-in, so a planted cookie never becomes valid (no session fixation). The session row holds the tenant, partition, user, identity provider, `acr`/`amr`, `auth_time`, creation and last-seen time, an absolute expiry and an idle expiry. The row's public `id` (not the secret) is the `sid` claim and the anchor of client session links.
-- **Session limits:** the absolute lifetime defaults to 24 hours and the idle timeout to 8 hours; the administrative partition (`sprezz_admin`) defaults to 8 hours and 1 hour. All four are configurable (`SESSION_ABSOLUTE_LIFETIME`, `SESSION_IDLE_TIMEOUT`, `ADMIN_SESSION_ABSOLUTE_LIFETIME`, `ADMIN_SESSION_IDLE_TIMEOUT`). "Last seen" is written at most once a minute per session, so a busy session does not cause a write per request.
-- **Where the state lives, and why:** the identity server stays stateless where a resource server verifies a token on its own (access tokens: only revoked `jti` values are tracked). The browser session is read only by this server, on one primary-key lookup per browser request, so server-side state costs little there and buys real sign-out, idle and absolute timeouts, "sign out everywhere" and tenant deactivation that takes effect at once. Resolving a session is a single query that is tenant-scoped; expired, idle and signed-out sessions are invisible even before the 15-minute housekeeping sweep deletes them.
+A session is in one of two states:
+
+- **Pending (a sign-in in progress).** Created when `/authorize`, the login page or the admin console starts a sign-in and the browser has no live session cookie for the partition. It names **no user** and authenticates nothing: it exists only to bind the flow to the browser that started it. It lives 15 minutes and does not slide, so a sign-in cannot be kept alive forever. A browser that already holds a pending session (a second tab) keeps it, so tabs share one binding and each flow keeps its own `tx` or `state`.
+- **Active (signed in).** Signing in **promotes the pending row in place**: the session ID stays (so other tabs' flows stay bound), the secret is replaced (so the cookie the flow ran under is dead, and a planted cookie never becomes a session: no fixation), and the full lifetime starts. Promotion is a conditional update on a pending, unexpired session of that tenant and partition, so a double submit or replayed callback signs in once.
+
+The invariant that keeps this safe: **`ResolveSession` only ever returns active sessions.** Everything that needs a signed-in user (authorize, the profile pages, the admin guard) goes through it, so a pending session can never authenticate anything. Only the login, sign-up and federation-callback handlers use the flow-aware lookups, and the database enforces the shape (`state = 'active'` requires a user, `'pending'` forbids one).
+
+- **Session limits:** a signed-in session lasts 24 hours absolute and 8 hours idle; the administrative partition (`sprezz_admin`) 8 hours and 1 hour. All four are configurable (`SESSION_ABSOLUTE_LIFETIME`, `SESSION_IDLE_TIMEOUT`, `ADMIN_SESSION_ABSOLUTE_LIFETIME`, `ADMIN_SESSION_IDLE_TIMEOUT`). "Last seen" is written at most once a minute per session, so a busy session does not cause a write per request. A pending session lasts 15 minutes.
+- **Where the state lives, and why:** the identity server stays stateless where a resource server verifies a token on its own (access tokens: only revoked `jti` values are tracked). The browser session is read only by this server, on one primary-key lookup per browser request, so server-side state costs little there and buys real sign-out, idle and absolute timeouts, "sign out everywhere" and a tenant deactivation that takes effect at once. Resolving a session is a single tenant-scoped query; expired, idle and pending sessions are invisible to it even before the 15-minute housekeeping sweep deletes them.
 - **Revocation:** sign-out deletes the row (`ProcessLogoutRequest`, `/admin/logout`), deactivating a tenant purges all of its sessions, and a user's sessions can be ended together (`RevokeUserSessions`). Deleting a user, partition or tenant cascades to its sessions.
-- **Clear/Evict Lifecycle:** When terminating or revoking a session, the adapter forcefully expires and clears the browser's partition-scoped first-party cookie by returning a standard `Set-Cookie` header with a negative `Max-Age` attribute (`Max-Age = -1`) and an empty value.
+- **Binding checks:** the interaction session and the outbound OIDC handshake both store the pending session ID (`ON DELETE CASCADE`, so a deleted or pruned session takes its flows with it). The login and sign-up submit resolve the cookie of the interaction's partition and require it to be *that* session. The federation callback offers the pending sessions behind the request's cookies to the storage, and the state only redeems when the handshake was started by one of them (at most 8 session cookies are examined per request).
+- **Already signed in:** an authorize request with an active session keeps its silent SSO. A login or sign-up page or submit from a signed-in browser does not sign in again: it is sent back to `/authorize` (or the landing page), where the existing session completes the request.
+- **No cookies:** a submit without its cookie is refused with a message that cookies are required; there is no fallback to `tx` alone.
+- **Expiry:** an unknown or expired `tx` shows "your sign-in took too long, start again".
+- **Constraint:** the federation callback is a GET, which carries `SameSite=Lax` cookies on a top-level navigation. An upstream provider configured for `form_post` would send a POST and drop the cookie, which would break the binding; `form_post` is not supported.
+- **Limits:** a client that sends no cookies creates a pending row per request. Reusing the browser's pending session bounds a normal browser, but unauthenticated writes still need rate limiting (todo).
+- **Clear/Evict:** when terminating or revoking a session, the adapter expires the partition cookie with `Max-Age = -1` and an empty value, and deletes the row.
 
 ### 8.4 Hypermedia Functional Validation and Error Delivery Strategy
 

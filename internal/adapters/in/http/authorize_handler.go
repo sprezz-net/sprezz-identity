@@ -35,15 +35,12 @@ func (h *AuthorizeHandler) HandleAuthorize(w http.ResponseWriter, r *http.Reques
 
 	tenantUUID := TenantIDFromContext(r.Context())
 
-	// 1. Resolve the live server-side session behind the partition cookie, if any
-	activeSession := defaultPartitionSession(r, h.ssoUseCase, tenantUUID)
-
 	var scopes []string
 	if scopeFormVal := r.FormValue("scope"); scopeFormVal != "" {
 		scopes = strings.Fields(scopeFormVal)
 	}
 
-	// 2. Map transport layer parameters into the pure driving port command object
+	// 1. Map transport layer parameters into the pure driving port command object
 	cmd := port.AuthorizeRequestCommand{
 		TenantID:        tenantUUID,
 		ClientID:        r.FormValue("client_id"),
@@ -57,18 +54,18 @@ func (h *AuthorizeHandler) HandleAuthorize(w http.ResponseWriter, r *http.Reques
 		ClaimsJSON:      r.FormValue("claims"),
 		RequestURI:      r.FormValue("request_uri"), // When PAR is used
 		Scopes:          scopes,
-		ActiveSession:   activeSession,
+		Cookies:         requestCookies(r), // the domain finds the session in the cookie of the client's partition
 		RequestHost:     r.Host,
 	}
 
-	// 3. Pure Delegation: Run validations and lifecycle states inside the core use case
+	// 2. Pure Delegation: Run validations and lifecycle states inside the core use case
 	result, err := h.authUseCase.ProcessAuthorizeRequest(r.Context(), cmd)
 	if err != nil {
 		h.writeWebPlainError(w, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
 
-	// 4. Apply side-effects explicitly dictated by the domain outcome
+	// 3. Apply side-effects explicitly dictated by the domain outcome
 	if result.HasCookieIntent {
 		http.SetCookie(w, &http.Cookie{
 			Name:     result.CookieName,

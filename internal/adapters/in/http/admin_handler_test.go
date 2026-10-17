@@ -50,14 +50,18 @@ func TestHttpAdapter_AdminOIDC_Initiation_Success(t *testing.T) {
 		AliasName: model.AdminPartitionAliasName,
 	}, nil)
 
-	suc.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
-		if cmd.LifecycleStage == "clear" {
-			return &port.CookieIntentResponse{CookieName: "spz_session_" + model.AdminPartitionAliasName}, nil
+	suc.BuildSessionCookieMock.Optional().Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
+		return &port.CookieIntentResponse{CookieName: "spz_session_" + model.AdminPartitionAliasName}, nil
+	})
+	pendingAdminFlow := model.SSOSession{ID: uuid.New(), TenantID: tenantID, PartitionID: 1, State: model.SSOSessionPending}
+	suc.StartFlowMock.Set(func(ctx context.Context, cmd port.StartFlowCommand) (*port.StartedFlow, error) {
+		if cmd.TenantID != tenantID || cmd.PartitionID != 1 {
+			t.Errorf("the admin sign-in starts in the administrative partition, got %+v", cmd)
 		}
-		if cmd.LifecycleStage == "handshake" {
-			return &port.CookieIntentResponse{CookieName: "spz_session_" + model.AdminPartitionAliasName, CookieValue: "handshake:test-state-token"}, nil
-		}
-		return nil, nil
+		return &port.StartedFlow{
+			Session: pendingAdminFlow,
+			Cookie:  &port.CookieIntentResponse{CookieName: "spz_session_" + model.AdminPartitionAliasName, CookieValue: "pending-secret", MaxAge: 900},
+		}, nil
 	})
 
 	storage.GetIdentityProvidersMock.Expect(minimock.AnyContext, tenantID).Return([]model.IdentityProvider{
@@ -71,7 +75,7 @@ func TestHttpAdapter_AdminOIDC_Initiation_Success(t *testing.T) {
 		},
 	}, nil)
 
-	aluc.InitiateAdminLogonMock.Expect(minimock.AnyContext, tenantID, "http://admin-domain.com/oauth/federation/callback", "http://admin-domain.com/admin").Return(&port.InitiateFederatedLoginResponse{
+	aluc.InitiateAdminLogonMock.Expect(minimock.AnyContext, tenantID, pendingAdminFlow.ID, "http://admin-domain.com/oauth/federation/callback", "http://admin-domain.com/admin").Return(&port.InitiateFederatedLoginResponse{
 		TargetRedirectURL: "https://admin.com/oauth/authorize?client_id=registered-client-id",
 		StateToken:        "test-state-token",
 	}, nil)
@@ -91,9 +95,14 @@ func TestHttpAdapter_AdminOIDC_Initiation_Success(t *testing.T) {
 		t.Errorf("expected redirect location, got %s", location)
 	}
 
-	cookie := rec.Header().Get("Set-Cookie")
-	if cookie == "" {
-		t.Error("expected session tracking state cookie to be set")
+	var pending *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "spz_session_"+model.AdminPartitionAliasName && c.Value != "" {
+			pending = c
+		}
+	}
+	if pending == nil || pending.Value != "pending-secret" || !pending.HttpOnly || pending.MaxAge != 900 {
+		t.Errorf("expected the pending session cookie to be set HttpOnly for 15 minutes, got %+v", pending)
 	}
 }
 

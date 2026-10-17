@@ -56,7 +56,7 @@ func inactiveOAuthCases() []inactiveCase {
 			return err
 		}},
 		{"admin console login", func(ctx context.Context, e *inactiveEnv) error {
-			_, err := e.adminLog.InitiateAdminLogon(ctx, e.tenantID, "https://off.example.com/cb", "https://off.example.com/admin")
+			_, err := e.adminLog.InitiateAdminLogon(ctx, e.tenantID, uuid.New(), "https://off.example.com/cb", "https://off.example.com/admin")
 			return err
 		}},
 	}

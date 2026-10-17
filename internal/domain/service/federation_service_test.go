@@ -11,6 +11,7 @@ import (
 
 	"github.com/gojuno/minimock/v3"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFederationService_InitiateFederatedLogin_Success(t *testing.T) {
@@ -49,7 +50,9 @@ func TestFederationService_InitiateFederatedLogin_Success(t *testing.T) {
 		JwksURI:               "https://external-idp.com/jwks.json",
 	}, nil)
 
+	flowSessionID := uuid.New()
 	storage.SaveOutboundHandshakeMock.Set(func(ctx context.Context, session model.OutboundHandshakeSession) error {
+		require.Equal(t, flowSessionID, session.SessionID, "the handshake is bound to the browser that starts it")
 		return nil
 	})
 
@@ -60,6 +63,7 @@ func TestFederationService_InitiateFederatedLogin_Success(t *testing.T) {
 		RequestedScopes:    []string{"openid", "profile"},
 		LocalCallbackURI:   "https://callback",
 		FinalTargetURI:     "https://final",
+		FlowSessionID:      flowSessionID,
 	}
 
 	resp, err := svc.InitiateFederatedLogin(context.Background(), cmd)
@@ -89,9 +93,11 @@ func TestFederationService_ExecuteFederatedCallback_JITProvisioning(t *testing.T
 	tenantUUID := uuid.New()
 	providerUUID := uuid.New()
 	stateToken := "state-123"
+	flowSessionID := uuid.New()
 
 	// 1. Mock Outbound Handshake Session
-	storage.GetAndConsumeOutboundHandshakeMock.Expect(minimock.AnyContext, tenantUUID, stateToken).Return(&model.OutboundHandshakeSession{
+	storage.GetAndConsumeOutboundHandshakeMock.Expect(minimock.AnyContext, tenantUUID, stateToken, []uuid.UUID{flowSessionID}).Return(&model.OutboundHandshakeSession{
+		SessionID:          flowSessionID,
 		ID:                 stateToken,
 		TenantID:           tenantUUID,
 		PartitionID:        2,
@@ -179,10 +185,10 @@ func TestFederationService_ExecuteFederatedCallback_JITProvisioning(t *testing.T
 	})
 
 	cmd := port.FederatedCallbackCommand{
-		TenantID:      tenantUUID,
-		IncomingState: stateToken,
-		IncomingCode:  "code-123",
-		SessionID:     "native-session-999",
+		TenantID:       tenantUUID,
+		IncomingState:  stateToken,
+		IncomingCode:   "code-123",
+		FlowSessionIDs: []uuid.UUID{flowSessionID},
 	}
 
 	resp, err := svc.ExecuteFederatedCallback(context.Background(), cmd)
@@ -212,9 +218,11 @@ func TestFederationService_ExecuteFederatedCallback_FailsIfEmailUnverified(t *te
 	tenantUUID := uuid.New()
 	providerUUID := uuid.New()
 	stateToken := "state-123"
+	flowSessionID := uuid.New()
 
 	// 1. Mock Outbound Handshake Session
-	storage.GetAndConsumeOutboundHandshakeMock.Expect(minimock.AnyContext, tenantUUID, stateToken).Return(&model.OutboundHandshakeSession{
+	storage.GetAndConsumeOutboundHandshakeMock.Expect(minimock.AnyContext, tenantUUID, stateToken, []uuid.UUID{flowSessionID}).Return(&model.OutboundHandshakeSession{
+		SessionID:          flowSessionID,
 		ID:                 stateToken,
 		TenantID:           tenantUUID,
 		PartitionID:        2,
@@ -266,10 +274,10 @@ func TestFederationService_ExecuteFederatedCallback_FailsIfEmailUnverified(t *te
 	storage.GetUserIdentityByProviderAndExternalIDMock.Expect(minimock.AnyContext, tenantUUID, int64(2), providerUUID, "upstream-sub-123").Return(nil, port.ErrSessionNotFound)
 
 	cmd := port.FederatedCallbackCommand{
-		TenantID:      tenantUUID,
-		IncomingState: stateToken,
-		IncomingCode:  "code-123",
-		SessionID:     "native-session-999",
+		TenantID:       tenantUUID,
+		IncomingState:  stateToken,
+		IncomingCode:   "code-123",
+		FlowSessionIDs: []uuid.UUID{flowSessionID},
 	}
 
 	_, err := svc.ExecuteFederatedCallback(context.Background(), cmd)
@@ -281,4 +289,56 @@ func TestFederationService_ExecuteFederatedCallback_FailsIfEmailUnverified(t *te
 	if err.Error() != expectedErrorStr {
 		t.Errorf("expected error '%s', got '%s'", expectedErrorStr, err.Error())
 	}
+}
+
+// The state of an outbound handshake only redeems for the browser that started it: the storage is asked with the
+// pending sessions behind the cookies of the request, and a miss refuses the callback before anything else happens.
+func TestFederationService_ExecuteFederatedCallback_RefusesABrowserThatDidNotStartTheFlow(t *testing.T) {
+	ctrl := minimock.NewController(t)
+
+	storage := portmock.NewStorageMock(ctrl) // strict: nothing happens after the refusal
+	allowTenant(storage)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+	clock := portmock.NewMockClock(time.Now())
+	idp := NewIdentityProviderService(storage, adminStorage, crypto, clock, nil)
+	svc := NewFederationService(storage, portmock.NewFederationClientMock(ctrl), crypto, clock, idp, NewOAuthValidatorService(idp))
+
+	tenantUUID := uuid.New()
+	attackerBrowser := uuid.New()
+	storage.GetAndConsumeOutboundHandshakeMock.Expect(minimock.AnyContext, tenantUUID, "state-123", []uuid.UUID{attackerBrowser}).
+		Return(nil, port.ErrSessionNotFound)
+
+	_, err := svc.ExecuteFederatedCallback(context.Background(), port.FederatedCallbackCommand{
+		TenantID: tenantUUID, IncomingState: "state-123", IncomingCode: "code", FlowSessionIDs: []uuid.UUID{attackerBrowser},
+	})
+
+	require.ErrorIs(t, err, port.ErrSessionNotFound)
+}
+
+func TestFederationService_ExecuteFederatedCallback_ARedeemedButExpiredStateIsRefused(t *testing.T) {
+	ctrl := minimock.NewController(t)
+
+	storage := portmock.NewStorageMock(ctrl)
+	allowTenant(storage)
+	adminStorage := portmock.NewAdminStorageMock(ctrl)
+	fedClient := portmock.NewFederationClientMock(ctrl)
+	crypto := portmock.NewCryptoMock(ctrl)
+	clock := portmock.NewMockClock(time.Now())
+	idp := NewIdentityProviderService(storage, adminStorage, crypto, clock, nil)
+	svc := NewFederationService(storage, fedClient, crypto, clock, idp, NewOAuthValidatorService(idp))
+
+	tenantUUID, providerUUID, flowSessionID := uuid.New(), uuid.New(), uuid.New()
+	storage.GetAndConsumeOutboundHandshakeMock.Expect(minimock.AnyContext, tenantUUID, "state-123", []uuid.UUID{flowSessionID}).Return(&model.OutboundHandshakeSession{
+		ID: "state-123", TenantID: tenantUUID, PartitionID: 2, IdentityProviderID: providerUUID, SessionID: flowSessionID,
+		ExpiresAt: clock.Now().Add(time.Minute), CallbackURI: "https://callback", TargetURI: "https://target",
+	}, nil)
+	// An expired handshake stops right after the consume, so the rest of the pipeline is not needed here.
+	clock.Advance(2 * time.Minute)
+
+	_, err := svc.ExecuteFederatedCallback(context.Background(), port.FederatedCallbackCommand{
+		TenantID: tenantUUID, IncomingState: "state-123", IncomingCode: "code", FlowSessionIDs: []uuid.UUID{flowSessionID},
+	})
+
+	require.Error(t, err, "an expired state is refused after it was consumed")
 }

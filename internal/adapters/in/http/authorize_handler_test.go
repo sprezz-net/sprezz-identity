@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"sprezz-identity/internal/domain/model"
@@ -39,16 +40,10 @@ func setupTestEnv(ctrl *minimock.Controller) (
 	adapter := NewHttpAdapter(tuc, auth, fuc, nil, suc, upuc, uruc, lauc, nil, nil, nil, storage, crypto, "unittest", "admin-domain.com")
 	return adapter, storage, auth, crypto, tuc, fuc, suc, upuc, uruc
 }
-func mockSessionCookie(suc *portmock.SSOSessionUseCaseMock) {
-	suc.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
-		return &port.CookieIntentResponse{CookieName: "spz_session"}, nil
-	})
-}
 
 func TestHttpAdapter_Authorize_PreservesParams(t *testing.T) {
 	ctrl := minimock.NewController(t)
-	adapter, _, auth, _, tuc, _, suc, _, _ := setupTestEnv(ctrl)
-	mockSessionCookie(suc)
+	adapter, _, auth, _, tuc, _, _, _, _ := setupTestEnv(ctrl)
 
 	tenantID := uuid.New()
 	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", IsActive: true}
@@ -86,8 +81,7 @@ func TestHttpAdapter_Authorize_PreservesParams(t *testing.T) {
 
 func TestHttpAdapter_Authorize_InvalidClient(t *testing.T) {
 	ctrl := minimock.NewController(t)
-	adapter, _, auth, _, tuc, _, suc, _, _ := setupTestEnv(ctrl)
-	mockSessionCookie(suc)
+	adapter, _, auth, _, tuc, _, _, _, _ := setupTestEnv(ctrl)
 
 	tenantID := uuid.New()
 	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", IsActive: true}
@@ -112,8 +106,7 @@ func TestHttpAdapter_Authorize_InvalidClient(t *testing.T) {
 
 func TestHttpAdapter_Authorize_DisallowedRedirectURI(t *testing.T) {
 	ctrl := minimock.NewController(t)
-	adapter, _, auth, _, tuc, _, suc, _, _ := setupTestEnv(ctrl)
-	mockSessionCookie(suc)
+	adapter, _, auth, _, tuc, _, _, _, _ := setupTestEnv(ctrl)
 
 	tenantID := uuid.New()
 	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", IsActive: true}
@@ -136,52 +129,51 @@ func TestHttpAdapter_Authorize_DisallowedRedirectURI(t *testing.T) {
 	}
 }
 
-func TestHttpAdapter_Authorize_AuthenticatedSSO(t *testing.T) {
+func TestHttpAdapter_Authorize_HandsTheCookiesToTheDomain(t *testing.T) {
 	ctrl := minimock.NewController(t)
-	adapter, _, auth, _, tuc, _, suc, _, _ := setupTestEnv(ctrl)
+	adapter, _, auth, _, tuc, _, _, _, _ := setupTestEnv(ctrl)
 
 	tenantID := uuid.New()
 	tenant := &model.Tenant{ID: tenantID, Domain: "test.com", IsActive: true}
-
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
 		return tenant, nil
 	})
 
-	suc.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
-		return &port.CookieIntentResponse{
-			CookieName: "spz_session",
-		}, nil
-	})
-
-	live := &model.SSOSession{ID: uuid.New(), TenantID: tenantID, PartitionID: 1, UserProfileID: uuid.New()}
-	suc.ResolveSessionMock.Set(func(ctx context.Context, tID uuid.UUID, val string) (*model.SSOSession, error) {
-		if tID != tenantID || val != "existing-cookie-val" {
-			return nil, port.ErrSessionNotFound
-		}
-		return live, nil
-	})
-
+	// The domain, not the transport layer, finds the session: it knows the partition of the client.
 	auth.ProcessAuthorizeRequestMock.Set(func(ctx context.Context, cmd port.AuthorizeRequestCommand) (*port.AuthorizeExecutionResult, error) {
-		if cmd.ActiveSession != live {
-			t.Errorf("the live session behind the cookie must reach the use case, got %+v", cmd.ActiveSession)
+		if cmd.ActiveSession != nil {
+			t.Errorf("the handler must not resolve sessions itself, got %+v", cmd.ActiveSession)
+		}
+		if cmd.Cookies["spz_session_default"] != "existing-cookie-val" {
+			t.Errorf("the session cookies must reach the use case, got %v", cmd.Cookies)
+		}
+		if _, leaked := cmd.Cookies["unrelated"]; leaked {
+			t.Errorf("only session cookies are handed over, got %v", cmd.Cookies)
 		}
 		return &port.AuthorizeExecutionResult{
 			Action:          port.ActionEmitAuthorizationCode,
 			RedirectURL:     "https://test.com/callback?code=code123&state=state123",
 			HasCookieIntent: true,
-			CookieName:      "spz_session",
+			CookieName:      "spz_session_default",
 			CookieValue:     "new-cookie-val",
+			CookieMaxAge:    900,
+			CookieSecure:    true,
 		}, nil
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?client_id=test-client&redirect_uri=https://test.com/callback&state=state123", nil)
 	req.Host = "test.com"
-	req.AddCookie(&http.Cookie{Name: "spz_session", Value: "existing-cookie-val"})
+	req.AddCookie(&http.Cookie{Name: "spz_session_default", Value: "existing-cookie-val"})
+	req.AddCookie(&http.Cookie{Name: "unrelated", Value: "x"})
 	rec := httptest.NewRecorder()
 
 	adapter.Router().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusFound {
 		t.Fatalf("expected status 302 Found, got %d", rec.Code)
+	}
+	cookie := rec.Header().Get("Set-Cookie")
+	if !strings.Contains(cookie, "spz_session_default=new-cookie-val") || !strings.Contains(cookie, "HttpOnly") || !strings.Contains(cookie, "Max-Age=900") {
+		t.Errorf("the cookie intent of the domain must be applied HttpOnly, got %q", cookie)
 	}
 }

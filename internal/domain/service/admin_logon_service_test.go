@@ -26,6 +26,7 @@ func TestAdminLogonService_InitiateAdminLogon_Success(t *testing.T) {
 	svc := NewAdminLogonService(storage, nil, nil, nil, nil, fedLogin, clock, "local", "admin.com")
 
 	tenantUUID := uuid.New()
+	flowSessionID := uuid.New()
 	providerUUID := uuid.New()
 
 	storage.GetIdentityProvidersMock.Expect(minimock.AnyContext, tenantUUID).Return([]model.IdentityProvider{
@@ -50,11 +51,12 @@ func TestAdminLogonService_InitiateAdminLogon_Success(t *testing.T) {
 		RequestedScopes:    []string{"openid", "profile", "email"},
 		LocalCallbackURI:   "https://callback",
 		FinalTargetURI:     "https://final",
+		FlowSessionID:      flowSessionID,
 	}).Return(&port.InitiateFederatedLoginResponse{
 		TargetRedirectURL: "https://redirect-url",
 	}, nil)
 
-	resp, err := svc.InitiateAdminLogon(context.Background(), tenantUUID, "https://callback", "https://final")
+	resp, err := svc.InitiateAdminLogon(context.Background(), tenantUUID, flowSessionID, "https://callback", "https://final")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -81,6 +83,7 @@ func TestAdminLogonService_InitiateAdminLogon_OnDemandDCR_Success(t *testing.T) 
 	svc := NewAdminLogonService(storage, adminStorage, auth, crypto, fedClient, fedLogin, clock, "local", "admin.com")
 
 	tenantUUID := uuid.New()
+	flowSessionID := uuid.New()
 	adminTenantUUID := uuid.New()
 	providerUUID := uuid.New()
 
@@ -142,11 +145,12 @@ func TestAdminLogonService_InitiateAdminLogon_OnDemandDCR_Success(t *testing.T) 
 		RequestedScopes:    []string{"openid", "profile", "email"},
 		LocalCallbackURI:   "https://callback",
 		FinalTargetURI:     "https://final",
+		FlowSessionID:      flowSessionID,
 	}).Return(&port.InitiateFederatedLoginResponse{
 		TargetRedirectURL: "https://admin.com/oauth/authorize?client_id=registered-client-id",
 	}, nil)
 
-	resp, err := svc.InitiateAdminLogon(context.Background(), tenantUUID, "https://callback", "https://final")
+	resp, err := svc.InitiateAdminLogon(context.Background(), tenantUUID, flowSessionID, "https://callback", "https://final")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -173,6 +177,7 @@ func TestAdminLogonService_InitiateAdminLogon_DiscoveryPersist_Success(t *testin
 	svc := NewAdminLogonService(storage, adminStorage, auth, crypto, fedClient, fedLogin, clock, "local", "admin.com")
 
 	tenantUUID := uuid.New()
+	flowSessionID := uuid.New()
 	providerUUID := uuid.New()
 
 	storage.GetIdentityProvidersMock.Expect(minimock.AnyContext, tenantUUID).Return([]model.IdentityProvider{
@@ -218,11 +223,12 @@ func TestAdminLogonService_InitiateAdminLogon_DiscoveryPersist_Success(t *testin
 		RequestedScopes:    []string{"openid", "profile", "email"},
 		LocalCallbackURI:   "https://callback",
 		FinalTargetURI:     "https://final",
+		FlowSessionID:      flowSessionID,
 	}).Return(&port.InitiateFederatedLoginResponse{
 		TargetRedirectURL: "https://admin.com/oauth/authorize?client_id=already-provisioned-id",
 	}, nil)
 
-	resp, err := svc.InitiateAdminLogon(context.Background(), tenantUUID, "https://callback", "https://final")
+	resp, err := svc.InitiateAdminLogon(context.Background(), tenantUUID, flowSessionID, "https://callback", "https://final")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

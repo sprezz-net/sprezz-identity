@@ -12,6 +12,8 @@ import (
 
 	"github.com/gojuno/minimock/v3"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestOAuthService_ProcessDiscoveryMetadata_Success(t *testing.T) {
@@ -127,24 +129,23 @@ func TestOAuthService_ProcessAuthorizeRequest_StrictPartitionIsolation(t *testin
 	storage.GetIdentityProvidersByUUIDsMock.Expect(minimock.AnyContext, tenantUUID, group.AllowedIDPIDs).Return(idps, nil)
 
 	// Since we pass a session of partition 13 (mismatching 14),
-	// the engine should invalidate it and proceed to Branch A (SaveInteractionSession and BuildSessionCookie).
+	// the engine should invalidate it and proceed to Branch A (start a pending sign-in and bind the interaction to it).
+
+	pending := model.SSOSession{ID: uuid.New(), TenantID: tenantUUID, PartitionID: 14, State: model.SSOSessionPending}
+	ssoUseCase.StartFlowMock.Set(func(ctx context.Context, cmd port.StartFlowCommand) (*port.StartedFlow, error) {
+		if cmd.PartitionID != 14 {
+			t.Errorf("expected the sign-in to start in partition 14, got %d", cmd.PartitionID)
+		}
+		return &port.StartedFlow{
+			Session: pending,
+			Cookie:  &port.CookieIntentResponse{CookieName: "spz_session_admin", CookieValue: "temp-value", MaxAge: 900, Secure: true},
+		}, nil
+	})
 	storage.SaveInteractionSessionMock.Set(func(ctx context.Context, session model.InteractionSession) error {
-		if session.PartitionID != 14 {
-			t.Errorf("expected interaction session to be bound to partition 14, got %d", session.PartitionID)
+		if session.PartitionID != 14 || session.SessionID != pending.ID {
+			t.Errorf("expected the interaction to be bound to partition 14 and to the pending session, got %d / %s", session.PartitionID, session.SessionID)
 		}
 		return nil
-	})
-
-	ssoUseCase.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
-		if cmd.PartitionID != 14 {
-			t.Errorf("expected cookie intent to be bound to partition 14, got %d", cmd.PartitionID)
-		}
-		return &port.CookieIntentResponse{
-			CookieName:  "spz_session_admin",
-			CookieValue: "temp-value",
-			MaxAge:      600,
-			Secure:      true,
-		}, nil
 	})
 
 	cmd := port.AuthorizeRequestCommand{
@@ -1004,4 +1005,126 @@ func TestOAuthService_RotateRefreshToken(t *testing.T) {
 // testSession is a live SSO session of a user in the given partition.
 func testSession(tenantID uuid.UUID, partitionID int64) *model.SSOSession {
 	return &model.SSOSession{ID: uuid.New(), TenantID: tenantID, PartitionID: partitionID, UserProfileID: uuid.New()}
+}
+
+// authorizeFixture is an authorize request for a client whose provider lives in partition 14.
+type authorizeFixture struct {
+	svc      *OAuthService
+	storage  *portmock.StorageMock
+	sso      *portmock.SSOSessionUseCaseMock
+	tenantID uuid.UUID
+	clientID string
+	redirect string
+}
+
+func newAuthorizeFixture(t *testing.T) *authorizeFixture {
+	t.Helper()
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	sso := portmock.NewSSOSessionUseCaseMock(ctrl)
+	clock := portmock.NewMockClock(time.Now())
+	idpService := NewIdentityProviderService(storage, portmock.NewAdminStorageMock(ctrl), portmock.NewCryptoMock(ctrl), clock, nil)
+	f := &authorizeFixture{
+		svc:      NewOAuthService(storage, nil, nil, nil, clock, sso, NewOAuthValidatorService(idpService)),
+		storage:  storage,
+		sso:      sso,
+		tenantID: uuid.New(),
+		clientID: "test-client",
+		redirect: "https://myapp.com/callback",
+	}
+
+	tenant := &model.Tenant{ID: f.tenantID, Domain: "myapp.com", Scheme: "https", IsActive: true,
+		Config: model.TenantConfig{RedirectWhitelist: []string{f.redirect}}}
+	group := &model.ApplicationGroup{ID: uuid.New(), IsEnabled: true, RedirectURIs: []string{f.redirect}, AllowedIDPIDs: []uuid.UUID{uuid.New()}}
+	storage.ResolveTenantByUUIDMock.Return(tenant, nil)
+	storage.GetApplicationByClientIDMock.Return(&model.Application{ID: uuid.New(), IsEnabled: true}, &model.ApplicationProfile{ID: uuid.New(), IsEnabled: true}, group, nil)
+	storage.GetIdentityProvidersByUUIDsMock.Return([]model.IdentityProvider{{ID: group.AllowedIDPIDs[0], Enabled: true, PartitionID: 14, Alias: "google"}}, nil)
+	return f
+}
+
+func (f *authorizeFixture) cmd(cookies map[string]string) port.AuthorizeRequestCommand {
+	return port.AuthorizeRequestCommand{TenantID: f.tenantID, ClientID: f.clientID, RedirectURI: f.redirect, Cookies: cookies}
+}
+
+// The signed-in session is looked up in the cookie of the partition the client signs in to, which only the routing
+// of the authorize request knows. A signed-in browser gets its code without any login.
+func TestOAuthService_ProcessAuthorizeRequest_FindsTheSessionInTheCookieOfTheClientsPartition(t *testing.T) {
+	f := newAuthorizeFixture(t)
+	cookies := map[string]string{"spz_session_customers": "secret"}
+	active := testSession(f.tenantID, 14)
+	f.sso.ResolvePartitionSessionMock.Expect(minimock.AnyContext, f.tenantID, int64(14), cookies).Return(active, nil)
+	f.storage.SaveAuthSessionMock.Set(func(_ context.Context, s model.AuthorizationCodeSession) error {
+		require.Equal(t, active.ID.String(), s.SessionID, "the code is tied to the session, so sid and logout line up")
+		require.Equal(t, active.UserProfileID.String(), s.Subject)
+		return nil
+	})
+
+	res, err := f.svc.ProcessAuthorizeRequest(context.Background(), f.cmd(cookies))
+
+	require.NoError(t, err)
+	assert.Equal(t, port.ActionEmitAuthorizationCode, res.Action)
+}
+
+// Nobody signed in: the flow is bound to the pending session of this browser and the browser gets its cookie.
+func TestOAuthService_ProcessAuthorizeRequest_BindsTheFlowToThePendingSession(t *testing.T) {
+	f := newAuthorizeFixture(t)
+	cookies := map[string]string{} // a browser with no cookies: no session lookup happens at all
+
+	pending := model.SSOSession{ID: uuid.New(), TenantID: f.tenantID, PartitionID: 14, State: model.SSOSessionPending}
+	f.sso.StartFlowMock.Set(func(_ context.Context, cmd port.StartFlowCommand) (*port.StartedFlow, error) {
+		assert.Equal(t, int64(14), cmd.PartitionID, "the cookie is named after the partition of the client")
+		return &port.StartedFlow{Session: pending, Cookie: &port.CookieIntentResponse{CookieName: "spz_session_customers", CookieValue: "pending-secret", MaxAge: 900, Secure: true}}, nil
+	})
+	var interaction model.InteractionSession
+	f.storage.SaveInteractionSessionMock.Set(func(_ context.Context, s model.InteractionSession) error {
+		interaction = s
+		return nil
+	})
+
+	res, err := f.svc.ProcessAuthorizeRequest(context.Background(), f.cmd(cookies))
+
+	require.NoError(t, err)
+	assert.Equal(t, port.ActionRedirectToLoginUI, res.Action)
+	assert.Equal(t, pending.ID, interaction.SessionID, "only this browser may complete the sign-in")
+	assert.Equal(t, int64(14), interaction.PartitionID)
+	assert.Equal(t, port.RouteWebLogin+"?tx="+interaction.ID.String(), res.RedirectURL)
+	assert.True(t, res.HasCookieIntent)
+	assert.Equal(t, "pending-secret", res.CookieValue)
+	assert.Equal(t, 900, res.CookieMaxAge)
+}
+
+// A browser that already has a pending session (a second tab) keeps it, so no cookie is set again.
+func TestOAuthService_ProcessAuthorizeRequest_ASecondTabSetsNoNewCookie(t *testing.T) {
+	f := newAuthorizeFixture(t)
+	f.sso.ResolvePartitionSessionMock.Return(nil, port.ErrSessionNotFound)
+	f.sso.StartFlowMock.Return(&port.StartedFlow{Session: model.SSOSession{ID: uuid.New(), PartitionID: 14, State: model.SSOSessionPending}}, nil)
+	f.storage.SaveInteractionSessionMock.Return(nil)
+
+	res, err := f.svc.ProcessAuthorizeRequest(context.Background(), f.cmd(map[string]string{"spz_session_customers": "existing"}))
+
+	require.NoError(t, err)
+	assert.False(t, res.HasCookieIntent)
+}
+
+// A session of another partition does not sign the user in to this client's partition.
+func TestOAuthService_ProcessAuthorizeRequest_ASessionOfAnotherPartitionIsNotUsed(t *testing.T) {
+	f := newAuthorizeFixture(t)
+	f.sso.ResolvePartitionSessionMock.Return(testSession(f.tenantID, 99), nil)
+	f.sso.StartFlowMock.Return(&port.StartedFlow{Session: model.SSOSession{ID: uuid.New(), PartitionID: 14, State: model.SSOSessionPending}}, nil)
+	f.storage.SaveInteractionSessionMock.Return(nil)
+
+	res, err := f.svc.ProcessAuthorizeRequest(context.Background(), f.cmd(map[string]string{"spz_session_customers": "x"}))
+
+	require.NoError(t, err)
+	assert.Equal(t, port.ActionRedirectToLoginUI, res.Action)
+}
+
+func TestOAuthService_ProcessAuthorizeRequest_FailsWhenTheSignInCannotBeStarted(t *testing.T) {
+	f := newAuthorizeFixture(t)
+	f.sso.StartFlowMock.Return(nil, errors.New("db down"))
+	// strict storage: no interaction session may be saved without its binding
+
+	_, err := f.svc.ProcessAuthorizeRequest(context.Background(), f.cmd(nil))
+
+	require.Error(t, err)
 }

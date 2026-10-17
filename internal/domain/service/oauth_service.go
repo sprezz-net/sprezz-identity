@@ -238,6 +238,13 @@ func (s *OAuthService) ProcessAuthorizeRequest(ctx context.Context, cmd port.Aut
 	// Strict Multi-Partition Cookie isolation guard:
 	// If the active session is associated with a different partition than the
 	// client's target partition, treat the user as unauthenticated for this request.
+	// The signed-in session lives in the cookie of the partition the client signs in to, which only the routing above
+	// knows; the transport layer just hands over the cookies.
+	if cmd.ActiveSession == nil && len(cmd.Cookies) > 0 {
+		if active, err := s.ssoUseCase.ResolvePartitionSession(ctx, cmd.TenantID, truePartitionID, cmd.Cookies); err == nil {
+			cmd.ActiveSession = active
+		}
+	}
 	if cmd.ActiveSession != nil && cmd.ActiveSession.PartitionID != truePartitionID {
 		cmd.ActiveSession = nil // Invalidate session context for this cross-partition request
 	}
@@ -250,6 +257,18 @@ func (s *OAuthService) ProcessAuthorizeRequest(ctx context.Context, cmd port.Aut
 		sessionACR := cmd.ACRValues
 		if cmd.ClaimsJSON != "" {
 			sessionACR = cmd.ClaimsJSON
+		}
+
+		// The pending session binds this flow to the browser that started it. A browser that already has one (a second
+		// tab, or a retry) keeps it; otherwise a new one is created and its cookie is returned below.
+		flow, err := s.ssoUseCase.StartFlow(ctx, port.StartFlowCommand{
+			TenantID:    cmd.TenantID,
+			PartitionID: truePartitionID,
+			Cookies:     cmd.Cookies,
+			RequestHost: cmd.RequestHost,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("oauth_service: could not start the sign-in: %w", err)
 		}
 
 		interaction := model.InteractionSession{
@@ -265,6 +284,7 @@ func (s *OAuthService) ProcessAuthorizeRequest(ctx context.Context, cmd port.Aut
 			State:           cmd.State,
 			Nonce:           cmd.Nonce,
 			ACRValues:       sessionACR, // TODO Add AMR
+			SessionID:       flow.Session.ID,
 		}
 
 		// Persist strictly as an internal Interaction Session.
@@ -272,28 +292,18 @@ func (s *OAuthService) ProcessAuthorizeRequest(ctx context.Context, cmd port.Aut
 			return nil, fmt.Errorf("oauth_service: transient session storage failure: %w", err)
 		}
 
-		// Call SSOSessionUseCase driven port interface directly to build the response cookie configuration.
-		// The service now passes raw parameters down-funnel, staying agnostic to string parsing formats or transport security tags.
-		cookieIntent, err := s.ssoUseCase.BuildSessionCookie(ctx, port.CookieIntentCommand{
-			TenantID:       cmd.TenantID,
-			PartitionID:    truePartitionID,
-			PayloadValue:   interaction.ID.String(),
-			LifecycleStage: "handshake",
-			RequestHost:    cmd.RequestHost,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("oauth_service: cookie metadata generation failed: %w", err)
+		result := &port.AuthorizeExecutionResult{
+			Action:      port.ActionRedirectToLoginUI,
+			RedirectURL: port.RouteWebLogin + "?tx=" + interaction.ID.String(),
 		}
-
-		return &port.AuthorizeExecutionResult{
-			Action:          port.ActionRedirectToLoginUI,
-			RedirectURL:     port.RouteWebLogin + "?tx=" + interaction.ID.String(),
-			HasCookieIntent: true,
-			CookieName:      cookieIntent.CookieName,
-			CookieValue:     cookieIntent.CookieValue,
-			CookieMaxAge:    cookieIntent.MaxAge,
-			CookieSecure:    cookieIntent.Secure,
-		}, nil
+		if flow.Cookie != nil {
+			result.HasCookieIntent = true
+			result.CookieName = flow.Cookie.CookieName
+			result.CookieValue = flow.Cookie.CookieValue
+			result.CookieMaxAge = flow.Cookie.MaxAge
+			result.CookieSecure = flow.Cookie.Secure
+		}
+		return result, nil
 	}
 
 	// ------------------------------------------------------------------------

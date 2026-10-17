@@ -14,7 +14,8 @@ INSERT INTO outbound_handshake_sessions (
     created_at,
     expires_at,
     target_uri,
-    callback_uri
+    callback_uri,
+    session_id
 )
 SELECT
     @state_token,
@@ -26,7 +27,8 @@ SELECT
     @created_at::timestamptz,
     @expires_at::timestamptz,
     @target_uri::text,
-    @callback_uri::text
+    @callback_uri::text,
+    @session_id::uuid
 FROM tenant;
 
 -- name: ConsumeOutboundHandshake :one
@@ -38,6 +40,8 @@ WITH tenant AS (
 DELETE FROM outbound_handshake_sessions ohs
 WHERE ohs.id = @state_token
   AND ohs.tenant_id = (SELECT id FROM tenant)
+  -- The state only redeems for a browser that holds the pending session the flow was started with.
+  AND ohs.session_id = ANY(@session_ids::uuid[])
 RETURNING
     ohs.id,
     ohs.partition_id,
@@ -47,7 +51,8 @@ RETURNING
     ohs.created_at,
     ohs.expires_at,
     ohs.target_uri,
-    ohs.callback_uri;
+    ohs.callback_uri,
+    ohs.session_id;
 
 -- name: PruneExpiredOutboundHandshakes :exec
 DELETE FROM outbound_handshake_sessions

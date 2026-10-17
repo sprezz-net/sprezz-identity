@@ -15,7 +15,6 @@ const (
 	RouteIntrospect            = "/oauth/introspect"
 	RouteLogout                = "/oauth/logout"
 	RoutePAR                   = "/oauth/par"
-	RouteCallback              = "/oauth/callback"
 	RouteFederationCallback    = "/oauth/federation/callback"
 
 	// Core web application routes

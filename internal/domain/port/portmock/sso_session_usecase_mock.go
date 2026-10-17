@@ -35,12 +35,40 @@ type SSOSessionUseCaseMock struct {
 	beforeCreateSessionCounter uint64
 	CreateSessionMock          mSSOSessionUseCaseMockCreateSession
 
-	funcParseSessionCookie          func(ctx context.Context, cookieValue string) (stage string, payload string, err error)
-	funcParseSessionCookieOrigin    string
-	inspectFuncParseSessionCookie   func(ctx context.Context, cookieValue string)
-	afterParseSessionCookieCounter  uint64
-	beforeParseSessionCookieCounter uint64
-	ParseSessionCookieMock          mSSOSessionUseCaseMockParseSessionCookie
+	funcPromoteSession          func(ctx context.Context, cmd mm_port.PromoteSessionCommand) (cp1 *mm_port.CreatedSession, err error)
+	funcPromoteSessionOrigin    string
+	inspectFuncPromoteSession   func(ctx context.Context, cmd mm_port.PromoteSessionCommand)
+	afterPromoteSessionCounter  uint64
+	beforePromoteSessionCounter uint64
+	PromoteSessionMock          mSSOSessionUseCaseMockPromoteSession
+
+	funcResolveDirectFlowSession          func(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string) (sp1 *model.SSOSession, err error)
+	funcResolveDirectFlowSessionOrigin    string
+	inspectFuncResolveDirectFlowSession   func(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string)
+	afterResolveDirectFlowSessionCounter  uint64
+	beforeResolveDirectFlowSessionCounter uint64
+	ResolveDirectFlowSessionMock          mSSOSessionUseCaseMockResolveDirectFlowSession
+
+	funcResolveFlowSession          func(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string, flowSessionID uuid.UUID) (sp1 *model.SSOSession, err error)
+	funcResolveFlowSessionOrigin    string
+	inspectFuncResolveFlowSession   func(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string, flowSessionID uuid.UUID)
+	afterResolveFlowSessionCounter  uint64
+	beforeResolveFlowSessionCounter uint64
+	ResolveFlowSessionMock          mSSOSessionUseCaseMockResolveFlowSession
+
+	funcResolveFlowSessionIDs          func(ctx context.Context, tenantID uuid.UUID, cookies map[string]string) (ua1 []uuid.UUID, err error)
+	funcResolveFlowSessionIDsOrigin    string
+	inspectFuncResolveFlowSessionIDs   func(ctx context.Context, tenantID uuid.UUID, cookies map[string]string)
+	afterResolveFlowSessionIDsCounter  uint64
+	beforeResolveFlowSessionIDsCounter uint64
+	ResolveFlowSessionIDsMock          mSSOSessionUseCaseMockResolveFlowSessionIDs
+
+	funcResolvePartitionSession          func(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string) (sp1 *model.SSOSession, err error)
+	funcResolvePartitionSessionOrigin    string
+	inspectFuncResolvePartitionSession   func(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string)
+	afterResolvePartitionSessionCounter  uint64
+	beforeResolvePartitionSessionCounter uint64
+	ResolvePartitionSessionMock          mSSOSessionUseCaseMockResolvePartitionSession
 
 	funcResolveSession          func(ctx context.Context, tenantID uuid.UUID, cookieValue string) (sp1 *model.SSOSession, err error)
 	funcResolveSessionOrigin    string
@@ -62,6 +90,13 @@ type SSOSessionUseCaseMock struct {
 	afterRevokeUserSessionsCounter  uint64
 	beforeRevokeUserSessionsCounter uint64
 	RevokeUserSessionsMock          mSSOSessionUseCaseMockRevokeUserSessions
+
+	funcStartFlow          func(ctx context.Context, cmd mm_port.StartFlowCommand) (sp1 *mm_port.StartedFlow, err error)
+	funcStartFlowOrigin    string
+	inspectFuncStartFlow   func(ctx context.Context, cmd mm_port.StartFlowCommand)
+	afterStartFlowCounter  uint64
+	beforeStartFlowCounter uint64
+	StartFlowMock          mSSOSessionUseCaseMockStartFlow
 }
 
 // NewSSOSessionUseCaseMock returns a mock for mm_port.SSOSessionUseCase
@@ -78,8 +113,20 @@ func NewSSOSessionUseCaseMock(t minimock.Tester) *SSOSessionUseCaseMock {
 	m.CreateSessionMock = mSSOSessionUseCaseMockCreateSession{mock: m}
 	m.CreateSessionMock.callArgs = []*SSOSessionUseCaseMockCreateSessionParams{}
 
-	m.ParseSessionCookieMock = mSSOSessionUseCaseMockParseSessionCookie{mock: m}
-	m.ParseSessionCookieMock.callArgs = []*SSOSessionUseCaseMockParseSessionCookieParams{}
+	m.PromoteSessionMock = mSSOSessionUseCaseMockPromoteSession{mock: m}
+	m.PromoteSessionMock.callArgs = []*SSOSessionUseCaseMockPromoteSessionParams{}
+
+	m.ResolveDirectFlowSessionMock = mSSOSessionUseCaseMockResolveDirectFlowSession{mock: m}
+	m.ResolveDirectFlowSessionMock.callArgs = []*SSOSessionUseCaseMockResolveDirectFlowSessionParams{}
+
+	m.ResolveFlowSessionMock = mSSOSessionUseCaseMockResolveFlowSession{mock: m}
+	m.ResolveFlowSessionMock.callArgs = []*SSOSessionUseCaseMockResolveFlowSessionParams{}
+
+	m.ResolveFlowSessionIDsMock = mSSOSessionUseCaseMockResolveFlowSessionIDs{mock: m}
+	m.ResolveFlowSessionIDsMock.callArgs = []*SSOSessionUseCaseMockResolveFlowSessionIDsParams{}
+
+	m.ResolvePartitionSessionMock = mSSOSessionUseCaseMockResolvePartitionSession{mock: m}
+	m.ResolvePartitionSessionMock.callArgs = []*SSOSessionUseCaseMockResolvePartitionSessionParams{}
 
 	m.ResolveSessionMock = mSSOSessionUseCaseMockResolveSession{mock: m}
 	m.ResolveSessionMock.callArgs = []*SSOSessionUseCaseMockResolveSessionParams{}
@@ -89,6 +136,9 @@ func NewSSOSessionUseCaseMock(t minimock.Tester) *SSOSessionUseCaseMock {
 
 	m.RevokeUserSessionsMock = mSSOSessionUseCaseMockRevokeUserSessions{mock: m}
 	m.RevokeUserSessionsMock.callArgs = []*SSOSessionUseCaseMockRevokeUserSessionsParams{}
+
+	m.StartFlowMock = mSSOSessionUseCaseMockStartFlow{mock: m}
+	m.StartFlowMock.callArgs = []*SSOSessionUseCaseMockStartFlowParams{}
 
 	t.Cleanup(m.MinimockFinish)
 
@@ -781,54 +831,53 @@ func (m *SSOSessionUseCaseMock) MinimockCreateSessionInspect() {
 	}
 }
 
-type mSSOSessionUseCaseMockParseSessionCookie struct {
+type mSSOSessionUseCaseMockPromoteSession struct {
 	optional           bool
 	mock               *SSOSessionUseCaseMock
-	defaultExpectation *SSOSessionUseCaseMockParseSessionCookieExpectation
-	expectations       []*SSOSessionUseCaseMockParseSessionCookieExpectation
+	defaultExpectation *SSOSessionUseCaseMockPromoteSessionExpectation
+	expectations       []*SSOSessionUseCaseMockPromoteSessionExpectation
 
-	callArgs []*SSOSessionUseCaseMockParseSessionCookieParams
+	callArgs []*SSOSessionUseCaseMockPromoteSessionParams
 	mutex    sync.RWMutex
 
 	expectedInvocations       uint64
 	expectedInvocationsOrigin string
 }
 
-// SSOSessionUseCaseMockParseSessionCookieExpectation specifies expectation struct of the SSOSessionUseCase.ParseSessionCookie
-type SSOSessionUseCaseMockParseSessionCookieExpectation struct {
+// SSOSessionUseCaseMockPromoteSessionExpectation specifies expectation struct of the SSOSessionUseCase.PromoteSession
+type SSOSessionUseCaseMockPromoteSessionExpectation struct {
 	mock               *SSOSessionUseCaseMock
-	params             *SSOSessionUseCaseMockParseSessionCookieParams
-	paramPtrs          *SSOSessionUseCaseMockParseSessionCookieParamPtrs
-	expectationOrigins SSOSessionUseCaseMockParseSessionCookieExpectationOrigins
-	results            *SSOSessionUseCaseMockParseSessionCookieResults
+	params             *SSOSessionUseCaseMockPromoteSessionParams
+	paramPtrs          *SSOSessionUseCaseMockPromoteSessionParamPtrs
+	expectationOrigins SSOSessionUseCaseMockPromoteSessionExpectationOrigins
+	results            *SSOSessionUseCaseMockPromoteSessionResults
 	returnOrigin       string
 	Counter            uint64
 }
 
-// SSOSessionUseCaseMockParseSessionCookieParams contains parameters of the SSOSessionUseCase.ParseSessionCookie
-type SSOSessionUseCaseMockParseSessionCookieParams struct {
-	ctx         context.Context
-	cookieValue string
+// SSOSessionUseCaseMockPromoteSessionParams contains parameters of the SSOSessionUseCase.PromoteSession
+type SSOSessionUseCaseMockPromoteSessionParams struct {
+	ctx context.Context
+	cmd mm_port.PromoteSessionCommand
 }
 
-// SSOSessionUseCaseMockParseSessionCookieParamPtrs contains pointers to parameters of the SSOSessionUseCase.ParseSessionCookie
-type SSOSessionUseCaseMockParseSessionCookieParamPtrs struct {
-	ctx         *context.Context
-	cookieValue *string
+// SSOSessionUseCaseMockPromoteSessionParamPtrs contains pointers to parameters of the SSOSessionUseCase.PromoteSession
+type SSOSessionUseCaseMockPromoteSessionParamPtrs struct {
+	ctx *context.Context
+	cmd *mm_port.PromoteSessionCommand
 }
 
-// SSOSessionUseCaseMockParseSessionCookieResults contains results of the SSOSessionUseCase.ParseSessionCookie
-type SSOSessionUseCaseMockParseSessionCookieResults struct {
-	stage   string
-	payload string
-	err     error
+// SSOSessionUseCaseMockPromoteSessionResults contains results of the SSOSessionUseCase.PromoteSession
+type SSOSessionUseCaseMockPromoteSessionResults struct {
+	cp1 *mm_port.CreatedSession
+	err error
 }
 
-// SSOSessionUseCaseMockParseSessionCookieOrigins contains origins of expectations of the SSOSessionUseCase.ParseSessionCookie
-type SSOSessionUseCaseMockParseSessionCookieExpectationOrigins struct {
-	origin            string
-	originCtx         string
-	originCookieValue string
+// SSOSessionUseCaseMockPromoteSessionOrigins contains origins of expectations of the SSOSessionUseCase.PromoteSession
+type SSOSessionUseCaseMockPromoteSessionExpectationOrigins struct {
+	origin    string
+	originCtx string
+	originCmd string
 }
 
 // Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
@@ -836,292 +885,1912 @@ type SSOSessionUseCaseMockParseSessionCookieExpectationOrigins struct {
 // Optional() makes method check to work in '0 or more' mode.
 // It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
 // catch the problems when the expected method call is totally skipped during test run.
-func (mmParseSessionCookie *mSSOSessionUseCaseMockParseSessionCookie) Optional() *mSSOSessionUseCaseMockParseSessionCookie {
-	mmParseSessionCookie.optional = true
-	return mmParseSessionCookie
+func (mmPromoteSession *mSSOSessionUseCaseMockPromoteSession) Optional() *mSSOSessionUseCaseMockPromoteSession {
+	mmPromoteSession.optional = true
+	return mmPromoteSession
 }
 
-// Expect sets up expected params for SSOSessionUseCase.ParseSessionCookie
-func (mmParseSessionCookie *mSSOSessionUseCaseMockParseSessionCookie) Expect(ctx context.Context, cookieValue string) *mSSOSessionUseCaseMockParseSessionCookie {
-	if mmParseSessionCookie.mock.funcParseSessionCookie != nil {
-		mmParseSessionCookie.mock.t.Fatalf("SSOSessionUseCaseMock.ParseSessionCookie mock is already set by Set")
+// Expect sets up expected params for SSOSessionUseCase.PromoteSession
+func (mmPromoteSession *mSSOSessionUseCaseMockPromoteSession) Expect(ctx context.Context, cmd mm_port.PromoteSessionCommand) *mSSOSessionUseCaseMockPromoteSession {
+	if mmPromoteSession.mock.funcPromoteSession != nil {
+		mmPromoteSession.mock.t.Fatalf("SSOSessionUseCaseMock.PromoteSession mock is already set by Set")
 	}
 
-	if mmParseSessionCookie.defaultExpectation == nil {
-		mmParseSessionCookie.defaultExpectation = &SSOSessionUseCaseMockParseSessionCookieExpectation{}
+	if mmPromoteSession.defaultExpectation == nil {
+		mmPromoteSession.defaultExpectation = &SSOSessionUseCaseMockPromoteSessionExpectation{}
 	}
 
-	if mmParseSessionCookie.defaultExpectation.paramPtrs != nil {
-		mmParseSessionCookie.mock.t.Fatalf("SSOSessionUseCaseMock.ParseSessionCookie mock is already set by ExpectParams functions")
+	if mmPromoteSession.defaultExpectation.paramPtrs != nil {
+		mmPromoteSession.mock.t.Fatalf("SSOSessionUseCaseMock.PromoteSession mock is already set by ExpectParams functions")
 	}
 
-	mmParseSessionCookie.defaultExpectation.params = &SSOSessionUseCaseMockParseSessionCookieParams{ctx, cookieValue}
-	mmParseSessionCookie.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
-	for _, e := range mmParseSessionCookie.expectations {
-		if minimock.Equal(e.params, mmParseSessionCookie.defaultExpectation.params) {
-			mmParseSessionCookie.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmParseSessionCookie.defaultExpectation.params)
+	mmPromoteSession.defaultExpectation.params = &SSOSessionUseCaseMockPromoteSessionParams{ctx, cmd}
+	mmPromoteSession.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmPromoteSession.expectations {
+		if minimock.Equal(e.params, mmPromoteSession.defaultExpectation.params) {
+			mmPromoteSession.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmPromoteSession.defaultExpectation.params)
 		}
 	}
 
-	return mmParseSessionCookie
+	return mmPromoteSession
 }
 
-// ExpectCtxParam1 sets up expected param ctx for SSOSessionUseCase.ParseSessionCookie
-func (mmParseSessionCookie *mSSOSessionUseCaseMockParseSessionCookie) ExpectCtxParam1(ctx context.Context) *mSSOSessionUseCaseMockParseSessionCookie {
-	if mmParseSessionCookie.mock.funcParseSessionCookie != nil {
-		mmParseSessionCookie.mock.t.Fatalf("SSOSessionUseCaseMock.ParseSessionCookie mock is already set by Set")
+// ExpectCtxParam1 sets up expected param ctx for SSOSessionUseCase.PromoteSession
+func (mmPromoteSession *mSSOSessionUseCaseMockPromoteSession) ExpectCtxParam1(ctx context.Context) *mSSOSessionUseCaseMockPromoteSession {
+	if mmPromoteSession.mock.funcPromoteSession != nil {
+		mmPromoteSession.mock.t.Fatalf("SSOSessionUseCaseMock.PromoteSession mock is already set by Set")
 	}
 
-	if mmParseSessionCookie.defaultExpectation == nil {
-		mmParseSessionCookie.defaultExpectation = &SSOSessionUseCaseMockParseSessionCookieExpectation{}
+	if mmPromoteSession.defaultExpectation == nil {
+		mmPromoteSession.defaultExpectation = &SSOSessionUseCaseMockPromoteSessionExpectation{}
 	}
 
-	if mmParseSessionCookie.defaultExpectation.params != nil {
-		mmParseSessionCookie.mock.t.Fatalf("SSOSessionUseCaseMock.ParseSessionCookie mock is already set by Expect")
+	if mmPromoteSession.defaultExpectation.params != nil {
+		mmPromoteSession.mock.t.Fatalf("SSOSessionUseCaseMock.PromoteSession mock is already set by Expect")
 	}
 
-	if mmParseSessionCookie.defaultExpectation.paramPtrs == nil {
-		mmParseSessionCookie.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockParseSessionCookieParamPtrs{}
+	if mmPromoteSession.defaultExpectation.paramPtrs == nil {
+		mmPromoteSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockPromoteSessionParamPtrs{}
 	}
-	mmParseSessionCookie.defaultExpectation.paramPtrs.ctx = &ctx
-	mmParseSessionCookie.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+	mmPromoteSession.defaultExpectation.paramPtrs.ctx = &ctx
+	mmPromoteSession.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
 
-	return mmParseSessionCookie
+	return mmPromoteSession
 }
 
-// ExpectCookieValueParam2 sets up expected param cookieValue for SSOSessionUseCase.ParseSessionCookie
-func (mmParseSessionCookie *mSSOSessionUseCaseMockParseSessionCookie) ExpectCookieValueParam2(cookieValue string) *mSSOSessionUseCaseMockParseSessionCookie {
-	if mmParseSessionCookie.mock.funcParseSessionCookie != nil {
-		mmParseSessionCookie.mock.t.Fatalf("SSOSessionUseCaseMock.ParseSessionCookie mock is already set by Set")
+// ExpectCmdParam2 sets up expected param cmd for SSOSessionUseCase.PromoteSession
+func (mmPromoteSession *mSSOSessionUseCaseMockPromoteSession) ExpectCmdParam2(cmd mm_port.PromoteSessionCommand) *mSSOSessionUseCaseMockPromoteSession {
+	if mmPromoteSession.mock.funcPromoteSession != nil {
+		mmPromoteSession.mock.t.Fatalf("SSOSessionUseCaseMock.PromoteSession mock is already set by Set")
 	}
 
-	if mmParseSessionCookie.defaultExpectation == nil {
-		mmParseSessionCookie.defaultExpectation = &SSOSessionUseCaseMockParseSessionCookieExpectation{}
+	if mmPromoteSession.defaultExpectation == nil {
+		mmPromoteSession.defaultExpectation = &SSOSessionUseCaseMockPromoteSessionExpectation{}
 	}
 
-	if mmParseSessionCookie.defaultExpectation.params != nil {
-		mmParseSessionCookie.mock.t.Fatalf("SSOSessionUseCaseMock.ParseSessionCookie mock is already set by Expect")
+	if mmPromoteSession.defaultExpectation.params != nil {
+		mmPromoteSession.mock.t.Fatalf("SSOSessionUseCaseMock.PromoteSession mock is already set by Expect")
 	}
 
-	if mmParseSessionCookie.defaultExpectation.paramPtrs == nil {
-		mmParseSessionCookie.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockParseSessionCookieParamPtrs{}
+	if mmPromoteSession.defaultExpectation.paramPtrs == nil {
+		mmPromoteSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockPromoteSessionParamPtrs{}
 	}
-	mmParseSessionCookie.defaultExpectation.paramPtrs.cookieValue = &cookieValue
-	mmParseSessionCookie.defaultExpectation.expectationOrigins.originCookieValue = minimock.CallerInfo(1)
+	mmPromoteSession.defaultExpectation.paramPtrs.cmd = &cmd
+	mmPromoteSession.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
 
-	return mmParseSessionCookie
+	return mmPromoteSession
 }
 
-// Inspect accepts an inspector function that has same arguments as the SSOSessionUseCase.ParseSessionCookie
-func (mmParseSessionCookie *mSSOSessionUseCaseMockParseSessionCookie) Inspect(f func(ctx context.Context, cookieValue string)) *mSSOSessionUseCaseMockParseSessionCookie {
-	if mmParseSessionCookie.mock.inspectFuncParseSessionCookie != nil {
-		mmParseSessionCookie.mock.t.Fatalf("Inspect function is already set for SSOSessionUseCaseMock.ParseSessionCookie")
+// Inspect accepts an inspector function that has same arguments as the SSOSessionUseCase.PromoteSession
+func (mmPromoteSession *mSSOSessionUseCaseMockPromoteSession) Inspect(f func(ctx context.Context, cmd mm_port.PromoteSessionCommand)) *mSSOSessionUseCaseMockPromoteSession {
+	if mmPromoteSession.mock.inspectFuncPromoteSession != nil {
+		mmPromoteSession.mock.t.Fatalf("Inspect function is already set for SSOSessionUseCaseMock.PromoteSession")
 	}
 
-	mmParseSessionCookie.mock.inspectFuncParseSessionCookie = f
+	mmPromoteSession.mock.inspectFuncPromoteSession = f
 
-	return mmParseSessionCookie
+	return mmPromoteSession
 }
 
-// Return sets up results that will be returned by SSOSessionUseCase.ParseSessionCookie
-func (mmParseSessionCookie *mSSOSessionUseCaseMockParseSessionCookie) Return(stage string, payload string, err error) *SSOSessionUseCaseMock {
-	if mmParseSessionCookie.mock.funcParseSessionCookie != nil {
-		mmParseSessionCookie.mock.t.Fatalf("SSOSessionUseCaseMock.ParseSessionCookie mock is already set by Set")
+// Return sets up results that will be returned by SSOSessionUseCase.PromoteSession
+func (mmPromoteSession *mSSOSessionUseCaseMockPromoteSession) Return(cp1 *mm_port.CreatedSession, err error) *SSOSessionUseCaseMock {
+	if mmPromoteSession.mock.funcPromoteSession != nil {
+		mmPromoteSession.mock.t.Fatalf("SSOSessionUseCaseMock.PromoteSession mock is already set by Set")
 	}
 
-	if mmParseSessionCookie.defaultExpectation == nil {
-		mmParseSessionCookie.defaultExpectation = &SSOSessionUseCaseMockParseSessionCookieExpectation{mock: mmParseSessionCookie.mock}
+	if mmPromoteSession.defaultExpectation == nil {
+		mmPromoteSession.defaultExpectation = &SSOSessionUseCaseMockPromoteSessionExpectation{mock: mmPromoteSession.mock}
 	}
-	mmParseSessionCookie.defaultExpectation.results = &SSOSessionUseCaseMockParseSessionCookieResults{stage, payload, err}
-	mmParseSessionCookie.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
-	return mmParseSessionCookie.mock
+	mmPromoteSession.defaultExpectation.results = &SSOSessionUseCaseMockPromoteSessionResults{cp1, err}
+	mmPromoteSession.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmPromoteSession.mock
 }
 
-// Set uses given function f to mock the SSOSessionUseCase.ParseSessionCookie method
-func (mmParseSessionCookie *mSSOSessionUseCaseMockParseSessionCookie) Set(f func(ctx context.Context, cookieValue string) (stage string, payload string, err error)) *SSOSessionUseCaseMock {
-	if mmParseSessionCookie.defaultExpectation != nil {
-		mmParseSessionCookie.mock.t.Fatalf("Default expectation is already set for the SSOSessionUseCase.ParseSessionCookie method")
+// Set uses given function f to mock the SSOSessionUseCase.PromoteSession method
+func (mmPromoteSession *mSSOSessionUseCaseMockPromoteSession) Set(f func(ctx context.Context, cmd mm_port.PromoteSessionCommand) (cp1 *mm_port.CreatedSession, err error)) *SSOSessionUseCaseMock {
+	if mmPromoteSession.defaultExpectation != nil {
+		mmPromoteSession.mock.t.Fatalf("Default expectation is already set for the SSOSessionUseCase.PromoteSession method")
 	}
 
-	if len(mmParseSessionCookie.expectations) > 0 {
-		mmParseSessionCookie.mock.t.Fatalf("Some expectations are already set for the SSOSessionUseCase.ParseSessionCookie method")
+	if len(mmPromoteSession.expectations) > 0 {
+		mmPromoteSession.mock.t.Fatalf("Some expectations are already set for the SSOSessionUseCase.PromoteSession method")
 	}
 
-	mmParseSessionCookie.mock.funcParseSessionCookie = f
-	mmParseSessionCookie.mock.funcParseSessionCookieOrigin = minimock.CallerInfo(1)
-	return mmParseSessionCookie.mock
+	mmPromoteSession.mock.funcPromoteSession = f
+	mmPromoteSession.mock.funcPromoteSessionOrigin = minimock.CallerInfo(1)
+	return mmPromoteSession.mock
 }
 
-// When sets expectation for the SSOSessionUseCase.ParseSessionCookie which will trigger the result defined by the following
+// When sets expectation for the SSOSessionUseCase.PromoteSession which will trigger the result defined by the following
 // Then helper
-func (mmParseSessionCookie *mSSOSessionUseCaseMockParseSessionCookie) When(ctx context.Context, cookieValue string) *SSOSessionUseCaseMockParseSessionCookieExpectation {
-	if mmParseSessionCookie.mock.funcParseSessionCookie != nil {
-		mmParseSessionCookie.mock.t.Fatalf("SSOSessionUseCaseMock.ParseSessionCookie mock is already set by Set")
+func (mmPromoteSession *mSSOSessionUseCaseMockPromoteSession) When(ctx context.Context, cmd mm_port.PromoteSessionCommand) *SSOSessionUseCaseMockPromoteSessionExpectation {
+	if mmPromoteSession.mock.funcPromoteSession != nil {
+		mmPromoteSession.mock.t.Fatalf("SSOSessionUseCaseMock.PromoteSession mock is already set by Set")
 	}
 
-	expectation := &SSOSessionUseCaseMockParseSessionCookieExpectation{
-		mock:               mmParseSessionCookie.mock,
-		params:             &SSOSessionUseCaseMockParseSessionCookieParams{ctx, cookieValue},
-		expectationOrigins: SSOSessionUseCaseMockParseSessionCookieExpectationOrigins{origin: minimock.CallerInfo(1)},
+	expectation := &SSOSessionUseCaseMockPromoteSessionExpectation{
+		mock:               mmPromoteSession.mock,
+		params:             &SSOSessionUseCaseMockPromoteSessionParams{ctx, cmd},
+		expectationOrigins: SSOSessionUseCaseMockPromoteSessionExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
-	mmParseSessionCookie.expectations = append(mmParseSessionCookie.expectations, expectation)
+	mmPromoteSession.expectations = append(mmPromoteSession.expectations, expectation)
 	return expectation
 }
 
-// Then sets up SSOSessionUseCase.ParseSessionCookie return parameters for the expectation previously defined by the When method
-func (e *SSOSessionUseCaseMockParseSessionCookieExpectation) Then(stage string, payload string, err error) *SSOSessionUseCaseMock {
-	e.results = &SSOSessionUseCaseMockParseSessionCookieResults{stage, payload, err}
+// Then sets up SSOSessionUseCase.PromoteSession return parameters for the expectation previously defined by the When method
+func (e *SSOSessionUseCaseMockPromoteSessionExpectation) Then(cp1 *mm_port.CreatedSession, err error) *SSOSessionUseCaseMock {
+	e.results = &SSOSessionUseCaseMockPromoteSessionResults{cp1, err}
 	return e.mock
 }
 
-// Times sets number of times SSOSessionUseCase.ParseSessionCookie should be invoked
-func (mmParseSessionCookie *mSSOSessionUseCaseMockParseSessionCookie) Times(n uint64) *mSSOSessionUseCaseMockParseSessionCookie {
+// Times sets number of times SSOSessionUseCase.PromoteSession should be invoked
+func (mmPromoteSession *mSSOSessionUseCaseMockPromoteSession) Times(n uint64) *mSSOSessionUseCaseMockPromoteSession {
 	if n == 0 {
-		mmParseSessionCookie.mock.t.Fatalf("Times of SSOSessionUseCaseMock.ParseSessionCookie mock can not be zero")
+		mmPromoteSession.mock.t.Fatalf("Times of SSOSessionUseCaseMock.PromoteSession mock can not be zero")
 	}
-	mm_atomic.StoreUint64(&mmParseSessionCookie.expectedInvocations, n)
-	mmParseSessionCookie.expectedInvocationsOrigin = minimock.CallerInfo(1)
-	return mmParseSessionCookie
+	mm_atomic.StoreUint64(&mmPromoteSession.expectedInvocations, n)
+	mmPromoteSession.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmPromoteSession
 }
 
-func (mmParseSessionCookie *mSSOSessionUseCaseMockParseSessionCookie) invocationsDone() bool {
-	if len(mmParseSessionCookie.expectations) == 0 && mmParseSessionCookie.defaultExpectation == nil && mmParseSessionCookie.mock.funcParseSessionCookie == nil {
+func (mmPromoteSession *mSSOSessionUseCaseMockPromoteSession) invocationsDone() bool {
+	if len(mmPromoteSession.expectations) == 0 && mmPromoteSession.defaultExpectation == nil && mmPromoteSession.mock.funcPromoteSession == nil {
 		return true
 	}
 
-	totalInvocations := mm_atomic.LoadUint64(&mmParseSessionCookie.mock.afterParseSessionCookieCounter)
-	expectedInvocations := mm_atomic.LoadUint64(&mmParseSessionCookie.expectedInvocations)
+	totalInvocations := mm_atomic.LoadUint64(&mmPromoteSession.mock.afterPromoteSessionCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmPromoteSession.expectedInvocations)
 
 	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
 }
 
-// ParseSessionCookie implements mm_port.SSOSessionUseCase
-func (mmParseSessionCookie *SSOSessionUseCaseMock) ParseSessionCookie(ctx context.Context, cookieValue string) (stage string, payload string, err error) {
-	mm_atomic.AddUint64(&mmParseSessionCookie.beforeParseSessionCookieCounter, 1)
-	defer mm_atomic.AddUint64(&mmParseSessionCookie.afterParseSessionCookieCounter, 1)
+// PromoteSession implements mm_port.SSOSessionUseCase
+func (mmPromoteSession *SSOSessionUseCaseMock) PromoteSession(ctx context.Context, cmd mm_port.PromoteSessionCommand) (cp1 *mm_port.CreatedSession, err error) {
+	mm_atomic.AddUint64(&mmPromoteSession.beforePromoteSessionCounter, 1)
+	defer mm_atomic.AddUint64(&mmPromoteSession.afterPromoteSessionCounter, 1)
 
-	mmParseSessionCookie.t.Helper()
+	mmPromoteSession.t.Helper()
 
-	if mmParseSessionCookie.inspectFuncParseSessionCookie != nil {
-		mmParseSessionCookie.inspectFuncParseSessionCookie(ctx, cookieValue)
+	if mmPromoteSession.inspectFuncPromoteSession != nil {
+		mmPromoteSession.inspectFuncPromoteSession(ctx, cmd)
 	}
 
-	mm_params := SSOSessionUseCaseMockParseSessionCookieParams{ctx, cookieValue}
+	mm_params := SSOSessionUseCaseMockPromoteSessionParams{ctx, cmd}
 
 	// Record call args
-	mmParseSessionCookie.ParseSessionCookieMock.mutex.Lock()
-	mmParseSessionCookie.ParseSessionCookieMock.callArgs = append(mmParseSessionCookie.ParseSessionCookieMock.callArgs, &mm_params)
-	mmParseSessionCookie.ParseSessionCookieMock.mutex.Unlock()
+	mmPromoteSession.PromoteSessionMock.mutex.Lock()
+	mmPromoteSession.PromoteSessionMock.callArgs = append(mmPromoteSession.PromoteSessionMock.callArgs, &mm_params)
+	mmPromoteSession.PromoteSessionMock.mutex.Unlock()
 
-	for _, e := range mmParseSessionCookie.ParseSessionCookieMock.expectations {
+	for _, e := range mmPromoteSession.PromoteSessionMock.expectations {
 		if minimock.Equal(*e.params, mm_params) {
 			mm_atomic.AddUint64(&e.Counter, 1)
-			return e.results.stage, e.results.payload, e.results.err
+			return e.results.cp1, e.results.err
 		}
 	}
 
-	if mmParseSessionCookie.ParseSessionCookieMock.defaultExpectation != nil {
-		mm_atomic.AddUint64(&mmParseSessionCookie.ParseSessionCookieMock.defaultExpectation.Counter, 1)
-		mm_want := mmParseSessionCookie.ParseSessionCookieMock.defaultExpectation.params
-		mm_want_ptrs := mmParseSessionCookie.ParseSessionCookieMock.defaultExpectation.paramPtrs
+	if mmPromoteSession.PromoteSessionMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmPromoteSession.PromoteSessionMock.defaultExpectation.Counter, 1)
+		mm_want := mmPromoteSession.PromoteSessionMock.defaultExpectation.params
+		mm_want_ptrs := mmPromoteSession.PromoteSessionMock.defaultExpectation.paramPtrs
 
-		mm_got := SSOSessionUseCaseMockParseSessionCookieParams{ctx, cookieValue}
+		mm_got := SSOSessionUseCaseMockPromoteSessionParams{ctx, cmd}
 
 		if mm_want_ptrs != nil {
 
 			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmParseSessionCookie.t.Errorf("SSOSessionUseCaseMock.ParseSessionCookie got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmParseSessionCookie.ParseSessionCookieMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+				mmPromoteSession.t.Errorf("SSOSessionUseCaseMock.PromoteSession got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmPromoteSession.PromoteSessionMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
 			}
 
-			if mm_want_ptrs.cookieValue != nil && !minimock.Equal(*mm_want_ptrs.cookieValue, mm_got.cookieValue) {
-				mmParseSessionCookie.t.Errorf("SSOSessionUseCaseMock.ParseSessionCookie got unexpected parameter cookieValue, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmParseSessionCookie.ParseSessionCookieMock.defaultExpectation.expectationOrigins.originCookieValue, *mm_want_ptrs.cookieValue, mm_got.cookieValue, minimock.Diff(*mm_want_ptrs.cookieValue, mm_got.cookieValue))
+			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
+				mmPromoteSession.t.Errorf("SSOSessionUseCaseMock.PromoteSession got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmPromoteSession.PromoteSessionMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
 			}
 
 		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmParseSessionCookie.t.Errorf("SSOSessionUseCaseMock.ParseSessionCookie got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-				mmParseSessionCookie.ParseSessionCookieMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+			mmPromoteSession.t.Errorf("SSOSessionUseCaseMock.PromoteSession got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmPromoteSession.PromoteSessionMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
 		}
 
-		mm_results := mmParseSessionCookie.ParseSessionCookieMock.defaultExpectation.results
+		mm_results := mmPromoteSession.PromoteSessionMock.defaultExpectation.results
 		if mm_results == nil {
-			mmParseSessionCookie.t.Fatal("No results are set for the SSOSessionUseCaseMock.ParseSessionCookie")
+			mmPromoteSession.t.Fatal("No results are set for the SSOSessionUseCaseMock.PromoteSession")
 		}
-		return (*mm_results).stage, (*mm_results).payload, (*mm_results).err
+		return (*mm_results).cp1, (*mm_results).err
 	}
-	if mmParseSessionCookie.funcParseSessionCookie != nil {
-		return mmParseSessionCookie.funcParseSessionCookie(ctx, cookieValue)
+	if mmPromoteSession.funcPromoteSession != nil {
+		return mmPromoteSession.funcPromoteSession(ctx, cmd)
 	}
-	mmParseSessionCookie.t.Fatalf("Unexpected call to SSOSessionUseCaseMock.ParseSessionCookie. %v %v", ctx, cookieValue)
+	mmPromoteSession.t.Fatalf("Unexpected call to SSOSessionUseCaseMock.PromoteSession. %v %v", ctx, cmd)
 	return
 }
 
-// ParseSessionCookieAfterCounter returns a count of finished SSOSessionUseCaseMock.ParseSessionCookie invocations
-func (mmParseSessionCookie *SSOSessionUseCaseMock) ParseSessionCookieAfterCounter() uint64 {
-	return mm_atomic.LoadUint64(&mmParseSessionCookie.afterParseSessionCookieCounter)
+// PromoteSessionAfterCounter returns a count of finished SSOSessionUseCaseMock.PromoteSession invocations
+func (mmPromoteSession *SSOSessionUseCaseMock) PromoteSessionAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmPromoteSession.afterPromoteSessionCounter)
 }
 
-// ParseSessionCookieBeforeCounter returns a count of SSOSessionUseCaseMock.ParseSessionCookie invocations
-func (mmParseSessionCookie *SSOSessionUseCaseMock) ParseSessionCookieBeforeCounter() uint64 {
-	return mm_atomic.LoadUint64(&mmParseSessionCookie.beforeParseSessionCookieCounter)
+// PromoteSessionBeforeCounter returns a count of SSOSessionUseCaseMock.PromoteSession invocations
+func (mmPromoteSession *SSOSessionUseCaseMock) PromoteSessionBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmPromoteSession.beforePromoteSessionCounter)
 }
 
-// Calls returns a list of arguments used in each call to SSOSessionUseCaseMock.ParseSessionCookie.
+// Calls returns a list of arguments used in each call to SSOSessionUseCaseMock.PromoteSession.
 // The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmParseSessionCookie *mSSOSessionUseCaseMockParseSessionCookie) Calls() []*SSOSessionUseCaseMockParseSessionCookieParams {
-	mmParseSessionCookie.mutex.RLock()
+func (mmPromoteSession *mSSOSessionUseCaseMockPromoteSession) Calls() []*SSOSessionUseCaseMockPromoteSessionParams {
+	mmPromoteSession.mutex.RLock()
 
-	argCopy := make([]*SSOSessionUseCaseMockParseSessionCookieParams, len(mmParseSessionCookie.callArgs))
-	copy(argCopy, mmParseSessionCookie.callArgs)
+	argCopy := make([]*SSOSessionUseCaseMockPromoteSessionParams, len(mmPromoteSession.callArgs))
+	copy(argCopy, mmPromoteSession.callArgs)
 
-	mmParseSessionCookie.mutex.RUnlock()
+	mmPromoteSession.mutex.RUnlock()
 
 	return argCopy
 }
 
-// MinimockParseSessionCookieDone returns true if the count of the ParseSessionCookie invocations corresponds
+// MinimockPromoteSessionDone returns true if the count of the PromoteSession invocations corresponds
 // the number of defined expectations
-func (m *SSOSessionUseCaseMock) MinimockParseSessionCookieDone() bool {
-	if m.ParseSessionCookieMock.optional {
+func (m *SSOSessionUseCaseMock) MinimockPromoteSessionDone() bool {
+	if m.PromoteSessionMock.optional {
 		// Optional methods provide '0 or more' call count restriction.
 		return true
 	}
 
-	for _, e := range m.ParseSessionCookieMock.expectations {
+	for _, e := range m.PromoteSessionMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
 			return false
 		}
 	}
 
-	return m.ParseSessionCookieMock.invocationsDone()
+	return m.PromoteSessionMock.invocationsDone()
 }
 
-// MinimockParseSessionCookieInspect logs each unmet expectation
-func (m *SSOSessionUseCaseMock) MinimockParseSessionCookieInspect() {
-	for _, e := range m.ParseSessionCookieMock.expectations {
+// MinimockPromoteSessionInspect logs each unmet expectation
+func (m *SSOSessionUseCaseMock) MinimockPromoteSessionInspect() {
+	for _, e := range m.PromoteSessionMock.expectations {
 		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ParseSessionCookie at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.PromoteSession at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
 		}
 	}
 
-	afterParseSessionCookieCounter := mm_atomic.LoadUint64(&m.afterParseSessionCookieCounter)
+	afterPromoteSessionCounter := mm_atomic.LoadUint64(&m.afterPromoteSessionCounter)
 	// if default expectation was set then invocations count should be greater than zero
-	if m.ParseSessionCookieMock.defaultExpectation != nil && afterParseSessionCookieCounter < 1 {
-		if m.ParseSessionCookieMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ParseSessionCookie at\n%s", m.ParseSessionCookieMock.defaultExpectation.returnOrigin)
+	if m.PromoteSessionMock.defaultExpectation != nil && afterPromoteSessionCounter < 1 {
+		if m.PromoteSessionMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.PromoteSession at\n%s", m.PromoteSessionMock.defaultExpectation.returnOrigin)
 		} else {
-			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ParseSessionCookie at\n%s with params: %#v", m.ParseSessionCookieMock.defaultExpectation.expectationOrigins.origin, *m.ParseSessionCookieMock.defaultExpectation.params)
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.PromoteSession at\n%s with params: %#v", m.PromoteSessionMock.defaultExpectation.expectationOrigins.origin, *m.PromoteSessionMock.defaultExpectation.params)
 		}
 	}
 	// if func was set then invocations count should be greater than zero
-	if m.funcParseSessionCookie != nil && afterParseSessionCookieCounter < 1 {
-		m.t.Errorf("Expected call to SSOSessionUseCaseMock.ParseSessionCookie at\n%s", m.funcParseSessionCookieOrigin)
+	if m.funcPromoteSession != nil && afterPromoteSessionCounter < 1 {
+		m.t.Errorf("Expected call to SSOSessionUseCaseMock.PromoteSession at\n%s", m.funcPromoteSessionOrigin)
 	}
 
-	if !m.ParseSessionCookieMock.invocationsDone() && afterParseSessionCookieCounter > 0 {
-		m.t.Errorf("Expected %d calls to SSOSessionUseCaseMock.ParseSessionCookie at\n%s but found %d calls",
-			mm_atomic.LoadUint64(&m.ParseSessionCookieMock.expectedInvocations), m.ParseSessionCookieMock.expectedInvocationsOrigin, afterParseSessionCookieCounter)
+	if !m.PromoteSessionMock.invocationsDone() && afterPromoteSessionCounter > 0 {
+		m.t.Errorf("Expected %d calls to SSOSessionUseCaseMock.PromoteSession at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.PromoteSessionMock.expectedInvocations), m.PromoteSessionMock.expectedInvocationsOrigin, afterPromoteSessionCounter)
+	}
+}
+
+type mSSOSessionUseCaseMockResolveDirectFlowSession struct {
+	optional           bool
+	mock               *SSOSessionUseCaseMock
+	defaultExpectation *SSOSessionUseCaseMockResolveDirectFlowSessionExpectation
+	expectations       []*SSOSessionUseCaseMockResolveDirectFlowSessionExpectation
+
+	callArgs []*SSOSessionUseCaseMockResolveDirectFlowSessionParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// SSOSessionUseCaseMockResolveDirectFlowSessionExpectation specifies expectation struct of the SSOSessionUseCase.ResolveDirectFlowSession
+type SSOSessionUseCaseMockResolveDirectFlowSessionExpectation struct {
+	mock               *SSOSessionUseCaseMock
+	params             *SSOSessionUseCaseMockResolveDirectFlowSessionParams
+	paramPtrs          *SSOSessionUseCaseMockResolveDirectFlowSessionParamPtrs
+	expectationOrigins SSOSessionUseCaseMockResolveDirectFlowSessionExpectationOrigins
+	results            *SSOSessionUseCaseMockResolveDirectFlowSessionResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// SSOSessionUseCaseMockResolveDirectFlowSessionParams contains parameters of the SSOSessionUseCase.ResolveDirectFlowSession
+type SSOSessionUseCaseMockResolveDirectFlowSessionParams struct {
+	ctx         context.Context
+	tenantID    uuid.UUID
+	partitionID int64
+	cookies     map[string]string
+}
+
+// SSOSessionUseCaseMockResolveDirectFlowSessionParamPtrs contains pointers to parameters of the SSOSessionUseCase.ResolveDirectFlowSession
+type SSOSessionUseCaseMockResolveDirectFlowSessionParamPtrs struct {
+	ctx         *context.Context
+	tenantID    *uuid.UUID
+	partitionID *int64
+	cookies     *map[string]string
+}
+
+// SSOSessionUseCaseMockResolveDirectFlowSessionResults contains results of the SSOSessionUseCase.ResolveDirectFlowSession
+type SSOSessionUseCaseMockResolveDirectFlowSessionResults struct {
+	sp1 *model.SSOSession
+	err error
+}
+
+// SSOSessionUseCaseMockResolveDirectFlowSessionOrigins contains origins of expectations of the SSOSessionUseCase.ResolveDirectFlowSession
+type SSOSessionUseCaseMockResolveDirectFlowSessionExpectationOrigins struct {
+	origin            string
+	originCtx         string
+	originTenantID    string
+	originPartitionID string
+	originCookies     string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmResolveDirectFlowSession *mSSOSessionUseCaseMockResolveDirectFlowSession) Optional() *mSSOSessionUseCaseMockResolveDirectFlowSession {
+	mmResolveDirectFlowSession.optional = true
+	return mmResolveDirectFlowSession
+}
+
+// Expect sets up expected params for SSOSessionUseCase.ResolveDirectFlowSession
+func (mmResolveDirectFlowSession *mSSOSessionUseCaseMockResolveDirectFlowSession) Expect(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string) *mSSOSessionUseCaseMockResolveDirectFlowSession {
+	if mmResolveDirectFlowSession.mock.funcResolveDirectFlowSession != nil {
+		mmResolveDirectFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveDirectFlowSession mock is already set by Set")
+	}
+
+	if mmResolveDirectFlowSession.defaultExpectation == nil {
+		mmResolveDirectFlowSession.defaultExpectation = &SSOSessionUseCaseMockResolveDirectFlowSessionExpectation{}
+	}
+
+	if mmResolveDirectFlowSession.defaultExpectation.paramPtrs != nil {
+		mmResolveDirectFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveDirectFlowSession mock is already set by ExpectParams functions")
+	}
+
+	mmResolveDirectFlowSession.defaultExpectation.params = &SSOSessionUseCaseMockResolveDirectFlowSessionParams{ctx, tenantID, partitionID, cookies}
+	mmResolveDirectFlowSession.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmResolveDirectFlowSession.expectations {
+		if minimock.Equal(e.params, mmResolveDirectFlowSession.defaultExpectation.params) {
+			mmResolveDirectFlowSession.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmResolveDirectFlowSession.defaultExpectation.params)
+		}
+	}
+
+	return mmResolveDirectFlowSession
+}
+
+// ExpectCtxParam1 sets up expected param ctx for SSOSessionUseCase.ResolveDirectFlowSession
+func (mmResolveDirectFlowSession *mSSOSessionUseCaseMockResolveDirectFlowSession) ExpectCtxParam1(ctx context.Context) *mSSOSessionUseCaseMockResolveDirectFlowSession {
+	if mmResolveDirectFlowSession.mock.funcResolveDirectFlowSession != nil {
+		mmResolveDirectFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveDirectFlowSession mock is already set by Set")
+	}
+
+	if mmResolveDirectFlowSession.defaultExpectation == nil {
+		mmResolveDirectFlowSession.defaultExpectation = &SSOSessionUseCaseMockResolveDirectFlowSessionExpectation{}
+	}
+
+	if mmResolveDirectFlowSession.defaultExpectation.params != nil {
+		mmResolveDirectFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveDirectFlowSession mock is already set by Expect")
+	}
+
+	if mmResolveDirectFlowSession.defaultExpectation.paramPtrs == nil {
+		mmResolveDirectFlowSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolveDirectFlowSessionParamPtrs{}
+	}
+	mmResolveDirectFlowSession.defaultExpectation.paramPtrs.ctx = &ctx
+	mmResolveDirectFlowSession.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmResolveDirectFlowSession
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for SSOSessionUseCase.ResolveDirectFlowSession
+func (mmResolveDirectFlowSession *mSSOSessionUseCaseMockResolveDirectFlowSession) ExpectTenantIDParam2(tenantID uuid.UUID) *mSSOSessionUseCaseMockResolveDirectFlowSession {
+	if mmResolveDirectFlowSession.mock.funcResolveDirectFlowSession != nil {
+		mmResolveDirectFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveDirectFlowSession mock is already set by Set")
+	}
+
+	if mmResolveDirectFlowSession.defaultExpectation == nil {
+		mmResolveDirectFlowSession.defaultExpectation = &SSOSessionUseCaseMockResolveDirectFlowSessionExpectation{}
+	}
+
+	if mmResolveDirectFlowSession.defaultExpectation.params != nil {
+		mmResolveDirectFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveDirectFlowSession mock is already set by Expect")
+	}
+
+	if mmResolveDirectFlowSession.defaultExpectation.paramPtrs == nil {
+		mmResolveDirectFlowSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolveDirectFlowSessionParamPtrs{}
+	}
+	mmResolveDirectFlowSession.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmResolveDirectFlowSession.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmResolveDirectFlowSession
+}
+
+// ExpectPartitionIDParam3 sets up expected param partitionID for SSOSessionUseCase.ResolveDirectFlowSession
+func (mmResolveDirectFlowSession *mSSOSessionUseCaseMockResolveDirectFlowSession) ExpectPartitionIDParam3(partitionID int64) *mSSOSessionUseCaseMockResolveDirectFlowSession {
+	if mmResolveDirectFlowSession.mock.funcResolveDirectFlowSession != nil {
+		mmResolveDirectFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveDirectFlowSession mock is already set by Set")
+	}
+
+	if mmResolveDirectFlowSession.defaultExpectation == nil {
+		mmResolveDirectFlowSession.defaultExpectation = &SSOSessionUseCaseMockResolveDirectFlowSessionExpectation{}
+	}
+
+	if mmResolveDirectFlowSession.defaultExpectation.params != nil {
+		mmResolveDirectFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveDirectFlowSession mock is already set by Expect")
+	}
+
+	if mmResolveDirectFlowSession.defaultExpectation.paramPtrs == nil {
+		mmResolveDirectFlowSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolveDirectFlowSessionParamPtrs{}
+	}
+	mmResolveDirectFlowSession.defaultExpectation.paramPtrs.partitionID = &partitionID
+	mmResolveDirectFlowSession.defaultExpectation.expectationOrigins.originPartitionID = minimock.CallerInfo(1)
+
+	return mmResolveDirectFlowSession
+}
+
+// ExpectCookiesParam4 sets up expected param cookies for SSOSessionUseCase.ResolveDirectFlowSession
+func (mmResolveDirectFlowSession *mSSOSessionUseCaseMockResolveDirectFlowSession) ExpectCookiesParam4(cookies map[string]string) *mSSOSessionUseCaseMockResolveDirectFlowSession {
+	if mmResolveDirectFlowSession.mock.funcResolveDirectFlowSession != nil {
+		mmResolveDirectFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveDirectFlowSession mock is already set by Set")
+	}
+
+	if mmResolveDirectFlowSession.defaultExpectation == nil {
+		mmResolveDirectFlowSession.defaultExpectation = &SSOSessionUseCaseMockResolveDirectFlowSessionExpectation{}
+	}
+
+	if mmResolveDirectFlowSession.defaultExpectation.params != nil {
+		mmResolveDirectFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveDirectFlowSession mock is already set by Expect")
+	}
+
+	if mmResolveDirectFlowSession.defaultExpectation.paramPtrs == nil {
+		mmResolveDirectFlowSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolveDirectFlowSessionParamPtrs{}
+	}
+	mmResolveDirectFlowSession.defaultExpectation.paramPtrs.cookies = &cookies
+	mmResolveDirectFlowSession.defaultExpectation.expectationOrigins.originCookies = minimock.CallerInfo(1)
+
+	return mmResolveDirectFlowSession
+}
+
+// Inspect accepts an inspector function that has same arguments as the SSOSessionUseCase.ResolveDirectFlowSession
+func (mmResolveDirectFlowSession *mSSOSessionUseCaseMockResolveDirectFlowSession) Inspect(f func(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string)) *mSSOSessionUseCaseMockResolveDirectFlowSession {
+	if mmResolveDirectFlowSession.mock.inspectFuncResolveDirectFlowSession != nil {
+		mmResolveDirectFlowSession.mock.t.Fatalf("Inspect function is already set for SSOSessionUseCaseMock.ResolveDirectFlowSession")
+	}
+
+	mmResolveDirectFlowSession.mock.inspectFuncResolveDirectFlowSession = f
+
+	return mmResolveDirectFlowSession
+}
+
+// Return sets up results that will be returned by SSOSessionUseCase.ResolveDirectFlowSession
+func (mmResolveDirectFlowSession *mSSOSessionUseCaseMockResolveDirectFlowSession) Return(sp1 *model.SSOSession, err error) *SSOSessionUseCaseMock {
+	if mmResolveDirectFlowSession.mock.funcResolveDirectFlowSession != nil {
+		mmResolveDirectFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveDirectFlowSession mock is already set by Set")
+	}
+
+	if mmResolveDirectFlowSession.defaultExpectation == nil {
+		mmResolveDirectFlowSession.defaultExpectation = &SSOSessionUseCaseMockResolveDirectFlowSessionExpectation{mock: mmResolveDirectFlowSession.mock}
+	}
+	mmResolveDirectFlowSession.defaultExpectation.results = &SSOSessionUseCaseMockResolveDirectFlowSessionResults{sp1, err}
+	mmResolveDirectFlowSession.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmResolveDirectFlowSession.mock
+}
+
+// Set uses given function f to mock the SSOSessionUseCase.ResolveDirectFlowSession method
+func (mmResolveDirectFlowSession *mSSOSessionUseCaseMockResolveDirectFlowSession) Set(f func(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string) (sp1 *model.SSOSession, err error)) *SSOSessionUseCaseMock {
+	if mmResolveDirectFlowSession.defaultExpectation != nil {
+		mmResolveDirectFlowSession.mock.t.Fatalf("Default expectation is already set for the SSOSessionUseCase.ResolveDirectFlowSession method")
+	}
+
+	if len(mmResolveDirectFlowSession.expectations) > 0 {
+		mmResolveDirectFlowSession.mock.t.Fatalf("Some expectations are already set for the SSOSessionUseCase.ResolveDirectFlowSession method")
+	}
+
+	mmResolveDirectFlowSession.mock.funcResolveDirectFlowSession = f
+	mmResolveDirectFlowSession.mock.funcResolveDirectFlowSessionOrigin = minimock.CallerInfo(1)
+	return mmResolveDirectFlowSession.mock
+}
+
+// When sets expectation for the SSOSessionUseCase.ResolveDirectFlowSession which will trigger the result defined by the following
+// Then helper
+func (mmResolveDirectFlowSession *mSSOSessionUseCaseMockResolveDirectFlowSession) When(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string) *SSOSessionUseCaseMockResolveDirectFlowSessionExpectation {
+	if mmResolveDirectFlowSession.mock.funcResolveDirectFlowSession != nil {
+		mmResolveDirectFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveDirectFlowSession mock is already set by Set")
+	}
+
+	expectation := &SSOSessionUseCaseMockResolveDirectFlowSessionExpectation{
+		mock:               mmResolveDirectFlowSession.mock,
+		params:             &SSOSessionUseCaseMockResolveDirectFlowSessionParams{ctx, tenantID, partitionID, cookies},
+		expectationOrigins: SSOSessionUseCaseMockResolveDirectFlowSessionExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmResolveDirectFlowSession.expectations = append(mmResolveDirectFlowSession.expectations, expectation)
+	return expectation
+}
+
+// Then sets up SSOSessionUseCase.ResolveDirectFlowSession return parameters for the expectation previously defined by the When method
+func (e *SSOSessionUseCaseMockResolveDirectFlowSessionExpectation) Then(sp1 *model.SSOSession, err error) *SSOSessionUseCaseMock {
+	e.results = &SSOSessionUseCaseMockResolveDirectFlowSessionResults{sp1, err}
+	return e.mock
+}
+
+// Times sets number of times SSOSessionUseCase.ResolveDirectFlowSession should be invoked
+func (mmResolveDirectFlowSession *mSSOSessionUseCaseMockResolveDirectFlowSession) Times(n uint64) *mSSOSessionUseCaseMockResolveDirectFlowSession {
+	if n == 0 {
+		mmResolveDirectFlowSession.mock.t.Fatalf("Times of SSOSessionUseCaseMock.ResolveDirectFlowSession mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmResolveDirectFlowSession.expectedInvocations, n)
+	mmResolveDirectFlowSession.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmResolveDirectFlowSession
+}
+
+func (mmResolveDirectFlowSession *mSSOSessionUseCaseMockResolveDirectFlowSession) invocationsDone() bool {
+	if len(mmResolveDirectFlowSession.expectations) == 0 && mmResolveDirectFlowSession.defaultExpectation == nil && mmResolveDirectFlowSession.mock.funcResolveDirectFlowSession == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmResolveDirectFlowSession.mock.afterResolveDirectFlowSessionCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmResolveDirectFlowSession.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// ResolveDirectFlowSession implements mm_port.SSOSessionUseCase
+func (mmResolveDirectFlowSession *SSOSessionUseCaseMock) ResolveDirectFlowSession(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string) (sp1 *model.SSOSession, err error) {
+	mm_atomic.AddUint64(&mmResolveDirectFlowSession.beforeResolveDirectFlowSessionCounter, 1)
+	defer mm_atomic.AddUint64(&mmResolveDirectFlowSession.afterResolveDirectFlowSessionCounter, 1)
+
+	mmResolveDirectFlowSession.t.Helper()
+
+	if mmResolveDirectFlowSession.inspectFuncResolveDirectFlowSession != nil {
+		mmResolveDirectFlowSession.inspectFuncResolveDirectFlowSession(ctx, tenantID, partitionID, cookies)
+	}
+
+	mm_params := SSOSessionUseCaseMockResolveDirectFlowSessionParams{ctx, tenantID, partitionID, cookies}
+
+	// Record call args
+	mmResolveDirectFlowSession.ResolveDirectFlowSessionMock.mutex.Lock()
+	mmResolveDirectFlowSession.ResolveDirectFlowSessionMock.callArgs = append(mmResolveDirectFlowSession.ResolveDirectFlowSessionMock.callArgs, &mm_params)
+	mmResolveDirectFlowSession.ResolveDirectFlowSessionMock.mutex.Unlock()
+
+	for _, e := range mmResolveDirectFlowSession.ResolveDirectFlowSessionMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.sp1, e.results.err
+		}
+	}
+
+	if mmResolveDirectFlowSession.ResolveDirectFlowSessionMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmResolveDirectFlowSession.ResolveDirectFlowSessionMock.defaultExpectation.Counter, 1)
+		mm_want := mmResolveDirectFlowSession.ResolveDirectFlowSessionMock.defaultExpectation.params
+		mm_want_ptrs := mmResolveDirectFlowSession.ResolveDirectFlowSessionMock.defaultExpectation.paramPtrs
+
+		mm_got := SSOSessionUseCaseMockResolveDirectFlowSessionParams{ctx, tenantID, partitionID, cookies}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmResolveDirectFlowSession.t.Errorf("SSOSessionUseCaseMock.ResolveDirectFlowSession got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolveDirectFlowSession.ResolveDirectFlowSessionMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmResolveDirectFlowSession.t.Errorf("SSOSessionUseCaseMock.ResolveDirectFlowSession got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolveDirectFlowSession.ResolveDirectFlowSessionMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.partitionID != nil && !minimock.Equal(*mm_want_ptrs.partitionID, mm_got.partitionID) {
+				mmResolveDirectFlowSession.t.Errorf("SSOSessionUseCaseMock.ResolveDirectFlowSession got unexpected parameter partitionID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolveDirectFlowSession.ResolveDirectFlowSessionMock.defaultExpectation.expectationOrigins.originPartitionID, *mm_want_ptrs.partitionID, mm_got.partitionID, minimock.Diff(*mm_want_ptrs.partitionID, mm_got.partitionID))
+			}
+
+			if mm_want_ptrs.cookies != nil && !minimock.Equal(*mm_want_ptrs.cookies, mm_got.cookies) {
+				mmResolveDirectFlowSession.t.Errorf("SSOSessionUseCaseMock.ResolveDirectFlowSession got unexpected parameter cookies, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolveDirectFlowSession.ResolveDirectFlowSessionMock.defaultExpectation.expectationOrigins.originCookies, *mm_want_ptrs.cookies, mm_got.cookies, minimock.Diff(*mm_want_ptrs.cookies, mm_got.cookies))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmResolveDirectFlowSession.t.Errorf("SSOSessionUseCaseMock.ResolveDirectFlowSession got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmResolveDirectFlowSession.ResolveDirectFlowSessionMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmResolveDirectFlowSession.ResolveDirectFlowSessionMock.defaultExpectation.results
+		if mm_results == nil {
+			mmResolveDirectFlowSession.t.Fatal("No results are set for the SSOSessionUseCaseMock.ResolveDirectFlowSession")
+		}
+		return (*mm_results).sp1, (*mm_results).err
+	}
+	if mmResolveDirectFlowSession.funcResolveDirectFlowSession != nil {
+		return mmResolveDirectFlowSession.funcResolveDirectFlowSession(ctx, tenantID, partitionID, cookies)
+	}
+	mmResolveDirectFlowSession.t.Fatalf("Unexpected call to SSOSessionUseCaseMock.ResolveDirectFlowSession. %v %v %v %v", ctx, tenantID, partitionID, cookies)
+	return
+}
+
+// ResolveDirectFlowSessionAfterCounter returns a count of finished SSOSessionUseCaseMock.ResolveDirectFlowSession invocations
+func (mmResolveDirectFlowSession *SSOSessionUseCaseMock) ResolveDirectFlowSessionAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmResolveDirectFlowSession.afterResolveDirectFlowSessionCounter)
+}
+
+// ResolveDirectFlowSessionBeforeCounter returns a count of SSOSessionUseCaseMock.ResolveDirectFlowSession invocations
+func (mmResolveDirectFlowSession *SSOSessionUseCaseMock) ResolveDirectFlowSessionBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmResolveDirectFlowSession.beforeResolveDirectFlowSessionCounter)
+}
+
+// Calls returns a list of arguments used in each call to SSOSessionUseCaseMock.ResolveDirectFlowSession.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmResolveDirectFlowSession *mSSOSessionUseCaseMockResolveDirectFlowSession) Calls() []*SSOSessionUseCaseMockResolveDirectFlowSessionParams {
+	mmResolveDirectFlowSession.mutex.RLock()
+
+	argCopy := make([]*SSOSessionUseCaseMockResolveDirectFlowSessionParams, len(mmResolveDirectFlowSession.callArgs))
+	copy(argCopy, mmResolveDirectFlowSession.callArgs)
+
+	mmResolveDirectFlowSession.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockResolveDirectFlowSessionDone returns true if the count of the ResolveDirectFlowSession invocations corresponds
+// the number of defined expectations
+func (m *SSOSessionUseCaseMock) MinimockResolveDirectFlowSessionDone() bool {
+	if m.ResolveDirectFlowSessionMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.ResolveDirectFlowSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.ResolveDirectFlowSessionMock.invocationsDone()
+}
+
+// MinimockResolveDirectFlowSessionInspect logs each unmet expectation
+func (m *SSOSessionUseCaseMock) MinimockResolveDirectFlowSessionInspect() {
+	for _, e := range m.ResolveDirectFlowSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolveDirectFlowSession at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterResolveDirectFlowSessionCounter := mm_atomic.LoadUint64(&m.afterResolveDirectFlowSessionCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.ResolveDirectFlowSessionMock.defaultExpectation != nil && afterResolveDirectFlowSessionCounter < 1 {
+		if m.ResolveDirectFlowSessionMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolveDirectFlowSession at\n%s", m.ResolveDirectFlowSessionMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolveDirectFlowSession at\n%s with params: %#v", m.ResolveDirectFlowSessionMock.defaultExpectation.expectationOrigins.origin, *m.ResolveDirectFlowSessionMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcResolveDirectFlowSession != nil && afterResolveDirectFlowSessionCounter < 1 {
+		m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolveDirectFlowSession at\n%s", m.funcResolveDirectFlowSessionOrigin)
+	}
+
+	if !m.ResolveDirectFlowSessionMock.invocationsDone() && afterResolveDirectFlowSessionCounter > 0 {
+		m.t.Errorf("Expected %d calls to SSOSessionUseCaseMock.ResolveDirectFlowSession at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.ResolveDirectFlowSessionMock.expectedInvocations), m.ResolveDirectFlowSessionMock.expectedInvocationsOrigin, afterResolveDirectFlowSessionCounter)
+	}
+}
+
+type mSSOSessionUseCaseMockResolveFlowSession struct {
+	optional           bool
+	mock               *SSOSessionUseCaseMock
+	defaultExpectation *SSOSessionUseCaseMockResolveFlowSessionExpectation
+	expectations       []*SSOSessionUseCaseMockResolveFlowSessionExpectation
+
+	callArgs []*SSOSessionUseCaseMockResolveFlowSessionParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// SSOSessionUseCaseMockResolveFlowSessionExpectation specifies expectation struct of the SSOSessionUseCase.ResolveFlowSession
+type SSOSessionUseCaseMockResolveFlowSessionExpectation struct {
+	mock               *SSOSessionUseCaseMock
+	params             *SSOSessionUseCaseMockResolveFlowSessionParams
+	paramPtrs          *SSOSessionUseCaseMockResolveFlowSessionParamPtrs
+	expectationOrigins SSOSessionUseCaseMockResolveFlowSessionExpectationOrigins
+	results            *SSOSessionUseCaseMockResolveFlowSessionResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// SSOSessionUseCaseMockResolveFlowSessionParams contains parameters of the SSOSessionUseCase.ResolveFlowSession
+type SSOSessionUseCaseMockResolveFlowSessionParams struct {
+	ctx           context.Context
+	tenantID      uuid.UUID
+	partitionID   int64
+	cookies       map[string]string
+	flowSessionID uuid.UUID
+}
+
+// SSOSessionUseCaseMockResolveFlowSessionParamPtrs contains pointers to parameters of the SSOSessionUseCase.ResolveFlowSession
+type SSOSessionUseCaseMockResolveFlowSessionParamPtrs struct {
+	ctx           *context.Context
+	tenantID      *uuid.UUID
+	partitionID   *int64
+	cookies       *map[string]string
+	flowSessionID *uuid.UUID
+}
+
+// SSOSessionUseCaseMockResolveFlowSessionResults contains results of the SSOSessionUseCase.ResolveFlowSession
+type SSOSessionUseCaseMockResolveFlowSessionResults struct {
+	sp1 *model.SSOSession
+	err error
+}
+
+// SSOSessionUseCaseMockResolveFlowSessionOrigins contains origins of expectations of the SSOSessionUseCase.ResolveFlowSession
+type SSOSessionUseCaseMockResolveFlowSessionExpectationOrigins struct {
+	origin              string
+	originCtx           string
+	originTenantID      string
+	originPartitionID   string
+	originCookies       string
+	originFlowSessionID string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmResolveFlowSession *mSSOSessionUseCaseMockResolveFlowSession) Optional() *mSSOSessionUseCaseMockResolveFlowSession {
+	mmResolveFlowSession.optional = true
+	return mmResolveFlowSession
+}
+
+// Expect sets up expected params for SSOSessionUseCase.ResolveFlowSession
+func (mmResolveFlowSession *mSSOSessionUseCaseMockResolveFlowSession) Expect(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string, flowSessionID uuid.UUID) *mSSOSessionUseCaseMockResolveFlowSession {
+	if mmResolveFlowSession.mock.funcResolveFlowSession != nil {
+		mmResolveFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSession mock is already set by Set")
+	}
+
+	if mmResolveFlowSession.defaultExpectation == nil {
+		mmResolveFlowSession.defaultExpectation = &SSOSessionUseCaseMockResolveFlowSessionExpectation{}
+	}
+
+	if mmResolveFlowSession.defaultExpectation.paramPtrs != nil {
+		mmResolveFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSession mock is already set by ExpectParams functions")
+	}
+
+	mmResolveFlowSession.defaultExpectation.params = &SSOSessionUseCaseMockResolveFlowSessionParams{ctx, tenantID, partitionID, cookies, flowSessionID}
+	mmResolveFlowSession.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmResolveFlowSession.expectations {
+		if minimock.Equal(e.params, mmResolveFlowSession.defaultExpectation.params) {
+			mmResolveFlowSession.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmResolveFlowSession.defaultExpectation.params)
+		}
+	}
+
+	return mmResolveFlowSession
+}
+
+// ExpectCtxParam1 sets up expected param ctx for SSOSessionUseCase.ResolveFlowSession
+func (mmResolveFlowSession *mSSOSessionUseCaseMockResolveFlowSession) ExpectCtxParam1(ctx context.Context) *mSSOSessionUseCaseMockResolveFlowSession {
+	if mmResolveFlowSession.mock.funcResolveFlowSession != nil {
+		mmResolveFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSession mock is already set by Set")
+	}
+
+	if mmResolveFlowSession.defaultExpectation == nil {
+		mmResolveFlowSession.defaultExpectation = &SSOSessionUseCaseMockResolveFlowSessionExpectation{}
+	}
+
+	if mmResolveFlowSession.defaultExpectation.params != nil {
+		mmResolveFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSession mock is already set by Expect")
+	}
+
+	if mmResolveFlowSession.defaultExpectation.paramPtrs == nil {
+		mmResolveFlowSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolveFlowSessionParamPtrs{}
+	}
+	mmResolveFlowSession.defaultExpectation.paramPtrs.ctx = &ctx
+	mmResolveFlowSession.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmResolveFlowSession
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for SSOSessionUseCase.ResolveFlowSession
+func (mmResolveFlowSession *mSSOSessionUseCaseMockResolveFlowSession) ExpectTenantIDParam2(tenantID uuid.UUID) *mSSOSessionUseCaseMockResolveFlowSession {
+	if mmResolveFlowSession.mock.funcResolveFlowSession != nil {
+		mmResolveFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSession mock is already set by Set")
+	}
+
+	if mmResolveFlowSession.defaultExpectation == nil {
+		mmResolveFlowSession.defaultExpectation = &SSOSessionUseCaseMockResolveFlowSessionExpectation{}
+	}
+
+	if mmResolveFlowSession.defaultExpectation.params != nil {
+		mmResolveFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSession mock is already set by Expect")
+	}
+
+	if mmResolveFlowSession.defaultExpectation.paramPtrs == nil {
+		mmResolveFlowSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolveFlowSessionParamPtrs{}
+	}
+	mmResolveFlowSession.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmResolveFlowSession.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmResolveFlowSession
+}
+
+// ExpectPartitionIDParam3 sets up expected param partitionID for SSOSessionUseCase.ResolveFlowSession
+func (mmResolveFlowSession *mSSOSessionUseCaseMockResolveFlowSession) ExpectPartitionIDParam3(partitionID int64) *mSSOSessionUseCaseMockResolveFlowSession {
+	if mmResolveFlowSession.mock.funcResolveFlowSession != nil {
+		mmResolveFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSession mock is already set by Set")
+	}
+
+	if mmResolveFlowSession.defaultExpectation == nil {
+		mmResolveFlowSession.defaultExpectation = &SSOSessionUseCaseMockResolveFlowSessionExpectation{}
+	}
+
+	if mmResolveFlowSession.defaultExpectation.params != nil {
+		mmResolveFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSession mock is already set by Expect")
+	}
+
+	if mmResolveFlowSession.defaultExpectation.paramPtrs == nil {
+		mmResolveFlowSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolveFlowSessionParamPtrs{}
+	}
+	mmResolveFlowSession.defaultExpectation.paramPtrs.partitionID = &partitionID
+	mmResolveFlowSession.defaultExpectation.expectationOrigins.originPartitionID = minimock.CallerInfo(1)
+
+	return mmResolveFlowSession
+}
+
+// ExpectCookiesParam4 sets up expected param cookies for SSOSessionUseCase.ResolveFlowSession
+func (mmResolveFlowSession *mSSOSessionUseCaseMockResolveFlowSession) ExpectCookiesParam4(cookies map[string]string) *mSSOSessionUseCaseMockResolveFlowSession {
+	if mmResolveFlowSession.mock.funcResolveFlowSession != nil {
+		mmResolveFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSession mock is already set by Set")
+	}
+
+	if mmResolveFlowSession.defaultExpectation == nil {
+		mmResolveFlowSession.defaultExpectation = &SSOSessionUseCaseMockResolveFlowSessionExpectation{}
+	}
+
+	if mmResolveFlowSession.defaultExpectation.params != nil {
+		mmResolveFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSession mock is already set by Expect")
+	}
+
+	if mmResolveFlowSession.defaultExpectation.paramPtrs == nil {
+		mmResolveFlowSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolveFlowSessionParamPtrs{}
+	}
+	mmResolveFlowSession.defaultExpectation.paramPtrs.cookies = &cookies
+	mmResolveFlowSession.defaultExpectation.expectationOrigins.originCookies = minimock.CallerInfo(1)
+
+	return mmResolveFlowSession
+}
+
+// ExpectFlowSessionIDParam5 sets up expected param flowSessionID for SSOSessionUseCase.ResolveFlowSession
+func (mmResolveFlowSession *mSSOSessionUseCaseMockResolveFlowSession) ExpectFlowSessionIDParam5(flowSessionID uuid.UUID) *mSSOSessionUseCaseMockResolveFlowSession {
+	if mmResolveFlowSession.mock.funcResolveFlowSession != nil {
+		mmResolveFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSession mock is already set by Set")
+	}
+
+	if mmResolveFlowSession.defaultExpectation == nil {
+		mmResolveFlowSession.defaultExpectation = &SSOSessionUseCaseMockResolveFlowSessionExpectation{}
+	}
+
+	if mmResolveFlowSession.defaultExpectation.params != nil {
+		mmResolveFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSession mock is already set by Expect")
+	}
+
+	if mmResolveFlowSession.defaultExpectation.paramPtrs == nil {
+		mmResolveFlowSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolveFlowSessionParamPtrs{}
+	}
+	mmResolveFlowSession.defaultExpectation.paramPtrs.flowSessionID = &flowSessionID
+	mmResolveFlowSession.defaultExpectation.expectationOrigins.originFlowSessionID = minimock.CallerInfo(1)
+
+	return mmResolveFlowSession
+}
+
+// Inspect accepts an inspector function that has same arguments as the SSOSessionUseCase.ResolveFlowSession
+func (mmResolveFlowSession *mSSOSessionUseCaseMockResolveFlowSession) Inspect(f func(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string, flowSessionID uuid.UUID)) *mSSOSessionUseCaseMockResolveFlowSession {
+	if mmResolveFlowSession.mock.inspectFuncResolveFlowSession != nil {
+		mmResolveFlowSession.mock.t.Fatalf("Inspect function is already set for SSOSessionUseCaseMock.ResolveFlowSession")
+	}
+
+	mmResolveFlowSession.mock.inspectFuncResolveFlowSession = f
+
+	return mmResolveFlowSession
+}
+
+// Return sets up results that will be returned by SSOSessionUseCase.ResolveFlowSession
+func (mmResolveFlowSession *mSSOSessionUseCaseMockResolveFlowSession) Return(sp1 *model.SSOSession, err error) *SSOSessionUseCaseMock {
+	if mmResolveFlowSession.mock.funcResolveFlowSession != nil {
+		mmResolveFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSession mock is already set by Set")
+	}
+
+	if mmResolveFlowSession.defaultExpectation == nil {
+		mmResolveFlowSession.defaultExpectation = &SSOSessionUseCaseMockResolveFlowSessionExpectation{mock: mmResolveFlowSession.mock}
+	}
+	mmResolveFlowSession.defaultExpectation.results = &SSOSessionUseCaseMockResolveFlowSessionResults{sp1, err}
+	mmResolveFlowSession.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmResolveFlowSession.mock
+}
+
+// Set uses given function f to mock the SSOSessionUseCase.ResolveFlowSession method
+func (mmResolveFlowSession *mSSOSessionUseCaseMockResolveFlowSession) Set(f func(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string, flowSessionID uuid.UUID) (sp1 *model.SSOSession, err error)) *SSOSessionUseCaseMock {
+	if mmResolveFlowSession.defaultExpectation != nil {
+		mmResolveFlowSession.mock.t.Fatalf("Default expectation is already set for the SSOSessionUseCase.ResolveFlowSession method")
+	}
+
+	if len(mmResolveFlowSession.expectations) > 0 {
+		mmResolveFlowSession.mock.t.Fatalf("Some expectations are already set for the SSOSessionUseCase.ResolveFlowSession method")
+	}
+
+	mmResolveFlowSession.mock.funcResolveFlowSession = f
+	mmResolveFlowSession.mock.funcResolveFlowSessionOrigin = minimock.CallerInfo(1)
+	return mmResolveFlowSession.mock
+}
+
+// When sets expectation for the SSOSessionUseCase.ResolveFlowSession which will trigger the result defined by the following
+// Then helper
+func (mmResolveFlowSession *mSSOSessionUseCaseMockResolveFlowSession) When(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string, flowSessionID uuid.UUID) *SSOSessionUseCaseMockResolveFlowSessionExpectation {
+	if mmResolveFlowSession.mock.funcResolveFlowSession != nil {
+		mmResolveFlowSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSession mock is already set by Set")
+	}
+
+	expectation := &SSOSessionUseCaseMockResolveFlowSessionExpectation{
+		mock:               mmResolveFlowSession.mock,
+		params:             &SSOSessionUseCaseMockResolveFlowSessionParams{ctx, tenantID, partitionID, cookies, flowSessionID},
+		expectationOrigins: SSOSessionUseCaseMockResolveFlowSessionExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmResolveFlowSession.expectations = append(mmResolveFlowSession.expectations, expectation)
+	return expectation
+}
+
+// Then sets up SSOSessionUseCase.ResolveFlowSession return parameters for the expectation previously defined by the When method
+func (e *SSOSessionUseCaseMockResolveFlowSessionExpectation) Then(sp1 *model.SSOSession, err error) *SSOSessionUseCaseMock {
+	e.results = &SSOSessionUseCaseMockResolveFlowSessionResults{sp1, err}
+	return e.mock
+}
+
+// Times sets number of times SSOSessionUseCase.ResolveFlowSession should be invoked
+func (mmResolveFlowSession *mSSOSessionUseCaseMockResolveFlowSession) Times(n uint64) *mSSOSessionUseCaseMockResolveFlowSession {
+	if n == 0 {
+		mmResolveFlowSession.mock.t.Fatalf("Times of SSOSessionUseCaseMock.ResolveFlowSession mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmResolveFlowSession.expectedInvocations, n)
+	mmResolveFlowSession.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmResolveFlowSession
+}
+
+func (mmResolveFlowSession *mSSOSessionUseCaseMockResolveFlowSession) invocationsDone() bool {
+	if len(mmResolveFlowSession.expectations) == 0 && mmResolveFlowSession.defaultExpectation == nil && mmResolveFlowSession.mock.funcResolveFlowSession == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmResolveFlowSession.mock.afterResolveFlowSessionCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmResolveFlowSession.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// ResolveFlowSession implements mm_port.SSOSessionUseCase
+func (mmResolveFlowSession *SSOSessionUseCaseMock) ResolveFlowSession(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string, flowSessionID uuid.UUID) (sp1 *model.SSOSession, err error) {
+	mm_atomic.AddUint64(&mmResolveFlowSession.beforeResolveFlowSessionCounter, 1)
+	defer mm_atomic.AddUint64(&mmResolveFlowSession.afterResolveFlowSessionCounter, 1)
+
+	mmResolveFlowSession.t.Helper()
+
+	if mmResolveFlowSession.inspectFuncResolveFlowSession != nil {
+		mmResolveFlowSession.inspectFuncResolveFlowSession(ctx, tenantID, partitionID, cookies, flowSessionID)
+	}
+
+	mm_params := SSOSessionUseCaseMockResolveFlowSessionParams{ctx, tenantID, partitionID, cookies, flowSessionID}
+
+	// Record call args
+	mmResolveFlowSession.ResolveFlowSessionMock.mutex.Lock()
+	mmResolveFlowSession.ResolveFlowSessionMock.callArgs = append(mmResolveFlowSession.ResolveFlowSessionMock.callArgs, &mm_params)
+	mmResolveFlowSession.ResolveFlowSessionMock.mutex.Unlock()
+
+	for _, e := range mmResolveFlowSession.ResolveFlowSessionMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.sp1, e.results.err
+		}
+	}
+
+	if mmResolveFlowSession.ResolveFlowSessionMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmResolveFlowSession.ResolveFlowSessionMock.defaultExpectation.Counter, 1)
+		mm_want := mmResolveFlowSession.ResolveFlowSessionMock.defaultExpectation.params
+		mm_want_ptrs := mmResolveFlowSession.ResolveFlowSessionMock.defaultExpectation.paramPtrs
+
+		mm_got := SSOSessionUseCaseMockResolveFlowSessionParams{ctx, tenantID, partitionID, cookies, flowSessionID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmResolveFlowSession.t.Errorf("SSOSessionUseCaseMock.ResolveFlowSession got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolveFlowSession.ResolveFlowSessionMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmResolveFlowSession.t.Errorf("SSOSessionUseCaseMock.ResolveFlowSession got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolveFlowSession.ResolveFlowSessionMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.partitionID != nil && !minimock.Equal(*mm_want_ptrs.partitionID, mm_got.partitionID) {
+				mmResolveFlowSession.t.Errorf("SSOSessionUseCaseMock.ResolveFlowSession got unexpected parameter partitionID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolveFlowSession.ResolveFlowSessionMock.defaultExpectation.expectationOrigins.originPartitionID, *mm_want_ptrs.partitionID, mm_got.partitionID, minimock.Diff(*mm_want_ptrs.partitionID, mm_got.partitionID))
+			}
+
+			if mm_want_ptrs.cookies != nil && !minimock.Equal(*mm_want_ptrs.cookies, mm_got.cookies) {
+				mmResolveFlowSession.t.Errorf("SSOSessionUseCaseMock.ResolveFlowSession got unexpected parameter cookies, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolveFlowSession.ResolveFlowSessionMock.defaultExpectation.expectationOrigins.originCookies, *mm_want_ptrs.cookies, mm_got.cookies, minimock.Diff(*mm_want_ptrs.cookies, mm_got.cookies))
+			}
+
+			if mm_want_ptrs.flowSessionID != nil && !minimock.Equal(*mm_want_ptrs.flowSessionID, mm_got.flowSessionID) {
+				mmResolveFlowSession.t.Errorf("SSOSessionUseCaseMock.ResolveFlowSession got unexpected parameter flowSessionID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolveFlowSession.ResolveFlowSessionMock.defaultExpectation.expectationOrigins.originFlowSessionID, *mm_want_ptrs.flowSessionID, mm_got.flowSessionID, minimock.Diff(*mm_want_ptrs.flowSessionID, mm_got.flowSessionID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmResolveFlowSession.t.Errorf("SSOSessionUseCaseMock.ResolveFlowSession got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmResolveFlowSession.ResolveFlowSessionMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmResolveFlowSession.ResolveFlowSessionMock.defaultExpectation.results
+		if mm_results == nil {
+			mmResolveFlowSession.t.Fatal("No results are set for the SSOSessionUseCaseMock.ResolveFlowSession")
+		}
+		return (*mm_results).sp1, (*mm_results).err
+	}
+	if mmResolveFlowSession.funcResolveFlowSession != nil {
+		return mmResolveFlowSession.funcResolveFlowSession(ctx, tenantID, partitionID, cookies, flowSessionID)
+	}
+	mmResolveFlowSession.t.Fatalf("Unexpected call to SSOSessionUseCaseMock.ResolveFlowSession. %v %v %v %v %v", ctx, tenantID, partitionID, cookies, flowSessionID)
+	return
+}
+
+// ResolveFlowSessionAfterCounter returns a count of finished SSOSessionUseCaseMock.ResolveFlowSession invocations
+func (mmResolveFlowSession *SSOSessionUseCaseMock) ResolveFlowSessionAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmResolveFlowSession.afterResolveFlowSessionCounter)
+}
+
+// ResolveFlowSessionBeforeCounter returns a count of SSOSessionUseCaseMock.ResolveFlowSession invocations
+func (mmResolveFlowSession *SSOSessionUseCaseMock) ResolveFlowSessionBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmResolveFlowSession.beforeResolveFlowSessionCounter)
+}
+
+// Calls returns a list of arguments used in each call to SSOSessionUseCaseMock.ResolveFlowSession.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmResolveFlowSession *mSSOSessionUseCaseMockResolveFlowSession) Calls() []*SSOSessionUseCaseMockResolveFlowSessionParams {
+	mmResolveFlowSession.mutex.RLock()
+
+	argCopy := make([]*SSOSessionUseCaseMockResolveFlowSessionParams, len(mmResolveFlowSession.callArgs))
+	copy(argCopy, mmResolveFlowSession.callArgs)
+
+	mmResolveFlowSession.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockResolveFlowSessionDone returns true if the count of the ResolveFlowSession invocations corresponds
+// the number of defined expectations
+func (m *SSOSessionUseCaseMock) MinimockResolveFlowSessionDone() bool {
+	if m.ResolveFlowSessionMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.ResolveFlowSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.ResolveFlowSessionMock.invocationsDone()
+}
+
+// MinimockResolveFlowSessionInspect logs each unmet expectation
+func (m *SSOSessionUseCaseMock) MinimockResolveFlowSessionInspect() {
+	for _, e := range m.ResolveFlowSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolveFlowSession at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterResolveFlowSessionCounter := mm_atomic.LoadUint64(&m.afterResolveFlowSessionCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.ResolveFlowSessionMock.defaultExpectation != nil && afterResolveFlowSessionCounter < 1 {
+		if m.ResolveFlowSessionMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolveFlowSession at\n%s", m.ResolveFlowSessionMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolveFlowSession at\n%s with params: %#v", m.ResolveFlowSessionMock.defaultExpectation.expectationOrigins.origin, *m.ResolveFlowSessionMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcResolveFlowSession != nil && afterResolveFlowSessionCounter < 1 {
+		m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolveFlowSession at\n%s", m.funcResolveFlowSessionOrigin)
+	}
+
+	if !m.ResolveFlowSessionMock.invocationsDone() && afterResolveFlowSessionCounter > 0 {
+		m.t.Errorf("Expected %d calls to SSOSessionUseCaseMock.ResolveFlowSession at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.ResolveFlowSessionMock.expectedInvocations), m.ResolveFlowSessionMock.expectedInvocationsOrigin, afterResolveFlowSessionCounter)
+	}
+}
+
+type mSSOSessionUseCaseMockResolveFlowSessionIDs struct {
+	optional           bool
+	mock               *SSOSessionUseCaseMock
+	defaultExpectation *SSOSessionUseCaseMockResolveFlowSessionIDsExpectation
+	expectations       []*SSOSessionUseCaseMockResolveFlowSessionIDsExpectation
+
+	callArgs []*SSOSessionUseCaseMockResolveFlowSessionIDsParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// SSOSessionUseCaseMockResolveFlowSessionIDsExpectation specifies expectation struct of the SSOSessionUseCase.ResolveFlowSessionIDs
+type SSOSessionUseCaseMockResolveFlowSessionIDsExpectation struct {
+	mock               *SSOSessionUseCaseMock
+	params             *SSOSessionUseCaseMockResolveFlowSessionIDsParams
+	paramPtrs          *SSOSessionUseCaseMockResolveFlowSessionIDsParamPtrs
+	expectationOrigins SSOSessionUseCaseMockResolveFlowSessionIDsExpectationOrigins
+	results            *SSOSessionUseCaseMockResolveFlowSessionIDsResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// SSOSessionUseCaseMockResolveFlowSessionIDsParams contains parameters of the SSOSessionUseCase.ResolveFlowSessionIDs
+type SSOSessionUseCaseMockResolveFlowSessionIDsParams struct {
+	ctx      context.Context
+	tenantID uuid.UUID
+	cookies  map[string]string
+}
+
+// SSOSessionUseCaseMockResolveFlowSessionIDsParamPtrs contains pointers to parameters of the SSOSessionUseCase.ResolveFlowSessionIDs
+type SSOSessionUseCaseMockResolveFlowSessionIDsParamPtrs struct {
+	ctx      *context.Context
+	tenantID *uuid.UUID
+	cookies  *map[string]string
+}
+
+// SSOSessionUseCaseMockResolveFlowSessionIDsResults contains results of the SSOSessionUseCase.ResolveFlowSessionIDs
+type SSOSessionUseCaseMockResolveFlowSessionIDsResults struct {
+	ua1 []uuid.UUID
+	err error
+}
+
+// SSOSessionUseCaseMockResolveFlowSessionIDsOrigins contains origins of expectations of the SSOSessionUseCase.ResolveFlowSessionIDs
+type SSOSessionUseCaseMockResolveFlowSessionIDsExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originTenantID string
+	originCookies  string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmResolveFlowSessionIDs *mSSOSessionUseCaseMockResolveFlowSessionIDs) Optional() *mSSOSessionUseCaseMockResolveFlowSessionIDs {
+	mmResolveFlowSessionIDs.optional = true
+	return mmResolveFlowSessionIDs
+}
+
+// Expect sets up expected params for SSOSessionUseCase.ResolveFlowSessionIDs
+func (mmResolveFlowSessionIDs *mSSOSessionUseCaseMockResolveFlowSessionIDs) Expect(ctx context.Context, tenantID uuid.UUID, cookies map[string]string) *mSSOSessionUseCaseMockResolveFlowSessionIDs {
+	if mmResolveFlowSessionIDs.mock.funcResolveFlowSessionIDs != nil {
+		mmResolveFlowSessionIDs.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSessionIDs mock is already set by Set")
+	}
+
+	if mmResolveFlowSessionIDs.defaultExpectation == nil {
+		mmResolveFlowSessionIDs.defaultExpectation = &SSOSessionUseCaseMockResolveFlowSessionIDsExpectation{}
+	}
+
+	if mmResolveFlowSessionIDs.defaultExpectation.paramPtrs != nil {
+		mmResolveFlowSessionIDs.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSessionIDs mock is already set by ExpectParams functions")
+	}
+
+	mmResolveFlowSessionIDs.defaultExpectation.params = &SSOSessionUseCaseMockResolveFlowSessionIDsParams{ctx, tenantID, cookies}
+	mmResolveFlowSessionIDs.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmResolveFlowSessionIDs.expectations {
+		if minimock.Equal(e.params, mmResolveFlowSessionIDs.defaultExpectation.params) {
+			mmResolveFlowSessionIDs.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmResolveFlowSessionIDs.defaultExpectation.params)
+		}
+	}
+
+	return mmResolveFlowSessionIDs
+}
+
+// ExpectCtxParam1 sets up expected param ctx for SSOSessionUseCase.ResolveFlowSessionIDs
+func (mmResolveFlowSessionIDs *mSSOSessionUseCaseMockResolveFlowSessionIDs) ExpectCtxParam1(ctx context.Context) *mSSOSessionUseCaseMockResolveFlowSessionIDs {
+	if mmResolveFlowSessionIDs.mock.funcResolveFlowSessionIDs != nil {
+		mmResolveFlowSessionIDs.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSessionIDs mock is already set by Set")
+	}
+
+	if mmResolveFlowSessionIDs.defaultExpectation == nil {
+		mmResolveFlowSessionIDs.defaultExpectation = &SSOSessionUseCaseMockResolveFlowSessionIDsExpectation{}
+	}
+
+	if mmResolveFlowSessionIDs.defaultExpectation.params != nil {
+		mmResolveFlowSessionIDs.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSessionIDs mock is already set by Expect")
+	}
+
+	if mmResolveFlowSessionIDs.defaultExpectation.paramPtrs == nil {
+		mmResolveFlowSessionIDs.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolveFlowSessionIDsParamPtrs{}
+	}
+	mmResolveFlowSessionIDs.defaultExpectation.paramPtrs.ctx = &ctx
+	mmResolveFlowSessionIDs.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmResolveFlowSessionIDs
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for SSOSessionUseCase.ResolveFlowSessionIDs
+func (mmResolveFlowSessionIDs *mSSOSessionUseCaseMockResolveFlowSessionIDs) ExpectTenantIDParam2(tenantID uuid.UUID) *mSSOSessionUseCaseMockResolveFlowSessionIDs {
+	if mmResolveFlowSessionIDs.mock.funcResolveFlowSessionIDs != nil {
+		mmResolveFlowSessionIDs.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSessionIDs mock is already set by Set")
+	}
+
+	if mmResolveFlowSessionIDs.defaultExpectation == nil {
+		mmResolveFlowSessionIDs.defaultExpectation = &SSOSessionUseCaseMockResolveFlowSessionIDsExpectation{}
+	}
+
+	if mmResolveFlowSessionIDs.defaultExpectation.params != nil {
+		mmResolveFlowSessionIDs.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSessionIDs mock is already set by Expect")
+	}
+
+	if mmResolveFlowSessionIDs.defaultExpectation.paramPtrs == nil {
+		mmResolveFlowSessionIDs.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolveFlowSessionIDsParamPtrs{}
+	}
+	mmResolveFlowSessionIDs.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmResolveFlowSessionIDs.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmResolveFlowSessionIDs
+}
+
+// ExpectCookiesParam3 sets up expected param cookies for SSOSessionUseCase.ResolveFlowSessionIDs
+func (mmResolveFlowSessionIDs *mSSOSessionUseCaseMockResolveFlowSessionIDs) ExpectCookiesParam3(cookies map[string]string) *mSSOSessionUseCaseMockResolveFlowSessionIDs {
+	if mmResolveFlowSessionIDs.mock.funcResolveFlowSessionIDs != nil {
+		mmResolveFlowSessionIDs.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSessionIDs mock is already set by Set")
+	}
+
+	if mmResolveFlowSessionIDs.defaultExpectation == nil {
+		mmResolveFlowSessionIDs.defaultExpectation = &SSOSessionUseCaseMockResolveFlowSessionIDsExpectation{}
+	}
+
+	if mmResolveFlowSessionIDs.defaultExpectation.params != nil {
+		mmResolveFlowSessionIDs.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSessionIDs mock is already set by Expect")
+	}
+
+	if mmResolveFlowSessionIDs.defaultExpectation.paramPtrs == nil {
+		mmResolveFlowSessionIDs.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolveFlowSessionIDsParamPtrs{}
+	}
+	mmResolveFlowSessionIDs.defaultExpectation.paramPtrs.cookies = &cookies
+	mmResolveFlowSessionIDs.defaultExpectation.expectationOrigins.originCookies = minimock.CallerInfo(1)
+
+	return mmResolveFlowSessionIDs
+}
+
+// Inspect accepts an inspector function that has same arguments as the SSOSessionUseCase.ResolveFlowSessionIDs
+func (mmResolveFlowSessionIDs *mSSOSessionUseCaseMockResolveFlowSessionIDs) Inspect(f func(ctx context.Context, tenantID uuid.UUID, cookies map[string]string)) *mSSOSessionUseCaseMockResolveFlowSessionIDs {
+	if mmResolveFlowSessionIDs.mock.inspectFuncResolveFlowSessionIDs != nil {
+		mmResolveFlowSessionIDs.mock.t.Fatalf("Inspect function is already set for SSOSessionUseCaseMock.ResolveFlowSessionIDs")
+	}
+
+	mmResolveFlowSessionIDs.mock.inspectFuncResolveFlowSessionIDs = f
+
+	return mmResolveFlowSessionIDs
+}
+
+// Return sets up results that will be returned by SSOSessionUseCase.ResolveFlowSessionIDs
+func (mmResolveFlowSessionIDs *mSSOSessionUseCaseMockResolveFlowSessionIDs) Return(ua1 []uuid.UUID, err error) *SSOSessionUseCaseMock {
+	if mmResolveFlowSessionIDs.mock.funcResolveFlowSessionIDs != nil {
+		mmResolveFlowSessionIDs.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSessionIDs mock is already set by Set")
+	}
+
+	if mmResolveFlowSessionIDs.defaultExpectation == nil {
+		mmResolveFlowSessionIDs.defaultExpectation = &SSOSessionUseCaseMockResolveFlowSessionIDsExpectation{mock: mmResolveFlowSessionIDs.mock}
+	}
+	mmResolveFlowSessionIDs.defaultExpectation.results = &SSOSessionUseCaseMockResolveFlowSessionIDsResults{ua1, err}
+	mmResolveFlowSessionIDs.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmResolveFlowSessionIDs.mock
+}
+
+// Set uses given function f to mock the SSOSessionUseCase.ResolveFlowSessionIDs method
+func (mmResolveFlowSessionIDs *mSSOSessionUseCaseMockResolveFlowSessionIDs) Set(f func(ctx context.Context, tenantID uuid.UUID, cookies map[string]string) (ua1 []uuid.UUID, err error)) *SSOSessionUseCaseMock {
+	if mmResolveFlowSessionIDs.defaultExpectation != nil {
+		mmResolveFlowSessionIDs.mock.t.Fatalf("Default expectation is already set for the SSOSessionUseCase.ResolveFlowSessionIDs method")
+	}
+
+	if len(mmResolveFlowSessionIDs.expectations) > 0 {
+		mmResolveFlowSessionIDs.mock.t.Fatalf("Some expectations are already set for the SSOSessionUseCase.ResolveFlowSessionIDs method")
+	}
+
+	mmResolveFlowSessionIDs.mock.funcResolveFlowSessionIDs = f
+	mmResolveFlowSessionIDs.mock.funcResolveFlowSessionIDsOrigin = minimock.CallerInfo(1)
+	return mmResolveFlowSessionIDs.mock
+}
+
+// When sets expectation for the SSOSessionUseCase.ResolveFlowSessionIDs which will trigger the result defined by the following
+// Then helper
+func (mmResolveFlowSessionIDs *mSSOSessionUseCaseMockResolveFlowSessionIDs) When(ctx context.Context, tenantID uuid.UUID, cookies map[string]string) *SSOSessionUseCaseMockResolveFlowSessionIDsExpectation {
+	if mmResolveFlowSessionIDs.mock.funcResolveFlowSessionIDs != nil {
+		mmResolveFlowSessionIDs.mock.t.Fatalf("SSOSessionUseCaseMock.ResolveFlowSessionIDs mock is already set by Set")
+	}
+
+	expectation := &SSOSessionUseCaseMockResolveFlowSessionIDsExpectation{
+		mock:               mmResolveFlowSessionIDs.mock,
+		params:             &SSOSessionUseCaseMockResolveFlowSessionIDsParams{ctx, tenantID, cookies},
+		expectationOrigins: SSOSessionUseCaseMockResolveFlowSessionIDsExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmResolveFlowSessionIDs.expectations = append(mmResolveFlowSessionIDs.expectations, expectation)
+	return expectation
+}
+
+// Then sets up SSOSessionUseCase.ResolveFlowSessionIDs return parameters for the expectation previously defined by the When method
+func (e *SSOSessionUseCaseMockResolveFlowSessionIDsExpectation) Then(ua1 []uuid.UUID, err error) *SSOSessionUseCaseMock {
+	e.results = &SSOSessionUseCaseMockResolveFlowSessionIDsResults{ua1, err}
+	return e.mock
+}
+
+// Times sets number of times SSOSessionUseCase.ResolveFlowSessionIDs should be invoked
+func (mmResolveFlowSessionIDs *mSSOSessionUseCaseMockResolveFlowSessionIDs) Times(n uint64) *mSSOSessionUseCaseMockResolveFlowSessionIDs {
+	if n == 0 {
+		mmResolveFlowSessionIDs.mock.t.Fatalf("Times of SSOSessionUseCaseMock.ResolveFlowSessionIDs mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmResolveFlowSessionIDs.expectedInvocations, n)
+	mmResolveFlowSessionIDs.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmResolveFlowSessionIDs
+}
+
+func (mmResolveFlowSessionIDs *mSSOSessionUseCaseMockResolveFlowSessionIDs) invocationsDone() bool {
+	if len(mmResolveFlowSessionIDs.expectations) == 0 && mmResolveFlowSessionIDs.defaultExpectation == nil && mmResolveFlowSessionIDs.mock.funcResolveFlowSessionIDs == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmResolveFlowSessionIDs.mock.afterResolveFlowSessionIDsCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmResolveFlowSessionIDs.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// ResolveFlowSessionIDs implements mm_port.SSOSessionUseCase
+func (mmResolveFlowSessionIDs *SSOSessionUseCaseMock) ResolveFlowSessionIDs(ctx context.Context, tenantID uuid.UUID, cookies map[string]string) (ua1 []uuid.UUID, err error) {
+	mm_atomic.AddUint64(&mmResolveFlowSessionIDs.beforeResolveFlowSessionIDsCounter, 1)
+	defer mm_atomic.AddUint64(&mmResolveFlowSessionIDs.afterResolveFlowSessionIDsCounter, 1)
+
+	mmResolveFlowSessionIDs.t.Helper()
+
+	if mmResolveFlowSessionIDs.inspectFuncResolveFlowSessionIDs != nil {
+		mmResolveFlowSessionIDs.inspectFuncResolveFlowSessionIDs(ctx, tenantID, cookies)
+	}
+
+	mm_params := SSOSessionUseCaseMockResolveFlowSessionIDsParams{ctx, tenantID, cookies}
+
+	// Record call args
+	mmResolveFlowSessionIDs.ResolveFlowSessionIDsMock.mutex.Lock()
+	mmResolveFlowSessionIDs.ResolveFlowSessionIDsMock.callArgs = append(mmResolveFlowSessionIDs.ResolveFlowSessionIDsMock.callArgs, &mm_params)
+	mmResolveFlowSessionIDs.ResolveFlowSessionIDsMock.mutex.Unlock()
+
+	for _, e := range mmResolveFlowSessionIDs.ResolveFlowSessionIDsMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.ua1, e.results.err
+		}
+	}
+
+	if mmResolveFlowSessionIDs.ResolveFlowSessionIDsMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmResolveFlowSessionIDs.ResolveFlowSessionIDsMock.defaultExpectation.Counter, 1)
+		mm_want := mmResolveFlowSessionIDs.ResolveFlowSessionIDsMock.defaultExpectation.params
+		mm_want_ptrs := mmResolveFlowSessionIDs.ResolveFlowSessionIDsMock.defaultExpectation.paramPtrs
+
+		mm_got := SSOSessionUseCaseMockResolveFlowSessionIDsParams{ctx, tenantID, cookies}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmResolveFlowSessionIDs.t.Errorf("SSOSessionUseCaseMock.ResolveFlowSessionIDs got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolveFlowSessionIDs.ResolveFlowSessionIDsMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmResolveFlowSessionIDs.t.Errorf("SSOSessionUseCaseMock.ResolveFlowSessionIDs got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolveFlowSessionIDs.ResolveFlowSessionIDsMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.cookies != nil && !minimock.Equal(*mm_want_ptrs.cookies, mm_got.cookies) {
+				mmResolveFlowSessionIDs.t.Errorf("SSOSessionUseCaseMock.ResolveFlowSessionIDs got unexpected parameter cookies, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolveFlowSessionIDs.ResolveFlowSessionIDsMock.defaultExpectation.expectationOrigins.originCookies, *mm_want_ptrs.cookies, mm_got.cookies, minimock.Diff(*mm_want_ptrs.cookies, mm_got.cookies))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmResolveFlowSessionIDs.t.Errorf("SSOSessionUseCaseMock.ResolveFlowSessionIDs got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmResolveFlowSessionIDs.ResolveFlowSessionIDsMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmResolveFlowSessionIDs.ResolveFlowSessionIDsMock.defaultExpectation.results
+		if mm_results == nil {
+			mmResolveFlowSessionIDs.t.Fatal("No results are set for the SSOSessionUseCaseMock.ResolveFlowSessionIDs")
+		}
+		return (*mm_results).ua1, (*mm_results).err
+	}
+	if mmResolveFlowSessionIDs.funcResolveFlowSessionIDs != nil {
+		return mmResolveFlowSessionIDs.funcResolveFlowSessionIDs(ctx, tenantID, cookies)
+	}
+	mmResolveFlowSessionIDs.t.Fatalf("Unexpected call to SSOSessionUseCaseMock.ResolveFlowSessionIDs. %v %v %v", ctx, tenantID, cookies)
+	return
+}
+
+// ResolveFlowSessionIDsAfterCounter returns a count of finished SSOSessionUseCaseMock.ResolveFlowSessionIDs invocations
+func (mmResolveFlowSessionIDs *SSOSessionUseCaseMock) ResolveFlowSessionIDsAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmResolveFlowSessionIDs.afterResolveFlowSessionIDsCounter)
+}
+
+// ResolveFlowSessionIDsBeforeCounter returns a count of SSOSessionUseCaseMock.ResolveFlowSessionIDs invocations
+func (mmResolveFlowSessionIDs *SSOSessionUseCaseMock) ResolveFlowSessionIDsBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmResolveFlowSessionIDs.beforeResolveFlowSessionIDsCounter)
+}
+
+// Calls returns a list of arguments used in each call to SSOSessionUseCaseMock.ResolveFlowSessionIDs.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmResolveFlowSessionIDs *mSSOSessionUseCaseMockResolveFlowSessionIDs) Calls() []*SSOSessionUseCaseMockResolveFlowSessionIDsParams {
+	mmResolveFlowSessionIDs.mutex.RLock()
+
+	argCopy := make([]*SSOSessionUseCaseMockResolveFlowSessionIDsParams, len(mmResolveFlowSessionIDs.callArgs))
+	copy(argCopy, mmResolveFlowSessionIDs.callArgs)
+
+	mmResolveFlowSessionIDs.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockResolveFlowSessionIDsDone returns true if the count of the ResolveFlowSessionIDs invocations corresponds
+// the number of defined expectations
+func (m *SSOSessionUseCaseMock) MinimockResolveFlowSessionIDsDone() bool {
+	if m.ResolveFlowSessionIDsMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.ResolveFlowSessionIDsMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.ResolveFlowSessionIDsMock.invocationsDone()
+}
+
+// MinimockResolveFlowSessionIDsInspect logs each unmet expectation
+func (m *SSOSessionUseCaseMock) MinimockResolveFlowSessionIDsInspect() {
+	for _, e := range m.ResolveFlowSessionIDsMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolveFlowSessionIDs at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterResolveFlowSessionIDsCounter := mm_atomic.LoadUint64(&m.afterResolveFlowSessionIDsCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.ResolveFlowSessionIDsMock.defaultExpectation != nil && afterResolveFlowSessionIDsCounter < 1 {
+		if m.ResolveFlowSessionIDsMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolveFlowSessionIDs at\n%s", m.ResolveFlowSessionIDsMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolveFlowSessionIDs at\n%s with params: %#v", m.ResolveFlowSessionIDsMock.defaultExpectation.expectationOrigins.origin, *m.ResolveFlowSessionIDsMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcResolveFlowSessionIDs != nil && afterResolveFlowSessionIDsCounter < 1 {
+		m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolveFlowSessionIDs at\n%s", m.funcResolveFlowSessionIDsOrigin)
+	}
+
+	if !m.ResolveFlowSessionIDsMock.invocationsDone() && afterResolveFlowSessionIDsCounter > 0 {
+		m.t.Errorf("Expected %d calls to SSOSessionUseCaseMock.ResolveFlowSessionIDs at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.ResolveFlowSessionIDsMock.expectedInvocations), m.ResolveFlowSessionIDsMock.expectedInvocationsOrigin, afterResolveFlowSessionIDsCounter)
+	}
+}
+
+type mSSOSessionUseCaseMockResolvePartitionSession struct {
+	optional           bool
+	mock               *SSOSessionUseCaseMock
+	defaultExpectation *SSOSessionUseCaseMockResolvePartitionSessionExpectation
+	expectations       []*SSOSessionUseCaseMockResolvePartitionSessionExpectation
+
+	callArgs []*SSOSessionUseCaseMockResolvePartitionSessionParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// SSOSessionUseCaseMockResolvePartitionSessionExpectation specifies expectation struct of the SSOSessionUseCase.ResolvePartitionSession
+type SSOSessionUseCaseMockResolvePartitionSessionExpectation struct {
+	mock               *SSOSessionUseCaseMock
+	params             *SSOSessionUseCaseMockResolvePartitionSessionParams
+	paramPtrs          *SSOSessionUseCaseMockResolvePartitionSessionParamPtrs
+	expectationOrigins SSOSessionUseCaseMockResolvePartitionSessionExpectationOrigins
+	results            *SSOSessionUseCaseMockResolvePartitionSessionResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// SSOSessionUseCaseMockResolvePartitionSessionParams contains parameters of the SSOSessionUseCase.ResolvePartitionSession
+type SSOSessionUseCaseMockResolvePartitionSessionParams struct {
+	ctx         context.Context
+	tenantID    uuid.UUID
+	partitionID int64
+	cookies     map[string]string
+}
+
+// SSOSessionUseCaseMockResolvePartitionSessionParamPtrs contains pointers to parameters of the SSOSessionUseCase.ResolvePartitionSession
+type SSOSessionUseCaseMockResolvePartitionSessionParamPtrs struct {
+	ctx         *context.Context
+	tenantID    *uuid.UUID
+	partitionID *int64
+	cookies     *map[string]string
+}
+
+// SSOSessionUseCaseMockResolvePartitionSessionResults contains results of the SSOSessionUseCase.ResolvePartitionSession
+type SSOSessionUseCaseMockResolvePartitionSessionResults struct {
+	sp1 *model.SSOSession
+	err error
+}
+
+// SSOSessionUseCaseMockResolvePartitionSessionOrigins contains origins of expectations of the SSOSessionUseCase.ResolvePartitionSession
+type SSOSessionUseCaseMockResolvePartitionSessionExpectationOrigins struct {
+	origin            string
+	originCtx         string
+	originTenantID    string
+	originPartitionID string
+	originCookies     string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmResolvePartitionSession *mSSOSessionUseCaseMockResolvePartitionSession) Optional() *mSSOSessionUseCaseMockResolvePartitionSession {
+	mmResolvePartitionSession.optional = true
+	return mmResolvePartitionSession
+}
+
+// Expect sets up expected params for SSOSessionUseCase.ResolvePartitionSession
+func (mmResolvePartitionSession *mSSOSessionUseCaseMockResolvePartitionSession) Expect(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string) *mSSOSessionUseCaseMockResolvePartitionSession {
+	if mmResolvePartitionSession.mock.funcResolvePartitionSession != nil {
+		mmResolvePartitionSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolvePartitionSession mock is already set by Set")
+	}
+
+	if mmResolvePartitionSession.defaultExpectation == nil {
+		mmResolvePartitionSession.defaultExpectation = &SSOSessionUseCaseMockResolvePartitionSessionExpectation{}
+	}
+
+	if mmResolvePartitionSession.defaultExpectation.paramPtrs != nil {
+		mmResolvePartitionSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolvePartitionSession mock is already set by ExpectParams functions")
+	}
+
+	mmResolvePartitionSession.defaultExpectation.params = &SSOSessionUseCaseMockResolvePartitionSessionParams{ctx, tenantID, partitionID, cookies}
+	mmResolvePartitionSession.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmResolvePartitionSession.expectations {
+		if minimock.Equal(e.params, mmResolvePartitionSession.defaultExpectation.params) {
+			mmResolvePartitionSession.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmResolvePartitionSession.defaultExpectation.params)
+		}
+	}
+
+	return mmResolvePartitionSession
+}
+
+// ExpectCtxParam1 sets up expected param ctx for SSOSessionUseCase.ResolvePartitionSession
+func (mmResolvePartitionSession *mSSOSessionUseCaseMockResolvePartitionSession) ExpectCtxParam1(ctx context.Context) *mSSOSessionUseCaseMockResolvePartitionSession {
+	if mmResolvePartitionSession.mock.funcResolvePartitionSession != nil {
+		mmResolvePartitionSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolvePartitionSession mock is already set by Set")
+	}
+
+	if mmResolvePartitionSession.defaultExpectation == nil {
+		mmResolvePartitionSession.defaultExpectation = &SSOSessionUseCaseMockResolvePartitionSessionExpectation{}
+	}
+
+	if mmResolvePartitionSession.defaultExpectation.params != nil {
+		mmResolvePartitionSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolvePartitionSession mock is already set by Expect")
+	}
+
+	if mmResolvePartitionSession.defaultExpectation.paramPtrs == nil {
+		mmResolvePartitionSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolvePartitionSessionParamPtrs{}
+	}
+	mmResolvePartitionSession.defaultExpectation.paramPtrs.ctx = &ctx
+	mmResolvePartitionSession.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmResolvePartitionSession
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for SSOSessionUseCase.ResolvePartitionSession
+func (mmResolvePartitionSession *mSSOSessionUseCaseMockResolvePartitionSession) ExpectTenantIDParam2(tenantID uuid.UUID) *mSSOSessionUseCaseMockResolvePartitionSession {
+	if mmResolvePartitionSession.mock.funcResolvePartitionSession != nil {
+		mmResolvePartitionSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolvePartitionSession mock is already set by Set")
+	}
+
+	if mmResolvePartitionSession.defaultExpectation == nil {
+		mmResolvePartitionSession.defaultExpectation = &SSOSessionUseCaseMockResolvePartitionSessionExpectation{}
+	}
+
+	if mmResolvePartitionSession.defaultExpectation.params != nil {
+		mmResolvePartitionSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolvePartitionSession mock is already set by Expect")
+	}
+
+	if mmResolvePartitionSession.defaultExpectation.paramPtrs == nil {
+		mmResolvePartitionSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolvePartitionSessionParamPtrs{}
+	}
+	mmResolvePartitionSession.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmResolvePartitionSession.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmResolvePartitionSession
+}
+
+// ExpectPartitionIDParam3 sets up expected param partitionID for SSOSessionUseCase.ResolvePartitionSession
+func (mmResolvePartitionSession *mSSOSessionUseCaseMockResolvePartitionSession) ExpectPartitionIDParam3(partitionID int64) *mSSOSessionUseCaseMockResolvePartitionSession {
+	if mmResolvePartitionSession.mock.funcResolvePartitionSession != nil {
+		mmResolvePartitionSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolvePartitionSession mock is already set by Set")
+	}
+
+	if mmResolvePartitionSession.defaultExpectation == nil {
+		mmResolvePartitionSession.defaultExpectation = &SSOSessionUseCaseMockResolvePartitionSessionExpectation{}
+	}
+
+	if mmResolvePartitionSession.defaultExpectation.params != nil {
+		mmResolvePartitionSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolvePartitionSession mock is already set by Expect")
+	}
+
+	if mmResolvePartitionSession.defaultExpectation.paramPtrs == nil {
+		mmResolvePartitionSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolvePartitionSessionParamPtrs{}
+	}
+	mmResolvePartitionSession.defaultExpectation.paramPtrs.partitionID = &partitionID
+	mmResolvePartitionSession.defaultExpectation.expectationOrigins.originPartitionID = minimock.CallerInfo(1)
+
+	return mmResolvePartitionSession
+}
+
+// ExpectCookiesParam4 sets up expected param cookies for SSOSessionUseCase.ResolvePartitionSession
+func (mmResolvePartitionSession *mSSOSessionUseCaseMockResolvePartitionSession) ExpectCookiesParam4(cookies map[string]string) *mSSOSessionUseCaseMockResolvePartitionSession {
+	if mmResolvePartitionSession.mock.funcResolvePartitionSession != nil {
+		mmResolvePartitionSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolvePartitionSession mock is already set by Set")
+	}
+
+	if mmResolvePartitionSession.defaultExpectation == nil {
+		mmResolvePartitionSession.defaultExpectation = &SSOSessionUseCaseMockResolvePartitionSessionExpectation{}
+	}
+
+	if mmResolvePartitionSession.defaultExpectation.params != nil {
+		mmResolvePartitionSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolvePartitionSession mock is already set by Expect")
+	}
+
+	if mmResolvePartitionSession.defaultExpectation.paramPtrs == nil {
+		mmResolvePartitionSession.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockResolvePartitionSessionParamPtrs{}
+	}
+	mmResolvePartitionSession.defaultExpectation.paramPtrs.cookies = &cookies
+	mmResolvePartitionSession.defaultExpectation.expectationOrigins.originCookies = minimock.CallerInfo(1)
+
+	return mmResolvePartitionSession
+}
+
+// Inspect accepts an inspector function that has same arguments as the SSOSessionUseCase.ResolvePartitionSession
+func (mmResolvePartitionSession *mSSOSessionUseCaseMockResolvePartitionSession) Inspect(f func(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string)) *mSSOSessionUseCaseMockResolvePartitionSession {
+	if mmResolvePartitionSession.mock.inspectFuncResolvePartitionSession != nil {
+		mmResolvePartitionSession.mock.t.Fatalf("Inspect function is already set for SSOSessionUseCaseMock.ResolvePartitionSession")
+	}
+
+	mmResolvePartitionSession.mock.inspectFuncResolvePartitionSession = f
+
+	return mmResolvePartitionSession
+}
+
+// Return sets up results that will be returned by SSOSessionUseCase.ResolvePartitionSession
+func (mmResolvePartitionSession *mSSOSessionUseCaseMockResolvePartitionSession) Return(sp1 *model.SSOSession, err error) *SSOSessionUseCaseMock {
+	if mmResolvePartitionSession.mock.funcResolvePartitionSession != nil {
+		mmResolvePartitionSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolvePartitionSession mock is already set by Set")
+	}
+
+	if mmResolvePartitionSession.defaultExpectation == nil {
+		mmResolvePartitionSession.defaultExpectation = &SSOSessionUseCaseMockResolvePartitionSessionExpectation{mock: mmResolvePartitionSession.mock}
+	}
+	mmResolvePartitionSession.defaultExpectation.results = &SSOSessionUseCaseMockResolvePartitionSessionResults{sp1, err}
+	mmResolvePartitionSession.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmResolvePartitionSession.mock
+}
+
+// Set uses given function f to mock the SSOSessionUseCase.ResolvePartitionSession method
+func (mmResolvePartitionSession *mSSOSessionUseCaseMockResolvePartitionSession) Set(f func(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string) (sp1 *model.SSOSession, err error)) *SSOSessionUseCaseMock {
+	if mmResolvePartitionSession.defaultExpectation != nil {
+		mmResolvePartitionSession.mock.t.Fatalf("Default expectation is already set for the SSOSessionUseCase.ResolvePartitionSession method")
+	}
+
+	if len(mmResolvePartitionSession.expectations) > 0 {
+		mmResolvePartitionSession.mock.t.Fatalf("Some expectations are already set for the SSOSessionUseCase.ResolvePartitionSession method")
+	}
+
+	mmResolvePartitionSession.mock.funcResolvePartitionSession = f
+	mmResolvePartitionSession.mock.funcResolvePartitionSessionOrigin = minimock.CallerInfo(1)
+	return mmResolvePartitionSession.mock
+}
+
+// When sets expectation for the SSOSessionUseCase.ResolvePartitionSession which will trigger the result defined by the following
+// Then helper
+func (mmResolvePartitionSession *mSSOSessionUseCaseMockResolvePartitionSession) When(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string) *SSOSessionUseCaseMockResolvePartitionSessionExpectation {
+	if mmResolvePartitionSession.mock.funcResolvePartitionSession != nil {
+		mmResolvePartitionSession.mock.t.Fatalf("SSOSessionUseCaseMock.ResolvePartitionSession mock is already set by Set")
+	}
+
+	expectation := &SSOSessionUseCaseMockResolvePartitionSessionExpectation{
+		mock:               mmResolvePartitionSession.mock,
+		params:             &SSOSessionUseCaseMockResolvePartitionSessionParams{ctx, tenantID, partitionID, cookies},
+		expectationOrigins: SSOSessionUseCaseMockResolvePartitionSessionExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmResolvePartitionSession.expectations = append(mmResolvePartitionSession.expectations, expectation)
+	return expectation
+}
+
+// Then sets up SSOSessionUseCase.ResolvePartitionSession return parameters for the expectation previously defined by the When method
+func (e *SSOSessionUseCaseMockResolvePartitionSessionExpectation) Then(sp1 *model.SSOSession, err error) *SSOSessionUseCaseMock {
+	e.results = &SSOSessionUseCaseMockResolvePartitionSessionResults{sp1, err}
+	return e.mock
+}
+
+// Times sets number of times SSOSessionUseCase.ResolvePartitionSession should be invoked
+func (mmResolvePartitionSession *mSSOSessionUseCaseMockResolvePartitionSession) Times(n uint64) *mSSOSessionUseCaseMockResolvePartitionSession {
+	if n == 0 {
+		mmResolvePartitionSession.mock.t.Fatalf("Times of SSOSessionUseCaseMock.ResolvePartitionSession mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmResolvePartitionSession.expectedInvocations, n)
+	mmResolvePartitionSession.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmResolvePartitionSession
+}
+
+func (mmResolvePartitionSession *mSSOSessionUseCaseMockResolvePartitionSession) invocationsDone() bool {
+	if len(mmResolvePartitionSession.expectations) == 0 && mmResolvePartitionSession.defaultExpectation == nil && mmResolvePartitionSession.mock.funcResolvePartitionSession == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmResolvePartitionSession.mock.afterResolvePartitionSessionCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmResolvePartitionSession.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// ResolvePartitionSession implements mm_port.SSOSessionUseCase
+func (mmResolvePartitionSession *SSOSessionUseCaseMock) ResolvePartitionSession(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string) (sp1 *model.SSOSession, err error) {
+	mm_atomic.AddUint64(&mmResolvePartitionSession.beforeResolvePartitionSessionCounter, 1)
+	defer mm_atomic.AddUint64(&mmResolvePartitionSession.afterResolvePartitionSessionCounter, 1)
+
+	mmResolvePartitionSession.t.Helper()
+
+	if mmResolvePartitionSession.inspectFuncResolvePartitionSession != nil {
+		mmResolvePartitionSession.inspectFuncResolvePartitionSession(ctx, tenantID, partitionID, cookies)
+	}
+
+	mm_params := SSOSessionUseCaseMockResolvePartitionSessionParams{ctx, tenantID, partitionID, cookies}
+
+	// Record call args
+	mmResolvePartitionSession.ResolvePartitionSessionMock.mutex.Lock()
+	mmResolvePartitionSession.ResolvePartitionSessionMock.callArgs = append(mmResolvePartitionSession.ResolvePartitionSessionMock.callArgs, &mm_params)
+	mmResolvePartitionSession.ResolvePartitionSessionMock.mutex.Unlock()
+
+	for _, e := range mmResolvePartitionSession.ResolvePartitionSessionMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.sp1, e.results.err
+		}
+	}
+
+	if mmResolvePartitionSession.ResolvePartitionSessionMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmResolvePartitionSession.ResolvePartitionSessionMock.defaultExpectation.Counter, 1)
+		mm_want := mmResolvePartitionSession.ResolvePartitionSessionMock.defaultExpectation.params
+		mm_want_ptrs := mmResolvePartitionSession.ResolvePartitionSessionMock.defaultExpectation.paramPtrs
+
+		mm_got := SSOSessionUseCaseMockResolvePartitionSessionParams{ctx, tenantID, partitionID, cookies}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmResolvePartitionSession.t.Errorf("SSOSessionUseCaseMock.ResolvePartitionSession got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolvePartitionSession.ResolvePartitionSessionMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmResolvePartitionSession.t.Errorf("SSOSessionUseCaseMock.ResolvePartitionSession got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolvePartitionSession.ResolvePartitionSessionMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.partitionID != nil && !minimock.Equal(*mm_want_ptrs.partitionID, mm_got.partitionID) {
+				mmResolvePartitionSession.t.Errorf("SSOSessionUseCaseMock.ResolvePartitionSession got unexpected parameter partitionID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolvePartitionSession.ResolvePartitionSessionMock.defaultExpectation.expectationOrigins.originPartitionID, *mm_want_ptrs.partitionID, mm_got.partitionID, minimock.Diff(*mm_want_ptrs.partitionID, mm_got.partitionID))
+			}
+
+			if mm_want_ptrs.cookies != nil && !minimock.Equal(*mm_want_ptrs.cookies, mm_got.cookies) {
+				mmResolvePartitionSession.t.Errorf("SSOSessionUseCaseMock.ResolvePartitionSession got unexpected parameter cookies, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmResolvePartitionSession.ResolvePartitionSessionMock.defaultExpectation.expectationOrigins.originCookies, *mm_want_ptrs.cookies, mm_got.cookies, minimock.Diff(*mm_want_ptrs.cookies, mm_got.cookies))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmResolvePartitionSession.t.Errorf("SSOSessionUseCaseMock.ResolvePartitionSession got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmResolvePartitionSession.ResolvePartitionSessionMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmResolvePartitionSession.ResolvePartitionSessionMock.defaultExpectation.results
+		if mm_results == nil {
+			mmResolvePartitionSession.t.Fatal("No results are set for the SSOSessionUseCaseMock.ResolvePartitionSession")
+		}
+		return (*mm_results).sp1, (*mm_results).err
+	}
+	if mmResolvePartitionSession.funcResolvePartitionSession != nil {
+		return mmResolvePartitionSession.funcResolvePartitionSession(ctx, tenantID, partitionID, cookies)
+	}
+	mmResolvePartitionSession.t.Fatalf("Unexpected call to SSOSessionUseCaseMock.ResolvePartitionSession. %v %v %v %v", ctx, tenantID, partitionID, cookies)
+	return
+}
+
+// ResolvePartitionSessionAfterCounter returns a count of finished SSOSessionUseCaseMock.ResolvePartitionSession invocations
+func (mmResolvePartitionSession *SSOSessionUseCaseMock) ResolvePartitionSessionAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmResolvePartitionSession.afterResolvePartitionSessionCounter)
+}
+
+// ResolvePartitionSessionBeforeCounter returns a count of SSOSessionUseCaseMock.ResolvePartitionSession invocations
+func (mmResolvePartitionSession *SSOSessionUseCaseMock) ResolvePartitionSessionBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmResolvePartitionSession.beforeResolvePartitionSessionCounter)
+}
+
+// Calls returns a list of arguments used in each call to SSOSessionUseCaseMock.ResolvePartitionSession.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmResolvePartitionSession *mSSOSessionUseCaseMockResolvePartitionSession) Calls() []*SSOSessionUseCaseMockResolvePartitionSessionParams {
+	mmResolvePartitionSession.mutex.RLock()
+
+	argCopy := make([]*SSOSessionUseCaseMockResolvePartitionSessionParams, len(mmResolvePartitionSession.callArgs))
+	copy(argCopy, mmResolvePartitionSession.callArgs)
+
+	mmResolvePartitionSession.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockResolvePartitionSessionDone returns true if the count of the ResolvePartitionSession invocations corresponds
+// the number of defined expectations
+func (m *SSOSessionUseCaseMock) MinimockResolvePartitionSessionDone() bool {
+	if m.ResolvePartitionSessionMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.ResolvePartitionSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.ResolvePartitionSessionMock.invocationsDone()
+}
+
+// MinimockResolvePartitionSessionInspect logs each unmet expectation
+func (m *SSOSessionUseCaseMock) MinimockResolvePartitionSessionInspect() {
+	for _, e := range m.ResolvePartitionSessionMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolvePartitionSession at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterResolvePartitionSessionCounter := mm_atomic.LoadUint64(&m.afterResolvePartitionSessionCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.ResolvePartitionSessionMock.defaultExpectation != nil && afterResolvePartitionSessionCounter < 1 {
+		if m.ResolvePartitionSessionMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolvePartitionSession at\n%s", m.ResolvePartitionSessionMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolvePartitionSession at\n%s with params: %#v", m.ResolvePartitionSessionMock.defaultExpectation.expectationOrigins.origin, *m.ResolvePartitionSessionMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcResolvePartitionSession != nil && afterResolvePartitionSessionCounter < 1 {
+		m.t.Errorf("Expected call to SSOSessionUseCaseMock.ResolvePartitionSession at\n%s", m.funcResolvePartitionSessionOrigin)
+	}
+
+	if !m.ResolvePartitionSessionMock.invocationsDone() && afterResolvePartitionSessionCounter > 0 {
+		m.t.Errorf("Expected %d calls to SSOSessionUseCaseMock.ResolvePartitionSession at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.ResolvePartitionSessionMock.expectedInvocations), m.ResolvePartitionSessionMock.expectedInvocationsOrigin, afterResolvePartitionSessionCounter)
 	}
 }
 
@@ -2245,6 +3914,349 @@ func (m *SSOSessionUseCaseMock) MinimockRevokeUserSessionsInspect() {
 	}
 }
 
+type mSSOSessionUseCaseMockStartFlow struct {
+	optional           bool
+	mock               *SSOSessionUseCaseMock
+	defaultExpectation *SSOSessionUseCaseMockStartFlowExpectation
+	expectations       []*SSOSessionUseCaseMockStartFlowExpectation
+
+	callArgs []*SSOSessionUseCaseMockStartFlowParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// SSOSessionUseCaseMockStartFlowExpectation specifies expectation struct of the SSOSessionUseCase.StartFlow
+type SSOSessionUseCaseMockStartFlowExpectation struct {
+	mock               *SSOSessionUseCaseMock
+	params             *SSOSessionUseCaseMockStartFlowParams
+	paramPtrs          *SSOSessionUseCaseMockStartFlowParamPtrs
+	expectationOrigins SSOSessionUseCaseMockStartFlowExpectationOrigins
+	results            *SSOSessionUseCaseMockStartFlowResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// SSOSessionUseCaseMockStartFlowParams contains parameters of the SSOSessionUseCase.StartFlow
+type SSOSessionUseCaseMockStartFlowParams struct {
+	ctx context.Context
+	cmd mm_port.StartFlowCommand
+}
+
+// SSOSessionUseCaseMockStartFlowParamPtrs contains pointers to parameters of the SSOSessionUseCase.StartFlow
+type SSOSessionUseCaseMockStartFlowParamPtrs struct {
+	ctx *context.Context
+	cmd *mm_port.StartFlowCommand
+}
+
+// SSOSessionUseCaseMockStartFlowResults contains results of the SSOSessionUseCase.StartFlow
+type SSOSessionUseCaseMockStartFlowResults struct {
+	sp1 *mm_port.StartedFlow
+	err error
+}
+
+// SSOSessionUseCaseMockStartFlowOrigins contains origins of expectations of the SSOSessionUseCase.StartFlow
+type SSOSessionUseCaseMockStartFlowExpectationOrigins struct {
+	origin    string
+	originCtx string
+	originCmd string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmStartFlow *mSSOSessionUseCaseMockStartFlow) Optional() *mSSOSessionUseCaseMockStartFlow {
+	mmStartFlow.optional = true
+	return mmStartFlow
+}
+
+// Expect sets up expected params for SSOSessionUseCase.StartFlow
+func (mmStartFlow *mSSOSessionUseCaseMockStartFlow) Expect(ctx context.Context, cmd mm_port.StartFlowCommand) *mSSOSessionUseCaseMockStartFlow {
+	if mmStartFlow.mock.funcStartFlow != nil {
+		mmStartFlow.mock.t.Fatalf("SSOSessionUseCaseMock.StartFlow mock is already set by Set")
+	}
+
+	if mmStartFlow.defaultExpectation == nil {
+		mmStartFlow.defaultExpectation = &SSOSessionUseCaseMockStartFlowExpectation{}
+	}
+
+	if mmStartFlow.defaultExpectation.paramPtrs != nil {
+		mmStartFlow.mock.t.Fatalf("SSOSessionUseCaseMock.StartFlow mock is already set by ExpectParams functions")
+	}
+
+	mmStartFlow.defaultExpectation.params = &SSOSessionUseCaseMockStartFlowParams{ctx, cmd}
+	mmStartFlow.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmStartFlow.expectations {
+		if minimock.Equal(e.params, mmStartFlow.defaultExpectation.params) {
+			mmStartFlow.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmStartFlow.defaultExpectation.params)
+		}
+	}
+
+	return mmStartFlow
+}
+
+// ExpectCtxParam1 sets up expected param ctx for SSOSessionUseCase.StartFlow
+func (mmStartFlow *mSSOSessionUseCaseMockStartFlow) ExpectCtxParam1(ctx context.Context) *mSSOSessionUseCaseMockStartFlow {
+	if mmStartFlow.mock.funcStartFlow != nil {
+		mmStartFlow.mock.t.Fatalf("SSOSessionUseCaseMock.StartFlow mock is already set by Set")
+	}
+
+	if mmStartFlow.defaultExpectation == nil {
+		mmStartFlow.defaultExpectation = &SSOSessionUseCaseMockStartFlowExpectation{}
+	}
+
+	if mmStartFlow.defaultExpectation.params != nil {
+		mmStartFlow.mock.t.Fatalf("SSOSessionUseCaseMock.StartFlow mock is already set by Expect")
+	}
+
+	if mmStartFlow.defaultExpectation.paramPtrs == nil {
+		mmStartFlow.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockStartFlowParamPtrs{}
+	}
+	mmStartFlow.defaultExpectation.paramPtrs.ctx = &ctx
+	mmStartFlow.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmStartFlow
+}
+
+// ExpectCmdParam2 sets up expected param cmd for SSOSessionUseCase.StartFlow
+func (mmStartFlow *mSSOSessionUseCaseMockStartFlow) ExpectCmdParam2(cmd mm_port.StartFlowCommand) *mSSOSessionUseCaseMockStartFlow {
+	if mmStartFlow.mock.funcStartFlow != nil {
+		mmStartFlow.mock.t.Fatalf("SSOSessionUseCaseMock.StartFlow mock is already set by Set")
+	}
+
+	if mmStartFlow.defaultExpectation == nil {
+		mmStartFlow.defaultExpectation = &SSOSessionUseCaseMockStartFlowExpectation{}
+	}
+
+	if mmStartFlow.defaultExpectation.params != nil {
+		mmStartFlow.mock.t.Fatalf("SSOSessionUseCaseMock.StartFlow mock is already set by Expect")
+	}
+
+	if mmStartFlow.defaultExpectation.paramPtrs == nil {
+		mmStartFlow.defaultExpectation.paramPtrs = &SSOSessionUseCaseMockStartFlowParamPtrs{}
+	}
+	mmStartFlow.defaultExpectation.paramPtrs.cmd = &cmd
+	mmStartFlow.defaultExpectation.expectationOrigins.originCmd = minimock.CallerInfo(1)
+
+	return mmStartFlow
+}
+
+// Inspect accepts an inspector function that has same arguments as the SSOSessionUseCase.StartFlow
+func (mmStartFlow *mSSOSessionUseCaseMockStartFlow) Inspect(f func(ctx context.Context, cmd mm_port.StartFlowCommand)) *mSSOSessionUseCaseMockStartFlow {
+	if mmStartFlow.mock.inspectFuncStartFlow != nil {
+		mmStartFlow.mock.t.Fatalf("Inspect function is already set for SSOSessionUseCaseMock.StartFlow")
+	}
+
+	mmStartFlow.mock.inspectFuncStartFlow = f
+
+	return mmStartFlow
+}
+
+// Return sets up results that will be returned by SSOSessionUseCase.StartFlow
+func (mmStartFlow *mSSOSessionUseCaseMockStartFlow) Return(sp1 *mm_port.StartedFlow, err error) *SSOSessionUseCaseMock {
+	if mmStartFlow.mock.funcStartFlow != nil {
+		mmStartFlow.mock.t.Fatalf("SSOSessionUseCaseMock.StartFlow mock is already set by Set")
+	}
+
+	if mmStartFlow.defaultExpectation == nil {
+		mmStartFlow.defaultExpectation = &SSOSessionUseCaseMockStartFlowExpectation{mock: mmStartFlow.mock}
+	}
+	mmStartFlow.defaultExpectation.results = &SSOSessionUseCaseMockStartFlowResults{sp1, err}
+	mmStartFlow.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmStartFlow.mock
+}
+
+// Set uses given function f to mock the SSOSessionUseCase.StartFlow method
+func (mmStartFlow *mSSOSessionUseCaseMockStartFlow) Set(f func(ctx context.Context, cmd mm_port.StartFlowCommand) (sp1 *mm_port.StartedFlow, err error)) *SSOSessionUseCaseMock {
+	if mmStartFlow.defaultExpectation != nil {
+		mmStartFlow.mock.t.Fatalf("Default expectation is already set for the SSOSessionUseCase.StartFlow method")
+	}
+
+	if len(mmStartFlow.expectations) > 0 {
+		mmStartFlow.mock.t.Fatalf("Some expectations are already set for the SSOSessionUseCase.StartFlow method")
+	}
+
+	mmStartFlow.mock.funcStartFlow = f
+	mmStartFlow.mock.funcStartFlowOrigin = minimock.CallerInfo(1)
+	return mmStartFlow.mock
+}
+
+// When sets expectation for the SSOSessionUseCase.StartFlow which will trigger the result defined by the following
+// Then helper
+func (mmStartFlow *mSSOSessionUseCaseMockStartFlow) When(ctx context.Context, cmd mm_port.StartFlowCommand) *SSOSessionUseCaseMockStartFlowExpectation {
+	if mmStartFlow.mock.funcStartFlow != nil {
+		mmStartFlow.mock.t.Fatalf("SSOSessionUseCaseMock.StartFlow mock is already set by Set")
+	}
+
+	expectation := &SSOSessionUseCaseMockStartFlowExpectation{
+		mock:               mmStartFlow.mock,
+		params:             &SSOSessionUseCaseMockStartFlowParams{ctx, cmd},
+		expectationOrigins: SSOSessionUseCaseMockStartFlowExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmStartFlow.expectations = append(mmStartFlow.expectations, expectation)
+	return expectation
+}
+
+// Then sets up SSOSessionUseCase.StartFlow return parameters for the expectation previously defined by the When method
+func (e *SSOSessionUseCaseMockStartFlowExpectation) Then(sp1 *mm_port.StartedFlow, err error) *SSOSessionUseCaseMock {
+	e.results = &SSOSessionUseCaseMockStartFlowResults{sp1, err}
+	return e.mock
+}
+
+// Times sets number of times SSOSessionUseCase.StartFlow should be invoked
+func (mmStartFlow *mSSOSessionUseCaseMockStartFlow) Times(n uint64) *mSSOSessionUseCaseMockStartFlow {
+	if n == 0 {
+		mmStartFlow.mock.t.Fatalf("Times of SSOSessionUseCaseMock.StartFlow mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmStartFlow.expectedInvocations, n)
+	mmStartFlow.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmStartFlow
+}
+
+func (mmStartFlow *mSSOSessionUseCaseMockStartFlow) invocationsDone() bool {
+	if len(mmStartFlow.expectations) == 0 && mmStartFlow.defaultExpectation == nil && mmStartFlow.mock.funcStartFlow == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmStartFlow.mock.afterStartFlowCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmStartFlow.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// StartFlow implements mm_port.SSOSessionUseCase
+func (mmStartFlow *SSOSessionUseCaseMock) StartFlow(ctx context.Context, cmd mm_port.StartFlowCommand) (sp1 *mm_port.StartedFlow, err error) {
+	mm_atomic.AddUint64(&mmStartFlow.beforeStartFlowCounter, 1)
+	defer mm_atomic.AddUint64(&mmStartFlow.afterStartFlowCounter, 1)
+
+	mmStartFlow.t.Helper()
+
+	if mmStartFlow.inspectFuncStartFlow != nil {
+		mmStartFlow.inspectFuncStartFlow(ctx, cmd)
+	}
+
+	mm_params := SSOSessionUseCaseMockStartFlowParams{ctx, cmd}
+
+	// Record call args
+	mmStartFlow.StartFlowMock.mutex.Lock()
+	mmStartFlow.StartFlowMock.callArgs = append(mmStartFlow.StartFlowMock.callArgs, &mm_params)
+	mmStartFlow.StartFlowMock.mutex.Unlock()
+
+	for _, e := range mmStartFlow.StartFlowMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.sp1, e.results.err
+		}
+	}
+
+	if mmStartFlow.StartFlowMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmStartFlow.StartFlowMock.defaultExpectation.Counter, 1)
+		mm_want := mmStartFlow.StartFlowMock.defaultExpectation.params
+		mm_want_ptrs := mmStartFlow.StartFlowMock.defaultExpectation.paramPtrs
+
+		mm_got := SSOSessionUseCaseMockStartFlowParams{ctx, cmd}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmStartFlow.t.Errorf("SSOSessionUseCaseMock.StartFlow got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmStartFlow.StartFlowMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.cmd != nil && !minimock.Equal(*mm_want_ptrs.cmd, mm_got.cmd) {
+				mmStartFlow.t.Errorf("SSOSessionUseCaseMock.StartFlow got unexpected parameter cmd, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmStartFlow.StartFlowMock.defaultExpectation.expectationOrigins.originCmd, *mm_want_ptrs.cmd, mm_got.cmd, minimock.Diff(*mm_want_ptrs.cmd, mm_got.cmd))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmStartFlow.t.Errorf("SSOSessionUseCaseMock.StartFlow got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmStartFlow.StartFlowMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmStartFlow.StartFlowMock.defaultExpectation.results
+		if mm_results == nil {
+			mmStartFlow.t.Fatal("No results are set for the SSOSessionUseCaseMock.StartFlow")
+		}
+		return (*mm_results).sp1, (*mm_results).err
+	}
+	if mmStartFlow.funcStartFlow != nil {
+		return mmStartFlow.funcStartFlow(ctx, cmd)
+	}
+	mmStartFlow.t.Fatalf("Unexpected call to SSOSessionUseCaseMock.StartFlow. %v %v", ctx, cmd)
+	return
+}
+
+// StartFlowAfterCounter returns a count of finished SSOSessionUseCaseMock.StartFlow invocations
+func (mmStartFlow *SSOSessionUseCaseMock) StartFlowAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmStartFlow.afterStartFlowCounter)
+}
+
+// StartFlowBeforeCounter returns a count of SSOSessionUseCaseMock.StartFlow invocations
+func (mmStartFlow *SSOSessionUseCaseMock) StartFlowBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmStartFlow.beforeStartFlowCounter)
+}
+
+// Calls returns a list of arguments used in each call to SSOSessionUseCaseMock.StartFlow.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmStartFlow *mSSOSessionUseCaseMockStartFlow) Calls() []*SSOSessionUseCaseMockStartFlowParams {
+	mmStartFlow.mutex.RLock()
+
+	argCopy := make([]*SSOSessionUseCaseMockStartFlowParams, len(mmStartFlow.callArgs))
+	copy(argCopy, mmStartFlow.callArgs)
+
+	mmStartFlow.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockStartFlowDone returns true if the count of the StartFlow invocations corresponds
+// the number of defined expectations
+func (m *SSOSessionUseCaseMock) MinimockStartFlowDone() bool {
+	if m.StartFlowMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.StartFlowMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.StartFlowMock.invocationsDone()
+}
+
+// MinimockStartFlowInspect logs each unmet expectation
+func (m *SSOSessionUseCaseMock) MinimockStartFlowInspect() {
+	for _, e := range m.StartFlowMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.StartFlow at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterStartFlowCounter := mm_atomic.LoadUint64(&m.afterStartFlowCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.StartFlowMock.defaultExpectation != nil && afterStartFlowCounter < 1 {
+		if m.StartFlowMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.StartFlow at\n%s", m.StartFlowMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to SSOSessionUseCaseMock.StartFlow at\n%s with params: %#v", m.StartFlowMock.defaultExpectation.expectationOrigins.origin, *m.StartFlowMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcStartFlow != nil && afterStartFlowCounter < 1 {
+		m.t.Errorf("Expected call to SSOSessionUseCaseMock.StartFlow at\n%s", m.funcStartFlowOrigin)
+	}
+
+	if !m.StartFlowMock.invocationsDone() && afterStartFlowCounter > 0 {
+		m.t.Errorf("Expected %d calls to SSOSessionUseCaseMock.StartFlow at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.StartFlowMock.expectedInvocations), m.StartFlowMock.expectedInvocationsOrigin, afterStartFlowCounter)
+	}
+}
+
 // MinimockFinish checks that all mocked methods have been called the expected number of times
 func (m *SSOSessionUseCaseMock) MinimockFinish() {
 	m.finishOnce.Do(func() {
@@ -2253,13 +4265,23 @@ func (m *SSOSessionUseCaseMock) MinimockFinish() {
 
 			m.MinimockCreateSessionInspect()
 
-			m.MinimockParseSessionCookieInspect()
+			m.MinimockPromoteSessionInspect()
+
+			m.MinimockResolveDirectFlowSessionInspect()
+
+			m.MinimockResolveFlowSessionInspect()
+
+			m.MinimockResolveFlowSessionIDsInspect()
+
+			m.MinimockResolvePartitionSessionInspect()
 
 			m.MinimockResolveSessionInspect()
 
 			m.MinimockRevokeSessionInspect()
 
 			m.MinimockRevokeUserSessionsInspect()
+
+			m.MinimockStartFlowInspect()
 		}
 	})
 }
@@ -2285,8 +4307,13 @@ func (m *SSOSessionUseCaseMock) minimockDone() bool {
 	return done &&
 		m.MinimockBuildSessionCookieDone() &&
 		m.MinimockCreateSessionDone() &&
-		m.MinimockParseSessionCookieDone() &&
+		m.MinimockPromoteSessionDone() &&
+		m.MinimockResolveDirectFlowSessionDone() &&
+		m.MinimockResolveFlowSessionDone() &&
+		m.MinimockResolveFlowSessionIDsDone() &&
+		m.MinimockResolvePartitionSessionDone() &&
 		m.MinimockResolveSessionDone() &&
 		m.MinimockRevokeSessionDone() &&
-		m.MinimockRevokeUserSessionsDone()
+		m.MinimockRevokeUserSessionsDone() &&
+		m.MinimockStartFlowDone()
 }

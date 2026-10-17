@@ -7,5 +7,5 @@ import (
 )
 
 type AdminLogonUseCase interface {
-	InitiateAdminLogon(ctx context.Context, localTenantID uuid.UUID, callbackURI string, targetAdminUI string) (*InitiateFederatedLoginResponse, error)
+	InitiateAdminLogon(ctx context.Context, localTenantID uuid.UUID, flowSessionID uuid.UUID, callbackURI string, targetAdminUI string) (*InitiateFederatedLoginResponse, error)
 }

@@ -162,6 +162,7 @@ func (s *FederationService) InitiateFederatedLogin(
 		ExpiresAt:          now.Add(5 * time.Minute), // Strict expiration constraint
 		CallbackURI:        cmd.LocalCallbackURI,     // e.g., https://sprezz.net
 		TargetURI:          cmd.FinalTargetURI,       // Final landing path inside tenant perimeter
+		SessionID:          cmd.FlowSessionID,        // Only the browser holding this pending session may redeem the state
 	}
 
 	if err := s.storage.SaveOutboundHandshake(ctx, handshakeRecord); err != nil {
@@ -245,7 +246,7 @@ func (s *FederationService) ExecuteFederatedCallback(
 	}
 
 	// 1. STAGE 1: Evict and validate the tracking state parameter to block XSRF replays
-	handshake, err := s.storage.GetAndConsumeOutboundHandshake(ctx, cmd.TenantID, cmd.IncomingState)
+	handshake, err := s.storage.GetAndConsumeOutboundHandshake(ctx, cmd.TenantID, cmd.IncomingState, cmd.FlowSessionIDs)
 	if err != nil {
 		return nil, fmt.Errorf("federation_service: tracking state invalid or replayed: %w", port.ErrSessionNotFound)
 	}
@@ -414,7 +415,7 @@ func (s *FederationService) ExecuteFederatedCallback(
 		ID:                   uuid.New(), // Distinct tracking key allocated natively [5.7]
 		TenantUUID:           cmd.TenantID,
 		PartitionID:          handshake.PartitionID,
-		SessionID:            cmd.SessionID, // Securely binds to our active native cookie session reference
+		SessionID:            handshake.SessionID.String(), // The SSO session of the browser that started (and now completes) the sign-in
 		IdentityProviderID:   idp.ID,
 		UpstreamSubject:      subject,
 		UpstreamAccessToken:  providerTokenSet.AccessToken,
@@ -439,5 +440,7 @@ func (s *FederationService) ExecuteFederatedCallback(
 		TargetLandingURI:     handshake.TargetURI,           // Restores intended routing location gracefully [5.7]
 		ReachedAAL:           assurance.AAL,
 		ReachedIAL:           assurance.IAL,
+		FlowSessionID:        handshake.SessionID,
+		IdentityProviderID:   idp.ID,
 	}, nil
 }

@@ -9,7 +9,6 @@ import (
 	"sprezz-identity/internal/domain/port"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 type CallbackHandler struct {
@@ -28,7 +27,6 @@ func NewCallbackHandler(fuc port.FederatedLoginUseCase, auc port.AuthUseCase, su
 
 // Routes registers both the inbound local application and outbound federation callback vectors.
 func (h *CallbackHandler) Routes(r chi.Router) {
-	r.Get(port.RouteCallback, h.HandleOAuthCallbackRequest)
 	r.Get(port.RouteFederationCallback, h.HandleFederationCallback)
 }
 
@@ -47,39 +45,46 @@ func (h *CallbackHandler) HandleFederationCallback(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// The state only redeems for a browser that holds the pending session the sign-in was started with. A callback
+	// URL sent to somebody else's browser finds no matching cookie and is refused.
+	flowIDs, err := h.ssoUseCase.ResolveFlowSessionIDs(r.Context(), tenantUUID, requestCookies(r))
+	if err != nil {
+		h.writeWebError(w, http.StatusForbidden, "access_denied", "the sign-in could not be verified")
+		return
+	}
+
 	cmd := port.FederatedCallbackCommand{
-		TenantID:      tenantUUID,
-		IncomingState: state,
-		IncomingCode:  code,
-		SessionID:     uuid.NewString(),
-		RequestURL:    r.URL.String(),
-		HTTPMethod:    r.Method,
+		TenantID:       tenantUUID,
+		IncomingState:  state,
+		IncomingCode:   code,
+		FlowSessionIDs: flowIDs,
+		RequestURL:     r.URL.String(),
+		HTTPMethod:     r.Method,
 	}
 
 	response, err := h.federatedUseCase.ExecuteFederatedCallback(r.Context(), cmd)
 	if err != nil {
 		slog.Error("HandleFederationCallback: ExecuteFederatedCallback failed", "err", err)
-		h.writeWebError(w, http.StatusForbidden, "access_denied", err.Error())
+		h.writeWebError(w, http.StatusForbidden, "access_denied", "the sign-in could not be completed, please start again")
 		return
 	}
 
-	slog.Debug("HandleFederationCallback: callback executed successfully, building session cookie", "user_id", response.UserProfileID, "partition_id", response.PartitionID)
-
-	created, err := h.ssoUseCase.CreateSession(r.Context(), port.CreateSessionCommand{
-		TenantID:      tenantUUID,
-		PartitionID:   response.PartitionID,
-		UserProfileID: response.UserProfileID,
-		RequestHost:   r.Host,
+	// Signing in promotes the pending session: same session ID, a fresh secret, and the full lifetime.
+	created, err := h.ssoUseCase.PromoteSession(r.Context(), port.PromoteSessionCommand{
+		TenantID:           tenantUUID,
+		SessionID:          response.FlowSessionID,
+		PartitionID:        response.PartitionID,
+		UserProfileID:      response.UserProfileID,
+		IdentityProviderID: response.IdentityProviderID,
+		RequestHost:        r.Host,
 	})
 	if err != nil {
-		slog.Error("HandleFederationCallback: CreateSession failed", "err", err)
-		h.writeWebError(w, http.StatusInternalServerError, "server_error", "failed to establish the authorization session")
+		slog.Error("HandleFederationCallback: PromoteSession failed", "err", err)
+		h.writeWebError(w, http.StatusForbidden, "access_denied", "the sign-in could not be completed, please start again")
 		return
 	}
 
-	slog.Debug("HandleFederationCallback: applying session cookie", "cookie_name", created.Cookie.CookieName)
 	writeSessionCookie(w, &created.Cookie)
-	h.clearTransientHandshakeCookie(w)
 
 	redirectTarget := response.TargetLandingURI
 	if redirectTarget == "" {
@@ -95,66 +100,6 @@ func (h *CallbackHandler) HandleFederationCallback(w http.ResponseWriter, r *htt
 	}
 
 	http.Redirect(w, r, redirectTarget, http.StatusFound)
-}
-
-// HandleOAuthCallbackRequest processes the internal redirection loop for local web portal applications (ingress loop).
-func (h *CallbackHandler) HandleOAuthCallbackRequest(w http.ResponseWriter, r *http.Request) {
-	tenantUUID := TenantIDFromContext(r.Context())
-
-	cookie, err := r.Cookie("spz_auth_session_id")
-	if err != nil || cookie.Value == "" {
-		h.writeWebError(w, http.StatusBadRequest, "invalid_request", "transient handshake interaction session tracker missing")
-		return
-	}
-
-	sessionUUID, err := uuid.Parse(cookie.Value)
-	if err != nil {
-		h.writeWebError(w, http.StatusBadRequest, "invalid_request", "malformed handshake token value format")
-		return
-	}
-
-	activeSession := defaultPartitionSession(r, h.ssoUseCase, tenantUUID)
-	if activeSession == nil {
-		h.writeWebError(w, http.StatusUnauthorized, "access_denied", "no authenticated session exists for this partition loop")
-		return
-	}
-
-	cmd := port.AuthorizeRequestCommand{
-		TenantID:      tenantUUID,
-		ActiveSession: activeSession,
-		State:         r.URL.Query().Get("state"),
-		RequestHost:   r.Host,
-		RequestURI:    model.URIPrefixPAR + sessionUUID.String(),
-	}
-
-	result, err := h.authUseCase.ProcessAuthorizeRequest(r.Context(), cmd)
-	if err != nil {
-		h.writeWebError(w, http.StatusBadRequest, "invalid_request", err.Error())
-		return
-	}
-
-	// Clear out the handshake identifier; the active SSO session cookie remains valid and untouched
-	h.clearTransientHandshakeCookie(w)
-
-	if r.Header.Get("HX-Request") != "" {
-		w.Header().Set("HX-Redirect", result.RedirectURL)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("Authenticated"))
-		return
-	}
-
-	http.Redirect(w, r, result.RedirectURL, http.StatusFound)
-}
-
-func (h *CallbackHandler) clearTransientHandshakeCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     "spz_auth_session_id",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
 }
 
 func (h *CallbackHandler) writeWebError(w http.ResponseWriter, status int, code, desc string) {

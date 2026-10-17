@@ -20,9 +20,9 @@ type AdminLogonUseCaseMock struct {
 	t          minimock.Tester
 	finishOnce sync.Once
 
-	funcInitiateAdminLogon          func(ctx context.Context, localTenantID uuid.UUID, callbackURI string, targetAdminUI string) (ip1 *mm_port.InitiateFederatedLoginResponse, err error)
+	funcInitiateAdminLogon          func(ctx context.Context, localTenantID uuid.UUID, flowSessionID uuid.UUID, callbackURI string, targetAdminUI string) (ip1 *mm_port.InitiateFederatedLoginResponse, err error)
 	funcInitiateAdminLogonOrigin    string
-	inspectFuncInitiateAdminLogon   func(ctx context.Context, localTenantID uuid.UUID, callbackURI string, targetAdminUI string)
+	inspectFuncInitiateAdminLogon   func(ctx context.Context, localTenantID uuid.UUID, flowSessionID uuid.UUID, callbackURI string, targetAdminUI string)
 	afterInitiateAdminLogonCounter  uint64
 	beforeInitiateAdminLogonCounter uint64
 	InitiateAdminLogonMock          mAdminLogonUseCaseMockInitiateAdminLogon
@@ -72,6 +72,7 @@ type AdminLogonUseCaseMockInitiateAdminLogonExpectation struct {
 type AdminLogonUseCaseMockInitiateAdminLogonParams struct {
 	ctx           context.Context
 	localTenantID uuid.UUID
+	flowSessionID uuid.UUID
 	callbackURI   string
 	targetAdminUI string
 }
@@ -80,6 +81,7 @@ type AdminLogonUseCaseMockInitiateAdminLogonParams struct {
 type AdminLogonUseCaseMockInitiateAdminLogonParamPtrs struct {
 	ctx           *context.Context
 	localTenantID *uuid.UUID
+	flowSessionID *uuid.UUID
 	callbackURI   *string
 	targetAdminUI *string
 }
@@ -95,6 +97,7 @@ type AdminLogonUseCaseMockInitiateAdminLogonExpectationOrigins struct {
 	origin              string
 	originCtx           string
 	originLocalTenantID string
+	originFlowSessionID string
 	originCallbackURI   string
 	originTargetAdminUI string
 }
@@ -110,7 +113,7 @@ func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) Optional()
 }
 
 // Expect sets up expected params for AdminLogonUseCase.InitiateAdminLogon
-func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) Expect(ctx context.Context, localTenantID uuid.UUID, callbackURI string, targetAdminUI string) *mAdminLogonUseCaseMockInitiateAdminLogon {
+func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) Expect(ctx context.Context, localTenantID uuid.UUID, flowSessionID uuid.UUID, callbackURI string, targetAdminUI string) *mAdminLogonUseCaseMockInitiateAdminLogon {
 	if mmInitiateAdminLogon.mock.funcInitiateAdminLogon != nil {
 		mmInitiateAdminLogon.mock.t.Fatalf("AdminLogonUseCaseMock.InitiateAdminLogon mock is already set by Set")
 	}
@@ -123,7 +126,7 @@ func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) Expect(ctx
 		mmInitiateAdminLogon.mock.t.Fatalf("AdminLogonUseCaseMock.InitiateAdminLogon mock is already set by ExpectParams functions")
 	}
 
-	mmInitiateAdminLogon.defaultExpectation.params = &AdminLogonUseCaseMockInitiateAdminLogonParams{ctx, localTenantID, callbackURI, targetAdminUI}
+	mmInitiateAdminLogon.defaultExpectation.params = &AdminLogonUseCaseMockInitiateAdminLogonParams{ctx, localTenantID, flowSessionID, callbackURI, targetAdminUI}
 	mmInitiateAdminLogon.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmInitiateAdminLogon.expectations {
 		if minimock.Equal(e.params, mmInitiateAdminLogon.defaultExpectation.params) {
@@ -180,8 +183,31 @@ func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) ExpectLoca
 	return mmInitiateAdminLogon
 }
 
-// ExpectCallbackURIParam3 sets up expected param callbackURI for AdminLogonUseCase.InitiateAdminLogon
-func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) ExpectCallbackURIParam3(callbackURI string) *mAdminLogonUseCaseMockInitiateAdminLogon {
+// ExpectFlowSessionIDParam3 sets up expected param flowSessionID for AdminLogonUseCase.InitiateAdminLogon
+func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) ExpectFlowSessionIDParam3(flowSessionID uuid.UUID) *mAdminLogonUseCaseMockInitiateAdminLogon {
+	if mmInitiateAdminLogon.mock.funcInitiateAdminLogon != nil {
+		mmInitiateAdminLogon.mock.t.Fatalf("AdminLogonUseCaseMock.InitiateAdminLogon mock is already set by Set")
+	}
+
+	if mmInitiateAdminLogon.defaultExpectation == nil {
+		mmInitiateAdminLogon.defaultExpectation = &AdminLogonUseCaseMockInitiateAdminLogonExpectation{}
+	}
+
+	if mmInitiateAdminLogon.defaultExpectation.params != nil {
+		mmInitiateAdminLogon.mock.t.Fatalf("AdminLogonUseCaseMock.InitiateAdminLogon mock is already set by Expect")
+	}
+
+	if mmInitiateAdminLogon.defaultExpectation.paramPtrs == nil {
+		mmInitiateAdminLogon.defaultExpectation.paramPtrs = &AdminLogonUseCaseMockInitiateAdminLogonParamPtrs{}
+	}
+	mmInitiateAdminLogon.defaultExpectation.paramPtrs.flowSessionID = &flowSessionID
+	mmInitiateAdminLogon.defaultExpectation.expectationOrigins.originFlowSessionID = minimock.CallerInfo(1)
+
+	return mmInitiateAdminLogon
+}
+
+// ExpectCallbackURIParam4 sets up expected param callbackURI for AdminLogonUseCase.InitiateAdminLogon
+func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) ExpectCallbackURIParam4(callbackURI string) *mAdminLogonUseCaseMockInitiateAdminLogon {
 	if mmInitiateAdminLogon.mock.funcInitiateAdminLogon != nil {
 		mmInitiateAdminLogon.mock.t.Fatalf("AdminLogonUseCaseMock.InitiateAdminLogon mock is already set by Set")
 	}
@@ -203,8 +229,8 @@ func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) ExpectCall
 	return mmInitiateAdminLogon
 }
 
-// ExpectTargetAdminUIParam4 sets up expected param targetAdminUI for AdminLogonUseCase.InitiateAdminLogon
-func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) ExpectTargetAdminUIParam4(targetAdminUI string) *mAdminLogonUseCaseMockInitiateAdminLogon {
+// ExpectTargetAdminUIParam5 sets up expected param targetAdminUI for AdminLogonUseCase.InitiateAdminLogon
+func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) ExpectTargetAdminUIParam5(targetAdminUI string) *mAdminLogonUseCaseMockInitiateAdminLogon {
 	if mmInitiateAdminLogon.mock.funcInitiateAdminLogon != nil {
 		mmInitiateAdminLogon.mock.t.Fatalf("AdminLogonUseCaseMock.InitiateAdminLogon mock is already set by Set")
 	}
@@ -227,7 +253,7 @@ func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) ExpectTarg
 }
 
 // Inspect accepts an inspector function that has same arguments as the AdminLogonUseCase.InitiateAdminLogon
-func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) Inspect(f func(ctx context.Context, localTenantID uuid.UUID, callbackURI string, targetAdminUI string)) *mAdminLogonUseCaseMockInitiateAdminLogon {
+func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) Inspect(f func(ctx context.Context, localTenantID uuid.UUID, flowSessionID uuid.UUID, callbackURI string, targetAdminUI string)) *mAdminLogonUseCaseMockInitiateAdminLogon {
 	if mmInitiateAdminLogon.mock.inspectFuncInitiateAdminLogon != nil {
 		mmInitiateAdminLogon.mock.t.Fatalf("Inspect function is already set for AdminLogonUseCaseMock.InitiateAdminLogon")
 	}
@@ -252,7 +278,7 @@ func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) Return(ip1
 }
 
 // Set uses given function f to mock the AdminLogonUseCase.InitiateAdminLogon method
-func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) Set(f func(ctx context.Context, localTenantID uuid.UUID, callbackURI string, targetAdminUI string) (ip1 *mm_port.InitiateFederatedLoginResponse, err error)) *AdminLogonUseCaseMock {
+func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) Set(f func(ctx context.Context, localTenantID uuid.UUID, flowSessionID uuid.UUID, callbackURI string, targetAdminUI string) (ip1 *mm_port.InitiateFederatedLoginResponse, err error)) *AdminLogonUseCaseMock {
 	if mmInitiateAdminLogon.defaultExpectation != nil {
 		mmInitiateAdminLogon.mock.t.Fatalf("Default expectation is already set for the AdminLogonUseCase.InitiateAdminLogon method")
 	}
@@ -268,14 +294,14 @@ func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) Set(f func
 
 // When sets expectation for the AdminLogonUseCase.InitiateAdminLogon which will trigger the result defined by the following
 // Then helper
-func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) When(ctx context.Context, localTenantID uuid.UUID, callbackURI string, targetAdminUI string) *AdminLogonUseCaseMockInitiateAdminLogonExpectation {
+func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) When(ctx context.Context, localTenantID uuid.UUID, flowSessionID uuid.UUID, callbackURI string, targetAdminUI string) *AdminLogonUseCaseMockInitiateAdminLogonExpectation {
 	if mmInitiateAdminLogon.mock.funcInitiateAdminLogon != nil {
 		mmInitiateAdminLogon.mock.t.Fatalf("AdminLogonUseCaseMock.InitiateAdminLogon mock is already set by Set")
 	}
 
 	expectation := &AdminLogonUseCaseMockInitiateAdminLogonExpectation{
 		mock:               mmInitiateAdminLogon.mock,
-		params:             &AdminLogonUseCaseMockInitiateAdminLogonParams{ctx, localTenantID, callbackURI, targetAdminUI},
+		params:             &AdminLogonUseCaseMockInitiateAdminLogonParams{ctx, localTenantID, flowSessionID, callbackURI, targetAdminUI},
 		expectationOrigins: AdminLogonUseCaseMockInitiateAdminLogonExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmInitiateAdminLogon.expectations = append(mmInitiateAdminLogon.expectations, expectation)
@@ -310,17 +336,17 @@ func (mmInitiateAdminLogon *mAdminLogonUseCaseMockInitiateAdminLogon) invocation
 }
 
 // InitiateAdminLogon implements mm_port.AdminLogonUseCase
-func (mmInitiateAdminLogon *AdminLogonUseCaseMock) InitiateAdminLogon(ctx context.Context, localTenantID uuid.UUID, callbackURI string, targetAdminUI string) (ip1 *mm_port.InitiateFederatedLoginResponse, err error) {
+func (mmInitiateAdminLogon *AdminLogonUseCaseMock) InitiateAdminLogon(ctx context.Context, localTenantID uuid.UUID, flowSessionID uuid.UUID, callbackURI string, targetAdminUI string) (ip1 *mm_port.InitiateFederatedLoginResponse, err error) {
 	mm_atomic.AddUint64(&mmInitiateAdminLogon.beforeInitiateAdminLogonCounter, 1)
 	defer mm_atomic.AddUint64(&mmInitiateAdminLogon.afterInitiateAdminLogonCounter, 1)
 
 	mmInitiateAdminLogon.t.Helper()
 
 	if mmInitiateAdminLogon.inspectFuncInitiateAdminLogon != nil {
-		mmInitiateAdminLogon.inspectFuncInitiateAdminLogon(ctx, localTenantID, callbackURI, targetAdminUI)
+		mmInitiateAdminLogon.inspectFuncInitiateAdminLogon(ctx, localTenantID, flowSessionID, callbackURI, targetAdminUI)
 	}
 
-	mm_params := AdminLogonUseCaseMockInitiateAdminLogonParams{ctx, localTenantID, callbackURI, targetAdminUI}
+	mm_params := AdminLogonUseCaseMockInitiateAdminLogonParams{ctx, localTenantID, flowSessionID, callbackURI, targetAdminUI}
 
 	// Record call args
 	mmInitiateAdminLogon.InitiateAdminLogonMock.mutex.Lock()
@@ -339,7 +365,7 @@ func (mmInitiateAdminLogon *AdminLogonUseCaseMock) InitiateAdminLogon(ctx contex
 		mm_want := mmInitiateAdminLogon.InitiateAdminLogonMock.defaultExpectation.params
 		mm_want_ptrs := mmInitiateAdminLogon.InitiateAdminLogonMock.defaultExpectation.paramPtrs
 
-		mm_got := AdminLogonUseCaseMockInitiateAdminLogonParams{ctx, localTenantID, callbackURI, targetAdminUI}
+		mm_got := AdminLogonUseCaseMockInitiateAdminLogonParams{ctx, localTenantID, flowSessionID, callbackURI, targetAdminUI}
 
 		if mm_want_ptrs != nil {
 
@@ -351,6 +377,11 @@ func (mmInitiateAdminLogon *AdminLogonUseCaseMock) InitiateAdminLogon(ctx contex
 			if mm_want_ptrs.localTenantID != nil && !minimock.Equal(*mm_want_ptrs.localTenantID, mm_got.localTenantID) {
 				mmInitiateAdminLogon.t.Errorf("AdminLogonUseCaseMock.InitiateAdminLogon got unexpected parameter localTenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
 					mmInitiateAdminLogon.InitiateAdminLogonMock.defaultExpectation.expectationOrigins.originLocalTenantID, *mm_want_ptrs.localTenantID, mm_got.localTenantID, minimock.Diff(*mm_want_ptrs.localTenantID, mm_got.localTenantID))
+			}
+
+			if mm_want_ptrs.flowSessionID != nil && !minimock.Equal(*mm_want_ptrs.flowSessionID, mm_got.flowSessionID) {
+				mmInitiateAdminLogon.t.Errorf("AdminLogonUseCaseMock.InitiateAdminLogon got unexpected parameter flowSessionID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmInitiateAdminLogon.InitiateAdminLogonMock.defaultExpectation.expectationOrigins.originFlowSessionID, *mm_want_ptrs.flowSessionID, mm_got.flowSessionID, minimock.Diff(*mm_want_ptrs.flowSessionID, mm_got.flowSessionID))
 			}
 
 			if mm_want_ptrs.callbackURI != nil && !minimock.Equal(*mm_want_ptrs.callbackURI, mm_got.callbackURI) {
@@ -375,9 +406,9 @@ func (mmInitiateAdminLogon *AdminLogonUseCaseMock) InitiateAdminLogon(ctx contex
 		return (*mm_results).ip1, (*mm_results).err
 	}
 	if mmInitiateAdminLogon.funcInitiateAdminLogon != nil {
-		return mmInitiateAdminLogon.funcInitiateAdminLogon(ctx, localTenantID, callbackURI, targetAdminUI)
+		return mmInitiateAdminLogon.funcInitiateAdminLogon(ctx, localTenantID, flowSessionID, callbackURI, targetAdminUI)
 	}
-	mmInitiateAdminLogon.t.Fatalf("Unexpected call to AdminLogonUseCaseMock.InitiateAdminLogon. %v %v %v %v", ctx, localTenantID, callbackURI, targetAdminUI)
+	mmInitiateAdminLogon.t.Fatalf("Unexpected call to AdminLogonUseCaseMock.InitiateAdminLogon. %v %v %v %v %v", ctx, localTenantID, flowSessionID, callbackURI, targetAdminUI)
 	return
 }
 

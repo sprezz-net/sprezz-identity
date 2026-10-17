@@ -25,6 +25,8 @@ type SSOSessionPolicy struct {
 	IdleTimeout           time.Duration // sign out after this long without a request
 	AdminAbsoluteLifetime time.Duration
 	AdminIdleTimeout      time.Duration
+	// PendingLifetime is how long a sign-in in progress may take. It does not slide.
+	PendingLifetime time.Duration
 	// TouchInterval limits how often "last seen" is written, so a busy session does not cause a write per request.
 	TouchInterval time.Duration
 }
@@ -36,6 +38,7 @@ func DefaultSSOSessionPolicy() SSOSessionPolicy {
 		IdleTimeout:           8 * time.Hour,
 		AdminAbsoluteLifetime: 8 * time.Hour,
 		AdminIdleTimeout:      time.Hour,
+		PendingLifetime:       15 * time.Minute,
 		TouchInterval:         time.Minute,
 	}
 }
@@ -54,6 +57,9 @@ func (p SSOSessionPolicy) withDefaults() SSOSessionPolicy {
 	}
 	if p.AdminIdleTimeout <= 0 {
 		p.AdminIdleTimeout = d.AdminIdleTimeout
+	}
+	if p.PendingLifetime <= 0 {
+		p.PendingLifetime = d.PendingLifetime
 	}
 	if p.TouchInterval <= 0 {
 		p.TouchInterval = d.TouchInterval
@@ -116,14 +122,28 @@ func (s *SSOSessionService) resolveCookieTarget(ctx context.Context, tenantID uu
 	return target, nil
 }
 
-// BuildSessionCookie builds the short-lived handshake cookie or the eviction of the partition cookie.
-// Signed-in sessions are created by CreateSession.
+// BuildSessionCookie resolves the name and flags of the partition cookie. Signed-in sessions are issued by
+// CreateSession and PromoteSession, pending ones by StartFlow; this is only for reading or evicting the cookie.
 func (s *SSOSessionService) BuildSessionCookie(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
-	// Issuing a cookie needs an active tenant. Clearing one never does, so people can always sign out.
 	if cmd.LifecycleStage != "clear" {
-		if _, err := ensureTenantActive(ctx, s.storage, cmd.TenantID); err != nil {
-			return nil, err
-		}
+		return nil, errors.New("sso_cookie_service: invalid token lifecycle stage identifier")
+	}
+
+	// Clearing a cookie never needs an active tenant, so people can always sign out.
+	target, err := s.resolveCookieTarget(ctx, cmd.TenantID, cmd.PartitionID)
+	if err != nil {
+		return nil, err
+	}
+	return &port.CookieIntentResponse{CookieName: target.name, Secure: target.secure, MaxAge: -1}, nil
+}
+
+// StartFlow returns the session of the browser that is starting a sign-in in a partition, or creates a pending one.
+// A browser that already has a live session cookie for the partition keeps it: a second tab shares the binding of
+// the first, and a signed-in browser is never signed out by starting another flow. Only a client that sends no
+// cookie creates a row per request, which needs rate limiting.
+func (s *SSOSessionService) StartFlow(ctx context.Context, cmd port.StartFlowCommand) (*port.StartedFlow, error) {
+	if _, err := ensureTenantActive(ctx, s.storage, cmd.TenantID); err != nil {
+		return nil, err
 	}
 
 	target, err := s.resolveCookieTarget(ctx, cmd.TenantID, cmd.PartitionID)
@@ -131,37 +151,202 @@ func (s *SSOSessionService) BuildSessionCookie(ctx context.Context, cmd port.Coo
 		return nil, err
 	}
 
-	resp := &port.CookieIntentResponse{CookieName: target.name, Secure: target.secure}
-	switch cmd.LifecycleStage {
-	case "handshake":
-		resp.CookieValue = "handshake:" + cmd.PayloadValue
-		resp.MaxAge = 300 // 5 Minute pre-auth interaction staging restriction [4.1]
-	case "clear":
-		resp.MaxAge = -1 // Direct browser eviction trigger [7.3]
-	default:
-		return nil, errors.New("sso_cookie_service: invalid token lifecycle stage identifier")
+	if existing := s.liveSessionOfPartition(ctx, cmd, target); existing != nil {
+		return &port.StartedFlow{Session: *existing}, nil
 	}
-	return resp, nil
+
+	token, hash, err := newSessionSecret()
+	if err != nil {
+		return nil, err
+	}
+	now := s.clock.Now()
+	session := model.SSOSession{
+		ID:            uuid.New(),
+		TenantID:      cmd.TenantID,
+		PartitionID:   target.partitionID,
+		State:         model.SSOSessionPending,
+		AMR:           []string{},
+		AuthTime:      now,
+		CreatedAt:     now,
+		LastSeenAt:    now,
+		ExpiresAt:     now.Add(s.policy.PendingLifetime),
+		IdleExpiresAt: now.Add(s.policy.PendingLifetime),
+	}
+	if err := s.storage.SaveSSOSession(ctx, session, hash); err != nil {
+		return nil, fmt.Errorf("sso_session_service: failed to store pending session: %w", err)
+	}
+
+	return &port.StartedFlow{
+		Session: session,
+		Cookie: &port.CookieIntentResponse{
+			CookieName:  target.name,
+			CookieValue: token,
+			MaxAge:      int(s.policy.PendingLifetime / time.Second),
+			Secure:      target.secure,
+		},
+	}, nil
 }
 
-// ParseSessionCookie reads the value of a handshake cookie. A signed-in session value is opaque and is read with
-// ResolveSession, so anything else is refused here.
-func (s *SSOSessionService) ParseSessionCookie(_ context.Context, cookieValue string) (string, string, error) {
-	if cookieValue == "" {
-		return "", "", errors.New("sso_cookie_service: cannot parse an empty or missing token string value")
+// liveSessionOfPartition resolves the session behind the cookie this browser sent for the partition.
+func (s *SSOSessionService) liveSessionOfPartition(ctx context.Context, cmd port.StartFlowCommand, target *cookieTarget) *model.SSOSession {
+	hash, ok := hashSessionSecret(cmd.Cookies[target.name])
+	if !ok {
+		return nil
+	}
+	session, err := s.storage.GetLiveSSOSession(ctx, cmd.TenantID, hash, s.clock.Now())
+	if err != nil || session.PartitionID != target.partitionID {
+		return nil
+	}
+	return session
+}
+
+// ResolveFlowSession returns the session behind the cookie of the partition when it is the one the flow was started
+// with. A flow without a binding never matches, so flows created before the binding existed cannot be completed.
+func (s *SSOSessionService) ResolveFlowSession(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string, flowSessionID uuid.UUID) (*model.SSOSession, error) {
+	if flowSessionID == uuid.Nil {
+		return nil, port.ErrSessionNotFound
+	}
+	if _, err := ensureTenantActive(ctx, s.storage, tenantID); err != nil {
+		return nil, err
+	}
+	target, err := s.resolveCookieTarget(ctx, tenantID, partitionID)
+	if err != nil {
+		return nil, err
+	}
+	hash, ok := hashSessionSecret(cookies[target.name])
+	if !ok {
+		return nil, port.ErrSessionNotFound
+	}
+	session, err := s.storage.GetLiveSSOSession(ctx, tenantID, hash, s.clock.Now())
+	if err != nil {
+		return nil, err
+	}
+	if session.ID != flowSessionID || session.PartitionID != target.partitionID {
+		return nil, port.ErrSessionNotFound
+	}
+	return session, nil
+}
+
+// ResolveDirectFlowSession returns the pending or active session behind the cookie of the partition, for a sign-in
+// that has no interaction session to bind to.
+func (s *SSOSessionService) ResolveDirectFlowSession(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string) (*model.SSOSession, error) {
+	if _, err := ensureTenantActive(ctx, s.storage, tenantID); err != nil {
+		return nil, err
+	}
+	target, err := s.resolveCookieTarget(ctx, tenantID, partitionID)
+	if err != nil {
+		return nil, err
+	}
+	hash, ok := hashSessionSecret(cookies[target.name])
+	if !ok {
+		return nil, port.ErrSessionNotFound
+	}
+	session, err := s.storage.GetLiveSSOSession(ctx, tenantID, hash, s.clock.Now())
+	if err != nil {
+		return nil, err
+	}
+	if session.PartitionID != target.partitionID {
+		return nil, port.ErrSessionNotFound
+	}
+	return session, nil
+}
+
+// maxFlowCookies bounds the lookups one callback can cause.
+const maxFlowCookies = 8
+
+// ResolveFlowSessionIDs returns the pending sessions behind the session cookies the browser sent.
+func (s *SSOSessionService) ResolveFlowSessionIDs(ctx context.Context, tenantID uuid.UUID, cookies map[string]string) ([]uuid.UUID, error) {
+	if _, err := ensureTenantActive(ctx, s.storage, tenantID); err != nil {
+		return nil, err
+	}
+	now := s.clock.Now()
+	ids := []uuid.UUID{}
+	checked := 0
+	for name, value := range cookies {
+		if !isSessionCookieName(name) {
+			continue
+		}
+		if checked++; checked > maxFlowCookies {
+			break
+		}
+		hash, ok := hashSessionSecret(value)
+		if !ok {
+			continue
+		}
+		if session, err := s.storage.GetLiveSSOSession(ctx, tenantID, hash, now); err == nil && session.State == model.SSOSessionPending {
+			ids = append(ids, session.ID)
+		}
+	}
+	return ids, nil
+}
+
+func isSessionCookieName(name string) bool {
+	return strings.HasPrefix(strings.TrimPrefix(name, "__Host-"), "spz_session_")
+}
+
+// ResolvePartitionSession returns the signed-in session behind the cookie of the partition.
+func (s *SSOSessionService) ResolvePartitionSession(ctx context.Context, tenantID uuid.UUID, partitionID int64, cookies map[string]string) (*model.SSOSession, error) {
+	target, err := s.resolveCookieTarget(ctx, tenantID, partitionID)
+	if err != nil {
+		return nil, err
+	}
+	session, err := s.ResolveSession(ctx, tenantID, cookies[target.name])
+	if err != nil {
+		return nil, err
+	}
+	if session.PartitionID != target.partitionID {
+		return nil, port.ErrSessionNotFound
+	}
+	return session, nil
+}
+
+// PromoteSession turns the pending session of a flow into the signed-in session. The secret is replaced, so the
+// cookie the flow ran under is dead the moment the user is signed in (no session fixation), while the session ID
+// stays, so the other flows of this browser stay bound to it.
+func (s *SSOSessionService) PromoteSession(ctx context.Context, cmd port.PromoteSessionCommand) (*port.CreatedSession, error) {
+	if _, err := ensureTenantActive(ctx, s.storage, cmd.TenantID); err != nil {
+		return nil, err
+	}
+	target, err := s.resolveCookieTarget(ctx, cmd.TenantID, cmd.PartitionID)
+	if err != nil {
+		return nil, err
+	}
+	token, hash, err := newSessionSecret()
+	if err != nil {
+		return nil, err
 	}
 
-	stage, payload, found := strings.Cut(cookieValue, ":")
-	if !found {
-		return "", "", errors.New("sso_cookie_service: corrupt or non-namespaced authentication session string")
+	absolute, idle := s.policy.limitsFor(target.partitionAlias)
+	now := s.clock.Now()
+	session := model.SSOSession{
+		ID:                 cmd.SessionID,
+		TenantID:           cmd.TenantID,
+		PartitionID:        target.partitionID,
+		State:              model.SSOSessionActive,
+		UserProfileID:      cmd.UserProfileID,
+		IdentityProviderID: cmd.IdentityProviderID,
+		ACR:                cmd.ACR,
+		AMR:                nonNilStrings(cmd.AMR),
+		AuthTime:           now,
+		CreatedAt:          now,
+		LastSeenAt:         now,
+		ExpiresAt:          now.Add(absolute),
+		IdleExpiresAt:      now.Add(idle),
 	}
-	if stage != "handshake" {
-		return "", "", errors.New("sso_cookie_service: incoming token carries an unrecognized lifecycle header state")
+	if err := s.storage.PromoteSSOSession(ctx, session, hash, now); err != nil {
+		return nil, err
 	}
-	if payload == "" {
-		return "", "", errors.New("sso_cookie_service: authentication payload context string is blank")
-	}
-	return stage, payload, nil
+
+	return &port.CreatedSession{
+		Session: session,
+		Token:   token,
+		Cookie: port.CookieIntentResponse{
+			CookieName:  target.name,
+			CookieValue: token,
+			MaxAge:      int(absolute / time.Second),
+			Secure:      target.secure,
+		},
+	}, nil
 }
 
 // CreateSession stores a new session and returns the cookie that carries it. The cookie value is a fresh random
@@ -187,6 +372,7 @@ func (s *SSOSessionService) CreateSession(ctx context.Context, cmd port.CreateSe
 		ID:                 uuid.New(),
 		TenantID:           cmd.TenantID,
 		PartitionID:        target.partitionID,
+		State:              model.SSOSessionActive,
 		UserProfileID:      cmd.UserProfileID,
 		IdentityProviderID: cmd.IdentityProviderID,
 		ACR:                cmd.ACR,
@@ -226,9 +412,13 @@ func (s *SSOSessionService) ResolveSession(ctx context.Context, tenantID uuid.UU
 	}
 
 	now := s.clock.Now()
-	session, err := s.storage.GetActiveSSOSession(ctx, tenantID, hash, now)
+	session, err := s.storage.GetLiveSSOSession(ctx, tenantID, hash, now)
 	if err != nil {
 		return nil, err
+	}
+	if session.State != model.SSOSessionActive {
+		// A sign-in in progress names no user and authenticates nothing.
+		return nil, port.ErrSessionNotFound
 	}
 
 	s.touch(ctx, session, hash, now)

@@ -47,6 +47,8 @@ type InteractionSession struct {
 	AMRValues             []string  `json:"amr_values"`
 	IdentityProviderID    uuid.UUID `json:"identity_provider_id"`
 	IdentityProviderAlias string    `json:"identity_provider_alias"`
+	// SessionID is the pending SSO session of the browser that started this flow. Only that browser may continue it.
+	SessionID uuid.UUID `json:"session_id"`
 }
 
 // PushedAuthorizationRequest handles early RFC 9126 data caching validations.

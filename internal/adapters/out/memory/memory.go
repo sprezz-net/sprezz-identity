@@ -599,6 +599,7 @@ func (s *Storage) PruneExpiredTokens(ctx context.Context) error {
 	for k, sess := range s.ssoSessions {
 		if !sess.ExpiresAt.After(now) || !sess.IdleExpiresAt.After(now) {
 			delete(s.ssoSessions, k)
+			s.deleteFlowsOfSessionLocked(sess.ID)
 		}
 	}
 	for k, exp := range s.dpopProofs {
@@ -641,7 +642,7 @@ func (s *Storage) SaveSSOSession(_ context.Context, session model.SSOSession, to
 	return nil
 }
 
-func (s *Storage) GetActiveSSOSession(_ context.Context, tenantID uuid.UUID, tokenHash []byte, now time.Time) (*model.SSOSession, error) {
+func (s *Storage) GetLiveSSOSession(_ context.Context, tenantID uuid.UUID, tokenHash []byte, now time.Time) (*model.SSOSession, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -654,13 +655,34 @@ func (s *Storage) GetActiveSSOSession(_ context.Context, tenantID uuid.UUID, tok
 	return &session, nil
 }
 
+// PromoteSSOSession makes a pending session active under a new token hash, once.
+func (s *Storage) PromoteSSOSession(_ context.Context, session model.SSOSession, newTokenHash []byte, now time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for key, existing := range s.ssoSessions {
+		if existing.ID != session.ID {
+			continue
+		}
+		if existing.TenantID != session.TenantID || existing.PartitionID != session.PartitionID ||
+			existing.State != model.SSOSessionPending || !existing.ExpiresAt.After(now) {
+			return port.ErrSessionNotFound
+		}
+		delete(s.ssoSessions, key)
+		session.AMR = append([]string{}, session.AMR...)
+		s.ssoSessions[hex.EncodeToString(newTokenHash)] = session
+		return nil
+	}
+	return port.ErrSessionNotFound
+}
+
 func (s *Storage) TouchSSOSession(_ context.Context, tenantID uuid.UUID, tokenHash []byte, lastSeenAt time.Time, idleExpiresAt time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	key := hex.EncodeToString(tokenHash)
 	session, ok := s.ssoSessions[key]
-	if !ok || session.TenantID != tenantID {
+	if !ok || session.TenantID != tenantID || session.State != model.SSOSessionActive {
 		return nil
 	}
 	session.LastSeenAt = lastSeenAt
@@ -676,9 +698,24 @@ func (s *Storage) DeleteSSOSession(_ context.Context, tenantID uuid.UUID, sessio
 	for key, session := range s.ssoSessions {
 		if session.TenantID == tenantID && session.ID == sessionID {
 			delete(s.ssoSessions, key)
+			s.deleteFlowsOfSessionLocked(sessionID)
 		}
 	}
 	return nil
+}
+
+// deleteFlowsOfSessionLocked mirrors ON DELETE CASCADE: the flows of a removed session go with it.
+func (s *Storage) deleteFlowsOfSessionLocked(sessionID uuid.UUID) {
+	for id, flow := range s.interactionSessions {
+		if flow.SessionID == sessionID {
+			delete(s.interactionSessions, id)
+		}
+	}
+	for state, handshake := range s.outboundHandshakes {
+		if handshake.SessionID == sessionID {
+			delete(s.outboundHandshakes, state)
+		}
+	}
 }
 
 func (s *Storage) DeleteSSOSessionsByUser(_ context.Context, tenantID uuid.UUID, userProfileID uuid.UUID) error {
@@ -877,13 +914,13 @@ func (s *Storage) DeleteApplication(ctx context.Context, tenantUUID uuid.UUID, c
 
 /* OLD code */
 
-func (s *Storage) GetAndConsumeOutboundHandshake(ctx context.Context, tenantID uuid.UUID, incomingState string) (*model.OutboundHandshakeSession, error) {
+func (s *Storage) GetAndConsumeOutboundHandshake(ctx context.Context, tenantID uuid.UUID, incomingState string, sessionIDs []uuid.UUID) (*model.OutboundHandshakeSession, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	session, ok := s.outboundHandshakes[incomingState]
-	if !ok || session.TenantID != tenantID {
-		return nil, nil // Return explicitly safe nil if state is expired or unknown
+	if !ok || session.TenantID != tenantID || !slices.Contains(sessionIDs, session.SessionID) {
+		return nil, fmt.Errorf("handshake state %s: %w", incomingState, port.ErrSessionNotFound)
 	}
 
 	// Destructive single-use protection: immediately erase tracking state to block replay exploits

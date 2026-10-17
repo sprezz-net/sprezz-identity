@@ -65,13 +65,19 @@ type Storage interface {
 	RevokeSession(ctx context.Context, tenantID uuid.UUID, subject string, clientID string) error
 
 	// Browser SSO sessions. The token hash is the SHA-256 of the cookie secret; the secret itself is never stored.
+	// A session is pending (a sign-in in progress, no user) or active.
 	SaveSSOSession(ctx context.Context, session model.SSOSession, tokenHash []byte) error
-	// GetActiveSSOSession returns ErrSessionNotFound unless the session exists for this tenant and has not passed
-	// its absolute or idle deadline at "now".
-	GetActiveSSOSession(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, now time.Time) (*model.SSOSession, error)
+	// GetLiveSSOSession returns a pending or active session, or ErrSessionNotFound when it does not exist for this
+	// tenant or has passed its absolute or idle deadline at "now".
+	GetLiveSSOSession(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, now time.Time) (*model.SSOSession, error)
+	// PromoteSSOSession makes a pending session active under a new token hash. It returns ErrSessionNotFound unless
+	// the session is pending, unexpired and in the partition of the session, so it can only succeed once.
+	PromoteSSOSession(ctx context.Context, session model.SSOSession, newTokenHash []byte, now time.Time) error
+	// TouchSSOSession moves the idle deadline of an active session.
 	TouchSSOSession(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, lastSeenAt time.Time, idleExpiresAt time.Time) error
 	DeleteSSOSession(ctx context.Context, tenantID uuid.UUID, sessionID uuid.UUID) error
 	DeleteSSOSessionsByUser(ctx context.Context, tenantID uuid.UUID, userProfileID uuid.UUID) error
+
 	SaveInteractionSession(ctx context.Context, session model.InteractionSession) error
 	GetAndConsumeInteractionSession(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.InteractionSession, error)
 	GetInteractionSession(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*model.InteractionSession, error)
@@ -95,7 +101,8 @@ type Storage interface {
 	SaveOutboundHandshake(ctx context.Context, session model.OutboundHandshakeSession) error
 	// GetAndConsumeOutboundHandshake retrieves a tracking handshake record by its unique
 	// state token ID and instantly deletes it from persistence to prevent token replay vectors.
-	GetAndConsumeOutboundHandshake(ctx context.Context, tenantID uuid.UUID, incomingState string) (*model.OutboundHandshakeSession, error)
+	// The state only redeems when the handshake is bound to one of the given pending session IDs.
+	GetAndConsumeOutboundHandshake(ctx context.Context, tenantID uuid.UUID, incomingState string, sessionIDs []uuid.UUID) (*model.OutboundHandshakeSession, error)
 
 	SavePAR(ctx context.Context, req model.PushedAuthorizationRequest) error
 	GetAndConsumePAR(ctx context.Context, tenantID uuid.UUID, requestURI string) (*model.PushedAuthorizationRequest, error)

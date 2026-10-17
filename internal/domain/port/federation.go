@@ -20,6 +20,7 @@ type InitiateFederatedLoginCommand struct {
 	RequestedScopes    []string  // Added to dynamically support runtime incoming client application requests
 	LocalCallbackURI   string    // The address where the provider must send the user back (e.g. /oauth/federation/callback)
 	FinalTargetURI     string    // The target landing URL the user intended to access inside the system
+	FlowSessionID      uuid.UUID // Pending SSO session of the browser starting the flow; the callback only redeems for it
 }
 
 // InitiateFederatedLoginResponse delivers the final computed parameters to the controller layer
@@ -32,9 +33,11 @@ type FederatedCallbackCommand struct {
 	TenantID      uuid.UUID // Root tenant isolation anchor
 	IncomingState string    // State parameter used for XSRF validation
 	IncomingCode  string    // Back-channel authorization trade code
-	SessionID     string    // The active native session identifier string
 	RequestURL    string    // For validating incoming protocol metrics if needed
 	HTTPMethod    string    // For validating incoming protocol metrics if needed
+	// FlowSessionIDs are the pending SSO sessions behind the cookies this browser sent. The state only redeems when
+	// the handshake was started by one of them, so a callback URL sent to another browser is refused.
+	FlowSessionIDs []uuid.UUID
 }
 
 type FederatedCallbackResponse struct {
@@ -46,6 +49,8 @@ type FederatedCallbackResponse struct {
 	TargetLandingURI     string    // Resolved target landing zone (e.g., /admin/dashboard) [5.7]
 	ReachedAAL           int       // Trust metric passed cleanly up to the delivery shell
 	ReachedIAL           int       // Trust metric passed cleanly up to the delivery shell
+	FlowSessionID        uuid.UUID // The pending SSO session to promote into the signed-in session
+	IdentityProviderID   uuid.UUID // The provider the user signed in with
 }
 
 // FederatedCallbackUseCase handles the entire inbound external provider callback journey

@@ -44,12 +44,32 @@ func inactiveSignInCases() []inactiveCase {
 			_, err := e.reg.GetSignupContext(ctx, port.GetSignupContextCommand{TenantID: e.tenantID})
 			return err
 		}},
-		{"session cookie issuing (handshake)", func(ctx context.Context, e *inactiveEnv) error {
-			_, err := e.sso.BuildSessionCookie(ctx, port.CookieIntentCommand{TenantID: e.tenantID, PartitionID: inactivePartition, LifecycleStage: "handshake", PayloadValue: "x"})
+		{"starting a sign-in", func(ctx context.Context, e *inactiveEnv) error {
+			_, err := e.sso.StartFlow(ctx, port.StartFlowCommand{TenantID: e.tenantID, PartitionID: inactivePartition})
 			return err
 		}},
-		{"session cookie issuing (bearer)", func(ctx context.Context, e *inactiveEnv) error {
-			_, err := e.sso.BuildSessionCookie(ctx, port.CookieIntentCommand{TenantID: e.tenantID, PartitionID: inactivePartition, LifecycleStage: "bearer", PayloadValue: "x"})
+		{"completing a sign-in", func(ctx context.Context, e *inactiveEnv) error {
+			_, err := e.sso.PromoteSession(ctx, port.PromoteSessionCommand{TenantID: e.tenantID, PartitionID: inactivePartition, SessionID: uuid.New(), UserProfileID: uuid.New()})
+			return err
+		}},
+		{"opening a session", func(ctx context.Context, e *inactiveEnv) error {
+			_, err := e.sso.CreateSession(ctx, port.CreateSessionCommand{TenantID: e.tenantID, PartitionID: inactivePartition, UserProfileID: uuid.New()})
+			return err
+		}},
+		{"resolving a flow session", func(ctx context.Context, e *inactiveEnv) error {
+			_, err := e.sso.ResolveFlowSession(ctx, e.tenantID, inactivePartition, map[string]string{}, uuid.New())
+			return err
+		}},
+		{"resolving a direct flow session", func(ctx context.Context, e *inactiveEnv) error {
+			_, err := e.sso.ResolveDirectFlowSession(ctx, e.tenantID, inactivePartition, map[string]string{})
+			return err
+		}},
+		{"resolving the flow sessions of a callback", func(ctx context.Context, e *inactiveEnv) error {
+			_, err := e.sso.ResolveFlowSessionIDs(ctx, e.tenantID, map[string]string{})
+			return err
+		}},
+		{"resolving a signed-in session", func(ctx context.Context, e *inactiveEnv) error {
+			_, err := e.sso.ResolveSession(ctx, e.tenantID, "x")
 			return err
 		}},
 		{"assurance check", func(ctx context.Context, e *inactiveEnv) error {

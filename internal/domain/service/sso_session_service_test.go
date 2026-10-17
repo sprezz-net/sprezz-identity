@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"sprezz-identity/internal/adapters/out/memory"
 	"sprezz-identity/internal/domain/model"
 	"sprezz-identity/internal/domain/port"
 	"sprezz-identity/internal/domain/port/portmock"
@@ -17,119 +18,392 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSSOSessionService_BuildSessionCookie_ExplicitPartition(t *testing.T) {
-	ctrl := minimock.NewController(t)
-
-	storage := portmock.NewStorageMock(ctrl)
-
-	allowTenant(storage)
-	svc := NewSSOSessionService(storage, portmock.NewMockClock(time.Now()), "local", SSOSessionPolicy{})
-
-	tenantID := uuid.New()
-	partitionID := int64(42)
-
-	storage.GetPartitionByIDMock.Expect(minimock.AnyContext, tenantID, partitionID).Return(&model.Partition{
-		ID:        partitionID,
-		Name:      "test-partition",
-		AliasName: "test_part",
-	}, nil)
-
-	resp, err := svc.BuildSessionCookie(context.Background(), port.CookieIntentCommand{
-		TenantID:       tenantID,
-		PartitionID:    partitionID,
-		LifecycleStage: "handshake",
-		PayloadValue:   "some-state-token",
-		RequestHost:    "localhost",
-	})
-	require.NoError(t, err)
-
-	assert.Equal(t, "spz_session_test_part", resp.CookieName)
-	assert.Equal(t, "handshake:some-state-token", resp.CookieValue)
-	assert.Equal(t, 300, resp.MaxAge)
-	assert.False(t, resp.Secure, "local env may use plain http")
+// flowFixture runs the session service against the in-memory store, so the flow scenarios (start, bind, promote,
+// replay, revoke) exercise the real lifecycle instead of canned answers.
+type flowFixture struct {
+	svc       *SSOSessionService
+	storage   *memory.Storage
+	clock     *portmock.MockClock
+	tenantID  uuid.UUID
+	partition model.Partition
+	admin     model.Partition
 }
 
-func TestSSOSessionService_BuildSessionCookie_ZeroPartition_Fallback(t *testing.T) {
-	ctrl := minimock.NewController(t)
+func newFlowFixture(t *testing.T) *flowFixture {
+	t.Helper()
+	f := &flowFixture{
+		storage:  memory.NewStorage("production"),
+		clock:    portmock.NewMockClock(time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)),
+		tenantID: uuid.New(),
+	}
+	require.NoError(t, f.storage.CreateTenant(context.Background(), model.Tenant{ID: f.tenantID, Domain: "flow.example.com", IsActive: true}))
 
-	storage := portmock.NewStorageMock(ctrl)
-	svc := NewSSOSessionService(storage, portmock.NewMockClock(time.Now()), "production", SSOSessionPolicy{})
-
-	tenantID := uuid.New()
-	defaultPartID := int64(100)
-
-	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantID).Return(&model.Tenant{
-		ID:               tenantID,
-		DefaultPartition: &defaultPartID,
-		IsActive:         true,
-	}, nil)
-	storage.GetPartitionByIDMock.Expect(minimock.AnyContext, tenantID, defaultPartID).Return(&model.Partition{
-		ID:        defaultPartID,
-		Name:      "default-partition",
-		AliasName: "default",
-	}, nil)
-
-	resp, err := svc.BuildSessionCookie(context.Background(), port.CookieIntentCommand{
-		TenantID:       tenantID,
-		PartitionID:    0, // Trigger fallback
-		LifecycleStage: "handshake",
-		PayloadValue:   "state",
-		RequestHost:    "login.sprezz.com",
-	})
+	defaultPart, err := f.storage.CreatePartition(context.Background(), f.tenantID, "Customers", "customers")
 	require.NoError(t, err)
+	adminPart, err := f.storage.CreatePartition(context.Background(), f.tenantID, "Admin", model.AdminPartitionAliasName)
+	require.NoError(t, err)
+	f.partition, f.admin = *defaultPart, *adminPart
 
-	assert.Equal(t, "__Host-spz_session_default", resp.CookieName)
+	f.svc = NewSSOSessionService(f.storage, f.clock, "production", SSOSessionPolicy{})
+	return f
+}
+
+// cookies is what a browser sends: the partition cookie with the given value.
+func (f *flowFixture) cookies(partition model.Partition, value string) map[string]string {
+	return map[string]string{"__Host-spz_session_" + partition.AliasName: value}
+}
+
+// start is a browser starting a sign-in, with the cookies it already holds.
+func (f *flowFixture) start(t *testing.T, partition model.Partition, held map[string]string) *port.StartedFlow {
+	t.Helper()
+	flow, err := f.svc.StartFlow(context.Background(), port.StartFlowCommand{TenantID: f.tenantID, PartitionID: partition.ID, Cookies: held})
+	require.NoError(t, err)
+	return flow
+}
+
+func (f *flowFixture) promote(partition model.Partition, sessionID uuid.UUID) (*port.CreatedSession, error) {
+	return f.svc.PromoteSession(context.Background(), port.PromoteSessionCommand{
+		TenantID: f.tenantID, SessionID: sessionID, PartitionID: partition.ID, UserProfileID: uuid.New(),
+	})
+}
+
+func TestSSOSessionService_BuildSessionCookie_NamesAndEvictsThePartitionCookie(t *testing.T) {
+	f := newFlowFixture(t)
+
+	resp, err := f.svc.BuildSessionCookie(context.Background(), port.CookieIntentCommand{
+		TenantID: f.tenantID, PartitionID: f.partition.ID, LifecycleStage: "clear",
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "__Host-spz_session_customers", resp.CookieName)
+	assert.Equal(t, -1, resp.MaxAge)
 	assert.True(t, resp.Secure)
 }
 
-func TestSSOSessionService_BuildSessionCookie_RefusesToIssueASignedInValue(t *testing.T) {
+func TestSSOSessionService_BuildSessionCookie_LocalEnvironmentUsesPlainNameAndHttp(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	storage.GetPartitionByIDMock.Return(&model.Partition{ID: 42, AliasName: "test_part"}, nil)
+	svc := NewSSOSessionService(storage, portmock.NewMockClock(time.Now()), "local", SSOSessionPolicy{})
+
+	resp, err := svc.BuildSessionCookie(context.Background(), port.CookieIntentCommand{TenantID: uuid.New(), PartitionID: 42, LifecycleStage: "clear"})
+
+	require.NoError(t, err)
+	assert.Equal(t, "spz_session_test_part", resp.CookieName)
+	assert.False(t, resp.Secure)
+}
+
+func TestSSOSessionService_BuildSessionCookie_ZeroPartitionFallsBackToTheDefault(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	svc := NewSSOSessionService(storage, portmock.NewMockClock(time.Now()), "production", SSOSessionPolicy{})
+	tenantID, defaultPartID := uuid.New(), int64(100)
+	storage.ResolveTenantByUUIDMock.Expect(minimock.AnyContext, tenantID).Return(&model.Tenant{ID: tenantID, DefaultPartition: &defaultPartID, IsActive: true}, nil)
+	storage.GetPartitionByIDMock.Expect(minimock.AnyContext, tenantID, defaultPartID).Return(&model.Partition{ID: defaultPartID, AliasName: "default"}, nil)
+
+	resp, err := svc.BuildSessionCookie(context.Background(), port.CookieIntentCommand{TenantID: tenantID, LifecycleStage: "clear"})
+
+	require.NoError(t, err)
+	assert.Equal(t, "__Host-spz_session_default", resp.CookieName)
+}
+
+func TestSSOSessionService_BuildSessionCookie_OnlyEvicts(t *testing.T) {
+	f := newFlowFixture(t)
+
+	for _, stage := range []string{"handshake", "bearer", ""} {
+		_, err := f.svc.BuildSessionCookie(context.Background(), port.CookieIntentCommand{
+			TenantID: f.tenantID, PartitionID: f.partition.ID, LifecycleStage: stage,
+		})
+		require.Errorf(t, err, "stage %q must not issue a cookie", stage)
+	}
+}
+
+// ---- starting a sign-in ----
+
+func TestStartFlow_CreatesAPendingSessionThatNamesNoUser(t *testing.T) {
+	f := newFlowFixture(t)
+
+	flow := f.start(t, f.partition, nil)
+
+	require.NotNil(t, flow.Cookie, "a browser without a session gets a cookie")
+	assert.Equal(t, model.SSOSessionPending, flow.Session.State)
+	assert.Equal(t, uuid.Nil, flow.Session.UserProfileID)
+	assert.Equal(t, f.clock.Now().Add(15*time.Minute), flow.Session.ExpiresAt, "a sign-in has 15 minutes")
+	assert.Equal(t, 900, flow.Cookie.MaxAge)
+	assert.Equal(t, "__Host-spz_session_customers", flow.Cookie.CookieName)
+
+	raw, err := base64.RawURLEncoding.DecodeString(flow.Cookie.CookieValue)
+	require.NoError(t, err)
+	assert.Len(t, raw, 32, "the same 256-bit secret as a signed-in session")
+}
+
+func TestStartFlow_ABrowserThatAlreadyHasAPendingSessionKeepsIt(t *testing.T) {
+	f := newFlowFixture(t)
+	first := f.start(t, f.partition, nil)
+
+	second := f.start(t, f.partition, f.cookies(f.partition, first.Cookie.CookieValue))
+
+	assert.Equal(t, first.Session.ID, second.Session.ID, "a second tab shares the binding of the first")
+	assert.Nil(t, second.Cookie, "no new cookie is needed")
+}
+
+func TestStartFlow_ACookieThatIsNotLiveGetsAFreshSession(t *testing.T) {
+	f := newFlowFixture(t)
+	first := f.start(t, f.partition, nil)
+	f.clock.Advance(16 * time.Minute) // the pending session has expired
+
+	second := f.start(t, f.partition, f.cookies(f.partition, first.Cookie.CookieValue))
+
+	assert.NotEqual(t, first.Session.ID, second.Session.ID)
+	require.NotNil(t, second.Cookie)
+}
+
+func TestStartFlow_ACookieOfAnotherPartitionIsNotReused(t *testing.T) {
+	f := newFlowFixture(t)
+	other := f.start(t, f.admin, nil)
+
+	// The admin pending cookie presented under the customers cookie name must not bind a customers flow.
+	flow := f.start(t, f.partition, f.cookies(f.partition, other.Cookie.CookieValue))
+
+	assert.NotEqual(t, other.Session.ID, flow.Session.ID)
+	assert.Equal(t, f.partition.ID, flow.Session.PartitionID)
+}
+
+func TestStartFlow_ASignedInBrowserKeepsItsSession(t *testing.T) {
+	f := newFlowFixture(t)
+	pending := f.start(t, f.partition, nil)
+	signedIn, err := f.promote(f.partition, pending.Session.ID)
+	require.NoError(t, err)
+
+	flow := f.start(t, f.partition, f.cookies(f.partition, signedIn.Token))
+
+	assert.Equal(t, model.SSOSessionActive, flow.Session.State, "starting another flow never signs anybody out")
+	assert.Equal(t, signedIn.Session.ID, flow.Session.ID)
+}
+
+func TestStartFlow_RefusesAnInactiveTenant(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl) // strict: nothing is stored
+	storage.ResolveTenantByUUIDMock.Return(&model.Tenant{IsActive: false}, nil)
+	svc := NewSSOSessionService(storage, portmock.NewMockClock(time.Now()), "production", SSOSessionPolicy{})
+
+	_, err := svc.StartFlow(context.Background(), port.StartFlowCommand{TenantID: uuid.New(), PartitionID: 1})
+
+	require.ErrorIs(t, err, port.ErrTenantInactive)
+}
+
+// ---- a pending session never authenticates ----
+
+func TestPendingSession_NeverAuthenticatesAnything(t *testing.T) {
+	f := newFlowFixture(t)
+	flow := f.start(t, f.partition, nil)
+
+	_, err := f.svc.ResolveSession(context.Background(), f.tenantID, flow.Cookie.CookieValue)
+	require.ErrorIs(t, err, port.ErrSessionNotFound, "ResolveSession only ever returns signed-in sessions")
+
+	_, err = f.svc.ResolvePartitionSession(context.Background(), f.tenantID, f.partition.ID, f.cookies(f.partition, flow.Cookie.CookieValue))
+	require.ErrorIs(t, err, port.ErrSessionNotFound)
+}
+
+func TestPendingSession_IsNotTouchedByIdleSliding(t *testing.T) {
+	f := newFlowFixture(t)
+	flow := f.start(t, f.partition, nil)
+
+	f.clock.Advance(14 * time.Minute)
+	_, _ = f.svc.ResolveSession(context.Background(), f.tenantID, flow.Cookie.CookieValue)
+
+	f.clock.Advance(2 * time.Minute) // 16 minutes after the start
+	_, err := f.svc.ResolveDirectFlowSession(context.Background(), f.tenantID, f.partition.ID, f.cookies(f.partition, flow.Cookie.CookieValue))
+	require.ErrorIs(t, err, port.ErrSessionNotFound, "a sign-in cannot be kept alive for ever")
+}
+
+// ---- binding a flow to its browser ----
+
+func TestResolveFlowSession_OnlyTheBrowserThatStartedTheFlowMatches(t *testing.T) {
+	f := newFlowFixture(t)
+	mine := f.start(t, f.partition, nil)
+	theirs := f.start(t, f.partition, nil) // another browser, no cookies
+
+	got, err := f.svc.ResolveFlowSession(context.Background(), f.tenantID, f.partition.ID, f.cookies(f.partition, mine.Cookie.CookieValue), mine.Session.ID)
+	require.NoError(t, err)
+	assert.Equal(t, mine.Session.ID, got.ID)
+
+	_, err = f.svc.ResolveFlowSession(context.Background(), f.tenantID, f.partition.ID, f.cookies(f.partition, theirs.Cookie.CookieValue), mine.Session.ID)
+	require.ErrorIs(t, err, port.ErrSessionNotFound, "another browser's cookie does not open this flow")
+
+	_, err = f.svc.ResolveFlowSession(context.Background(), f.tenantID, f.partition.ID, map[string]string{}, mine.Session.ID)
+	require.ErrorIs(t, err, port.ErrSessionNotFound, "no cookie, no flow")
+
+	_, err = f.svc.ResolveFlowSession(context.Background(), f.tenantID, f.partition.ID, f.cookies(f.partition, "not-a-secret"), mine.Session.ID)
+	require.ErrorIs(t, err, port.ErrSessionNotFound, "garbage")
+}
+
+func TestResolveFlowSession_AFlowWithoutABindingNeverMatches(t *testing.T) {
+	f := newFlowFixture(t)
+	mine := f.start(t, f.partition, nil)
+
+	// A flow created before the binding existed carries uuid.Nil and cannot be completed by anybody.
+	_, err := f.svc.ResolveFlowSession(context.Background(), f.tenantID, f.partition.ID, f.cookies(f.partition, mine.Cookie.CookieValue), uuid.Nil)
+
+	require.ErrorIs(t, err, port.ErrSessionNotFound)
+}
+
+func TestResolveFlowSession_TheCookieOfAnotherPartitionDoesNotMatch(t *testing.T) {
+	f := newFlowFixture(t)
+	adminFlow := f.start(t, f.admin, nil)
+
+	_, err := f.svc.ResolveFlowSession(context.Background(), f.tenantID, f.partition.ID, f.cookies(f.partition, adminFlow.Cookie.CookieValue), adminFlow.Session.ID)
+
+	require.ErrorIs(t, err, port.ErrSessionNotFound)
+}
+
+func TestResolveFlowSession_AnExpiredFlowIsRefused(t *testing.T) {
+	f := newFlowFixture(t)
+	mine := f.start(t, f.partition, nil)
+	f.clock.Advance(15 * time.Minute)
+
+	_, err := f.svc.ResolveFlowSession(context.Background(), f.tenantID, f.partition.ID, f.cookies(f.partition, mine.Cookie.CookieValue), mine.Session.ID)
+
+	require.ErrorIs(t, err, port.ErrSessionNotFound)
+}
+
+func TestResolveFlowSessionIDs_OffersOnlyThePendingSessionsOfTheBrowser(t *testing.T) {
+	f := newFlowFixture(t)
+	pending := f.start(t, f.partition, nil)
+	adminFlow := f.start(t, f.admin, nil)
+	signedIn := f.start(t, f.partition, nil)
+	active, err := f.promote(f.partition, signedIn.Session.ID)
+	require.NoError(t, err)
+
+	cookies := map[string]string{
+		"__Host-spz_session_customers":                        pending.Cookie.CookieValue,
+		"__Host-spz_session_" + model.AdminPartitionAliasName: adminFlow.Cookie.CookieValue,
+		"__Host-spz_session_other":                            active.Token, // a signed-in session is not a flow
+		"unrelated":                                           pending.Cookie.CookieValue,
+		"__Host-spz_session_garbage":                          "garbage",
+	}
+
+	ids, err := f.svc.ResolveFlowSessionIDs(context.Background(), f.tenantID, cookies)
+
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []uuid.UUID{pending.Session.ID, adminFlow.Session.ID}, ids)
+}
+
+func TestResolveFlowSessionIDs_BoundsTheLookupsOfOneRequest(t *testing.T) {
 	ctrl := minimock.NewController(t)
 	storage := portmock.NewStorageMock(ctrl)
 	allowTenant(storage)
-	svc := NewSSOSessionService(storage, portmock.NewMockClock(time.Now()), "local", SSOSessionPolicy{})
-	storage.GetPartitionByIDMock.Optional().Return(&model.Partition{ID: 1, AliasName: "default"}, nil)
-
-	// "bearer" used to carry an unsigned user ID. Signed-in cookies now only come from CreateSession.
-	_, err := svc.BuildSessionCookie(context.Background(), port.CookieIntentCommand{
-		TenantID: uuid.New(), PartitionID: 1, LifecycleStage: "bearer", PayloadValue: "anything",
+	var lookups int
+	storage.GetLiveSSOSessionMock.Set(func(context.Context, uuid.UUID, []byte, time.Time) (*model.SSOSession, error) {
+		lookups++
+		return nil, port.ErrSessionNotFound
 	})
-	require.Error(t, err)
-}
+	svc := NewSSOSessionService(storage, portmock.NewMockClock(time.Now()), "production", SSOSessionPolicy{})
 
-func TestSSOSessionService_ParseSessionCookie(t *testing.T) {
-	svc := NewSSOSessionService(nil, nil, "local", SSOSessionPolicy{})
-
-	tests := []struct {
-		name      string
-		value     string
-		wantStage string
-		wantPay   string
-		wantErr   bool
-	}{
-		{name: "Valid handshake", value: "handshake:my-payload", wantStage: "handshake", wantPay: "my-payload"},
-		{name: "Payload may contain a colon", value: "handshake:a:b", wantStage: "handshake", wantPay: "a:b"},
-		{name: "Old bearer value is not accepted", value: "bearer:user-uuid:1", wantErr: true},
-		{name: "Empty cookie", value: "", wantErr: true},
-		{name: "No separator", value: "invalidcookievalue", wantErr: true},
-		{name: "Invalid lifecycle stage", value: "unknown:payload", wantErr: true},
-		{name: "Empty payload", value: "handshake:", wantErr: true},
+	cookies := map[string]string{}
+	for i := 0; i < 50; i++ {
+		token, _, err := newSessionSecret()
+		require.NoError(t, err)
+		cookies["__Host-spz_session_p"+string(rune('a'+i%26))+string(rune('a'+i/26))] = token
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			stage, payload, err := svc.ParseSessionCookie(context.Background(), tt.value)
-			if tt.wantErr {
-				require.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tt.wantStage, stage)
-			assert.Equal(t, tt.wantPay, payload)
-		})
-	}
+	_, err := svc.ResolveFlowSessionIDs(context.Background(), uuid.New(), cookies)
+
+	require.NoError(t, err)
+	assert.LessOrEqual(t, lookups, maxFlowCookies, "a request cannot make the server do unbounded lookups")
 }
 
-// sessionFixture wires the service to an in-memory style storage mock that records the saved session.
+func TestResolveDirectFlowSession_ReturnsThePendingOrActiveSessionOfThePartition(t *testing.T) {
+	f := newFlowFixture(t)
+	pending := f.start(t, f.partition, nil)
+
+	got, err := f.svc.ResolveDirectFlowSession(context.Background(), f.tenantID, f.partition.ID, f.cookies(f.partition, pending.Cookie.CookieValue))
+	require.NoError(t, err)
+	assert.Equal(t, model.SSOSessionPending, got.State)
+
+	signedIn, err := f.promote(f.partition, pending.Session.ID)
+	require.NoError(t, err)
+	got, err = f.svc.ResolveDirectFlowSession(context.Background(), f.tenantID, f.partition.ID, f.cookies(f.partition, signedIn.Token))
+	require.NoError(t, err)
+	assert.Equal(t, model.SSOSessionActive, got.State)
+
+	_, err = f.svc.ResolveDirectFlowSession(context.Background(), f.tenantID, f.admin.ID, f.cookies(f.admin, signedIn.Token))
+	require.ErrorIs(t, err, port.ErrSessionNotFound, "a session of another partition")
+}
+
+// ---- signing in: promotion ----
+
+func TestPromoteSession_KeepsTheSessionIDAndReplacesTheSecret(t *testing.T) {
+	f := newFlowFixture(t)
+	pending := f.start(t, f.partition, nil)
+
+	signedIn, err := f.promote(f.partition, pending.Session.ID)
+
+	require.NoError(t, err)
+	assert.Equal(t, pending.Session.ID, signedIn.Session.ID, "other tabs of this browser stay bound")
+	assert.NotEqual(t, pending.Cookie.CookieValue, signedIn.Token, "the secret of the flow is replaced")
+	assert.Equal(t, model.SSOSessionActive, signedIn.Session.State)
+	assert.Equal(t, f.clock.Now().Add(24*time.Hour), signedIn.Session.ExpiresAt, "the full lifetime starts at sign-in")
+	assert.Equal(t, 86400, signedIn.Cookie.MaxAge)
+
+	_, err = f.svc.ResolveFlowSession(context.Background(), f.tenantID, f.partition.ID, f.cookies(f.partition, pending.Cookie.CookieValue), pending.Session.ID)
+	require.ErrorIs(t, err, port.ErrSessionNotFound, "the old cookie is dead: a planted cookie never becomes a session (no fixation)")
+
+	got, err := f.svc.ResolveSession(context.Background(), f.tenantID, signedIn.Token)
+	require.NoError(t, err)
+	assert.Equal(t, signedIn.Session.UserProfileID, got.UserProfileID)
+}
+
+func TestPromoteSession_AppliesTheLimitsOfThePartition(t *testing.T) {
+	f := newFlowFixture(t)
+	pending := f.start(t, f.admin, nil)
+
+	signedIn, err := f.promote(f.admin, pending.Session.ID)
+
+	require.NoError(t, err)
+	assert.Equal(t, f.clock.Now().Add(8*time.Hour), signedIn.Session.ExpiresAt)
+	assert.Equal(t, f.clock.Now().Add(time.Hour), signedIn.Session.IdleExpiresAt)
+}
+
+func TestPromoteSession_CanOnlyHappenOnce(t *testing.T) {
+	f := newFlowFixture(t)
+	pending := f.start(t, f.partition, nil)
+	_, err := f.promote(f.partition, pending.Session.ID)
+	require.NoError(t, err)
+
+	_, err = f.promote(f.partition, pending.Session.ID)
+
+	require.ErrorIs(t, err, port.ErrSessionNotFound, "a double submit or a replayed callback signs in once")
+}
+
+func TestPromoteSession_RefusesWhatIsNotAPendingSessionOfThePartition(t *testing.T) {
+	f := newFlowFixture(t)
+	pending := f.start(t, f.partition, nil)
+
+	_, err := f.promote(f.admin, pending.Session.ID)
+	require.ErrorIs(t, err, port.ErrSessionNotFound, "another partition")
+
+	_, err = f.promote(f.partition, uuid.New())
+	require.ErrorIs(t, err, port.ErrSessionNotFound, "unknown session")
+
+	f.clock.Advance(16 * time.Minute)
+	_, err = f.promote(f.partition, pending.Session.ID)
+	require.ErrorIs(t, err, port.ErrSessionNotFound, "expired sign-in")
+}
+
+func TestPromoteSession_RefusesAnInactiveTenant(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl) // strict: nothing is promoted
+	storage.ResolveTenantByUUIDMock.Return(&model.Tenant{IsActive: false}, nil)
+	svc := NewSSOSessionService(storage, portmock.NewMockClock(time.Now()), "production", SSOSessionPolicy{})
+
+	_, err := svc.PromoteSession(context.Background(), port.PromoteSessionCommand{TenantID: uuid.New(), PartitionID: 1, SessionID: uuid.New()})
+
+	require.ErrorIs(t, err, port.ErrTenantInactive)
+}
+
+// ---- opening a session in one step ----
+
 type sessionFixture struct {
 	svc      *SSOSessionService
 	storage  *portmock.StorageMock
@@ -178,6 +452,7 @@ func TestSSOSessionService_CreateSession_IssuesAnOpaqueSecretAndStoresOnlyItsHas
 	assert.True(t, created.Cookie.Secure)
 
 	require.NotNil(t, f.saved)
+	assert.Equal(t, model.SSOSessionActive, f.saved.State)
 	assert.Len(t, f.hash, 32)
 	assert.NotEqual(t, []byte(created.Token), f.hash, "the stored value is a hash, not the secret")
 	assert.NotEqual(t, created.Token, f.saved.ID.String(), "the public session id is not the secret")
@@ -234,6 +509,8 @@ func TestSSOSessionService_CreateSession_ReportsAStorageFailure(t *testing.T) {
 	require.ErrorIs(t, err, boom)
 }
 
+// ---- resolving a signed-in session ----
+
 func TestSSOSessionService_ResolveSession_RejectsValuesThatCannotBeOurSecrets(t *testing.T) {
 	// The storage mock is strict: a malformed value must be refused before the database is asked.
 	f := newSessionFixture(t, "default")
@@ -241,12 +518,12 @@ func TestSSOSessionService_ResolveSession_RejectsValuesThatCannotBeOurSecrets(t 
 	for name, value := range map[string]string{
 		"empty":         "",
 		"old format":    "bearer:6f1c0d1e-0000-0000-0000-000000000000:1",
+		"old handshake": "handshake:6f1c0d1e-0000-0000-0000-000000000000",
 		"a user id":     uuid.NewString(),
 		"too short":     base64.RawURLEncoding.EncodeToString([]byte("short")),
 		"not base64":    "!!!!",
 		"too long":      base64.RawURLEncoding.EncodeToString(make([]byte, 64)),
 		"padded base64": base64.URLEncoding.EncodeToString(make([]byte, 32)),
-		"standard b64":  base64.StdEncoding.EncodeToString([]byte{0xfb, 0xff, 0xbf, 0xfb, 0xff, 0xbf, 0xfb, 0xff, 0xbf, 0xfb, 0xff, 0xbf, 0xfb, 0xff, 0xbf, 0xfb, 0xff, 0xbf, 0xfb, 0xff, 0xbf, 0xfb, 0xff, 0xbf, 0xfb, 0xff, 0xbf, 0xfb, 0xff, 0xbf, 0xfb, 0xff}),
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := f.svc.ResolveSession(context.Background(), f.tenantID, value)
@@ -260,12 +537,11 @@ func TestSSOSessionService_ResolveSession_LooksUpByTheHashOfTheSecret(t *testing
 	created := f.create(t)
 
 	var lookedUp []byte
-	f.storage.GetActiveSSOSessionMock.Set(func(_ context.Context, tenantID uuid.UUID, hash []byte, now time.Time) (*model.SSOSession, error) {
+	f.storage.GetLiveSSOSessionMock.Set(func(_ context.Context, tenantID uuid.UUID, hash []byte, now time.Time) (*model.SSOSession, error) {
 		lookedUp = hash
 		assert.Equal(t, f.tenantID, tenantID)
 		assert.Equal(t, f.clock.Now(), now)
-		s := f.saved
-		return s, nil
+		return f.saved, nil
 	})
 
 	got, err := f.svc.ResolveSession(context.Background(), f.tenantID, created.Token)
@@ -278,7 +554,7 @@ func TestSSOSessionService_ResolveSession_LooksUpByTheHashOfTheSecret(t *testing
 func TestSSOSessionService_ResolveSession_UnknownOrExpiredIsNotASession(t *testing.T) {
 	f := newSessionFixture(t, "default")
 	created := f.create(t)
-	f.storage.GetActiveSSOSessionMock.Return(nil, port.ErrSessionNotFound)
+	f.storage.GetLiveSSOSessionMock.Return(nil, port.ErrSessionNotFound)
 
 	_, err := f.svc.ResolveSession(context.Background(), f.tenantID, created.Token)
 
@@ -302,7 +578,7 @@ func TestSSOSessionService_ResolveSession_RefusesAnInactiveTenant(t *testing.T) 
 func TestSSOSessionService_ResolveSession_ThrottlesTheIdleExtension(t *testing.T) {
 	f := newSessionFixture(t, "default")
 	created := f.create(t)
-	f.storage.GetActiveSSOSessionMock.Set(func(context.Context, uuid.UUID, []byte, time.Time) (*model.SSOSession, error) {
+	f.storage.GetLiveSSOSessionMock.Set(func(context.Context, uuid.UUID, []byte, time.Time) (*model.SSOSession, error) {
 		s := *f.saved
 		return &s, nil
 	})
@@ -335,7 +611,7 @@ func TestSSOSessionService_ResolveSession_ThrottlesTheIdleExtension(t *testing.T
 func TestSSOSessionService_ResolveSession_TouchKeepsThePartitionIdleLength(t *testing.T) {
 	f := newSessionFixture(t, model.AdminPartitionAliasName)
 	created := f.create(t)
-	f.storage.GetActiveSSOSessionMock.Set(func(context.Context, uuid.UUID, []byte, time.Time) (*model.SSOSession, error) {
+	f.storage.GetLiveSSOSessionMock.Set(func(context.Context, uuid.UUID, []byte, time.Time) (*model.SSOSession, error) {
 		s := *f.saved
 		return &s, nil
 	})
@@ -355,7 +631,7 @@ func TestSSOSessionService_ResolveSession_TouchKeepsThePartitionIdleLength(t *te
 func TestSSOSessionService_ResolveSession_AFailedTouchDoesNotFailTheRequest(t *testing.T) {
 	f := newSessionFixture(t, "default")
 	created := f.create(t)
-	f.storage.GetActiveSSOSessionMock.Set(func(context.Context, uuid.UUID, []byte, time.Time) (*model.SSOSession, error) {
+	f.storage.GetLiveSSOSessionMock.Set(func(context.Context, uuid.UUID, []byte, time.Time) (*model.SSOSession, error) {
 		s := *f.saved
 		return &s, nil
 	})
@@ -367,6 +643,8 @@ func TestSSOSessionService_ResolveSession_AFailedTouchDoesNotFailTheRequest(t *t
 	require.NoError(t, err)
 	assert.Equal(t, created.Session.ID, got.ID)
 }
+
+// ---- signing out ----
 
 func TestSSOSessionService_Revoke_WorksForAnInactiveTenant(t *testing.T) {
 	ctrl := minimock.NewController(t)
@@ -380,11 +658,24 @@ func TestSSOSessionService_Revoke_WorksForAnInactiveTenant(t *testing.T) {
 	require.NoError(t, svc.RevokeUserSessions(context.Background(), tenantID, userID))
 }
 
+func TestSSOSessionService_RevokeEndsTheSessionAndEverythingBoundToIt(t *testing.T) {
+	f := newFlowFixture(t)
+	pending := f.start(t, f.partition, nil)
+	signedIn, err := f.promote(f.partition, pending.Session.ID)
+	require.NoError(t, err)
+
+	require.NoError(t, f.svc.RevokeSession(context.Background(), f.tenantID, signedIn.Session.ID))
+
+	_, err = f.svc.ResolveSession(context.Background(), f.tenantID, signedIn.Token)
+	require.ErrorIs(t, err, port.ErrSessionNotFound)
+}
+
 func TestSSOSessionPolicy_ZeroValuesFallBackToTheDefaults(t *testing.T) {
 	got := SSOSessionPolicy{AbsoluteLifetime: time.Hour}.withDefaults()
 
 	assert.Equal(t, time.Hour, got.AbsoluteLifetime)
 	assert.Equal(t, DefaultSSOSessionPolicy().IdleTimeout, got.IdleTimeout, "never an unbounded session")
 	assert.Equal(t, DefaultSSOSessionPolicy().AdminIdleTimeout, got.AdminIdleTimeout)
+	assert.Equal(t, DefaultSSOSessionPolicy().PendingLifetime, got.PendingLifetime)
 	assert.Equal(t, DefaultSSOSessionPolicy().TouchInterval, got.TouchInterval)
 }

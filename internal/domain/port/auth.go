@@ -56,8 +56,11 @@ type AuthorizeRequestCommand struct {
 	Scopes          []string
 	// ActiveSession is the live browser session resolved by the transport adapter; nil when nobody is signed in.
 	ActiveSession *model.SSOSession
-	RequestHost   string
-	RequestURI    string
+	// Cookies are the cookies of the request by name. When ActiveSession is nil the domain looks for the signed-in
+	// session in the cookie of the partition the client signs in to, and starts or reuses the pending one there.
+	Cookies     map[string]string
+	RequestHost string
+	RequestURI  string
 }
 
 // PushedAuthCommand carries raw parameters from the back-channel client POST payload.

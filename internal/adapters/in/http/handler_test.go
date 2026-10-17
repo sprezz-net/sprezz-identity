@@ -94,9 +94,9 @@ func TestHttpAdapter_CSPNonce(t *testing.T) {
 		return tenant, nil
 	})
 
-	suc.BuildSessionCookieMock.Set(func(ctx context.Context, cmd port.CookieIntentCommand) (*port.CookieIntentResponse, error) {
-		return &port.CookieIntentResponse{CookieName: "spz_session"}, nil
-	})
+	// A direct visit of the login page starts a sign-in of its own, bound to a pending session.
+	suc.ResolveDirectFlowSessionMock.Return(nil, port.ErrSessionNotFound)
+	suc.StartFlowMock.Return(&port.StartedFlow{Session: model.SSOSession{ID: uuid.New(), State: model.SSOSessionPending}}, nil)
 
 	lauc := portmock.NewLocalAuthUseCaseMock(ctrl)
 	lauc.GetLoginContextMock.Set(func(ctx context.Context, cmd port.GetLoginContextCommand) (*port.LoginContextResponse, error) {

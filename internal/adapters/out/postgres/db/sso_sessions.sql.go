@@ -43,13 +43,14 @@ func (q *Queries) DeleteSSOSessionsByUser(ctx context.Context, arg DeleteSSOSess
 	return err
 }
 
-const getActiveSSOSession = `-- name: GetActiveSSOSession :one
+const getLiveSSOSession = `-- name: GetLiveSSOSession :one
 SELECT
     s.token_hash,
     s.id,
     t.tenant_uuid,
     s.partition_id,
     s.user_profile_id,
+    s.state,
     s.identity_provider_id,
     s.acr,
     s.amr,
@@ -66,18 +67,19 @@ WHERE s.token_hash = $1::bytea
   AND s.idle_expires_at > $3::timestamptz
 `
 
-type GetActiveSSOSessionParams struct {
+type GetLiveSSOSessionParams struct {
 	TokenHash  []byte             `json:"token_hash"`
 	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
 	Now        pgtype.Timestamptz `json:"now"`
 }
 
-type GetActiveSSOSessionRow struct {
+type GetLiveSSOSessionRow struct {
 	TokenHash          []byte             `json:"token_hash"`
 	ID                 pgtype.UUID        `json:"id"`
 	TenantUuid         pgtype.UUID        `json:"tenant_uuid"`
 	PartitionID        int64              `json:"partition_id"`
 	UserProfileID      pgtype.UUID        `json:"user_profile_id"`
+	State              SsoSessionState    `json:"state"`
 	IdentityProviderID pgtype.UUID        `json:"identity_provider_id"`
 	Acr                string             `json:"acr"`
 	Amr                []string           `json:"amr"`
@@ -88,16 +90,18 @@ type GetActiveSSOSessionRow struct {
 	IdleExpiresAt      pgtype.Timestamptz `json:"idle_expires_at"`
 }
 
-// One primary-key read per browser request. Expired and idle sessions are invisible, even before housekeeping runs.
-func (q *Queries) GetActiveSSOSession(ctx context.Context, arg GetActiveSSOSessionParams) (GetActiveSSOSessionRow, error) {
-	row := q.db.QueryRow(ctx, getActiveSSOSession, arg.TokenHash, arg.TenantUuid, arg.Now)
-	var i GetActiveSSOSessionRow
+// One primary-key read per browser request, for a pending or an active session. Expired and idle sessions are
+// invisible, even before housekeeping runs. Callers decide what a pending session may be used for.
+func (q *Queries) GetLiveSSOSession(ctx context.Context, arg GetLiveSSOSessionParams) (GetLiveSSOSessionRow, error) {
+	row := q.db.QueryRow(ctx, getLiveSSOSession, arg.TokenHash, arg.TenantUuid, arg.Now)
+	var i GetLiveSSOSessionRow
 	err := row.Scan(
 		&i.TokenHash,
 		&i.ID,
 		&i.TenantUuid,
 		&i.PartitionID,
 		&i.UserProfileID,
+		&i.State,
 		&i.IdentityProviderID,
 		&i.Acr,
 		&i.Amr,
@@ -108,6 +112,65 @@ func (q *Queries) GetActiveSSOSession(ctx context.Context, arg GetActiveSSOSessi
 		&i.IdleExpiresAt,
 	)
 	return i, err
+}
+
+const promoteSSOSession = `-- name: PromoteSSOSession :execrows
+UPDATE sso_sessions
+SET token_hash = $1::bytea,
+    state = 'ACTIVE',
+    user_profile_id = $2::uuid,
+    identity_provider_id = $3::uuid,
+    acr = $4::text,
+    amr = $5::text[],
+    auth_time = $6::timestamptz,
+    last_seen_at = $7::timestamptz,
+    expires_at = $8::timestamptz,
+    idle_expires_at = $9::timestamptz
+WHERE id = $10::uuid
+  AND state = 'PENDING'
+  AND partition_id = $11::bigint
+  AND expires_at > $12::timestamptz
+  AND tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $13::uuid LIMIT 1)
+`
+
+type PromoteSSOSessionParams struct {
+	NewTokenHash       []byte             `json:"new_token_hash"`
+	UserProfileID      pgtype.UUID        `json:"user_profile_id"`
+	IdentityProviderID pgtype.UUID        `json:"identity_provider_id"`
+	Acr                string             `json:"acr"`
+	Amr                []string           `json:"amr"`
+	AuthTime           pgtype.Timestamptz `json:"auth_time"`
+	LastSeenAt         pgtype.Timestamptz `json:"last_seen_at"`
+	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
+	IdleExpiresAt      pgtype.Timestamptz `json:"idle_expires_at"`
+	ID                 pgtype.UUID        `json:"id"`
+	PartitionID        int64              `json:"partition_id"`
+	Now                pgtype.Timestamptz `json:"now"`
+	TenantUuid         pgtype.UUID        `json:"tenant_uuid"`
+}
+
+// Turns a pending session into an active one under a fresh secret. It only matches a pending session of this tenant
+// and partition that has not expired, so a replayed or stolen promotion changes nothing.
+func (q *Queries) PromoteSSOSession(ctx context.Context, arg PromoteSSOSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, promoteSSOSession,
+		arg.NewTokenHash,
+		arg.UserProfileID,
+		arg.IdentityProviderID,
+		arg.Acr,
+		arg.Amr,
+		arg.AuthTime,
+		arg.LastSeenAt,
+		arg.ExpiresAt,
+		arg.IdleExpiresAt,
+		arg.ID,
+		arg.PartitionID,
+		arg.Now,
+		arg.TenantUuid,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const purgeSSOSessionsByTenant = `-- name: PurgeSSOSessionsByTenant :exec
@@ -124,7 +187,7 @@ const saveSSOSession = `-- name: SaveSSOSession :exec
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $13::uuid
+    WHERE tenant_uuid = $14::uuid
     LIMIT 1
 )
 INSERT INTO sso_sessions (
@@ -133,6 +196,7 @@ INSERT INTO sso_sessions (
     tenant_id,
     partition_id,
     user_profile_id,
+    state,
     identity_provider_id,
     acr,
     amr,
@@ -148,14 +212,15 @@ SELECT
     tenant.id,
     $3::bigint,
     $4::uuid,
-    $5::uuid,
-    $6::text,
-    $7::text[],
-    $8::timestamptz,
+    $5::sso_session_state,
+    $6::uuid,
+    $7::text,
+    $8::text[],
     $9::timestamptz,
     $10::timestamptz,
     $11::timestamptz,
-    $12::timestamptz
+    $12::timestamptz,
+    $13::timestamptz
 FROM tenant
 `
 
@@ -164,6 +229,7 @@ type SaveSSOSessionParams struct {
 	ID                 pgtype.UUID        `json:"id"`
 	PartitionID        int64              `json:"partition_id"`
 	UserProfileID      pgtype.UUID        `json:"user_profile_id"`
+	State              SsoSessionState    `json:"state"`
 	IdentityProviderID pgtype.UUID        `json:"identity_provider_id"`
 	Acr                string             `json:"acr"`
 	Amr                []string           `json:"amr"`
@@ -181,6 +247,7 @@ func (q *Queries) SaveSSOSession(ctx context.Context, arg SaveSSOSessionParams) 
 		arg.ID,
 		arg.PartitionID,
 		arg.UserProfileID,
+		arg.State,
 		arg.IdentityProviderID,
 		arg.Acr,
 		arg.Amr,
@@ -199,6 +266,7 @@ UPDATE sso_sessions
 SET last_seen_at = $1::timestamptz,
     idle_expires_at = $2::timestamptz
 WHERE token_hash = $3::bytea
+  AND state = 'ACTIVE'
   AND tenant_id = (SELECT id FROM tenants WHERE tenant_uuid = $4::uuid LIMIT 1)
 `
 

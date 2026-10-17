@@ -56,15 +56,6 @@ func sessionCookieName(r *http.Request, sso port.SSOSessionUseCase, tenantID uui
 	})
 }
 
-// defaultPartitionSession resolves the session of the tenant's default partition.
-func defaultPartitionSession(r *http.Request, sso port.SSOSessionUseCase, tenantID uuid.UUID) *model.SSOSession {
-	spec, err := sessionCookieName(r, sso, tenantID, 0)
-	if err != nil {
-		return nil
-	}
-	return sessionFromCookie(r, sso, tenantID, spec.CookieName)
-}
-
 // foundSession is a live session together with the cookie that carried it.
 type foundSession struct {
 	session *model.SSOSession
@@ -101,4 +92,15 @@ func anyPartitionSession(r *http.Request, sso port.SSOSessionUseCase, tenantID u
 
 func isSessionCookieName(name string) bool {
 	return strings.HasPrefix(strings.TrimPrefix(name, "__Host-"), sessionCookiePrefix)
+}
+
+// requestCookies hands the cookies of a request to the domain by name. The domain picks the one of the partition.
+func requestCookies(r *http.Request) map[string]string {
+	cookies := make(map[string]string)
+	for _, c := range r.Cookies() {
+		if isSessionCookieName(c.Name) {
+			cookies[c.Name] = c.Value
+		}
+	}
+	return cookies
 }

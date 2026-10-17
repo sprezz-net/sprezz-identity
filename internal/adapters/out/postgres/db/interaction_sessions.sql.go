@@ -27,6 +27,8 @@ WITH deleted AS (
         state,
         nonce,
         acr_values,
+        partition_id,
+        session_id,
         (SELECT tenant_uuid FROM tenants WHERE id = tenant_id) AS tenant_uuid
 )
 SELECT
@@ -40,6 +42,8 @@ SELECT
     state,
     nonce,
     acr_values,
+    partition_id,
+    session_id,
     tenant_uuid
 FROM deleted
 LIMIT 1
@@ -61,6 +65,8 @@ type ConsumeInteractionSessionRow struct {
 	State               string             `json:"state"`
 	Nonce               string             `json:"nonce"`
 	AcrValues           string             `json:"acr_values"`
+	PartitionID         int64              `json:"partition_id"`
+	SessionID           pgtype.UUID        `json:"session_id"`
 	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
 }
 
@@ -78,6 +84,8 @@ func (q *Queries) ConsumeInteractionSession(ctx context.Context, arg ConsumeInte
 		&i.State,
 		&i.Nonce,
 		&i.AcrValues,
+		&i.PartitionID,
+		&i.SessionID,
 		&i.TenantUuid,
 	)
 	return i, err
@@ -95,6 +103,8 @@ SELECT
     state,
     nonce,
     acr_values,
+    partition_id,
+    session_id,
     (SELECT tenant_uuid FROM tenants WHERE id = tenant_id) AS tenant_uuid
 FROM interaction_sessions
 WHERE id = $1::uuid
@@ -117,6 +127,8 @@ type GetInteractionSessionRow struct {
 	State               string             `json:"state"`
 	Nonce               string             `json:"nonce"`
 	AcrValues           string             `json:"acr_values"`
+	PartitionID         int64              `json:"partition_id"`
+	SessionID           pgtype.UUID        `json:"session_id"`
 	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
 }
 
@@ -134,6 +146,8 @@ func (q *Queries) GetInteractionSession(ctx context.Context, arg GetInteractionS
 		&i.State,
 		&i.Nonce,
 		&i.AcrValues,
+		&i.PartitionID,
+		&i.SessionID,
 		&i.TenantUuid,
 	)
 	return i, err
@@ -143,7 +157,7 @@ const saveInteractionSession = `-- name: SaveInteractionSession :exec
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $11::uuid -- Safe named configuration parameter
+    WHERE tenant_uuid = $13::uuid -- Safe named configuration parameter
     LIMIT 1
 )
 INSERT INTO interaction_sessions (
@@ -157,7 +171,9 @@ INSERT INTO interaction_sessions (
     expires_at,
     state,
     nonce,
-    acr_values
+    acr_values,
+    partition_id,
+    session_id
 )
 SELECT
     $1::uuid,
@@ -170,7 +186,9 @@ SELECT
     $7::timestamptz,
     $8,
     $9,
-    $10
+    $10,
+    $11::bigint,
+    $12::uuid
 FROM tenant
 `
 
@@ -185,6 +203,8 @@ type SaveInteractionSessionParams struct {
 	State               string             `json:"state"`
 	Nonce               string             `json:"nonce"`
 	AcrValues           string             `json:"acr_values"`
+	PartitionID         int64              `json:"partition_id"`
+	SessionID           pgtype.UUID        `json:"session_id"`
 	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
 }
 
@@ -200,6 +220,8 @@ func (q *Queries) SaveInteractionSession(ctx context.Context, arg SaveInteractio
 		arg.State,
 		arg.Nonce,
 		arg.AcrValues,
+		arg.PartitionID,
+		arg.SessionID,
 		arg.TenantUuid,
 	)
 	return err

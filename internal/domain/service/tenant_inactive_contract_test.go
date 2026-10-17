@@ -24,7 +24,7 @@ var gatedEntryPoints = map[string][]string{
 	"LocalAuthUseCase":         {"AuthenticateLocalCredentials", "GetLoginContext", "GetInteractionSession"},
 	"UserRegistrationUseCase":  {"RegisterUser", "ApproveUserRequest", "GetSignupContext"},
 	"UserProfileUseCase":       {"CreateUserProfile", "ChangeUserPassword", "ChangeUserEmail", "ChangeUserName", "DecoupleUserIdentity", "GetUserProfile", "GetUserProfileDashboard"},
-	"SSOSessionUseCase":        {"BuildSessionCookie", "CreateSession", "ResolveSession"},
+	"SSOSessionUseCase":        {"StartFlow", "ResolveFlowSession", "ResolveFlowSessionIDs", "ResolveDirectFlowSession", "PromoteSession", "CreateSession", "ResolveSession"},
 	"IdentityAssuranceUseCase": {"AssertActionTrust"},
 	"AdminLogonUseCase":        {"InitiateAdminLogon"},
 }
@@ -37,9 +37,10 @@ var exemptEntryPoints = map[string]map[string]string{
 		"RevokeToken":            "revoking a token only reduces access",
 	},
 	"SSOSessionUseCase": {
-		"ParseSessionCookie": "only reads a cookie value; it grants nothing by itself",
-		"RevokeSession":      "ending a session only reduces access, and people must always be able to sign out",
-		"RevokeUserSessions": "ending sessions only reduces access",
+		"BuildSessionCookie":      "only names the cookie so it can be read or evicted; it issues nothing",
+		"ResolvePartitionSession": "resolves through ResolveSession, which refuses an inactive tenant",
+		"RevokeSession":           "ending a session only reduces access, and people must always be able to sign out",
+		"RevokeUserSessions":      "ending sessions only reduces access",
 	},
 	"TenantUseCase": {
 		"ResolveTenantContext": "refuses inactive tenants itself (TestResolveTenantContext_RefusesInactiveTenants)",

@@ -56,6 +56,48 @@ func (ns NullProfileLifecycleState) Value() (driver.Value, error) {
 	return string(ns.ProfileLifecycleState), nil
 }
 
+type SsoSessionState string
+
+const (
+	SsoSessionStatePENDING SsoSessionState = "PENDING"
+	SsoSessionStateACTIVE  SsoSessionState = "ACTIVE"
+)
+
+func (e *SsoSessionState) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SsoSessionState(s)
+	case string:
+		*e = SsoSessionState(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SsoSessionState: %T", src)
+	}
+	return nil
+}
+
+type NullSsoSessionState struct {
+	SsoSessionState SsoSessionState `json:"sso_session_state"`
+	Valid           bool            `json:"valid"` // Valid is true if SsoSessionState is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSsoSessionState) Scan(value interface{}) error {
+	if value == nil {
+		ns.SsoSessionState, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SsoSessionState.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSsoSessionState) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SsoSessionState), nil
+}
+
 type Application struct {
 	ID               pgtype.UUID        `json:"id"`
 	TenantID         int32              `json:"tenant_id"`
@@ -197,6 +239,8 @@ type InteractionSession struct {
 	State               string             `json:"state"`
 	Nonce               string             `json:"nonce"`
 	AcrValues           string             `json:"acr_values"`
+	PartitionID         int64              `json:"partition_id"`
+	SessionID           pgtype.UUID        `json:"session_id"`
 }
 
 type OutboundHandshakeSession struct {
@@ -210,6 +254,7 @@ type OutboundHandshakeSession struct {
 	PartitionID        int64              `json:"partition_id"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	CallbackUri        *string            `json:"callback_uri"`
+	SessionID          pgtype.UUID        `json:"session_id"`
 }
 
 type Partition struct {
@@ -279,6 +324,7 @@ type SsoSession struct {
 	LastSeenAt         pgtype.Timestamptz `json:"last_seen_at"`
 	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
 	IdleExpiresAt      pgtype.Timestamptz `json:"idle_expires_at"`
+	State              SsoSessionState    `json:"state"`
 }
 
 type Tenant struct {

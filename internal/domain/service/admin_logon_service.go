@@ -53,7 +53,7 @@ func NewAdminLogonService(
 }
 
 // InitiateAdminLogon evaluates localized setup configuration fields and triggers automated DCR workflows if needed.
-func (s *AdminLogonService) InitiateAdminLogon(ctx context.Context, localTenantID uuid.UUID, callbackURI string, targetAdminUI string) (*port.InitiateFederatedLoginResponse, error) {
+func (s *AdminLogonService) InitiateAdminLogon(ctx context.Context, localTenantID uuid.UUID, flowSessionID uuid.UUID, callbackURI string, targetAdminUI string) (*port.InitiateFederatedLoginResponse, error) {
 	if _, err := ensureTenantActive(ctx, s.storage, localTenantID); err != nil {
 		return nil, fmt.Errorf("admin_logon: %w", err)
 	}
@@ -109,6 +109,7 @@ func (s *AdminLogonService) InitiateAdminLogon(ctx context.Context, localTenantI
 		RequestedScopes:    []string{"openid", "profile", "email"},
 		LocalCallbackURI:   callbackURI,
 		FinalTargetURI:     targetAdminUI,
+		FlowSessionID:      flowSessionID,
 	})
 }
 

@@ -15,11 +15,13 @@ const consumeOutboundHandshake = `-- name: ConsumeOutboundHandshake :one
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $2::uuid
+    WHERE tenant_uuid = $3::uuid
 )
 DELETE FROM outbound_handshake_sessions ohs
 WHERE ohs.id = $1
   AND ohs.tenant_id = (SELECT id FROM tenant)
+  -- The state only redeems for a browser that holds the pending session the flow was started with.
+  AND ohs.session_id = ANY($2::uuid[])
 RETURNING
     ohs.id,
     ohs.partition_id,
@@ -29,12 +31,14 @@ RETURNING
     ohs.created_at,
     ohs.expires_at,
     ohs.target_uri,
-    ohs.callback_uri
+    ohs.callback_uri,
+    ohs.session_id
 `
 
 type ConsumeOutboundHandshakeParams struct {
-	StateToken string      `json:"state_token"`
-	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+	StateToken string        `json:"state_token"`
+	SessionIds []pgtype.UUID `json:"session_ids"`
+	TenantUuid pgtype.UUID   `json:"tenant_uuid"`
 }
 
 type ConsumeOutboundHandshakeRow struct {
@@ -47,10 +51,11 @@ type ConsumeOutboundHandshakeRow struct {
 	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
 	TargetUri          *string            `json:"target_uri"`
 	CallbackUri        *string            `json:"callback_uri"`
+	SessionID          pgtype.UUID        `json:"session_id"`
 }
 
 func (q *Queries) ConsumeOutboundHandshake(ctx context.Context, arg ConsumeOutboundHandshakeParams) (ConsumeOutboundHandshakeRow, error) {
-	row := q.db.QueryRow(ctx, consumeOutboundHandshake, arg.StateToken, arg.TenantUuid)
+	row := q.db.QueryRow(ctx, consumeOutboundHandshake, arg.StateToken, arg.SessionIds, arg.TenantUuid)
 	var i ConsumeOutboundHandshakeRow
 	err := row.Scan(
 		&i.ID,
@@ -62,6 +67,7 @@ func (q *Queries) ConsumeOutboundHandshake(ctx context.Context, arg ConsumeOutbo
 		&i.ExpiresAt,
 		&i.TargetUri,
 		&i.CallbackUri,
+		&i.SessionID,
 	)
 	return i, err
 }
@@ -80,7 +86,7 @@ const saveOutboundHandshake = `-- name: SaveOutboundHandshake :exec
 WITH tenant AS (
     SELECT id
     FROM tenants
-    WHERE tenant_uuid = $10::uuid
+    WHERE tenant_uuid = $11::uuid
 )
 INSERT INTO outbound_handshake_sessions (
     id,
@@ -92,7 +98,8 @@ INSERT INTO outbound_handshake_sessions (
     created_at,
     expires_at,
     target_uri,
-    callback_uri
+    callback_uri,
+    session_id
 )
 SELECT
     $1,
@@ -104,7 +111,8 @@ SELECT
     $6::timestamptz,
     $7::timestamptz,
     $8::text,
-    $9::text
+    $9::text,
+    $10::uuid
 FROM tenant
 `
 
@@ -118,6 +126,7 @@ type SaveOutboundHandshakeParams struct {
 	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
 	TargetUri          string             `json:"target_uri"`
 	CallbackUri        string             `json:"callback_uri"`
+	SessionID          pgtype.UUID        `json:"session_id"`
 	TenantUuid         pgtype.UUID        `json:"tenant_uuid"`
 }
 
@@ -132,6 +141,7 @@ func (q *Queries) SaveOutboundHandshake(ctx context.Context, arg SaveOutboundHan
 		arg.ExpiresAt,
 		arg.TargetUri,
 		arg.CallbackUri,
+		arg.SessionID,
 		arg.TenantUuid,
 	)
 	return err

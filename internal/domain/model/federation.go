@@ -27,6 +27,7 @@ type OutboundHandshakeSession struct {
 	ExpiresAt          time.Time `json:"expires_at"`           // Strict short-lived expiration tracking
 	CallbackURI        string    `json:"callback_uri"`         // Callback from external IDP
 	TargetURI          string    `json:"target_uri"`           // Remembers where to return the user
+	SessionID          uuid.UUID `json:"session_id"`           // Pending SSO session of the browser that started the flow
 }
 
 // OIDCDiscoveryMetadata mirrors the structural parameters fetched back-channel

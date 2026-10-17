@@ -635,6 +635,8 @@ func (s *PostgresStorage) SaveInteractionSession(ctx context.Context, session mo
 		State:               session.State,
 		Nonce:               session.Nonce,
 		AcrValues:           session.ACRValues,
+		PartitionID:         session.PartitionID,
+		SessionID:           optionalPGUUID(session.SessionID),
 	})
 	if err != nil {
 		return fmt.Errorf("save interaction session: %w", err)
@@ -680,6 +682,8 @@ func (s *PostgresStorage) GetAndConsumeInteractionSession(ctx context.Context, t
 		State:           row.State,
 		Nonce:           row.Nonce,
 		ACRValues:       row.AcrValues,
+		PartitionID:     row.PartitionID,
+		SessionID:       optionalUUID(row.SessionID),
 	}, nil
 }
 
@@ -721,6 +725,8 @@ func (s *PostgresStorage) GetInteractionSession(ctx context.Context, tenantID uu
 		State:           row.State,
 		Nonce:           row.Nonce,
 		ACRValues:       row.AcrValues,
+		PartitionID:     row.PartitionID,
+		SessionID:       optionalUUID(row.SessionID),
 	}, nil
 }
 
@@ -2700,26 +2706,41 @@ func (s *PostgresStorage) TrackUserLogin(ctx context.Context, tenantID uuid.UUID
 	})
 }
 
-func (s *PostgresStorage) SaveSSOSession(ctx context.Context, session model.SSOSession, tokenHash []byte) error {
-	providerID := pgtype.UUID{}
-	if session.IdentityProviderID != uuid.Nil {
-		providerID = toPGUUID(session.IdentityProviderID)
+// optionalPGUUID maps uuid.Nil to NULL.
+func optionalPGUUID(id uuid.UUID) pgtype.UUID {
+	if id == uuid.Nil {
+		return pgtype.UUID{}
 	}
+	return toPGUUID(id)
+}
 
-	amr := session.AMR
+// optionalUUID maps NULL to uuid.Nil.
+func optionalUUID(id pgtype.UUID) uuid.UUID {
+	if !id.Valid {
+		return uuid.Nil
+	}
+	return uuid.UUID(id.Bytes)
+}
+
+// nonNilAMR keeps the NOT NULL column from receiving NULL for a nil slice.
+func nonNilAMR(amr []string) []string {
 	if amr == nil {
-		amr = []string{} // the column is NOT NULL; a nil slice would be sent as NULL
+		return []string{}
 	}
+	return amr
+}
 
+func (s *PostgresStorage) SaveSSOSession(ctx context.Context, session model.SSOSession, tokenHash []byte) error {
 	err := s.queries.SaveSSOSession(ctx, sqlcdb.SaveSSOSessionParams{
 		TokenHash:          tokenHash,
 		ID:                 toPGUUID(session.ID),
 		TenantUuid:         toPGUUID(session.TenantID),
 		PartitionID:        session.PartitionID,
-		UserProfileID:      toPGUUID(session.UserProfileID),
-		IdentityProviderID: providerID,
+		UserProfileID:      optionalPGUUID(session.UserProfileID),
+		State:              sqlcdb.SsoSessionState(session.State),
+		IdentityProviderID: optionalPGUUID(session.IdentityProviderID),
 		Acr:                session.ACR,
-		Amr:                amr,
+		Amr:                nonNilAMR(session.AMR),
 		AuthTime:           toPGTimestamptz(session.AuthTime),
 		CreatedAt:          toPGTimestamptz(session.CreatedAt),
 		LastSeenAt:         toPGTimestamptz(session.LastSeenAt),
@@ -2732,9 +2753,10 @@ func (s *PostgresStorage) SaveSSOSession(ctx context.Context, session model.SSOS
 	return nil
 }
 
-// GetActiveSSOSession reads one live session by the hash of its cookie secret in a single primary-key lookup.
-func (s *PostgresStorage) GetActiveSSOSession(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, now time.Time) (*model.SSOSession, error) {
-	row, err := s.queries.GetActiveSSOSession(ctx, sqlcdb.GetActiveSSOSessionParams{
+// GetLiveSSOSession reads one pending or active session by the hash of its cookie secret in a single primary-key
+// lookup.
+func (s *PostgresStorage) GetLiveSSOSession(ctx context.Context, tenantID uuid.UUID, tokenHash []byte, now time.Time) (*model.SSOSession, error) {
+	row, err := s.queries.GetLiveSSOSession(ctx, sqlcdb.GetLiveSSOSessionParams{
 		TokenHash:  tokenHash,
 		TenantUuid: toPGUUID(tenantID),
 		Now:        toPGTimestamptz(now),
@@ -2750,22 +2772,14 @@ func (s *PostgresStorage) GetActiveSSOSession(ctx context.Context, tenantID uuid
 	if err != nil {
 		return nil, fmt.Errorf("parse sso session id: %w", err)
 	}
-	userID, err := pgUUIDToUUID(row.UserProfileID)
-	if err != nil {
-		return nil, fmt.Errorf("parse sso session user: %w", err)
-	}
-
-	providerID := uuid.Nil
-	if row.IdentityProviderID.Valid {
-		providerID = uuid.UUID(row.IdentityProviderID.Bytes)
-	}
 
 	return &model.SSOSession{
 		ID:                 id,
 		TenantID:           tenantID,
 		PartitionID:        row.PartitionID,
-		UserProfileID:      userID,
-		IdentityProviderID: providerID,
+		State:              model.SSOSessionState(row.State),
+		UserProfileID:      optionalUUID(row.UserProfileID),
+		IdentityProviderID: optionalUUID(row.IdentityProviderID),
 		ACR:                row.Acr,
 		AMR:                row.Amr,
 		AuthTime:           pgTimestamptzToTimeOrZero(row.AuthTime),
@@ -2774,6 +2788,33 @@ func (s *PostgresStorage) GetActiveSSOSession(ctx context.Context, tenantID uuid
 		ExpiresAt:          pgTimestamptzToTimeOrZero(row.ExpiresAt),
 		IdleExpiresAt:      pgTimestamptzToTimeOrZero(row.IdleExpiresAt),
 	}, nil
+}
+
+// PromoteSSOSession makes a pending session active under a new token hash. The update only matches a pending,
+// unexpired session of the partition, so of two concurrent promotions exactly one succeeds.
+func (s *PostgresStorage) PromoteSSOSession(ctx context.Context, session model.SSOSession, newTokenHash []byte, now time.Time) error {
+	rows, err := s.queries.PromoteSSOSession(ctx, sqlcdb.PromoteSSOSessionParams{
+		NewTokenHash:       newTokenHash,
+		UserProfileID:      toPGUUID(session.UserProfileID),
+		IdentityProviderID: optionalPGUUID(session.IdentityProviderID),
+		Acr:                session.ACR,
+		Amr:                nonNilAMR(session.AMR),
+		AuthTime:           toPGTimestamptz(session.AuthTime),
+		LastSeenAt:         toPGTimestamptz(session.LastSeenAt),
+		ExpiresAt:          toPGTimestamptz(session.ExpiresAt),
+		IdleExpiresAt:      toPGTimestamptz(session.IdleExpiresAt),
+		ID:                 toPGUUID(session.ID),
+		PartitionID:        session.PartitionID,
+		Now:                toPGTimestamptz(now),
+		TenantUuid:         toPGUUID(session.TenantID),
+	})
+	if err != nil {
+		return fmt.Errorf("promote sso session: %w", err)
+	}
+	if rows == 0 {
+		return port.ErrSessionNotFound
+	}
+	return nil
 }
 
 // TouchSSOSession moves the idle deadline of a session forward.
@@ -3386,6 +3427,7 @@ func (s *PostgresStorage) SaveOutboundHandshake(ctx context.Context, handshake m
 		ExpiresAt:          toPGTimestamptz(handshake.ExpiresAt),   // 5-minute protocol window boundary ceiling
 		TargetUri:          valueOrEmpty(targetURI),                // Remembers the intended landing zone target URL
 		CallbackUri:        valueOrEmpty(callbackURI),              // Local verification return path parameter context
+		SessionID:          toPGUUID(handshake.SessionID),          // The browser that started the flow
 	})
 	if err != nil {
 		return fmt.Errorf("storage: failed to execute outbound handshake insert: %w", err)
@@ -3395,12 +3437,18 @@ func (s *PostgresStorage) SaveOutboundHandshake(ctx context.Context, handshake m
 
 // GetAndConsumeOutboundHandshake executes a single-trip atomic destructive read.
 // This completely neutralizes Time-of-Check to Time-of-Use (TOCTOU) race condition vectors.
-func (s *PostgresStorage) GetAndConsumeOutboundHandshake(ctx context.Context, tenantID uuid.UUID, stateToken string) (*model.OutboundHandshakeSession, error) {
+func (s *PostgresStorage) GetAndConsumeOutboundHandshake(ctx context.Context, tenantID uuid.UUID, stateToken string, sessionIDs []uuid.UUID) (*model.OutboundHandshakeSession, error) {
+	pgSessionIDs := make([]pgtype.UUID, 0, len(sessionIDs))
+	for _, id := range sessionIDs {
+		pgSessionIDs = append(pgSessionIDs, toPGUUID(id))
+	}
+
 	// Relies on the atomic SQLC 'GetAndConsumeOutboundHandshake' (DELETE ... RETURNING) query structure.
 	// This guarantees that a state-token string CAN ONLY BE READ ONCE across application nodes.
 	row, err := s.queries.ConsumeOutboundHandshake(ctx, sqlcdb.ConsumeOutboundHandshakeParams{
 		TenantUuid: toPGUUID(tenantID),
 		StateToken: stateToken,
+		SessionIds: pgSessionIDs,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -3435,6 +3483,7 @@ func (s *PostgresStorage) GetAndConsumeOutboundHandshake(ctx context.Context, te
 		ExpiresAt:          expiresAt,
 		TargetURI:          valueOrEmpty(row.TargetUri),
 		CallbackURI:        valueOrEmpty(row.CallbackUri),
+		SessionID:          optionalUUID(row.SessionID),
 	}, nil
 }
 
