@@ -11,11 +11,17 @@ import (
 )
 
 // integrationURL returns the test database URL or skips the test.
+//
+// Every test works in its own throwaway schema (newSchemaPool) and never touches the tables of the database it
+// connects to, but it does connect with the credentials in the URL, so point it at this project's own database
+// (dbname "sprezz_identity" in local.yaml), for example:
+//
+//	SPREZZ_TEST_DATABASE_URL=postgres://<user>:<password>@localhost:5433/sprezz_identity?sslmode=disable
 func integrationURL(t *testing.T) string {
 	t.Helper()
 	url := os.Getenv("SPREZZ_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("SPREZZ_TEST_DATABASE_URL is not set")
+		t.Skip("SPREZZ_TEST_DATABASE_URL is not set (see integrationURL for the expected form)")
 	}
 	return url
 }

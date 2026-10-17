@@ -37,7 +37,6 @@ func TestHttpAdapter_AdminOIDC_Initiation_Success(t *testing.T) {
 
 	tenantID := uuid.New()
 	tenant := &model.Tenant{ID: tenantID, Domain: "admin-domain.com", Name: "Administrative Tenant", Scheme: "http", IsActive: true}
-	providerID := uuid.New()
 
 	tuc.ResolveTenantContextMock.Set(func(ctx context.Context, host string) (*model.Tenant, error) {
 		return tenant, nil
@@ -63,17 +62,6 @@ func TestHttpAdapter_AdminOIDC_Initiation_Success(t *testing.T) {
 			Cookie:  &port.CookieIntentResponse{CookieName: "spz_session_" + model.AdminPartitionAliasName, CookieValue: "pending-secret", MaxAge: 900},
 		}, nil
 	})
-
-	storage.GetIdentityProvidersMock.Expect(minimock.AnyContext, tenantID).Return([]model.IdentityProvider{
-		{
-			ID:       providerID,
-			TenantID: tenantID,
-			IDPType:  "oidc",
-			Alias:    "admin-sso",
-			Enabled:  true,
-			Config:   model.IdentityProviderConfig{},
-		},
-	}, nil)
 
 	aluc.InitiateAdminLogonMock.Expect(minimock.AnyContext, tenantID, pendingAdminFlow.ID, "http://admin-domain.com/oauth/federation/callback", "http://admin-domain.com/admin").Return(&port.InitiateFederatedLoginResponse{
 		TargetRedirectURL: "https://admin.com/oauth/authorize?client_id=registered-client-id",

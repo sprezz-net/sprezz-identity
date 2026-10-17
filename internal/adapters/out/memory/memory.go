@@ -961,6 +961,12 @@ func (s *Storage) CreateIdentityProvider(ctx context.Context, tenantID uuid.UUID
 	if _, ok := s.providers[tenantID.String()]; !ok {
 		s.providers[tenantID.String()] = make(map[uuid.UUID]model.IdentityProvider)
 	}
+	// The alias is unique per tenant, like the (tenant, alias) key of the database. Saving the same provider again is an update.
+	for id, other := range s.providers[tenantID.String()] {
+		if other.Alias == provider.Alias && id != provider.ID && !sameProviderKey(other, provider) {
+			return port.ErrAliasAlreadyExists
+		}
+	}
 	provider.Issuer = provider.Config.DiscoveryEndpoint
 	// One-way ratchet, like the SQL upsert: a provider can be flagged as system-managed but never unflagged.
 	if existing, ok := s.providers[tenantID.String()][provider.ID]; ok && existing.IsSystem {
@@ -968,6 +974,12 @@ func (s *Storage) CreateIdentityProvider(ctx context.Context, tenantID uuid.UUID
 	}
 	s.providers[tenantID.String()][provider.ID] = provider
 	return nil
+}
+
+// sameProviderKey reports whether two providers are the same row to the SQL upsert, which resolves a provider by
+// (tenant, partition, type, alias): saving such a provider under a new id replaces the old one.
+func sameProviderKey(a, b model.IdentityProvider) bool {
+	return a.PartitionID == b.PartitionID && a.IDPType == b.IDPType && a.Alias == b.Alias
 }
 
 // DeleteIdentityProvider purges a specific identity provider entry from the tenant context catalog.
@@ -1627,8 +1639,19 @@ func (s *Storage) GetApplicationsLogoutContextBySession(ctx context.Context, ten
 	return nil, nil
 }
 
+// GetIdentityProviderByAlias returns the provider of the tenant with this alias, like the unique (tenant, alias) key
+// of the database does, or ErrIdentityProviderNotFound.
 func (s *Storage) GetIdentityProviderByAlias(ctx context.Context, tenantID uuid.UUID, alias string) (*model.IdentityProvider, error) {
-	return nil, nil
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, provider := range s.providers[tenantID.String()] {
+		if provider.Alias == alias {
+			clone := provider
+			return &clone, nil
+		}
+	}
+	return nil, fmt.Errorf("identity provider alias %s not found: %w", alias, port.ErrIdentityProviderNotFound)
 }
 
 func (s *Storage) UpdateApplicationGroup(ctx context.Context, tenantUUID uuid.UUID, group model.ApplicationGroup) error {

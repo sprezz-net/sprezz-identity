@@ -192,6 +192,7 @@ To support granular security policies, Client Applications govern IdP execution:
 - **Allowed IdPs**: A client configuration option specifying which IdP aliases are permitted for authentication.
 - **Default IdP**: The default IdP alias utilized when no explicit choice is specified.
 - **IDP Hint (`idp_hint`)**: Client applications can bypass general selection by specifying an explicit IdP alias via the `idp_hint` authorize query parameter. The server strictly asserts that the hint exists within the client's allowed IdPs list.
+- **Alias Uniqueness**: A provider alias identifies exactly one provider in a tenant, whatever its type or partition. The `idp_hint` of an authorize request, the login page and the administrative console (`admin-sso`) all resolve a provider by alias alone, without naming a partition, so the identity provider service rejects a second provider with the same alias and the database backs it with `UNIQUE (tenant_id, alias_name)` (migration 00033). The `admin-sso` provider created with every tenant therefore holds its alias for good, and `GetIdentityProviderByAlias` can never be ambiguous.
 
 ```mermaid
 sequenceDiagram
@@ -696,6 +697,8 @@ To satisfy strict compliance, data minimalization, and audit guidelines, the pla
 `Cookie Identity Matrix = spz_session_[partition_alias]`
 
 This configuration forces the browser to sandbox storage contexts natively (e.g., `spz_session_default` running concurrently beside `spz_session_sprezz_admin`), eliminating state overwrites.
+
+`sprezz_admin` is a fixed partition that exists on every tenant, so the console of every tenant uses the same cookie name. The console signs in through the same federated login flow and `/oauth/federation/callback` as any upstream identity provider, with the admin tenant as the upstream (see the admin blueprint, section 1.1).
 
 ### 8.3.2 Session Lifecycle: Pending, Active, Cleared
 

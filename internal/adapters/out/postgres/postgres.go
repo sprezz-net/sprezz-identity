@@ -1807,6 +1807,11 @@ func (s *PostgresStorage) CreateIdentityProvider(ctx context.Context, tenantID u
 		TenantUuid:  toPGUUID(tenantID),
 	})
 	if err != nil {
+		// The (tenant, alias) key backs the rule the service checks first; a concurrent create can still reach it.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "uq_identity_providers_tenant_alias" {
+			return fmt.Errorf("create identity provider: %w", port.ErrAliasAlreadyExists)
+		}
 		return fmt.Errorf("create identity provider: %w", err)
 	}
 	return nil

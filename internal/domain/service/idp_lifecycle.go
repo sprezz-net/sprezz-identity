@@ -109,8 +109,9 @@ func (s *IdentityProviderService) DeleteIdentityProvider(ctx context.Context, te
 	return s.adminStorage.DeleteIdentityProvider(ctx, tenantID, idpID)
 }
 
-// ensureUniqueProvider keeps provider routing unambiguous: one local accounts provider per partition, and one
-// alias per partition and type (the storage conflict key).
+// ensureUniqueProvider keeps provider routing unambiguous: one local accounts provider per partition, and one alias
+// per tenant. The alias is tenant-wide because the idp_hint of an authorize request, the login page and the console
+// resolve a provider by alias alone, without a partition or a type.
 func (s *IdentityProviderService) ensureUniqueProvider(ctx context.Context, tenantID uuid.UUID, p model.IdentityProvider) error {
 	existing, err := s.storage.GetIdentityProviders(ctx, tenantID)
 	if err != nil {
@@ -118,14 +119,14 @@ func (s *IdentityProviderService) ensureUniqueProvider(ctx context.Context, tena
 	}
 	verr := port.NewValidationError()
 	for _, other := range existing {
-		if other.ID == p.ID || other.PartitionID != p.PartitionID {
+		if other.ID == p.ID {
 			continue
 		}
-		if p.IDPType == model.UsernamePasswordIDPType && other.IDPType == model.UsernamePasswordIDPType {
-			verr.Add("idp_type", "this partition already has a local accounts provider")
+		if other.Alias == p.Alias {
+			verr.Add("alias", "this alias is already used by another provider of the tenant")
 		}
-		if other.IDPType == p.IDPType && other.Alias == p.Alias {
-			verr.Add("alias", "this partition already has a provider with that alias")
+		if other.PartitionID == p.PartitionID && p.IDPType == model.UsernamePasswordIDPType && other.IDPType == model.UsernamePasswordIDPType {
+			verr.Add("idp_type", "this partition already has a local accounts provider")
 		}
 	}
 	if verr.HasErrors() {

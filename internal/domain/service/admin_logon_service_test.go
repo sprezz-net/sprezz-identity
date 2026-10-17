@@ -11,6 +11,8 @@ import (
 
 	"github.com/gojuno/minimock/v3"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAdminLogonService_InitiateAdminLogon_Success(t *testing.T) {
@@ -29,18 +31,18 @@ func TestAdminLogonService_InitiateAdminLogon_Success(t *testing.T) {
 	flowSessionID := uuid.New()
 	providerUUID := uuid.New()
 
-	storage.GetIdentityProvidersMock.Expect(minimock.AnyContext, tenantUUID).Return([]model.IdentityProvider{
-		{
-			ID:      providerUUID,
-			IDPType: model.OpenIDConnectIDPType,
-			Alias:   "admin-sso",
-			Enabled: true,
-			Issuer:  "https://admin.com",
-			Config: model.IdentityProviderConfig{
-				ClientID:              "admin_ui",
-				AuthorizationEndpoint: "https://auth",
-				TokenEndpoint:         "https://token",
-			},
+	allowAdminPartition(storage, tenantUUID)
+	storage.GetIdentityProviderByAliasMock.Expect(minimock.AnyContext, tenantUUID, model.AdminSSOAliasName).Return(&model.IdentityProvider{
+		ID:          providerUUID,
+		IDPType:     model.OpenIDConnectIDPType,
+		Alias:       model.AdminSSOAliasName,
+		Enabled:     true,
+		PartitionID: testAdminPartitionID,
+		Issuer:      "https://admin.com",
+		Config: model.IdentityProviderConfig{
+			ClientID:              "admin_ui",
+			AuthorizationEndpoint: "https://auth",
+			TokenEndpoint:         "https://token",
 		},
 	}, nil)
 
@@ -87,16 +89,16 @@ func TestAdminLogonService_InitiateAdminLogon_OnDemandDCR_Success(t *testing.T) 
 	adminTenantUUID := uuid.New()
 	providerUUID := uuid.New()
 
-	storage.GetIdentityProvidersMock.Expect(minimock.AnyContext, tenantUUID).Return([]model.IdentityProvider{
-		{
-			ID:      providerUUID,
-			IDPType: model.OpenIDConnectIDPType,
-			Alias:   "admin-sso",
-			Enabled: true,
-			Config: model.IdentityProviderConfig{
-				DiscoveryEndpoint: "https://admin.com/.well-known/openid-configuration",
-				ClientID:          "", // Triggers DCR!
-			},
+	allowAdminPartition(storage, tenantUUID)
+	storage.GetIdentityProviderByAliasMock.Expect(minimock.AnyContext, tenantUUID, model.AdminSSOAliasName).Return(&model.IdentityProvider{
+		ID:          providerUUID,
+		IDPType:     model.OpenIDConnectIDPType,
+		Alias:       model.AdminSSOAliasName,
+		Enabled:     true,
+		PartitionID: testAdminPartitionID,
+		Config: model.IdentityProviderConfig{
+			DiscoveryEndpoint: "https://admin.com/.well-known/openid-configuration",
+			ClientID:          "", // Triggers DCR!
 		},
 	}, nil)
 
@@ -180,18 +182,18 @@ func TestAdminLogonService_InitiateAdminLogon_DiscoveryPersist_Success(t *testin
 	flowSessionID := uuid.New()
 	providerUUID := uuid.New()
 
-	storage.GetIdentityProvidersMock.Expect(minimock.AnyContext, tenantUUID).Return([]model.IdentityProvider{
-		{
-			ID:      providerUUID,
-			IDPType: model.OpenIDConnectIDPType,
-			Alias:   "admin-sso",
-			Enabled: true,
-			Config: model.IdentityProviderConfig{
-				DiscoveryEndpoint:     "https://admin.com/.well-known/openid-configuration",
-				ClientID:              "already-provisioned-id", // Bypasses DCR!
-				AuthorizationEndpoint: "",                       // Triggers Discovery!
-				TokenEndpoint:         "",                       // Triggers Discovery!
-			},
+	allowAdminPartition(storage, tenantUUID)
+	storage.GetIdentityProviderByAliasMock.Expect(minimock.AnyContext, tenantUUID, model.AdminSSOAliasName).Return(&model.IdentityProvider{
+		ID:          providerUUID,
+		IDPType:     model.OpenIDConnectIDPType,
+		Alias:       model.AdminSSOAliasName,
+		Enabled:     true,
+		PartitionID: testAdminPartitionID,
+		Config: model.IdentityProviderConfig{
+			DiscoveryEndpoint:     "https://admin.com/.well-known/openid-configuration",
+			ClientID:              "already-provisioned-id", // Bypasses DCR!
+			AuthorizationEndpoint: "",                       // Triggers Discovery!
+			TokenEndpoint:         "",                       // Triggers Discovery!
 		},
 	}, nil)
 
@@ -236,4 +238,106 @@ func TestAdminLogonService_InitiateAdminLogon_DiscoveryPersist_Success(t *testin
 	if resp.TargetRedirectURL != "https://admin.com/oauth/authorize?client_id=already-provisioned-id" {
 		t.Errorf("expected redirect URL 'https://admin.com/oauth/authorize?client_id=already-provisioned-id', got '%s'", resp.TargetRedirectURL)
 	}
+}
+
+// testAdminPartitionID is the id the tests give the administrative partition of a tenant.
+const testAdminPartitionID = int64(18)
+
+func allowAdminPartition(storage *portmock.StorageMock, tenantID uuid.UUID) {
+	storage.GetPartitionByAliasMock.Optional().Set(func(ctx context.Context, id uuid.UUID, alias string) (*model.Partition, error) {
+		if id != tenantID || alias != model.AdminPartitionAliasName {
+			return nil, port.ErrPartitionNotFound
+		}
+		return &model.Partition{ID: testAdminPartitionID, TenantID: id, AliasName: alias}, nil
+	})
+}
+
+// The console signs in to the fixed administrative partition. A provider anywhere else would let the sign-in
+// complete and then fail the guard of the console, so it is refused before anything starts.
+func TestAdminLogonService_InitiateAdminLogon_RefusesAProviderOutsideTheAdministrativePartition(t *testing.T) {
+	for name, partitionID := range map[string]int64{"another partition": testAdminPartitionID + 1, "no partition": 0} {
+		t.Run(name, func(t *testing.T) {
+			ctrl := minimock.NewController(t)
+			storage := portmock.NewStorageMock(ctrl)
+			allowTenant(storage)
+			fedLogin := portmock.NewFederatedLoginUseCaseMock(ctrl) // strict: no federated login may start
+			svc := NewAdminLogonService(storage, nil, nil, nil, nil, fedLogin, portmock.NewMockClock(time.Now()), "local", "admin.com")
+			tenantUUID := uuid.New()
+			allowAdminPartition(storage, tenantUUID)
+			storage.GetIdentityProviderByAliasMock.Return(&model.IdentityProvider{
+				ID: uuid.New(), IDPType: model.OpenIDConnectIDPType, Alias: model.AdminSSOAliasName, Enabled: true, PartitionID: partitionID,
+				Config: model.IdentityProviderConfig{ClientID: "admin_ui", AuthorizationEndpoint: "https://auth", TokenEndpoint: "https://token"}, Issuer: "https://admin.com",
+			}, nil)
+
+			_, err := svc.InitiateAdminLogon(context.Background(), tenantUUID, uuid.New(), "https://callback", "https://final")
+
+			require.ErrorIs(t, err, port.ErrInvalidRequest)
+			assert.Contains(t, err.Error(), model.AdminPartitionAliasName)
+		})
+	}
+}
+
+func TestAdminLogonService_InitiateAdminLogon_RefusesATenantWithoutAnAdministrativePartition(t *testing.T) {
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	allowTenant(storage)
+	svc := NewAdminLogonService(storage, nil, nil, nil, nil, portmock.NewFederatedLoginUseCaseMock(ctrl), portmock.NewMockClock(time.Now()), "local", "admin.com")
+	tenantUUID := uuid.New()
+	storage.GetPartitionByAliasMock.Return(nil, port.ErrPartitionNotFound)
+	storage.GetIdentityProviderByAliasMock.Return(&model.IdentityProvider{ID: uuid.New(), IDPType: model.OpenIDConnectIDPType, Alias: model.AdminSSOAliasName, Enabled: true}, nil)
+
+	_, err := svc.InitiateAdminLogon(context.Background(), tenantUUID, uuid.New(), "https://callback", "https://final")
+
+	require.ErrorIs(t, err, port.ErrPartitionNotFound)
+}
+
+// ---- finding the provider the console signs in through ----
+
+func newAdminSSOLookupFixture(t *testing.T) (*AdminLogonService, *portmock.StorageMock, uuid.UUID) {
+	t.Helper()
+	ctrl := minimock.NewController(t)
+	storage := portmock.NewStorageMock(ctrl)
+	allowTenant(storage)
+	// strict federated login: nothing may start for a provider that fails a check
+	svc := NewAdminLogonService(storage, nil, nil, nil, nil, portmock.NewFederatedLoginUseCaseMock(ctrl), portmock.NewMockClock(time.Now()), "local", "admin.com")
+	tenantID := uuid.New()
+	allowAdminPartition(storage, tenantID)
+	return svc, storage, tenantID
+}
+
+func TestAdminLogonService_InitiateAdminLogon_FindsTheProviderByItsAlias(t *testing.T) {
+	svc, storage, tenantID := newAdminSSOLookupFixture(t)
+	storage.GetIdentityProviderByAliasMock.Expect(minimock.AnyContext, tenantID, "admin-sso").Return(nil, port.ErrIdentityProviderNotFound)
+
+	_, err := svc.InitiateAdminLogon(context.Background(), tenantID, uuid.New(), "https://callback", "https://final")
+
+	require.ErrorIs(t, err, port.ErrIdentityProviderNotFound)
+	assert.Equal(t, "admin-sso", model.AdminSSOAliasName, "the alias the console and the tenant bootstrap agree on")
+}
+
+func TestAdminLogonService_InitiateAdminLogon_RefusesAProviderThatIsNotOIDC(t *testing.T) {
+	svc, storage, tenantID := newAdminSSOLookupFixture(t)
+	storage.GetIdentityProviderByAliasMock.Return(&model.IdentityProvider{ID: uuid.New(), IDPType: model.UsernamePasswordIDPType, Alias: model.AdminSSOAliasName, Enabled: true, PartitionID: testAdminPartitionID}, nil)
+
+	_, err := svc.InitiateAdminLogon(context.Background(), tenantID, uuid.New(), "https://callback", "https://final")
+
+	require.ErrorIs(t, err, port.ErrIdentityProviderNotFound)
+}
+
+func TestAdminLogonService_InitiateAdminLogon_RefusesADisabledProvider(t *testing.T) {
+	svc, storage, tenantID := newAdminSSOLookupFixture(t)
+	storage.GetIdentityProviderByAliasMock.Return(&model.IdentityProvider{ID: uuid.New(), IDPType: model.OpenIDConnectIDPType, Alias: model.AdminSSOAliasName, Enabled: false, PartitionID: testAdminPartitionID}, nil)
+
+	_, err := svc.InitiateAdminLogon(context.Background(), tenantID, uuid.New(), "https://callback", "https://final")
+
+	require.ErrorIs(t, err, port.ErrIdentityProviderDisabled, "an administrator who disabled the provider switched console sign-in off")
+}
+
+func TestAdminLogonService_InitiateAdminLogon_ALookupThatReturnsNothingIsRefused(t *testing.T) {
+	svc, storage, tenantID := newAdminSSOLookupFixture(t)
+	storage.GetIdentityProviderByAliasMock.Return(nil, nil) // a misbehaving adapter must not cause a nil dereference
+
+	_, err := svc.InitiateAdminLogon(context.Background(), tenantID, uuid.New(), "https://callback", "https://final")
+
+	require.ErrorIs(t, err, port.ErrIdentityProviderNotFound)
 }

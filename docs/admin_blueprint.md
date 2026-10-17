@@ -4,6 +4,8 @@ This document establishes the definitive functional and architectural design for
 
 The Admin UI functions as an internal OIDC client executing the Authorization Code Flow with PKCE against the root `admin` tenant of the Sprezz Identity server itself.
 
+The dashboard of **every** tenant works this way: a normal tenant's console is an OIDC client of the admin tenant, which is its upstream identity provider. See section 1.1.
+
 ## 1. Architectural Topology & Authentication Loop
 
 The Admin UI is fully self-contained within the Sprezz Identity Go binary, acting as an internal OpenID Connect (OIDC) client. Rather than relying on separate infrastructure or specialized backdoors, it uses standard OIDC authorization channels to authenticate its administrators.
@@ -12,24 +14,33 @@ The Admin UI is fully self-contained within the Sprezz Identity Go binary, actin
 sequenceDiagram
     autonumber
     actor Admin as Administrator (Browser)
-    participant AdminUI as Admin HTTP Handler (Client)
-    participant IdPEngine as Sprezz IDP Engine (Provider)
-    database DB as PostgreSQL DB
+    participant AdminUI as Tenant Console (Admin HTTP Handler)
+    participant Fed as Federated Login (shared use cases)
+    participant IdPEngine as Admin Tenant (upstream OIDC provider)
 
     Admin->>AdminUI: GET /admin
-    Note over AdminUI: No active session cookie?
-    AdminUI->>Admin: Redirect to /oauth/authorize (OIDC flow, PKCE, admin tenant)
-    IdPEngine->>Admin: Render Login Form
-    Admin->>IdPEngine: Enter Credentials
-    IdPEngine->>DB: Verify & couple user profile
-    IdPEngine->>Admin: 302 Redirect with Auth Code
-    Admin->>AdminUI: Callback /admin/callback?code=xxx
-    AdminUI->>IdPEngine: POST /oauth/token (Exchange Code + Ephemeral Secret + PKCE verifier)
-    Note over IdPEngine: Authenticates "admin_ui" client<br/>using transient in-memory secret
-    IdPEngine-->>AdminUI: Returns Token Set (Access, ID, Refresh)
-    AdminUI->>AdminUI: Save session cookie (encrypted/secured)
-    AdminUI->>Admin: Redirect to /admin/dashboard
+    Note over AdminUI: No signed-in session behind the cookie?
+    AdminUI->>Fed: Start a pending session in the sprezz_admin partition, then InitiateFederatedLogin(admin-sso)
+    AdminUI->>Admin: Set cookie spz_session_sprezz_admin (pending), 302 to the admin tenant /oauth/authorize (PKCE, state)
+    Admin->>IdPEngine: Sign in (local credentials, or any provider the admin tenant offers)
+    IdPEngine->>Admin: 302 to /oauth/federation/callback?code=...&state=...
+    Admin->>AdminUI: GET /oauth/federation/callback
+    AdminUI->>Fed: ExecuteFederatedCallback (the state only redeems for the browser holding the pending cookie)
+    Fed->>IdPEngine: POST /oauth/token (code + PKCE verifier), verify the ID token
+    Fed-->>AdminUI: Local user profile (JIT provisioned in sprezz_admin)
+    AdminUI->>AdminUI: Promote the pending session: same ID, fresh secret, 8 hour / 1 hour limits
+    AdminUI->>Admin: 302 /admin
 ```
+
+### 1.1 One Federation Flow for Every Upstream
+
+The console is deliberately **not** a special case. It uses the same use cases, routes and storage as any tenant that signs its users in through an upstream OIDC provider (dogfooding the architecture):
+
+- **The admin tenant is the upstream.** On every tenant, the `admin-sso` identity provider (a system-managed OIDC provider) points at the admin tenant. The console starts a federated login against it with `AdminLogonUseCase`, which only adds what is specific to the console (on-demand dynamic client registration through a software statement) and then calls the same `FederatedLoginUseCase.InitiateFederatedLogin` as any other provider.
+- **One callback.** Every upstream, including the console's, returns to `/oauth/federation/callback`. There is no separate admin callback route. The admin client and its profile register that URI at bootstrap (and the tenant's redirect whitelist carries it).
+- **`sprezz_admin` is a fixed partition.** `CreateTenant` creates it on every tenant, with the `admin-sso` provider in it. That is why the cookie of the console is always `spz_session_sprezz_admin` (`__Host-` prefixed outside local), why administrators are a separate population from the tenant's own users, and why `InitiateAdminLogon` refuses a tenant whose `admin-sso` provider lives anywhere else: the sign-in would complete and then fail the console's own guard.
+- **Sign-in is bound to the browser.** The console starts a pending session before leaving for the upstream and the callback only redeems the state for the browser that holds it (architecture blueprint 4.1 and 8.3.2). Opening the console again while a sign-in is under way keeps the pending cookie instead of evicting it.
+- **Sessions are the shared ones.** After the callback the session is an ordinary `sso_sessions` row in the administrative partition, with the shorter administrative limits (8 hours absolute, 1 hour idle), and the guard of the console resolves it with the same `ResolveSession` as every other signed-in page.
 
 ## 2. Bootstrapping Strategy & Chicken-and-Egg Resolution
 
@@ -44,7 +55,7 @@ On application startup, before accepting external traffic, the bootstrapping lay
 3. **Internal Ephemeral Client Registration**: Register the `admin_ui` client with the following specific configuration:
    - `client_type = 'internal_ephemeral'`
    - `client_secret_hash = NULL` (not persisted to the database)
-   - `redirect_uris = ['https://<admin-domain>/admin/callback']`
+   - `redirect_uris = ['https://<admin-domain>/oauth/federation/callback']`
    - `allowed_scopes = ['openid', 'profile', 'email']`
 
 ### 2.2 Ephemeral Secret Lifecycle

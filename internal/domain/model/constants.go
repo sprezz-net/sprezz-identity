@@ -15,10 +15,13 @@ const (
 )
 
 const (
-	AdminUIProfileName        = "sprezz_admin_ui_profile"
-	AdminUIGroupName          = "sprezz_admin_ui_group"
-	LocalAdminUIGroupName     = "sprezz_local_admin_group"
-	AdminPartitionAliasName   = "sprezz_admin"
+	AdminUIProfileName      = "sprezz_admin_ui_profile"
+	AdminUIGroupName        = "sprezz_admin_ui_group"
+	LocalAdminUIGroupName   = "sprezz_local_admin_group"
+	AdminPartitionAliasName = "sprezz_admin"
+	// AdminSSOAliasName is the alias of the system provider that points every tenant's console at the admin tenant.
+	// Provider aliases are unique per tenant (idp_hint resolves by alias alone), so no other provider can take it.
+	AdminSSOAliasName         = "admin-sso"
 	ContentTypeFormUrlEncoded = "application/x-www-form-urlencoded"
 	ContentTypeJSON           = "application/json; charset=utf-8"
 	ContentTypeHTML           = "text/html; charset=utf-8"

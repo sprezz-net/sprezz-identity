@@ -220,7 +220,7 @@ func (s *TenantBootstrapService) ensureAdminApplicationProfileAndGroup(ctx conte
 	for _, p := range providers {
 		if p.IDPType == model.UsernamePasswordIDPType {
 			localProviderUUID = p.ID
-		} else if p.Alias == "admin-sso" && p.IDPType == model.OpenIDConnectIDPType {
+		} else if p.Alias == model.AdminSSOAliasName && p.IDPType == model.OpenIDConnectIDPType {
 			adminSsoProviderUUID = p.ID
 		}
 	}

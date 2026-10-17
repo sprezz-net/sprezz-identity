@@ -51,17 +51,23 @@ func (h *HttpAdapter) requireAdminSession(next http.Handler) http.Handler {
 // rejectUnauthenticatedAdmin answers a request that carries no valid administrator session.
 // Browser navigations start the OIDC login, HTMX requests are redirected with a full-page navigation,
 // and every other request receives a plain 401.
+//
+// A navigation does not evict the cookie it arrived with. The cookie may be the pending session of a sign-in that
+// is already under way (a second tab, a refresh while at the identity provider), and evicting it would strand that
+// sign-in. Starting the flow keeps a live pending cookie and replaces a dead one itself.
 func (h *HttpAdapter) rejectUnauthenticatedAdmin(w http.ResponseWriter, r *http.Request, staleCookie string) {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		if r.Header.Get(model.HeaderHxRequest) != "true" {
+			h.initiateAdminOIDC(w, r)
+			return
+		}
+	}
+
 	h.clearAdminCookie(w, staleCookie)
 
 	if r.Header.Get(model.HeaderHxRequest) == "true" {
 		w.Header().Set(model.HeaderHxRedirect, port.RouteAdmin)
 		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method == http.MethodGet || r.Method == http.MethodHead {
-		h.initiateAdminOIDC(w, r)
 		return
 	}
 

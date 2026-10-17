@@ -130,3 +130,59 @@ func TestCreateIdentityProvider_Rules(t *testing.T) {
 		assert.Equal(t, 1, saved.Config.AAL)
 	})
 }
+
+// idp_hint, the login page and the console resolve a provider by alias alone, so an alias identifies exactly one
+// provider in a tenant: another type or another partition does not make it a different alias.
+func TestCreateIdentityProvider_AliasIsUniqueInTheWholeTenant(t *testing.T) {
+	existing := storedOIDC() // alias "corp", OIDC, partition 1
+
+	cases := map[string]model.IdentityProvider{
+		"same type and partition":      {Name: "Corp 2", Alias: "corp", IDPType: model.OpenIDConnectIDPType, PartitionID: 1},
+		"same type, another partition": {Name: "Corp 2", Alias: "corp", IDPType: model.OpenIDConnectIDPType, PartitionID: 2},
+		"another type, same partition": {Name: "Corp 2", Alias: "corp", IDPType: model.UsernamePasswordIDPType, PartitionID: 1},
+		"another type and partition":   {Name: "Corp 2", Alias: "corp", IDPType: model.UsernamePasswordIDPType, PartitionID: 2},
+	}
+	for name, input := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := newIDPFixture(t) // strict admin storage: nothing is saved
+			f.storage.GetIdentityProvidersMock.Return([]model.IdentityProvider{existing}, nil)
+			if input.IDPType == model.OpenIDConnectIDPType {
+				input.Issuer = existing.Issuer
+				input.Config = existing.Config
+			}
+
+			_, err := f.svc.CreateIdentityProvider(context.Background(), f.tenantID, input)
+
+			var verr *port.ValidationError
+			require.ErrorAs(t, err, &verr)
+			assert.Contains(t, verr.Fields, "alias")
+		})
+	}
+}
+
+func TestCreateIdentityProvider_TheAdminConsoleAliasCannotBeTaken(t *testing.T) {
+	f := newIDPFixture(t)
+	system := model.IdentityProvider{ID: uuid.New(), Alias: model.AdminSSOAliasName, IDPType: model.OpenIDConnectIDPType, PartitionID: 7, IsSystem: true}
+	f.storage.GetIdentityProvidersMock.Return([]model.IdentityProvider{system}, nil)
+
+	_, err := f.svc.CreateIdentityProvider(context.Background(), f.tenantID, model.IdentityProvider{
+		Name: "Squatter", Alias: model.AdminSSOAliasName, IDPType: model.UsernamePasswordIDPType, PartitionID: 1,
+	})
+
+	var verr *port.ValidationError
+	require.ErrorAs(t, err, &verr)
+	assert.Contains(t, verr.Fields, "alias", "the system provider created with the tenant already holds the alias")
+}
+
+func TestCreateIdentityProvider_ADifferentAliasIsFreeEvenInAnotherPartition(t *testing.T) {
+	f := newIDPFixture(t)
+	f.storage.GetIdentityProvidersMock.Return([]model.IdentityProvider{storedOIDC()}, nil)
+	saved := f.captureSave()
+
+	other := storedOIDC()
+	other.Alias, other.PartitionID = "partner", 2
+	_, err := f.svc.CreateIdentityProvider(context.Background(), f.tenantID, other)
+
+	require.NoError(t, err)
+	assert.Equal(t, "partner", saved.Alias)
+}

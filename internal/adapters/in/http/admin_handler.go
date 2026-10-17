@@ -139,6 +139,9 @@ func (h *AdminHandler) adminDashboardView(w http.ResponseWriter, r *http.Request
 	_ = component.Render(r.Context(), w)
 }
 
+// adminSignInUnavailable is what the browser sees when the console cannot start its sign-in.
+const adminSignInUnavailable = "The administrative sign-in is not available right now. Please contact the operator of this server."
+
 func (h *HttpAdapter) initiateAdminOIDC(w http.ResponseWriter, r *http.Request) {
 	// 1. Resolve multi-tenant and layout boundaries safely
 	tenant, ok := TenantFromContext(r.Context())
@@ -150,26 +153,6 @@ func (h *HttpAdapter) initiateAdminOIDC(w http.ResponseWriter, r *http.Request) 
 	// Dynamic Resolution: Sourced from canonical tenant configuration instead of hardcoded headers
 	tenantBaseURI := tenant.GetBaseURI()
 	redirectURI := tenantBaseURI + port.RouteFederationCallback
-
-	providers, err := h.storagePort.GetIdentityProviders(r.Context(), tenant.ID)
-	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, "failed to load provider configurations")
-		return
-	}
-
-	// Dynamic Resolution: Lookup the explicit outbound provider enforcing all 3 mandatory criteria
-	var adminIDP *model.IdentityProvider
-	for _, p := range providers {
-		if p.Alias == "admin-sso" && p.IDPType == "oidc" && p.Enabled {
-			adminIDP = &p
-			break
-		}
-	}
-
-	if adminIDP == nil {
-		h.renderError(w, r, http.StatusInternalServerError, "system outbound administrative identity provider context is missing or misconfigured")
-		return
-	}
 
 	// 2. The pending session binds this sign-in to this browser: only a browser holding its cookie can complete the
 	// callback. The admin console signs in to the administrative partition.
@@ -192,7 +175,10 @@ func (h *HttpAdapter) initiateAdminOIDC(w http.ResponseWriter, r *http.Request) 
 	// 3. Trigger our clean data-driven administrative logon usecase that coordinates dynamic DCR setup on-demand
 	response, err := h.adminLogonUseCase.InitiateAdminLogon(r.Context(), tenant.ID, flow.Session.ID, redirectURI, tenantBaseURI+port.RouteAdmin)
 	if err != nil {
-		h.renderError(w, r, http.StatusInternalServerError, "failed to initiate secure administrative session: "+err.Error())
+		// The reason (a missing, disabled or misplaced admin-sso provider, an unreachable admin tenant) is for the
+		// operator's log, not for the browser.
+		slog.Error("admin sign-in could not be started", "tenant_id", tenant.ID, "err", err)
+		h.renderError(w, r, http.StatusInternalServerError, adminSignInUnavailable)
 		return
 	}
 

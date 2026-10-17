@@ -108,7 +108,7 @@ func (s *TenantService) CreateTenant(ctx context.Context, cmd port.CreateTenantC
 		TenantID:    newTenant.ID,
 		IDPType:     model.OpenIDConnectIDPType,
 		Enabled:     true,
-		Alias:       "admin-sso",
+		Alias:       model.AdminSSOAliasName,
 		Name:        "Administrative SSO",
 		IsSystem:    true,
 		PartitionID: p2.ID,

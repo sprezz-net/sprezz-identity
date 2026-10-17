@@ -58,21 +58,9 @@ func (s *AdminLogonService) InitiateAdminLogon(ctx context.Context, localTenantI
 		return nil, fmt.Errorf("admin_logon: %w", err)
 	}
 
-	providers, err := s.storage.GetIdentityProviders(ctx, localTenantID)
+	adminOidcProvider, err := s.resolveAdminSSOProvider(ctx, localTenantID)
 	if err != nil {
-		return nil, fmt.Errorf("admin_logon: failed loading tenant provider maps: %w", err)
-	}
-
-	var adminOidcProvider *model.IdentityProvider
-	for _, p := range providers {
-		if p.IDPType == model.OpenIDConnectIDPType && p.Alias == "admin-sso" { // TODO Maybe fetch directly via alias from storage
-			adminOidcProvider = &p
-			break
-		}
-	}
-
-	if adminOidcProvider == nil {
-		return nil, port.ErrIdentityProviderNotFound
+		return nil, err
 	}
 
 	// 1. On-Demand Automated DCR Trigger
@@ -111,6 +99,32 @@ func (s *AdminLogonService) InitiateAdminLogon(ctx context.Context, localTenantI
 		FinalTargetURI:     targetAdminUI,
 		FlowSessionID:      flowSessionID,
 	})
+}
+
+// resolveAdminSSOProvider finds the provider the console signs in through. Provider aliases are unique per tenant, so
+// the alias alone identifies it; the checks after the lookup make a damaged setup fail loudly instead of looping:
+// it must be an OIDC provider, it must be enabled, and it must live in the fixed administrative partition, because
+// the session that results is created there and the console's own guard looks for it there.
+func (s *AdminLogonService) resolveAdminSSOProvider(ctx context.Context, tenantID uuid.UUID) (*model.IdentityProvider, error) {
+	provider, err := s.storage.GetIdentityProviderByAlias(ctx, tenantID, model.AdminSSOAliasName)
+	if err != nil {
+		return nil, fmt.Errorf("admin_logon: the %s provider could not be loaded: %w", model.AdminSSOAliasName, err)
+	}
+	if provider == nil || provider.IDPType != model.OpenIDConnectIDPType {
+		return nil, fmt.Errorf("admin_logon: %s is not an OIDC provider: %w", model.AdminSSOAliasName, port.ErrIdentityProviderNotFound)
+	}
+	if !provider.Enabled {
+		return nil, fmt.Errorf("admin_logon: the %s provider is disabled: %w", model.AdminSSOAliasName, port.ErrIdentityProviderDisabled)
+	}
+
+	adminPartition, err := s.storage.GetPartitionByAlias(ctx, tenantID, model.AdminPartitionAliasName)
+	if err != nil {
+		return nil, fmt.Errorf("admin_logon: administrative partition unresolvable: %w", err)
+	}
+	if provider.PartitionID != adminPartition.ID {
+		return nil, fmt.Errorf("admin_logon: the %s provider must live in the %s partition: %w", model.AdminSSOAliasName, model.AdminPartitionAliasName, port.ErrInvalidRequest)
+	}
+	return provider, nil
 }
 
 // provisionViaSoftwareStatement generates short-lived platform tokens and executes direct DCR on-demand registrations.

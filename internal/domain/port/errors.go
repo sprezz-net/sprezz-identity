@@ -66,6 +66,8 @@ var (
 	ErrInteractionSessionNotFound = errors.New("interaction session not found")
 	ErrPartitionNotFound          = errors.New("partition not found")
 	ErrIdentityProviderNotFound   = errors.New("identity provider not found")
+	ErrIdentityProviderDisabled   = errors.New("identity provider is disabled")
+	ErrAliasAlreadyExists         = errors.New("identity provider alias already in use")
 	ErrUserProfileAlreadyExists   = errors.New("user profile with this identifier already exists")
 	ErrEmailAlreadyExists         = errors.New("email address already in use")
 	ErrUsernameAlreadyExists      = errors.New("username already in use")
